@@ -1,0 +1,20 @@
+# Sandbox-only Jenkins controller — stands in for the office controller while
+# we prove the runner + pipeline. NOT for the office.
+#
+#   cd sandbox/jenkins && docker compose up -d
+#   Open from your laptop:  ssh -L 8080:localhost:8080 <user>@<vps>
+#                           then browse http://localhost:8080
+#
+# Port 50000 is not published: the agent connects over WebSocket on 8080.
+services:
+  jenkins:
+    image: jenkins/jenkins:lts-jdk21
+    container_name: autore-jenkins
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+volumes:
+  jenkins_home:

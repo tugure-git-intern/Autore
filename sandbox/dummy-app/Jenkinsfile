@@ -1,0 +1,82 @@
+// Autore sandbox pipeline — proves the dedicated runner end-to-end:
+// checkout → audit info → build & test (inside docker build) → deploy → smoke test.
+pipeline {
+    // Never on the controller: only nodes labelled `docker` (the runner) may run this.
+    agent { label 'docker' }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        APP_NAME    = 'autore-dummy'
+        APP_DIR     = 'sandbox/dummy-app'
+        DEPLOY_PORT = '8081'
+    }
+
+    stages {
+        stage('Audit Info') {
+            steps {
+                script {
+                    env.SHORT_SHA = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "build-${env.BUILD_NUMBER}-commit-${env.SHORT_SHA}"
+                    def author = sh(script: "git log -1 --pretty='%an <%ae>'", returnStdout: true).trim()
+                    def message = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
+                    def causes = currentBuild.getBuildCauses().collect { it.shortDescription }.join(', ')
+                    echo """
+==================== AUDIT ====================
+Build      : #${env.BUILD_NUMBER}
+Commit     : ${env.GIT_COMMIT}
+Branch     : ${env.GIT_BRANCH}
+Author     : ${author}
+Message    : ${message}
+Triggered  : ${causes}
+Runner     : ${env.NODE_NAME}
+Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
+================================================"""
+                }
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                // Unit tests run inside the Dockerfile's `test` stage; a failing test fails this stage.
+                sh 'docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"'
+            }
+        }
+
+        stage('Deploy (sandbox)') {
+            steps {
+                sh '''
+                    docker rm -f "$APP_NAME" >/dev/null 2>&1 || true
+                    docker run -d --name "$APP_NAME" --restart unless-stopped \
+                        -p "127.0.0.1:$DEPLOY_PORT:8000" "$APP_NAME:$IMAGE_TAG"
+                '''
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    for i in $(seq 1 10); do
+                        if curl -fsS "http://127.0.0.1:$DEPLOY_PORT/health"; then
+                            echo
+                            exit 0
+                        fi
+                        sleep 1
+                    done
+                    echo "Smoke test failed: /health did not answer in 10s"
+                    docker logs --tail 50 "$APP_NAME" || true
+                    exit 1
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}

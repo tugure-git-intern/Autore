@@ -1,0 +1,9 @@
+# Never commit secrets (Jenkins agent secret, env files)
+*.secret
+.env
+
+# Python
+__pycache__/
+
+# Superpowers plan workspace (local scratch)
+.superpowers/

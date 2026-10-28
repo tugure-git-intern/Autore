@@ -108,6 +108,20 @@ pub fn collect_checks() -> Vec<CheckResult> {
         }),
     }
 
+    if std::path::Path::new("/usr/local/bin/autore").exists() {
+        results.push(CheckResult {
+            name: "Autore Global CLI (/usr/local/bin)",
+            ok: true,
+            detail: "/usr/local/bin/autore (tersedia untuk runner)".to_string(),
+        });
+    } else {
+        results.push(CheckResult {
+            name: "Autore Global CLI (/usr/local/bin)",
+            ok: false,
+            detail: "/usr/local/bin/autore belum ada (butuh sudo install)".to_string(),
+        });
+    }
+
     match run_cmd("df", &["-h", "/"]) {
         Some(_) => {
             let avail = Command::new("df")

@@ -181,8 +181,15 @@ pipeline {{
                 sh '''
                     if command -v autore >/dev/null 2>&1; then
                         autore scan --path "$APP_DIR"
+                    elif [ -x /usr/local/bin/autore ]; then
+                        /usr/local/bin/autore scan --path "$APP_DIR"
                     elif [ -x ./scripts/security-check.sh ]; then
                         ./scripts/security-check.sh
+                    else
+                        echo "🚫 [SECURITY GATE ERROR] Scanner 'autore' tidak ditemukan di sistem runner!" >&2
+                        echo "Build DIBATALKAN demi keamanan (Fail-Closed / Default-Deny)." >&2
+                        echo "Pastikan 'autore' terpasang secara global di runner (/usr/local/bin/autore)." >&2
+                        exit 1
                     fi
                 '''
             }}
@@ -298,5 +305,22 @@ mod tests {
                 report.violations
             );
         }
+    }
+
+    #[test]
+    fn jenkinsfile_enforces_fail_closed_security_gate() {
+        let cfg = InitConfig {
+            app_name: "secure-app".to_string(),
+            stack: TechStack::Python,
+            app_port: 5000,
+            deploy_port: 8081,
+        };
+        let content = render_jenkinsfile(&cfg);
+
+        // Security Gate must fail-closed if scanner is missing (Default-Deny)
+        assert!(content.contains("if command -v autore >/dev/null 2>&1; then"));
+        assert!(content.contains("elif [ -x /usr/local/bin/autore ]; then"));
+        assert!(content.contains("Fail-Closed / Default-Deny"));
+        assert!(content.contains("exit 1"));
     }
 }

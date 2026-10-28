@@ -52,7 +52,20 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
                 script {
                     env.FAILED_STAGE = 'Security Gate (Secret & Code Scan)'
                 }
-                sh './scripts/security-check.sh'
+                sh '''
+                    if command -v autore >/dev/null 2>&1; then
+                        autore scan --path "$APP_DIR"
+                    elif [ -x /usr/local/bin/autore ]; then
+                        /usr/local/bin/autore scan --path "$APP_DIR"
+                    elif [ -x ./scripts/security-check.sh ]; then
+                        ./scripts/security-check.sh
+                    else
+                        echo "🚫 [SECURITY GATE ERROR] Scanner 'autore' tidak ditemukan di sistem runner!" >&2
+                        echo "Build DIBATALKAN demi keamanan (Fail-Closed / Default-Deny)." >&2
+                        echo "Pastikan 'autore' terpasang secara global di runner (/usr/local/bin/autore)." >&2
+                        exit 1
+                    fi
+                '''
             }
         }
 

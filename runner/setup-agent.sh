@@ -72,7 +72,22 @@ done
 log "Preparing agent work directory ${AGENT_WORKDIR}"
 install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0755 "${AGENT_WORKDIR}"
 
+# Install Autore CLI to /usr/local/bin so the jenkins runner can execute it
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [ -f "${REPO_ROOT}/cli/target/release/autore" ]; then
+  log "Installing Autore CLI to /usr/local/bin/autore"
+  install -m 0755 "${REPO_ROOT}/cli/target/release/autore" /usr/local/bin/autore
+elif [ -n "${SUDO_USER:-}" ] && [ -f "/home/${SUDO_USER}/.local/bin/autore" ]; then
+  log "Installing Autore CLI to /usr/local/bin/autore"
+  install -m 0755 "/home/${SUDO_USER}/.local/bin/autore" /usr/local/bin/autore
+fi
+
 log "Done. Versions:"
 java -version 2>&1 | head -1
 docker --version
 docker compose version
+if [ -x /usr/local/bin/autore ]; then
+  /usr/local/bin/autore --version
+fi

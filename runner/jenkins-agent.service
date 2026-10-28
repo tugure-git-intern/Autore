@@ -1,0 +1,20 @@
+[Unit]
+Description=Jenkins inbound agent (Autore runner)
+Documentation=https://github.com/tugure-git-intern/Autore
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+User=jenkins
+Group=jenkins
+# Provides JENKINS_URL, AGENT_NAME, AGENT_WORKDIR (written by install-agent-service.sh)
+EnvironmentFile=/etc/jenkins-agent/agent.env
+WorkingDirectory=/home/jenkins
+# The secret is read from a 0600 file — never passed on the command line.
+ExecStart=/usr/bin/java -jar /opt/jenkins-agent/agent.jar -url ${JENKINS_URL} -name ${AGENT_NAME} -secret @/etc/jenkins-agent/secret -webSocket -workDir ${AGENT_WORKDIR}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

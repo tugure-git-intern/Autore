@@ -1,0 +1,19 @@
+[package]
+name = "autore"
+version = "0.1.0"
+edition = "2021"
+description = "Autore CLI — DevSecOps & CI/CD Platform Tooling for Tugu Re IT Team"
+authors = ["tugure-git-intern <tugure.gitintern@tugu-re.com>"]
+
+[[bin]]
+name = "autore"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+colored = "2.1"
+inquire = "0.7"
+regex = "1.11"
+
+[dev-dependencies]
+tempfile = "3.13"

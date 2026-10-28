@@ -1,5 +1,7 @@
-// Autore sandbox pipeline — proves the dedicated runner end-to-end:
-// checkout → audit info → build & test (inside docker build) → deploy → smoke test.
+// Autore sandbox pipeline — proves the dedicated runner + DevSecOps Security Gate
+// + Telegram Audit Report end-to-end:
+// checkout → audit info → security gate (Code Guard + Gitleaks + Trivy) →
+// build & test → deploy → smoke test → Telegram audit report.
 pipeline {
     // Never on the controller: only nodes labelled `docker` (the runner) may run this.
     agent { label 'docker' }
@@ -19,19 +21,20 @@ pipeline {
         stage('Audit Info') {
             steps {
                 script {
-                    env.SHORT_SHA = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-                    env.IMAGE_TAG = "build-${env.BUILD_NUMBER}-commit-${env.SHORT_SHA}"
-                    def author = sh(script: "git log -1 --pretty='%an <%ae>'", returnStdout: true).trim()
-                    def message = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
-                    def causes = currentBuild.getBuildCauses().collect { it.shortDescription }.join(', ')
+                    env.FAILED_STAGE  = 'Audit Info'
+                    env.SHORT_SHA     = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG     = "build-${env.BUILD_NUMBER}-commit-${env.SHORT_SHA}"
+                    env.AUDIT_AUTHOR  = sh(script: "git log -1 --pretty='%an <%ae>'", returnStdout: true).trim()
+                    env.AUDIT_MESSAGE = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
+                    env.AUDIT_CAUSES  = currentBuild.getBuildCauses().collect { it.shortDescription }.join(', ')
                     echo """
 ==================== AUDIT ====================
 Build      : #${env.BUILD_NUMBER}
 Commit     : ${env.GIT_COMMIT}
 Branch     : ${env.GIT_BRANCH}
-Author     : ${author}
-Message    : ${message}
-Triggered  : ${causes}
+Author     : ${env.AUDIT_AUTHOR}
+Message    : ${env.AUDIT_MESSAGE}
+Triggered  : ${env.AUDIT_CAUSES}
 Runner     : ${env.NODE_NAME}
 Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
 ================================================"""
@@ -39,8 +42,20 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
             }
         }
 
+        stage('Security Gate') {
+            steps {
+                script {
+                    env.FAILED_STAGE = 'Security Gate (Secret & Code Scan)'
+                }
+                sh './scripts/security-check.sh'
+            }
+        }
+
         stage('Build & Test') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Build & Test (Unit Test / Docker Build)'
+                }
                 // Unit tests run inside the Dockerfile's `test` stage; a failing test fails this stage.
                 sh 'docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"'
             }
@@ -48,6 +63,9 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
 
         stage('Deploy (sandbox)') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Deploy (sandbox)'
+                }
                 sh '''
                     docker rm -f "$APP_NAME" >/dev/null 2>&1 || true
                     docker run -d --name "$APP_NAME" --restart unless-stopped \
@@ -58,6 +76,9 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
 
         stage('Smoke Test') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Smoke Test (/health)'
+                }
                 sh '''
                     for i in $(seq 1 10); do
                         if curl -fsS "http://127.0.0.1:$DEPLOY_PORT/health"; then
@@ -76,6 +97,20 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
 
     post {
         always {
+            script {
+                env.BUILD_STATUS = currentBuild.currentResult ?: 'SUCCESS'
+                try {
+                    withCredentials([
+                        string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN'),
+                        string(credentialsId: 'telegram-chat-id', variable: 'TELEGRAM_CHAT_ID')
+                    ]) {
+                        sh './scripts/notify-telegram.sh'
+                    }
+                } catch (err) {
+                    // Credentials not configured in Jenkins yet — still print full audit report to build log
+                    sh './scripts/notify-telegram.sh'
+                }
+            }
             deleteDir()
         }
     }

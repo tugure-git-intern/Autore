@@ -11,6 +11,11 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    triggers {
+        // Automatically check Git every minute; only triggers a build when new commits exist.
+        pollSCM('* * * * *')
+    }
+
     environment {
         APP_NAME    = 'autore-dummy'
         APP_DIR     = 'sandbox/dummy-app'

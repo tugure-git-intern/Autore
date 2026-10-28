@@ -55,6 +55,19 @@ ${DETAIL_LINES}"
 
 printf '\n================ LAPORAN AUDIT TELEGRAM ================\n%s\n========================================================\n' "${REPORT_TEXT}"
 
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+  printf '==> Info: telegram-chat-id belum diset manual, mencari otomatis dari chat terakhir ke bot...\n'
+  TELEGRAM_CHAT_ID="$(curl -fsS --max-time 10 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" \
+    | python3 -c 'import json,sys
+data = json.load(sys.stdin)
+for item in reversed(data.get("result", [])):
+    for key in ("message", "edited_message", "my_chat_member", "channel_post"):
+        if key in item and "chat" in item[key]:
+            print(item[key]["chat"]["id"])
+            sys.exit(0)
+' 2>/dev/null || true)"
+fi
+
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
   printf '==> Mengirim laporan ke Bot Telegram (chat_id: %s)...\n' "${TELEGRAM_CHAT_ID}"
   if curl -fsS --max-time 15 -X POST \
@@ -65,7 +78,10 @@ if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
   else
     printf 'WARNING: Gagal mengirim pesan ke API Telegram (cek token/chat_id).\n' >&2
   fi
+elif [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  printf '==> Info: Token bot ditemukan, tapi belum ada pesan masuk ke bot.\n'
+  printf '==> Buka bot kamu di Telegram HP, tap START / kirim pesan "tes", lalu jalankan build lagi!\n'
 else
-  printf '==> Info: Kredensial Telegram (telegram-bot-token / telegram-chat-id) belum diset di Jenkins.\n'
+  printf '==> Info: Kredensial Telegram (telegram-bot-token) belum diset di Jenkins.\n'
   printf '==> Laporan tetap tercatat penuh di log audit di atas.\n'
 fi

@@ -1,0 +1,38 @@
+services:
+  sonarqube:
+    image: sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae
+    container_name: autore-sonarqube
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - SONAR_SEARCH_JAVAADDITIONALOPTS=-Xms512m -Xmx512m -Dnode.store.allow_mmap=false
+      - SONAR_WEB_JAVAOPTS=-Xmx512m -Xms128m
+      - SONAR_CE_JAVAOPTS=-Xmx512m -Xms128m
+    volumes:
+      - ./mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro
+      - sonar_data:/opt/sonarqube/data
+      - sonar_extensions:/opt/sonarqube/extensions
+      - sonar_logs:/opt/sonarqube/logs
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  nexus:
+    image: sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e
+    container_name: autore-nexus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8081"
+      - "127.0.0.1:5000:5000"
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=-Xms768m -Xmx768m -XX:MaxDirectMemorySize=512m -Djava.util.prefs.userRoot=/nexus-data/javaprefs
+    volumes:
+      - nexus_data:/nexus-data
+
+volumes:
+  sonar_data:
+  sonar_extensions:
+  sonar_logs:
+  nexus_data:

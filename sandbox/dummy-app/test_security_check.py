@@ -540,6 +540,34 @@ class SecurityGateTest(unittest.TestCase):
             res = subprocess.run(["bash", str(dep_script), bad_ref], capture_output=True, text=True)
             self.assertNotEqual(res.returncode, 0, f"Deploy script must reject {bad_ref}")
 
+    def test_services_docker_compose_and_bootstrap_configuration(self):
+        compose_file = REPO_ROOT / "sandbox" / "services" / "docker-compose.yml"
+        self.assertTrue(compose_file.exists(), "sandbox/services/docker-compose.yml must exist")
+        compose_content = compose_file.read_text(encoding="utf-8")
+        self.assertIn("sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae", compose_content)
+        self.assertIn("sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e", compose_content)
+        self.assertIn("127.0.0.1:9000:9000", compose_content)
+        self.assertIn("127.0.0.1:8082:8081", compose_content)
+        self.assertIn("127.0.0.1:5000:5000", compose_content)
+        self.assertIn("mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro", compose_content)
+
+        bootstrap_script = REPO_ROOT / "sandbox" / "services" / "bootstrap-local-services.sh"
+        self.assertTrue(bootstrap_script.exists(), "sandbox/services/bootstrap-local-services.sh must exist")
+        bootstrap_content = bootstrap_script.read_text(encoding="utf-8")
+        self.assertIn("keytool -delete", bootstrap_content)
+        self.assertIn("emsign", bootstrap_content)
+        self.assertIn("ALLOW_ONCE", bootstrap_content)
+
+    def test_jenkins_shared_library_structure_and_security(self):
+        groovy_file = REPO_ROOT / "jenkins-shared-library" / "vars" / "autorePipeline.groovy"
+        self.assertTrue(groovy_file.exists(), "jenkins-shared-library/vars/autorePipeline.groovy must exist")
+        content = groovy_file.read_text(encoding="utf-8")
+        self.assertIn("^[0-9a-f]{40}$", content)
+        self.assertIn("autore scan-image", content)
+        self.assertIn("ci-sonarqube-gate.sh", content)
+        self.assertIn("ci-nexus-publish.sh", content)
+        self.assertIn("ci-deploy-by-digest.sh", content)
+
 
 if __name__ == "__main__":
     unittest.main()

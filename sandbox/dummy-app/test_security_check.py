@@ -555,6 +555,8 @@ class SecurityGateTest(unittest.TestCase):
         self.assertTrue(bootstrap_script.exists(), "sandbox/services/bootstrap-local-services.sh must exist")
         bootstrap_content = bootstrap_script.read_text(encoding="utf-8")
         self.assertIn("keytool -delete", bootstrap_content)
+        self.assertIn("keytool -list -v", bootstrap_content)
+        self.assertIn("Alias name:", bootstrap_content)
         self.assertIn("emsign", bootstrap_content)
         self.assertIn("ALLOW_ONCE", bootstrap_content)
 

@@ -41,9 +41,9 @@ log "Mempersiapkan rilis image immutable: ${IMAGE_TAG}"
 log "Memeriksa kebijakan repositori Nexus (Disable redeploy)..."
 policy_resp="$(printf 'user = "%s:%s"\nurl = "%s/service/rest/v1/repositories/docker/hosted/docker-hosted"\n' \
   "${NEXUS_USER}" "${NEXUS_PASS}" "${NEXUS_API_URL}" \
-  | curl -fsS --max-time 15 --config - 2>/dev/null || echo '{"storage":{"writePolicy":"ALLOW_ONCE"}}')"
+  | curl -fsS --max-time 15 --config - 2>/dev/null)"
 
-write_policy="$(python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('storage', {}).get('writePolicy', ''))" <<< "${policy_resp}" 2>/dev/null || echo 'ALLOW_ONCE')"
+write_policy="$(python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('storage', {}).get('writePolicy', ''))" <<< "${policy_resp}" 2>/dev/null)"
 
 if [[ "${write_policy}" != "ALLOW_ONCE" ]]; then
   echo "ERROR: Repositori Nexus docker-hosted tidak menerapkan writePolicy ALLOW_ONCE (Disable redeploy). Tolak rilis!" >&2

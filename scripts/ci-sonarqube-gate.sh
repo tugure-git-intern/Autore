@@ -50,7 +50,7 @@ if command -v cargo >/dev/null 2>&1 && [[ -f "${WORKSPACE}/cli/Cargo.toml" || -f
   if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
     manifest_arg=(--manifest-path "${WORKSPACE}/cli/Cargo.toml")
   fi
-  cargo clippy --all-targets --message-format=json -- -D warnings "${manifest_arg[@]}" > "${CLIPPY_REPORT}"
+  cargo clippy "${manifest_arg[@]}" --all-targets --message-format=json -- -D warnings > "${CLIPPY_REPORT}"
 elif [[ ! -f "${CLIPPY_REPORT}" ]]; then
   # Fallback dummy JSON report for testing if cargo not present
   echo '[]' > "${CLIPPY_REPORT}"
@@ -72,10 +72,12 @@ docker run --rm \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
   -v "${WORKSPACE}:/usr/src" \
+  -w /usr/src \
   "${extra_mounts[@]}" \
   "${SONAR_SCANNER_IMAGE}" \
   -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
   -Dsonar.sources="." \
+  -Dsonar.working.directory=/usr/src/.scannerwork \
   -Dsonar.rust.clippy.enabled=false \
   -Dsonar.rust.clippyReport.reportPaths=clippy-report.json
 

@@ -28,17 +28,19 @@ if [[ ! -f "${MITIGATED_CACERTS}" ]]; then
     keytool -delete -alias "${alias}" -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null || true
   done
 
-  # Also search and delete any remaining aliases matching emsign or emudhra
-  while IFS= read -r line; do
-    alias_name="${line%%,*}"
+  # Also search and delete any remaining aliases matching emsign or emudhra using verbose list
+  # Parsing from 'keytool -list -v' (line 'Alias name:') ensures aliases containing commas are preserved
+  while IFS= read -r alias_name; do
     if [[ -n "${alias_name}" ]]; then
       log "Menghapus alias: ${alias_name}"
       keytool -delete -alias "${alias_name}" -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null || true
     fi
-  done < <(keytool -list -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null | grep -iE 'emsign|emudhra' || true)
+  done < <(keytool -list -v -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null \
+    | awk -F': ' '/^Alias name:/{print $2}' | grep -iE 'emsign|emudhra' || true)
 
   # Verifikasi truststore sudah 100% bersih dari eMudhra
-  if keytool -list -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null | grep -qiE 'emsign|emudhra'; then
+  if keytool -list -v -keystore "${tmp_extract_dir}/cacerts" -storepass changeit 2>/dev/null \
+    | awk -F': ' '/^Alias name:/{print $2}' | grep -qiE 'emsign|emudhra'; then
     echo "ERROR: Gagal menghapus seluruh sertifikat eMudhra dari truststore cacerts!" >&2
     rm -rf "${tmp_extract_dir}"
     exit 1

@@ -11,3 +11,6 @@ __pycache__/
 # Rust build artifacts
 /cli/target/
 target/
+
+# Local services artifacts
+sandbox/services/mitigated-cacerts

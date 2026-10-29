@@ -119,6 +119,18 @@ class SecurityGateTest(unittest.TestCase):
             res = self._run_security_check(ws)
             self.assertNotEqual(res.returncode, 0, "Symlink in scanned tree must fail-closed")
 
+    def test_dockerfile_user_root_or_zero_with_group_blocked(self):
+        for bad_user in ("root:root", "root:1000", "ROOT", "0:0", "0:1000", "00", "$APP_USER"):
+            with self.subTest(bad_user=bad_user), tempfile.TemporaryDirectory() as tmp:
+                ws = Path(tmp)
+                app_dir = self._make_clean_project(ws)
+                (app_dir / "Dockerfile").write_text(
+                    f"FROM python:3.12-slim\nUSER {bad_user}\nCMD [\"python\", \"app.py\"]\n",
+                    encoding="utf-8",
+                )
+                res = self._run_security_check(ws)
+                self.assertNotEqual(res.returncode, 0, f"USER {bad_user} bypassed security-check.sh")
+
     def test_dockerfile_without_non_root_user_blocked(self):
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)

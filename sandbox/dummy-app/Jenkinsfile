@@ -72,7 +72,15 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
                     env.FAILED_STAGE = 'Build & Test (Unit Test / Docker Build)'
                 }
                 // Unit tests run inside the Dockerfile's `test` stage; a failing test fails this stage.
-                sh 'docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"'
+                sh '''
+                    docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"
+                    IMG_UID="$(docker run --rm --entrypoint id "$APP_NAME:$IMAGE_TAG" -u)"
+                    if [ -z "$IMG_UID" ] || [ "$IMG_UID" = "0" ]; then
+                        echo "🚫 [SECURITY GATE ERROR] Image hasil build berjalan sebagai UID 0 (root)!" >&2
+                        docker rmi -f "$APP_NAME:$IMAGE_TAG" >/dev/null 2>&1 || true
+                        exit 1
+                    fi
+                '''
             }
         }
 

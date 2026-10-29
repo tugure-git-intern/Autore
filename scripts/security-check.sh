@@ -93,10 +93,12 @@ if [[ ${#all_files[@]} -gt 0 ]]; then
 fi
 
 if [[ -f "${TARGET_DIR}/Dockerfile" ]]; then
-  # Check that the final stage of the Dockerfile specifies a non-root USER
-  last_from_line=$(grep -nE '^[[:space:]]*FROM[[:space:]]+' "${TARGET_DIR}/Dockerfile" | tail -1 | cut -d: -f1)
-  last_user=$(tail -n +"${last_from_line:-1}" "${TARGET_DIR}/Dockerfile" | grep -E '^[[:space:]]*USER[[:space:]]+' | tail -1 | awk '{print $2}' || true)
-  if [[ -z "${last_user}" || "${last_user}" == "root" || "${last_user}" == "0" ]]; then
+  # Check that the final stage of the Dockerfile specifies a static non-root USER
+  last_from_line=$(grep -anE '^[[:space:]]*[Ff][Rr][Oo][Mm][[:space:]]+' "${TARGET_DIR}/Dockerfile" | tail -1 | cut -d: -f1)
+  last_user=$(tail -n +"${last_from_line:-1}" "${TARGET_DIR}/Dockerfile" | grep -aE '^[[:space:]]*[Uu][Ss][Ee][Rr][[:space:]]+' | tail -1 | awk '{print $2}' || true)
+  user_part="${last_user%%:*}"
+  user_lower="${user_part,,}"
+  if [[ -z "${user_lower}" || "${last_user}" == *'$'* || "${user_lower}" == "root" || "${user_lower}" =~ ^[+-]?0+$ ]]; then
     fail_gate "Dockerfile wajib menggunakan non-root USER pada stage akhir"
   fi
 fi

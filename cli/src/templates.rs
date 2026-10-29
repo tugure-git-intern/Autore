@@ -197,7 +197,15 @@ pipeline {{
                 script {{
                     env.FAILED_STAGE = 'Build & Test'
                 }}
-                sh 'docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"'
+                sh '''
+                    docker build --label "org.opencontainers.image.revision=$GIT_COMMIT" -t "$APP_NAME:$IMAGE_TAG" "$APP_DIR"
+                    IMG_UID="$(docker run --rm --entrypoint id "$APP_NAME:$IMAGE_TAG" -u)"
+                    if [ -z "$IMG_UID" ] || [ "$IMG_UID" = "0" ]; then
+                        echo "🚫 [SECURITY GATE ERROR] Image hasil build berjalan sebagai UID 0 (root)!" >&2
+                        docker rmi -f "$APP_NAME:$IMAGE_TAG" >/dev/null 2>&1 || true
+                        exit 1
+                    fi
+                '''
             }}
         }}
 
@@ -335,5 +343,10 @@ mod tests {
         assert!(!content.contains("security-check.sh"), "repo script must not be the gate");
         assert!(!content.contains("--no-docker"), "CI must run Gitleaks + Trivy");
         assert!(content.contains("stat -c %u /usr/local/bin/autore"), "must verify root ownership");
+        // H-3: verify built image effective UID is non-root
+        assert!(
+            content.contains("--entrypoint id \"$APP_NAME:$IMAGE_TAG\" -u"),
+            "must verify runtime UID of built image"
+        );
     }
 }

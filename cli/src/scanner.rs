@@ -308,9 +308,39 @@ fn check_file_bytes(
     }
 }
 
+fn is_valid_non_root_user(raw: &str) -> bool {
+    if raw.is_empty() || raw.contains('$') {
+        return false;
+    }
+    let user_part = raw.split(':').next().unwrap_or_default().trim();
+    if user_part.is_empty() || user_part.eq_ignore_ascii_case("root") {
+        return false;
+    }
+    let digits = user_part.trim_start_matches(['+', '-']);
+    if !digits.is_empty() && digits.chars().all(|c| c == '0') {
+        return false;
+    }
+    if matches!(user_part.parse::<i64>(), Ok(n) if n <= 0) {
+        return false;
+    }
+    user_part
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+}
+
 fn check_dockerfile(path: &Path, report: &mut ScanReport) -> Result<(), String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Gagal membaca Dockerfile '{}': {}", path.display(), e))?;
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            report.violations.push(Violation {
+                file: path.to_path_buf(),
+                line: 1,
+                rule: "unreadable-file".to_string(),
+                message: format!("Gagal membaca Dockerfile (fail-closed): {}", e),
+            });
+            return Ok(());
+        }
+    };
 
     let mut last_from_line = 0usize;
     let mut last_user: Option<(usize, String)> = None;
@@ -337,7 +367,7 @@ fn check_dockerfile(path: &Path, report: &mut ScanReport) -> Result<(), String> 
 
     if last_from_line > 0 {
         match last_user {
-            Some((_, ref u)) if u != "root" && u != "0" => {}
+            Some((_, ref u)) if is_valid_non_root_user(u) => {}
             _ => {
                 report.violations.push(Violation {
                     file: path.to_path_buf(),
@@ -532,5 +562,52 @@ mod tests {
         fs::write(tmp.path().join("target/x.py"), OS_SYSTEM).unwrap();
         let opts = ScanOptions { skip_build_dirs: true };
         assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
+    }
+
+    // ---- H-3 regressions --------------------------------------------------
+
+    #[test]
+    fn dockerfile_user_root_or_zero_variants_are_caught() {
+        for bad_user in [
+            "root:root",
+            "root:1000",
+            "ROOT:app",
+            "0:0",
+            "0:1000",
+            "00",
+            "000:1000",
+            "$APP_USER",
+            "${APP_USER}",
+        ] {
+            let tmp = TempDir::new().unwrap();
+            fs::write(
+                tmp.path().join("Dockerfile"),
+                format!("FROM python:3.12-slim\nUSER {bad_user}\nCMD [\"python\", \"app.py\"]\n"),
+            )
+            .unwrap();
+            let report = scan_directory(tmp.path()).unwrap();
+            assert!(
+                rules(&report).contains(&"dockerfile-non-root-user".to_string()),
+                "USER {bad_user} bypassed non-root check"
+            );
+        }
+    }
+
+    #[test]
+    fn dockerfile_non_root_user_with_group_passes() {
+        for good_user in ["appuser:appgroup", "1000:1000", "65532"] {
+            let tmp = TempDir::new().unwrap();
+            fs::write(
+                tmp.path().join("Dockerfile"),
+                format!("FROM python:3.12-slim\nUSER {good_user}\nCMD [\"python\", \"app.py\"]\n"),
+            )
+            .unwrap();
+            let report = scan_directory(tmp.path()).unwrap();
+            assert!(
+                report.is_clean(),
+                "USER {good_user} falsely rejected: {:?}",
+                report.violations
+            );
+        }
     }
 }

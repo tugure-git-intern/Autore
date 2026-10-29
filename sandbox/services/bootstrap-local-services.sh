@@ -76,7 +76,7 @@ done
 
 if [[ "${sonar_ready}" == "1" ]]; then
   log "SonarQube aktif! Memverifikasi ketersediaan plugin native Rust..."
-  if curl -fsS http://127.0.0.1:9000/api/languages/list 2>/dev/null | grep -q '"key":"rust"'; then
+  if curl -fsS -u admin:admin http://127.0.0.1:9000/api/languages/list 2>/dev/null | grep -q '"key":"rust"'; then
     log "✔ Plugin Rust aktif di SonarQube server."
   else
     echo "WARN: Plugin Rust belum terdeteksi di /api/languages/list" >&2

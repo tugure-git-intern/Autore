@@ -261,6 +261,33 @@ class SecurityGateTest(unittest.TestCase):
         self.assertIn("--severity HIGH,CRITICAL", script)
         self.assertNotIn("--severity CRITICAL", script.replace("--severity HIGH,CRITICAL", ""))
 
+    def test_build_musl_release_produces_static_binary_and_checksums(self):
+        build_script = REPO_ROOT / "scripts" / "build-musl-release.sh"
+        self.assertTrue(build_script.exists(), "scripts/build-musl-release.sh must exist")
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = Path(tmp)
+            env = os.environ.copy()
+            env["DIST_DIR"] = str(dist)
+            res = subprocess.run(
+                ["bash", str(build_script)],
+                cwd=str(REPO_ROOT),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            bin_path = dist / "autore-linux-x86_64-musl"
+            self.assertTrue(bin_path.exists(), "dist/autore-linux-x86_64-musl must be created")
+            checksum_path = dist / "SHA256SUMS"
+            self.assertTrue(checksum_path.exists(), "dist/SHA256SUMS must be created")
+            verify = subprocess.run(
+                ["sha256sum", "-c", "SHA256SUMS"],
+                cwd=str(dist),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(verify.returncode, 0, msg=verify.stdout + verify.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

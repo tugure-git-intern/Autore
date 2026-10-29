@@ -137,6 +137,31 @@ File `sandbox/services/docker-compose.yml` mem-pin penuh image dengan `@sha256:<
   - Port Docker Hosted Registry (`docker-hosted`): `127.0.0.1:5000:5000` (loopback).
   - Kedua repository (`docker-hosted` dan `autore-releases`) dibuat dengan `writePolicy: "ALLOW_ONCE"` (**Disable redeploy**).
 
+### 5.1 Cara Tes Lokal di Sandbox (Jaringan Docker Antar-Container)
+
+SonarQube di `docker-compose` bind cuma ke `127.0.0.1:9000`, dan Docker memblokir komunikasi antar-network berbeda (scanner di bridge default tidak bisa reach container di network `services_default` — error "connect timed out").
+
+**Cara Tes Lokal:**
+1. Hubungkan container SonarQube ke network bridge default:
+   ```bash
+   docker network connect bridge autore-sonarqube
+   ```
+2. Export `SONAR_HOST_URL` menggunakan IP bridge container:
+   ```bash
+   export SONAR_HOST_URL="http://$(docker inspect -f '{{.NetworkSettings.Networks.bridge.IPAddress}}' autore-sonarqube):9000"
+   ```
+3. Export credentials & project key:
+   ```bash
+   export SONAR_TOKEN=<token>
+   export SONAR_PROJECT_KEY=autore-cli
+   ```
+4. Jalankan script gate SonarQube:
+   ```bash
+   ./scripts/ci-sonarqube-gate.sh
+   ```
+
+*Fix jangka panjang:* Jalankan scanner dengan `--network services_default` dan pakai `http://autore-sonarqube:9000`.
+
 ---
 
 ## 6. Risiko yang Masih Tersisa (Residual Risks)

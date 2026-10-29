@@ -14,3 +14,10 @@ target/
 
 # Local services artifacts
 sandbox/services/mitigated-cacerts
+sandbox/services/.nexus-policy-spec.json
+
+# SonarQube & Scanner artifacts
+.scannerwork/
+**/.scannerwork/
+clippy-report.json
+**/clippy-report.json

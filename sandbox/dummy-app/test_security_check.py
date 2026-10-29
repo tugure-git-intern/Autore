@@ -292,7 +292,9 @@ class SecurityGateTest(unittest.TestCase):
         gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
         self.assertTrue(gate_script.exists(), "scripts/ci-sonarqube-gate.sh must exist")
         content = gate_script.read_text(encoding="utf-8")
-        self.assertIn("cargo clippy --all-targets --message-format=json -- -D warnings", content)
+        self.assertIn('cargo clippy "${manifest_arg[@]}" --all-targets --message-format=json -- -D warnings', content)
+        self.assertIn("-Dsonar.working.directory=/usr/src/.scannerwork", content)
+        self.assertIn("-w /usr/src", content)
         self.assertIn("-Dsonar.rust.clippy.enabled=false", content)
         self.assertIn("-Dsonar.rust.clippyReport.reportPaths=", content)
         self.assertIn("sonarsource/sonar-scanner-cli:12.3.0.4285_8.1.0@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7", content)

@@ -256,6 +256,11 @@ class SecurityGateTest(unittest.TestCase):
             script = (REPO_ROOT / "runner" / name).read_text(encoding="utf-8")
             self.assertIn('-m 0750 "${AGENT_WORKDIR}"', script, f"{name} workdir is not 0750")
 
+    def test_security_check_uses_high_critical_severity_for_trivy(self):
+        script = SECURITY_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("--severity HIGH,CRITICAL", script)
+        self.assertNotIn("--severity CRITICAL", script.replace("--severity HIGH,CRITICAL", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

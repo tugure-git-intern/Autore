@@ -19,6 +19,9 @@ pub trait Runner {
     /// Run `program args...`; return the exit code (Err if it could not start
     /// or was killed by a signal).
     fn run(&self, program: &Path, args: &[String]) -> Result<i32, String>;
+
+    /// Run `program args...`; return (exit code, stdout)
+    fn run_capture(&self, program: &Path, args: &[String]) -> Result<(i32, String), String>;
 }
 
 pub struct ScanContext {
@@ -105,7 +108,7 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
     }
 }
 
-pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String> {
+pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Result<(), String> {
     let report = ctx.out_dir.join("trivy.json");
     let _ = std::fs::remove_file(&report);
     let mut args = docker_base(ctx);
@@ -116,7 +119,7 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String> {
     args.extend(
         [
             TRIVY_IMAGE, "fs", "--cache-dir", "/cache", "--scanners", "vuln,misconfig",
-            "--skip-check-update", "--severity", "CRITICAL", "--exit-code", "1",
+            "--skip-check-update", "--severity", severity, "--exit-code", "1",
             "--format", "json", "--output", "/out/trivy.json", "/repo",
         ]
         .map(String::from),
@@ -125,12 +128,164 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String> {
     let well_formed = matches!(read_report(ctx, "trivy.json"), Some(b) if b.trim_start().starts_with('{') && b.contains("\"SchemaVersion\""));
     match (code, well_formed) {
         (0, true) => Ok(()),
-        (1, true) => Err("Trivy mendeteksi celah keamanan CRITICAL / misconfiguration".into()),
+        (1, true) => Err(format!("Trivy mendeteksi celah keamanan {severity} / misconfiguration")),
         (0 | 1, false) => Err(format!(
             "Trivy tidak menghasilkan laporan valid (exit {code}) — scanner dianggap TIDAK berjalan"
         )),
         _ => Err(format!("Trivy gagal berjalan (exit {code})")),
     }
+}
+
+pub struct ImageScanOptions<'a> {
+    pub image: &'a str,
+    pub severity: &'a str,
+    pub sbom_output: Option<&'a Path>,
+}
+
+pub fn run_trivy_image(
+    docker: &Path,
+    opts: &ImageScanOptions,
+    runner: &dyn Runner,
+) -> Result<(), String> {
+    if opts.image == "latest" || opts.image.ends_with(":latest") {
+        return Err("Tag :latest dilarang. Gunakan immutable commit tag.".into());
+    }
+
+    // 1. Periksa runtime user/UID image (fail-closed jika root / UID 0)
+    let (inspect_code, inspect_out) = runner.run_capture(
+        docker,
+        &[
+            "image".into(),
+            "inspect".into(),
+            "--format".into(),
+            "{{.Config.User}}".into(),
+            opts.image.into(),
+        ],
+    )?;
+    if inspect_code != 0 {
+        return Err(format!(
+            "Gagal membaca metadata image {}: inspect exit code {inspect_code}",
+            opts.image
+        ));
+    }
+    let user_trimmed = inspect_out.trim();
+    let user_lower = user_trimmed.to_ascii_lowercase();
+    let is_root = user_lower.is_empty()
+        || user_lower == "root"
+        || user_lower == "0"
+        || user_lower == "0:0"
+        || user_lower.starts_with("root:")
+        || user_lower.starts_with("0:");
+    if is_root {
+        let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
+        return Err(format!(
+            "Image {} berjalan sebagai root (UID 0, user: '{}'). Wajib menggunakan non-root USER.",
+            opts.image, user_trimmed
+        ));
+    }
+
+    // 2. Jalankan Trivy Image Scan
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let out_dir = std::env::temp_dir().join(format!("autore-image-scan-{}-{nanos}", std::process::id()));
+    std::fs::create_dir_all(&out_dir)
+        .map_err(|e| format!("Gagal membuat direktori laporan image: {e}"))?;
+    let cache_dir = match std::env::var_os("HOME") {
+        Some(h) => PathBuf::from(h).join(".cache/autore/trivy"),
+        None => out_dir.join("cache"),
+    };
+    let _ = std::fs::create_dir_all(&cache_dir);
+
+    let report_file = out_dir.join("trivy-image.json");
+    let args = [
+        "run".into(),
+        "--rm".into(),
+        "-v".into(),
+        "/var/run/docker.sock:/var/run/docker.sock".into(),
+        "-v".into(),
+        format!("{}:/reports", out_dir.display()),
+        "-v".into(),
+        format!("{}:/cache", cache_dir.display()),
+        TRIVY_IMAGE.into(),
+        "image".into(),
+        "--cache-dir".into(),
+        "/cache".into(),
+        "--scanners".into(),
+        "vuln".into(),
+        "--skip-check-update".into(),
+        "--severity".into(),
+        opts.severity.into(),
+        "--exit-code".into(),
+        "1".into(),
+        "--format".into(),
+        "json".into(),
+        "--output".into(),
+        "/reports/trivy-image.json".into(),
+        opts.image.into(),
+    ];
+    let scan_code = runner.run(docker, &args)?;
+    let report_body = std::fs::read_to_string(&report_file).ok();
+    let well_formed = matches!(&report_body, Some(b) if b.trim_start().starts_with('{') && b.contains("\"SchemaVersion\""));
+
+    if scan_code != 0 || !well_formed {
+        let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
+        let _ = std::fs::remove_dir_all(&out_dir);
+        if scan_code == 1 && well_formed {
+            return Err(format!(
+                "Trivy mendeteksi celah keamanan {} pada image {}",
+                opts.severity, opts.image
+            ));
+        } else {
+            return Err(format!(
+                "Trivy image scan gagal atau tidak menghasilkan laporan valid (exit {scan_code})"
+            ));
+        }
+    }
+
+    // 3. Generate CycloneDX SBOM jika diminta
+    if let Some(sbom_target) = opts.sbom_output {
+        let sbom_tmp = out_dir.join("sbom.cdx.json");
+        let sbom_args = [
+            "run".into(),
+            "--rm".into(),
+            "-v".into(),
+            "/var/run/docker.sock:/var/run/docker.sock".into(),
+            "-v".into(),
+            format!("{}:/reports", out_dir.display()),
+            "-v".into(),
+            format!("{}:/cache", cache_dir.display()),
+            TRIVY_IMAGE.into(),
+            "image".into(),
+            "--cache-dir".into(),
+            "/cache".into(),
+            "--format".into(),
+            "cyclonedx".into(),
+            "--output".into(),
+            "/reports/sbom.cdx.json".into(),
+            opts.image.into(),
+        ];
+        let sbom_code = runner.run(docker, &sbom_args)?;
+        let sbom_content = std::fs::read_to_string(&sbom_tmp).ok();
+        let sbom_valid = matches!(&sbom_content, Some(b) if b.contains("CycloneDX") || b.contains("bomFormat"));
+        if sbom_code != 0 || !sbom_valid {
+            let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
+            let _ = std::fs::remove_dir_all(&out_dir);
+            return Err("Gagal menghasilkan SBOM CycloneDX yang valid".into());
+        }
+        if let Some(parent) = sbom_target.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(sbom_target, sbom_content.unwrap()) {
+            let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
+            let _ = std::fs::remove_dir_all(&out_dir);
+            return Err(format!("Gagal menyimpan SBOM ke {}: {e}", sbom_target.display()));
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&out_dir);
+    Ok(())
 }
 
 /// Real process runner. Inherits stderr so scanner progress shows in CI logs.
@@ -147,11 +302,25 @@ impl Runner for ProcessRunner {
             .code()
             .ok_or_else(|| format!("{} dihentikan oleh signal", program.display()))
     }
+
+    fn run_capture(&self, program: &Path, args: &[String]) -> Result<(i32, String), String> {
+        let out = std::process::Command::new(program)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("Gagal menjalankan {}: {e}", program.display()))?;
+        let code = out
+            .status
+            .code()
+            .ok_or_else(|| format!("{} dihentikan oleh signal", program.display()))?;
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        Ok((code, stdout))
+    }
 }
 
 /// Build a context (private 0700 report dir, trusted docker) and run both
 /// scanners. Any error means the gate must fail.
-pub fn run_authoritative_scan(target: &Path) -> Result<(), String> {
+pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), String> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt};
     let docker = resolve_trusted_binary(
         &TRUSTED_DOCKER_PATHS.iter().map(PathBuf::from).collect::<Vec<_>>(),
@@ -180,12 +349,25 @@ pub fn run_authoritative_scan(target: &Path) -> Result<(), String> {
     let result = (|| {
         run_gitleaks(&ctx, &ProcessRunner)?;
         println!("  ✔ Gitleaks LULUS (tidak ada secret bocor).");
-        run_trivy(&ctx, &ProcessRunner)?;
-        println!("  ✔ Trivy LULUS (tidak ada celah CRITICAL).");
+        run_trivy(&ctx, &ProcessRunner, severity)?;
+        println!("  ✔ Trivy LULUS (tidak ada celah {severity}).");
         Ok(())
     })();
     let _ = std::fs::remove_dir_all(&out_dir);
     result
+}
+
+pub fn run_authoritative_image_scan(opts: &ImageScanOptions) -> Result<(), String> {
+    let docker = resolve_trusted_binary(
+        &TRUSTED_DOCKER_PATHS.iter().map(PathBuf::from).collect::<Vec<_>>(),
+        0,
+    )?;
+    run_trivy_image(&docker, opts, &ProcessRunner)?;
+    println!("  ✔ Image scan LULUS: runtime user non-root & bebas CVE {}.", opts.severity);
+    if opts.sbom_output.is_some() {
+        println!("  ✔ SBOM CycloneDX berhasil dibuat.");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -199,7 +381,9 @@ mod tests {
     /// Fake docker: records calls, optionally writes a report, returns `code`.
     struct FakeRunner {
         code: i32,
+        inspect_user: Option<String>,
         report: Option<&'static str>,
+        sbom: Option<&'static str>,
         calls: RefCell<Vec<Vec<String>>>,
     }
 
@@ -207,24 +391,51 @@ mod tests {
         fn run(&self, _program: &Path, args: &[String]) -> Result<i32, String> {
             self.calls.borrow_mut().push(args.to_vec());
             if let Some(body) = self.report {
-                // The report lands in out_dir as named by the scanner args.
+                // The report lands in out_dir as named by the scanner args (/out or /reports).
                 let out = args
                     .iter()
-                    .find_map(|a| a.strip_suffix(":/out").map(PathBuf::from))
-                    .expect("out_dir must be mounted at /out");
-                let name = if args.iter().any(|a| a.contains("gitleaks")) {
-                    "gitleaks.json"
-                } else {
-                    "trivy.json"
-                };
-                fs::write(out.join(name), body).unwrap();
+                    .find_map(|a| a.strip_suffix(":/out").or_else(|| a.strip_suffix(":/reports")).map(PathBuf::from));
+                if let Some(out) = out {
+                    let name = if args.iter().any(|a| a.contains("gitleaks")) {
+                        "gitleaks.json"
+                    } else if args.iter().any(|a| a == "image") && args.iter().any(|a| a == "cyclonedx") {
+                        "sbom.cdx.json"
+                    } else if args.iter().any(|a| a == "image") {
+                        "trivy-image.json"
+                    } else {
+                        "trivy.json"
+                    };
+                    if name == "sbom.cdx.json" {
+                        if let Some(s) = self.sbom {
+                            fs::write(out.join(name), s).unwrap();
+                        }
+                    } else {
+                        fs::write(out.join(name), body).unwrap();
+                    }
+                }
             }
             Ok(self.code)
+        }
+
+        fn run_capture(&self, _program: &Path, args: &[String]) -> Result<(i32, String), String> {
+            self.calls.borrow_mut().push(args.to_vec());
+            if args.iter().any(|a| a == "inspect") {
+                let user = self.inspect_user.clone().unwrap_or_else(|| "appuser".to_string());
+                Ok((0, user))
+            } else {
+                Ok((self.code, String::new()))
+            }
         }
     }
 
     fn fake(code: i32, report: Option<&'static str>) -> FakeRunner {
-        FakeRunner { code, report, calls: RefCell::new(vec![]) }
+        FakeRunner {
+            code,
+            inspect_user: None,
+            report,
+            sbom: None,
+            calls: RefCell::new(vec![]),
+        }
     }
 
     fn ctx(tmp: &TempDir) -> ScanContext {
@@ -261,11 +472,11 @@ mod tests {
         let me = fs::metadata(&bin).unwrap().uid();
 
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o777)).unwrap();
-        assert!(resolve_trusted_binary(&[bin.clone()], me).is_err(), "world-writable accepted");
+        assert!(resolve_trusted_binary(std::slice::from_ref(&bin), me).is_err(), "world-writable accepted");
 
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
-        assert!(resolve_trusted_binary(&[bin.clone()], me + 1).is_err(), "wrong owner accepted");
-        assert_eq!(resolve_trusted_binary(&[bin.clone()], me).unwrap(), bin);
+        assert!(resolve_trusted_binary(std::slice::from_ref(&bin), me + 1).is_err(), "wrong owner accepted");
+        assert_eq!(resolve_trusted_binary(std::slice::from_ref(&bin), me).unwrap(), bin);
     }
 
     // ---- gitleaks ---------------------------------------------------------
@@ -308,20 +519,20 @@ mod tests {
     #[test]
     fn trivy_exit_zero_without_report_fails_closed() {
         let tmp = TempDir::new().unwrap();
-        let err = run_trivy(&ctx(&tmp), &fake(0, None)).unwrap_err();
+        let err = run_trivy(&ctx(&tmp), &fake(0, None), "HIGH,CRITICAL").unwrap_err();
         assert!(err.contains("Trivy"), "{err}");
     }
 
     #[test]
     fn trivy_garbage_report_fails_closed() {
         let tmp = TempDir::new().unwrap();
-        assert!(run_trivy(&ctx(&tmp), &fake(0, Some("not json"))).is_err());
+        assert!(run_trivy(&ctx(&tmp), &fake(0, Some("not json")), "HIGH,CRITICAL").is_err());
     }
 
     #[test]
     fn trivy_critical_findings_block() {
         let tmp = TempDir::new().unwrap();
-        assert!(run_trivy(&ctx(&tmp), &fake(1, Some(TRIVY_OK))).is_err());
+        assert!(run_trivy(&ctx(&tmp), &fake(1, Some(TRIVY_OK)), "HIGH,CRITICAL").is_err());
     }
 
     #[test]
@@ -329,10 +540,85 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let c = ctx(&tmp);
         let r = fake(0, Some(TRIVY_OK));
-        run_trivy(&c, &r).unwrap();
+        run_trivy(&c, &r, "HIGH,CRITICAL").unwrap();
         let args = r.calls.borrow()[0].join(" ");
         assert!(args.contains(TRIVY_IMAGE), "{args}");
         assert!(args.contains(&format!("{}:/repo:ro", c.target.display())), "{args}");
-        assert!(args.contains("--severity CRITICAL"), "{args}");
+        assert!(args.contains("--severity HIGH,CRITICAL"), "{args}");
+    }
+
+    // ---- trivy image scan & sbom -------------------------------------------
+
+    #[test]
+    fn trivy_image_rejects_latest_tag() {
+        let _tmp = TempDir::new().unwrap();
+        let docker = PathBuf::from("/usr/bin/docker");
+        let opts = ImageScanOptions {
+            image: "127.0.0.1:5000/app:latest",
+            severity: "HIGH,CRITICAL",
+            sbom_output: None,
+        };
+        let r = fake(0, None);
+        let err = run_trivy_image(&docker, &opts, &r).unwrap_err();
+        assert!(err.contains("latest"), "{err}");
+    }
+
+    #[test]
+    fn trivy_image_fails_when_user_is_root_and_removes_image() {
+        let _tmp = TempDir::new().unwrap();
+        let docker = PathBuf::from("/usr/bin/docker");
+        let image = "127.0.0.1:5000/app:build-1-commit-0123456789abcdef0123456789abcdef01234567";
+        let opts = ImageScanOptions {
+            image,
+            severity: "HIGH,CRITICAL",
+            sbom_output: None,
+        };
+        let mut r = fake(0, None);
+        r.inspect_user = Some("root".to_string());
+        let err = run_trivy_image(&docker, &opts, &r).unwrap_err();
+        assert!(err.contains("root") || err.contains("UID 0"), "{err}");
+        let calls = r.calls.borrow();
+        let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
+        assert!(rmi_call.is_some(), "failed image must be removed with docker rmi");
+    }
+
+    #[test]
+    fn trivy_image_cve_failure_removes_image() {
+        let _tmp = TempDir::new().unwrap();
+        let docker = PathBuf::from("/usr/bin/docker");
+        let image = "127.0.0.1:5000/app:build-1-commit-0123456789abcdef0123456789abcdef01234567";
+        let opts = ImageScanOptions {
+            image,
+            severity: "HIGH,CRITICAL",
+            sbom_output: None,
+        };
+        let mut r = fake(1, Some(TRIVY_OK));
+        r.inspect_user = Some("1001:1001".to_string());
+        let err = run_trivy_image(&docker, &opts, &r).unwrap_err();
+        assert!(err.contains("Trivy") || err.contains("keamanan"), "{err}");
+        let calls = r.calls.borrow();
+        let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
+        assert!(rmi_call.is_some(), "failed image must be removed with docker rmi on CVE detection");
+    }
+
+    #[test]
+    fn trivy_image_clean_report_keeps_image_and_generates_sbom() {
+        let tmp = TempDir::new().unwrap();
+        let docker = PathBuf::from("/usr/bin/docker");
+        let image = "127.0.0.1:5000/app:build-1-commit-0123456789abcdef0123456789abcdef01234567";
+        let sbom_path = tmp.path().join("sbom.cdx.json");
+        let opts = ImageScanOptions {
+            image,
+            severity: "HIGH,CRITICAL",
+            sbom_output: Some(&sbom_path),
+        };
+        let mut r = fake(0, Some(TRIVY_OK));
+        r.inspect_user = Some("appuser".to_string());
+        r.sbom = Some(r#"{"bomFormat": "CycloneDX", "specVersion": "1.5"}"#);
+        run_trivy_image(&docker, &opts, &r).unwrap();
+        let calls = r.calls.borrow();
+        let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
+        assert!(rmi_call.is_none(), "passing image must NOT be removed from local docker");
+        assert!(sbom_path.exists(), "sbom file must be created at requested path");
     }
 }

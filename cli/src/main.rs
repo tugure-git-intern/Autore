@@ -58,6 +58,10 @@ enum Commands {
         #[arg(long, short, default_value = ".")]
         path: PathBuf,
 
+        /// Tingkat severity Trivy yang diblokir (default: HIGH,CRITICAL)
+        #[arg(long, default_value = "HIGH,CRITICAL")]
+        severity: String,
+
         /// Hanya static guard (untuk pre-commit lokal). NON-AUTHORITATIVE: jangan dipakai di CI.
         #[arg(long)]
         no_docker: bool,
@@ -65,6 +69,25 @@ enum Commands {
         /// [Deprecated] Gitleaks & Trivy sekarang selalu dijalankan; flag ini diabaikan.
         #[arg(long, hide = true)]
         docker: bool,
+    },
+
+    /// Jalankan Security Gate Post-Build pada Docker Image: periksa UID non-root + Trivy Image Scan + SBOM CycloneDX.
+    ScanImage {
+        /// Referensi image Docker lokal (contoh: 127.0.0.1:5000/app:build-1-commit-sha)
+        #[arg(long)]
+        image: String,
+
+        /// Tingkat severity Trivy yang diblokir (default: HIGH,CRITICAL)
+        #[arg(long, default_value = "HIGH,CRITICAL")]
+        severity: String,
+
+        /// Path output untuk file SBOM CycloneDX (contoh: dist/sbom.cdx.json)
+        #[arg(long)]
+        sbom_output: Option<PathBuf>,
+
+        /// Mode non-authoritative untuk testing tanpa Docker daemon
+        #[arg(long)]
+        no_docker: bool,
     },
 
     /// Kelola Git Pre-Commit Hook (Satpam Pintu 1 sebelum git commit)
@@ -168,7 +191,7 @@ fn main() {
             }
         }
 
-        Commands::Scan { path, no_docker, docker: _ } => {
+        Commands::Scan { path, severity, no_docker, docker: _ } => {
             println!(
                 "{} Memindai keamanan kode di '{}'...",
                 "==>".cyan().bold(),
@@ -221,8 +244,8 @@ fn main() {
                         .bold()
                 );
             } else {
-                println!("{} Menjalankan Gitleaks & Trivy (Docker, image pinned)...", "==>".cyan().bold());
-                if let Err(e) = external::run_authoritative_scan(&path) {
+                println!("{} Menjalankan Gitleaks & Trivy (Docker, image pinned, severity: {})...", "==>".cyan().bold(), severity);
+                if let Err(e) = external::run_authoritative_scan(&path, &severity) {
                     eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
                     process::exit(1);
                 }
@@ -231,6 +254,41 @@ fn main() {
             println!(
                 "{}",
                 "✔ SEMUA PEMERIKSAAN KEAMANAN LULUS!".green().bold()
+            );
+        }
+
+        Commands::ScanImage { image, severity, sbom_output, no_docker } => {
+            println!(
+                "{} Memeriksa keamanan Docker image '{}' (severity: {})...",
+                "==>".cyan().bold(),
+                image,
+                severity
+            );
+            if image == "latest" || image.ends_with(":latest") {
+                eprintln!("\n{} Tag :latest dilarang. Gunakan immutable commit tag.", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold());
+                process::exit(1);
+            }
+            if no_docker {
+                println!(
+                    "{}",
+                    "⚠ Mode --no-docker: pemeriksaan image dilewati (NON-AUTHORITATIVE)."
+                        .yellow()
+                        .bold()
+                );
+            } else {
+                let opts = external::ImageScanOptions {
+                    image: &image,
+                    severity: &severity,
+                    sbom_output: sbom_output.as_deref(),
+                };
+                if let Err(e) = external::run_authoritative_image_scan(&opts) {
+                    eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
+                    process::exit(1);
+                }
+            }
+            println!(
+                "{}",
+                "✔ PEMERIKSAAN DOCKER IMAGE LULUS!".green().bold()
             );
         }
 

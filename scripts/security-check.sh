@@ -4,7 +4,7 @@
 # Runs three checks before any image is built or deployed:
 #   1. Static Dangerous Code & Dockerfile Guard (instant local check)
 #   2. Gitleaks Secret Scanner (via Docker container, --no-git --redact)
-#   3. Trivy Vulnerability & Misconfig Scanner (via Docker container, CRITICAL)
+#   3. Trivy Vulnerability & Misconfig Scanner (via Docker container, HIGH,CRITICAL)
 #
 # When a check fails, the human-readable reason is written to
 # "$WORKSPACE/.security-gate-reason" so notify-telegram.sh can include it.
@@ -132,7 +132,7 @@ if ! docker run --rm \
   aquasec/trivy:0.58.1 fs \
   --scanners vuln,misconfig \
   --skip-check-update \
-  --severity CRITICAL \
+  --severity HIGH,CRITICAL \
   --exit-code 1 \
   "/repo/${APP_DIR}"; then
   fail_gate "Trivy mendeteksi celah keamanan CRITICAL atau salah konfigurasi pada ${APP_DIR}"

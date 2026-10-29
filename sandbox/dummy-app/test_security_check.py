@@ -256,6 +256,318 @@ class SecurityGateTest(unittest.TestCase):
             script = (REPO_ROOT / "runner" / name).read_text(encoding="utf-8")
             self.assertIn('-m 0750 "${AGENT_WORKDIR}"', script, f"{name} workdir is not 0750")
 
+    def test_security_check_uses_high_critical_severity_for_trivy(self):
+        script = SECURITY_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("--severity HIGH,CRITICAL", script)
+        self.assertNotIn("--severity CRITICAL", script.replace("--severity HIGH,CRITICAL", ""))
+
+    def test_build_musl_release_produces_static_binary_and_checksums(self):
+        build_script = REPO_ROOT / "scripts" / "build-musl-release.sh"
+        self.assertTrue(build_script.exists(), "scripts/build-musl-release.sh must exist")
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = Path(tmp)
+            env = os.environ.copy()
+            env["DIST_DIR"] = str(dist)
+            res = subprocess.run(
+                ["bash", str(build_script)],
+                cwd=str(REPO_ROOT),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            bin_path = dist / "autore-linux-x86_64-musl"
+            self.assertTrue(bin_path.exists(), "dist/autore-linux-x86_64-musl must be created")
+            checksum_path = dist / "SHA256SUMS"
+            self.assertTrue(checksum_path.exists(), "dist/SHA256SUMS must be created")
+            verify = subprocess.run(
+                ["sha256sum", "-c", "SHA256SUMS"],
+                cwd=str(dist),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(verify.returncode, 0, msg=verify.stdout + verify.stderr)
+
+    def test_sonarqube_gate_disables_internal_clippy_and_imports_report(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists(), "scripts/ci-sonarqube-gate.sh must exist")
+        content = gate_script.read_text(encoding="utf-8")
+        self.assertIn("cargo clippy --all-targets --message-format=json -- -D warnings", content)
+        self.assertIn("-Dsonar.rust.clippy.enabled=false", content)
+        self.assertIn("-Dsonar.rust.clippyReport.reportPaths=", content)
+        self.assertIn("sonarsource/sonar-scanner-cli:12.3.0.4285_8.1.0@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7", content)
+
+    def test_sonarqube_gate_polls_ce_task_and_verifies_analysis_id_and_rust_ncloc(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+            curl_log = ws / "curl_calls.log"
+
+            # Fake curl that records requests and returns mock Sonar responses
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "$@" >> "{curl_log}"\n'
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                f'  echo "STDIN: $stdin_cfg" >> "{curl_log}"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/api/languages/list"* ]]; then\n'
+                '  echo \'{"languages":[{"key":"rust","name":"Rust"}]}\'\n'
+                'elif [[ "$target" == *"/api/ce/task"* ]]; then\n'
+                '  echo \'{"task":{"id":"ce-123","status":"SUCCESS","analysisId":"analysis-456"}}\'\n'
+                'elif [[ "$target" == *"/api/qualitygates/project_status"* ]]; then\n'
+                '  echo \'{"projectStatus":{"status":"OK"}}\'\n'
+                'elif [[ "$target" == *"/api/measures/component"* ]]; then\n'
+                '  echo \'{"component":{"measures":[{"metric":"ncloc_language_distribution","value":"rust=1200;python=300"}]}}\'\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            # Fake docker that writes report-task.txt
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'mkdir -p .scannerwork\n'
+                'echo "ceTaskId=ce-123" > .scannerwork/report-task.txt\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            # Fake cargo that writes clippy-report.json
+            fake_cargo = bin_dir / "cargo"
+            fake_cargo.write_text(
+                "#!/usr/bin/env bash\n"
+                'echo "{}" > clippy-report.json\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["SONAR_TOKEN"] = "squ_super_secret_token_12345"
+            env["SONAR_PROJECT_KEY"] = "test-project"
+            env["WORKSPACE"] = str(ws)
+
+            res = subprocess.run(
+                ["bash", str(gate_script)],
+                cwd=str(ws),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            calls = curl_log.read_text(encoding="utf-8")
+            self.assertIn("/api/ce/task?id=ce-123", calls)
+            self.assertIn("/api/qualitygates/project_status?analysisId=analysis-456", calls)
+            self.assertIn("metricKeys=ncloc,ncloc_language_distribution", calls)
+            self.assertNotIn("squ_super_secret_token_12345", [arg for arg in calls.splitlines() if not arg.startswith("STDIN:")], "Token leaked in curl argv")
+
+    def test_sonarqube_gate_fails_when_rust_ncloc_zero(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/api/languages/list"* ]]; then\n'
+                '  echo \'{"languages":[{"key":"rust","name":"Rust"}]}\'\n'
+                'elif [[ "$target" == *"/api/ce/task"* ]]; then\n'
+                '  echo \'{"task":{"id":"ce-123","status":"SUCCESS","analysisId":"analysis-456"}}\'\n'
+                'elif [[ "$target" == *"/api/qualitygates/project_status"* ]]; then\n'
+                '  echo \'{"projectStatus":{"status":"OK"}}\'\n'
+                'elif [[ "$target" == *"/api/measures/component"* ]]; then\n'
+                '  echo \'{"component":{"measures":[{"metric":"ncloc_language_distribution","value":"python=300"}]}}\'\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'mkdir -p .scannerwork\n'
+                'echo "ceTaskId=ce-123" > .scannerwork/report-task.txt\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            fake_cargo = bin_dir / "cargo"
+            fake_cargo.write_text(
+                "#!/usr/bin/env bash\n"
+                'echo "{}" > clippy-report.json\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+
+            # Create a dummy .rs file in ws to indicate this is a Rust project
+            (ws / "src").mkdir()
+            (ws / "src" / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["SONAR_TOKEN"] = "squ_secret"
+            env["WORKSPACE"] = str(ws)
+
+            res = subprocess.run(
+                ["bash", str(gate_script)],
+                cwd=str(ws),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(res.returncode, 0, "Gate must fail when rust ncloc is absent on a Rust project")
+
+    def test_nexus_publish_rejects_latest_or_short_sha_tag(self):
+        pub_script = REPO_ROOT / "scripts" / "ci-nexus-publish.sh"
+        self.assertTrue(pub_script.exists(), "scripts/ci-nexus-publish.sh must exist")
+        env = os.environ.copy()
+        env["APP_NAME"] = "dummy-app"
+        env["BUILD_NUMBER"] = "1"
+        env["NEXUS_USER"] = "admin"
+        env["NEXUS_PASS"] = "secret"
+
+        # 1. Reject SHORT_SHA (7 chars)
+        env["GIT_COMMIT"] = "e77d504"
+        res = subprocess.run(["bash", str(pub_script)], env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("40", res.stderr + res.stdout)
+
+        # 2. Reject 'latest'
+        env["GIT_COMMIT"] = "latest"
+        res = subprocess.run(["bash", str(pub_script)], env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+
+    def test_nexus_publish_verifies_allow_once_and_authenticated_head_digest(self):
+        pub_script = REPO_ROOT / "scripts" / "ci-nexus-publish.sh"
+        self.assertTrue(pub_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+            dist_dir = ws / "dist"
+            dist_dir.mkdir()
+            (dist_dir / "autore-linux-x86_64-musl").write_bytes(b"static-binary")
+            (dist_dir / "sbom.cdx.json").write_text('{"bomFormat":"CycloneDX"}', encoding="utf-8")
+            (dist_dir / "SHA256SUMS").write_text("dummy sha256sums\n", encoding="utf-8")
+
+            call_log = ws / "calls.log"
+            digest_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            full_commit = "e77d5049f8a12b3c4d5e6f708192a3b4c5d6e7f8"
+
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "DOCKER $@" >> "{call_log}"\n'
+                'if [[ "$*" == *"inspect"* ]]; then\n'
+                f'  echo "127.0.0.1:5000/dummy-app@sha256:{digest_hex}"\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "CURL $@" >> "{call_log}"\n'
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                f'  echo "STDIN: $stdin_cfg" >> "{call_log}"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/service/rest/v1/repositories/docker/hosted"* ]]; then\n'
+                '  echo \'{"storage":{"writePolicy":"ALLOW_ONCE"}}\'\n'
+                'elif [[ "$*" == *"-X HEAD"* || "$*" == *"-I"* || "$*" == *"-fsSI"* ]]; then\n'
+                '  echo "HTTP/1.1 200 OK"\n'
+                f'  echo "Docker-Content-Digest: sha256:{digest_hex}"\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["WORKSPACE"] = str(ws)
+            env["DIST_DIR"] = str(dist_dir)
+            env["APP_NAME"] = "dummy-app"
+            env["BUILD_NUMBER"] = "42"
+            env["GIT_COMMIT"] = full_commit
+            env["NEXUS_USER"] = "admin"
+            env["NEXUS_PASS"] = "SuperSecretPassword123"
+
+            res = subprocess.run(["bash", str(pub_script)], env=env, cwd=str(ws), capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+
+            verified_digest_file = ws / ".verified-image-digest"
+            self.assertTrue(verified_digest_file.exists(), ".verified-image-digest must be created")
+            self.assertEqual(
+                verified_digest_file.read_text(encoding="utf-8").strip(),
+                f"127.0.0.1:5000/dummy-app@sha256:{digest_hex}",
+            )
+
+            calls = call_log.read_text(encoding="utf-8")
+            self.assertIn(f"/v2/dummy-app/manifests/sha256:{digest_hex}", calls)
+            self.assertNotIn("SuperSecretPassword123", [c for c in calls.splitlines() if not c.startswith("STDIN:")])
+
+    def test_deploy_by_digest_rejects_tag_without_sha256_digest(self):
+        dep_script = REPO_ROOT / "scripts" / "ci-deploy-by-digest.sh"
+        self.assertTrue(dep_script.exists(), "scripts/ci-deploy-by-digest.sh must exist")
+        for bad_ref in ("127.0.0.1:5000/app:latest", "127.0.0.1:5000/app:build-1", "127.0.0.1:5000/app"):
+            res = subprocess.run(["bash", str(dep_script), bad_ref], capture_output=True, text=True)
+            self.assertNotEqual(res.returncode, 0, f"Deploy script must reject {bad_ref}")
+
+    def test_services_docker_compose_and_bootstrap_configuration(self):
+        compose_file = REPO_ROOT / "sandbox" / "services" / "docker-compose.yml"
+        self.assertTrue(compose_file.exists(), "sandbox/services/docker-compose.yml must exist")
+        compose_content = compose_file.read_text(encoding="utf-8")
+        self.assertIn("sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae", compose_content)
+        self.assertIn("sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e", compose_content)
+        self.assertIn("127.0.0.1:9000:9000", compose_content)
+        self.assertIn("127.0.0.1:8082:8081", compose_content)
+        self.assertIn("127.0.0.1:5000:5000", compose_content)
+        self.assertIn("mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro", compose_content)
+
+        bootstrap_script = REPO_ROOT / "sandbox" / "services" / "bootstrap-local-services.sh"
+        self.assertTrue(bootstrap_script.exists(), "sandbox/services/bootstrap-local-services.sh must exist")
+        bootstrap_content = bootstrap_script.read_text(encoding="utf-8")
+        self.assertIn("keytool -delete", bootstrap_content)
+        self.assertIn("emsign", bootstrap_content)
+        self.assertIn("ALLOW_ONCE", bootstrap_content)
+
+    def test_jenkins_shared_library_structure_and_security(self):
+        groovy_file = REPO_ROOT / "jenkins-shared-library" / "vars" / "autorePipeline.groovy"
+        self.assertTrue(groovy_file.exists(), "jenkins-shared-library/vars/autorePipeline.groovy must exist")
+        content = groovy_file.read_text(encoding="utf-8")
+        self.assertIn("^[0-9a-f]{40}$", content)
+        self.assertIn("autore scan-image", content)
+        self.assertIn("ci-sonarqube-gate.sh", content)
+        self.assertIn("ci-nexus-publish.sh", content)
+        self.assertIn("ci-deploy-by-digest.sh", content)
+
 
 if __name__ == "__main__":
     unittest.main()

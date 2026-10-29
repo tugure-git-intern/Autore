@@ -64,3 +64,30 @@ fn no_docker_mode_is_labelled_non_authoritative() {
     assert!(out.status.success(), "{all}");
     assert!(all.contains("NON-AUTHORITATIVE"), "{all}");
 }
+
+#[test]
+fn scan_image_rejects_latest_tag() {
+    let out = autore()
+        .args(["scan-image", "--image", "127.0.0.1:5000/app:latest"])
+        .output()
+        .unwrap();
+    let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(!out.status.success(), "scan-image should fail on :latest tag");
+    assert!(all.contains("latest"), "{all}");
+}
+
+#[test]
+fn scan_image_no_docker_mode_is_labelled_non_authoritative() {
+    let out = autore()
+        .args([
+            "scan-image",
+            "--image",
+            "127.0.0.1:5000/app:build-1-commit-0123456789abcdef0123456789abcdef01234567",
+            "--no-docker",
+        ])
+        .output()
+        .unwrap();
+    let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success(), "{all}");
+    assert!(all.contains("NON-AUTHORITATIVE"), "{all}");
+}

@@ -288,6 +288,157 @@ class SecurityGateTest(unittest.TestCase):
             )
             self.assertEqual(verify.returncode, 0, msg=verify.stdout + verify.stderr)
 
+    def test_sonarqube_gate_disables_internal_clippy_and_imports_report(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists(), "scripts/ci-sonarqube-gate.sh must exist")
+        content = gate_script.read_text(encoding="utf-8")
+        self.assertIn("cargo clippy --all-targets --message-format=json -- -D warnings", content)
+        self.assertIn("-Dsonar.rust.clippy.enabled=false", content)
+        self.assertIn("-Dsonar.rust.clippyReport.reportPaths=", content)
+        self.assertIn("sonarsource/sonar-scanner-cli:12.3.0.4285_8.1.0@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7", content)
+
+    def test_sonarqube_gate_polls_ce_task_and_verifies_analysis_id_and_rust_ncloc(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+            curl_log = ws / "curl_calls.log"
+
+            # Fake curl that records requests and returns mock Sonar responses
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "$@" >> "{curl_log}"\n'
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                f'  echo "STDIN: $stdin_cfg" >> "{curl_log}"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/api/languages/list"* ]]; then\n'
+                '  echo \'{"languages":[{"key":"rust","name":"Rust"}]}\'\n'
+                'elif [[ "$target" == *"/api/ce/task"* ]]; then\n'
+                '  echo \'{"task":{"id":"ce-123","status":"SUCCESS","analysisId":"analysis-456"}}\'\n'
+                'elif [[ "$target" == *"/api/qualitygates/project_status"* ]]; then\n'
+                '  echo \'{"projectStatus":{"status":"OK"}}\'\n'
+                'elif [[ "$target" == *"/api/measures/component"* ]]; then\n'
+                '  echo \'{"component":{"measures":[{"metric":"ncloc_language_distribution","value":"rust=1200;python=300"}]}}\'\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            # Fake docker that writes report-task.txt
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'mkdir -p .scannerwork\n'
+                'echo "ceTaskId=ce-123" > .scannerwork/report-task.txt\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            # Fake cargo that writes clippy-report.json
+            fake_cargo = bin_dir / "cargo"
+            fake_cargo.write_text(
+                "#!/usr/bin/env bash\n"
+                'echo "{}" > clippy-report.json\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["SONAR_TOKEN"] = "squ_super_secret_token_12345"
+            env["SONAR_PROJECT_KEY"] = "test-project"
+            env["WORKSPACE"] = str(ws)
+
+            res = subprocess.run(
+                ["bash", str(gate_script)],
+                cwd=str(ws),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            calls = curl_log.read_text(encoding="utf-8")
+            self.assertIn("/api/ce/task?id=ce-123", calls)
+            self.assertIn("/api/qualitygates/project_status?analysisId=analysis-456", calls)
+            self.assertIn("metricKeys=ncloc,ncloc_language_distribution", calls)
+            self.assertNotIn("squ_super_secret_token_12345", [arg for arg in calls.splitlines() if not arg.startswith("STDIN:")], "Token leaked in curl argv")
+
+    def test_sonarqube_gate_fails_when_rust_ncloc_zero(self):
+        gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
+        self.assertTrue(gate_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/api/languages/list"* ]]; then\n'
+                '  echo \'{"languages":[{"key":"rust","name":"Rust"}]}\'\n'
+                'elif [[ "$target" == *"/api/ce/task"* ]]; then\n'
+                '  echo \'{"task":{"id":"ce-123","status":"SUCCESS","analysisId":"analysis-456"}}\'\n'
+                'elif [[ "$target" == *"/api/qualitygates/project_status"* ]]; then\n'
+                '  echo \'{"projectStatus":{"status":"OK"}}\'\n'
+                'elif [[ "$target" == *"/api/measures/component"* ]]; then\n'
+                '  echo \'{"component":{"measures":[{"metric":"ncloc_language_distribution","value":"python=300"}]}}\'\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                'mkdir -p .scannerwork\n'
+                'echo "ceTaskId=ce-123" > .scannerwork/report-task.txt\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            fake_cargo = bin_dir / "cargo"
+            fake_cargo.write_text(
+                "#!/usr/bin/env bash\n"
+                'echo "{}" > clippy-report.json\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+
+            # Create a dummy .rs file in ws to indicate this is a Rust project
+            (ws / "src").mkdir()
+            (ws / "src" / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["SONAR_TOKEN"] = "squ_secret"
+            env["WORKSPACE"] = str(ws)
+
+            res = subprocess.run(
+                ["bash", str(gate_script)],
+                cwd=str(ws),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(res.returncode, 0, "Gate must fail when rust ncloc is absent on a Rust project")
+
 
 if __name__ == "__main__":
     unittest.main()

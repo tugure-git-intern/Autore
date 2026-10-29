@@ -439,6 +439,107 @@ class SecurityGateTest(unittest.TestCase):
             )
             self.assertNotEqual(res.returncode, 0, "Gate must fail when rust ncloc is absent on a Rust project")
 
+    def test_nexus_publish_rejects_latest_or_short_sha_tag(self):
+        pub_script = REPO_ROOT / "scripts" / "ci-nexus-publish.sh"
+        self.assertTrue(pub_script.exists(), "scripts/ci-nexus-publish.sh must exist")
+        env = os.environ.copy()
+        env["APP_NAME"] = "dummy-app"
+        env["BUILD_NUMBER"] = "1"
+        env["NEXUS_USER"] = "admin"
+        env["NEXUS_PASS"] = "secret"
+
+        # 1. Reject SHORT_SHA (7 chars)
+        env["GIT_COMMIT"] = "e77d504"
+        res = subprocess.run(["bash", str(pub_script)], env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("40", res.stderr + res.stdout)
+
+        # 2. Reject 'latest'
+        env["GIT_COMMIT"] = "latest"
+        res = subprocess.run(["bash", str(pub_script)], env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+
+    def test_nexus_publish_verifies_allow_once_and_authenticated_head_digest(self):
+        pub_script = REPO_ROOT / "scripts" / "ci-nexus-publish.sh"
+        self.assertTrue(pub_script.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+            dist_dir = ws / "dist"
+            dist_dir.mkdir()
+            (dist_dir / "autore-linux-x86_64-musl").write_bytes(b"static-binary")
+            (dist_dir / "sbom.cdx.json").write_text('{"bomFormat":"CycloneDX"}', encoding="utf-8")
+            (dist_dir / "SHA256SUMS").write_text("dummy sha256sums\n", encoding="utf-8")
+
+            call_log = ws / "calls.log"
+            digest_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            full_commit = "e77d5049f8a12b3c4d5e6f708192a3b4c5d6e7f8"
+
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "DOCKER $@" >> "{call_log}"\n'
+                'if [[ "$*" == *"inspect"* ]]; then\n'
+                f'  echo "127.0.0.1:5000/dummy-app@sha256:{digest_hex}"\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo "CURL $@" >> "{call_log}"\n'
+                'stdin_cfg=""\n'
+                'if [[ "$*" == *"--config"* ]]; then\n'
+                '  stdin_cfg="$(cat)"\n'
+                f'  echo "STDIN: $stdin_cfg" >> "{call_log}"\n'
+                'fi\n'
+                'target="${*} ${stdin_cfg}"\n'
+                'if [[ "$target" == *"/service/rest/v1/repositories/docker/hosted"* ]]; then\n'
+                '  echo \'{"storage":{"writePolicy":"ALLOW_ONCE"}}\'\n'
+                'elif [[ "$*" == *"-X HEAD"* || "$*" == *"-I"* || "$*" == *"-fsSI"* ]]; then\n'
+                '  echo "HTTP/1.1 200 OK"\n'
+                f'  echo "Docker-Content-Digest: sha256:{digest_hex}"\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["WORKSPACE"] = str(ws)
+            env["DIST_DIR"] = str(dist_dir)
+            env["APP_NAME"] = "dummy-app"
+            env["BUILD_NUMBER"] = "42"
+            env["GIT_COMMIT"] = full_commit
+            env["NEXUS_USER"] = "admin"
+            env["NEXUS_PASS"] = "SuperSecretPassword123"
+
+            res = subprocess.run(["bash", str(pub_script)], env=env, cwd=str(ws), capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+
+            verified_digest_file = ws / ".verified-image-digest"
+            self.assertTrue(verified_digest_file.exists(), ".verified-image-digest must be created")
+            self.assertEqual(
+                verified_digest_file.read_text(encoding="utf-8").strip(),
+                f"127.0.0.1:5000/dummy-app@sha256:{digest_hex}",
+            )
+
+            calls = call_log.read_text(encoding="utf-8")
+            self.assertIn(f"/v2/dummy-app/manifests/sha256:{digest_hex}", calls)
+            self.assertNotIn("SuperSecretPassword123", [c for c in calls.splitlines() if not c.startswith("STDIN:")])
+
+    def test_deploy_by_digest_rejects_tag_without_sha256_digest(self):
+        dep_script = REPO_ROOT / "scripts" / "ci-deploy-by-digest.sh"
+        self.assertTrue(dep_script.exists(), "scripts/ci-deploy-by-digest.sh must exist")
+        for bad_ref in ("127.0.0.1:5000/app:latest", "127.0.0.1:5000/app:build-1", "127.0.0.1:5000/app"):
+            res = subprocess.run(["bash", str(dep_script), bad_ref], capture_output=True, text=True)
+            self.assertNotEqual(res.returncode, 0, f"Deploy script must reject {bad_ref}")
+
 
 if __name__ == "__main__":
     unittest.main()

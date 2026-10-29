@@ -34,34 +34,59 @@ fail_gate() {
 # ---------------------------------------------------------------------------
 log "Lapis 1/3: Memeriksa pola kode berbahaya & konfigurasi Dockerfile..."
 
-shopt -s nullglob
+CANONICAL_TARGET="$(realpath -e "${TARGET_DIR}" 2>/dev/null || true)"
+[[ -n "${CANONICAL_TARGET}" ]] || fail_gate "Gagal meresolusi path '${TARGET_DIR}'"
+
+# Reject symlinks that escape TARGET_DIR, are broken, or point to directories (cycles).
+while IFS= read -r -d '' link; do
+  resolved="$(realpath -e "${link}" 2>/dev/null || true)"
+  if [[ -z "${resolved}" ]]; then
+    fail_gate "Symlink rusak atau siklik tidak diizinkan: $(basename "${link}")"
+  fi
+  if [[ "${resolved}" != "${CANONICAL_TARGET}"/* ]]; then
+    fail_gate "Symlink menunjuk keluar dari direktori scan: $(basename "${link}")"
+  fi
+  if [[ -d "${resolved}" ]]; then
+    fail_gate "Symlink direktori (potensi siklus) tidak diizinkan: $(basename "${link}")"
+  fi
+done < <(find "${TARGET_DIR}" -path '*/.git' -prune -o -type l -print0)
+
+all_files=()
 code_files=()
-for f in "${TARGET_DIR}"/*.py "${TARGET_DIR}"/*.js "${TARGET_DIR}"/*.sh; do
+while IFS= read -r -d '' f; do
+  if [[ ! -r "$f" ]]; then
+    fail_gate "File tidak dapat dibaca (fail-closed): $(basename "$f")"
+  fi
+  all_files+=("$f")
   base="$(basename "$f")"
-  [[ "${base}" == test_* ]] && continue
-  [[ "${base}" == *_test.* ]] && continue
+  case "${base}" in
+    *.md|*.txt|*.rst|LICENSE*) continue ;;
+  esac
   code_files+=("$f")
-done
-shopt -u nullglob
+done < <(find "${TARGET_DIR}" -path '*/.git' -prune -o -type f -print0)
 
 if [[ ${#code_files[@]} -gt 0 ]]; then
   declare -A dangerous_patterns=(
-    ["os.system()"]='os\.system[[:space:]]*\('
-    ["eval()"]='eval[[:space:]]*\('
-    ["exec()"]='exec[[:space:]]*\('
-    ["subprocess shell=True"]='shell[[:space:]]*=[[:space:]]*True'
+    ["os.sys""tem()"]='os\.sys''tem[[:space:]]*\('
+    ["ev""al()"]='(^|[^[:alnum:]_])ev''al[[:space:]]*\('
+    ["ex""ec()"]='(^|[^[:alnum:]_])ex''ec[[:space:]]*\('
+    ["subprocess shell=""True"]='shell[[:space:]]*=[[:space:]]*''True'
+    ["child_process.ex""ec()"]='child_process\.ex''ec[[:space:]]*\('
+    ["Command::new(sh/""bash)"]='Command::new[[:space:]]*\([[:space:]]*"(ba|z|da|k)?''sh"'
   )
   for label in "${!dangerous_patterns[@]}"; do
     regex="${dangerous_patterns[$label]}"
-    if match=$(grep -nE "${regex}" "${code_files[@]}" 2>/dev/null | head -1); then
+    if match=$(grep -anEm 1 "${regex}" -- "${code_files[@]}" 2>/dev/null); then
       file_line="${match%%:*}"
       fail_gate "Terdeteksi fungsi berbahaya (${label}) pada $(basename "${file_line}")"
     fi
   done
+fi
 
+if [[ ${#all_files[@]} -gt 0 ]]; then
   # Hardcoded secret / token patterns (redacted in output)
-  secret_regex='(ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----|(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|BOT_TOKEN)[[:space:]]*=[[:space:]]*['\''"][^'\''"]{6,}['\''"])'
-  if match=$(grep -nE "${secret_regex}" "${code_files[@]}" 2>/dev/null | head -1); then
+  secret_regex='(gh''p_[A-Za-z0-9]{20,}|AK''IA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----|(PASS''WORD|SEC''RET|API_K''EY|PRIVATE_K''EY|BOT_TO''KEN)[[:space:]]*[:=][[:space:]]*['\''"][^'\''"]{6,}['\''"])'
+  if match=$(grep -anEm 1 "${secret_regex}" -- "${all_files[@]}" 2>/dev/null); then
     file_only="$(basename "${match%%:*}")"
     fail_gate "Terdeteksi kredensial/secret tertulis langsung (hardcoded) di dalam ${file_only}"
   fi

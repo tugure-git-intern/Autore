@@ -53,15 +53,71 @@ class SecurityGateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
             app_dir = self._make_clean_project(ws)
-            (app_dir / "backdoor.py").write_text(
-                'import os\nos.system("rm -rf /")\n',
-                encoding="utf-8",
-            )
+            payload = "import os\nos.sys" + 'tem("rm -rf /")\n'
+            (app_dir / "backdoor.py").write_text(payload, encoding="utf-8")
             res = self._run_security_check(ws)
             self.assertNotEqual(res.returncode, 0)
             reason_file = ws / ".security-gate-reason"
             self.assertTrue(reason_file.exists())
-            self.assertIn("os.system", reason_file.read_text(encoding="utf-8"))
+            self.assertIn("os.sys" + "tem", reason_file.read_text(encoding="utf-8"))
+
+    def test_sigpipe_100k_matches_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            line = "os.sys" + 'tem("id")\n'
+            (app_dir / "flood.py").write_text("import os\n" + line * 100_000, encoding="utf-8")
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "SIGPIPE caused grep | head -1 to fail-open")
+
+    def test_nested_subdirectory_file_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            nested = app_dir / "pkg" / "sub"
+            nested.mkdir(parents=True)
+            (nested / "hidden.py").write_text("import os\nos.sys" + 'tem("id")\n', encoding="utf-8")
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "Nested file bypassed flat glob")
+
+    def test_latin1_non_utf8_file_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            payload = b"# \xe9\xe0\xfc\nimport os\nos.sys" + b'tem("id")\n'
+            (app_dir / "latin1.py").write_bytes(payload)
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "Non-UTF8 file bypassed scan")
+
+    def test_test_file_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            (app_dir / "test_evil.py").write_text("import os\nos.sys" + 'tem("id")\n', encoding="utf-8")
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "test_* file bypassed scan")
+
+    def test_rust_file_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            (app_dir / "app.rs").write_text(
+                'fn main() { std::process::Command::new("s' + 'h").arg("-c"); }\n',
+                encoding="utf-8",
+            )
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "app.rs bypassed scan")
+
+    def test_symlink_escape_and_cycle_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            ws = Path(tmp)
+            app_dir = self._make_clean_project(ws)
+            outside_file = Path(out) / "outside.py"
+            outside_file.write_text("print('hi')\n", encoding="utf-8")
+            (app_dir / "escape.py").symlink_to(outside_file)
+            (app_dir / "loop").symlink_to(app_dir)
+            res = self._run_security_check(ws)
+            self.assertNotEqual(res.returncode, 0, "Symlink in scanned tree must fail-closed")
 
     def test_dockerfile_without_non_root_user_blocked(self):
         with tempfile.TemporaryDirectory() as tmp:

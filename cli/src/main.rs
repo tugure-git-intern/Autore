@@ -166,7 +166,12 @@ fn main() {
                 path.display()
             );
 
-            match scanner::scan_directory(&path) {
+            let scan_res = if no_docker {
+                scanner::scan_directory_with(&path, &scanner::ScanOptions { skip_build_dirs: true })
+            } else {
+                scanner::scan_directory(&path)
+            };
+            match scan_res {
                 Ok(report) => {
                     if !report.is_clean() {
                         eprintln!(

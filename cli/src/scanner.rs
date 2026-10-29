@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::bytes::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -22,117 +22,261 @@ impl ScanReport {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ScanOptions {
+    pub skip_build_dirs: bool,
+}
+
 pub fn scan_directory(root: &Path) -> Result<ScanReport, String> {
+    scan_directory_with(root, &ScanOptions::default())
+}
+
+pub fn scan_directory_with(root: &Path, opts: &ScanOptions) -> Result<ScanReport, String> {
     if !root.exists() {
         return Err(format!("Direktori '{}' tidak ditemukan", root.display()));
     }
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| format!("Gagal meresolusi path '{}': {}", root.display(), e))?;
 
     let dangerous_rules: Vec<(&str, Regex)> = vec![
-        ("os.system()", Regex::new(r"os\.system\s*\(").unwrap()),
-        ("eval()", Regex::new(r"\beval\s*\(").unwrap()),
-        ("exec()", Regex::new(r"\bexec\s*\(").unwrap()),
         (
-            "subprocess shell=True",
-            Regex::new(r"shell\s*=\s*True").unwrap(),
+            concat!("os.sys", "tem()"),
+            Regex::new(concat!(r"os\.sys", r"tem\s*\(")).unwrap(),
         ),
         (
-            "child_process.exec()",
-            Regex::new(r"child_process\.exec\s*\(").unwrap(),
+            concat!("ev", "al()"),
+            Regex::new(concat!(r"\bev", r"al\s*\(")).unwrap(),
+        ),
+        (
+            concat!("ex", "ec()"),
+            Regex::new(concat!(r"\bex", r"ec\s*\(")).unwrap(),
+        ),
+        (
+            concat!("subprocess shell=", "True"),
+            Regex::new(concat!(r"shell\s*=\s*", r"True")).unwrap(),
+        ),
+        (
+            concat!("child_process.ex", "ec()"),
+            Regex::new(concat!(r"child_process\.ex", r"ec\s*\(")).unwrap(),
+        ),
+        (
+            concat!("Command::new(sh/", "bash)"),
+            Regex::new(concat!(r#"Command::new\s*\(\s*""#, r#"(ba|z|da|k)?sh""#)).unwrap(),
         ),
     ];
 
-    let secret_regex = Regex::new(
-        r#"(ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----|(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|BOT_TOKEN)\s*=\s*['"][^'"]{6,}['"])"#,
-    )
+    let secret_regex = Regex::new(concat!(
+        r#"(gh"#,
+        r#"p_[A-Za-z0-9]{20,}|AK"#,
+        r#"IA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----|(PASS"#,
+        r#"WORD|SEC"#,
+        r#"RET|API_K"#,
+        r#"EY|PRIVATE_K"#,
+        r#"EY|BOT_TO"#,
+        r#"KEN)\s*[:=]\s*['"][^'"]{6,}['"])"#
+    ))
     .unwrap();
 
     let mut report = ScanReport::default();
-    visit_dir(root, &dangerous_rules, &secret_regex, &mut report)?;
+    visit_dir(
+        root,
+        &canonical_root,
+        opts,
+        &dangerous_rules,
+        &secret_regex,
+        &mut report,
+    )?;
     Ok(report)
 }
 
-fn should_skip_dir(name: &str) -> bool {
-    matches!(
-        name,
-        ".git" | "target" | "node_modules" | "__pycache__" | ".superpowers" | ".venv" | "venv"
-    )
-}
-
-fn is_test_or_scanner_file(path: &Path) -> bool {
-    let file_name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default();
-    if file_name.starts_with("test_")
-        || file_name.ends_with("_test.py")
-        || file_name.ends_with("_test.go")
-        || file_name.ends_with(".spec.js")
-        || file_name == "security-check.sh"
-        || file_name == "scanner.rs"
-    {
+fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
+    if name == ".git" {
         return true;
+    }
+    if opts.skip_build_dirs {
+        return matches!(
+            name,
+            "target" | "node_modules" | "__pycache__" | ".superpowers" | ".venv" | "venv"
+        );
     }
     false
 }
 
-fn is_code_extension(path: &Path) -> bool {
+fn is_prose_doc(path: &Path) -> bool {
+    let file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if file_name.starts_with("LICENSE") {
+        return true;
+    }
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("py" | "js" | "ts" | "sh" | "go" | "java" | "rb" | "php" | "env" | "yml" | "yaml")
+        Some("md" | "txt" | "rst")
     )
 }
 
 fn visit_dir(
     dir: &Path,
+    canonical_root: &Path,
+    opts: &ScanOptions,
     dangerous_rules: &[(&str, Regex)],
     secret_regex: &Regex,
     report: &mut ScanReport,
 ) -> Result<(), String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Gagal membaca direktori '{}': {}", dir.display(), e))?;
+    let entries = match fs::read_dir(dir) {
+        Ok(it) => it,
+        Err(e) => {
+            report.violations.push(Violation {
+                file: dir.to_path_buf(),
+                line: 1,
+                rule: "unreadable-file".to_string(),
+                message: format!("Direktori tidak dapat dibaca (fail-closed): {}", e),
+            });
+            return Ok(());
+        }
+    };
 
     for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                report.violations.push(Violation {
+                    file: dir.to_path_buf(),
+                    line: 1,
+                    rule: "unreadable-file".to_string(),
+                    message: format!("Entri direktori tidak dapat dibaca: {}", e),
+                });
+                continue;
+            }
+        };
         let path = entry.path();
         let file_name = entry.file_name();
         let name_str = file_name.to_string_lossy();
 
-        if path.is_dir() {
-            if !should_skip_dir(&name_str) {
-                visit_dir(&path, dangerous_rules, secret_regex, report)?;
+        let lmeta = match fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                report.violations.push(Violation {
+                    file: path.clone(),
+                    line: 1,
+                    rule: "unreadable-file".to_string(),
+                    message: format!("Metadata file tidak dapat dibaca: {}", e),
+                });
+                continue;
             }
+        };
+
+        if lmeta.file_type().is_symlink() {
+            // Do not follow symlinks during traversal (prevents cycles & double-counting).
+            // If a symlink resolves outside canonical_root (or is broken/looping), flag it.
+            match path.canonicalize() {
+                Ok(resolved) if resolved.starts_with(canonical_root) => {}
+                Ok(resolved) => {
+                    report.violations.push(Violation {
+                        file: path.clone(),
+                        line: 1,
+                        rule: "symlink-escape".to_string(),
+                        message: format!(
+                            "Symlink menunjuk keluar dari direktori scan ({})",
+                            resolved.display()
+                        ),
+                    });
+                }
+                Err(e) => {
+                    report.violations.push(Violation {
+                        file: path.clone(),
+                        line: 1,
+                        rule: "symlink-escape".to_string(),
+                        message: format!("Symlink rusak atau siklik tidak diizinkan: {}", e),
+                    });
+                }
+            }
+            continue;
+        }
+
+        if lmeta.is_dir() {
+            if !should_skip_dir(&name_str, opts) {
+                visit_dir(
+                    &path,
+                    canonical_root,
+                    opts,
+                    dangerous_rules,
+                    secret_regex,
+                    report,
+                )?;
+            }
+            continue;
+        }
+
+        if !lmeta.is_file() {
             continue;
         }
 
         if name_str == "Dockerfile" || name_str.starts_with("Dockerfile.") {
             report.scanned_files += 1;
             check_dockerfile(&path, report)?;
+            check_file_bytes(&path, &[], secret_regex, report);
             continue;
         }
 
-        if is_code_extension(&path) && !is_test_or_scanner_file(&path) {
-            report.scanned_files += 1;
-            check_code_file(&path, dangerous_rules, secret_regex, report)?;
-        }
+        report.scanned_files += 1;
+        let active_rules: &[(&str, Regex)] = if is_prose_doc(&path) {
+            &[]
+        } else {
+            dangerous_rules
+        };
+        check_file_bytes(&path, active_rules, secret_regex, report);
     }
     Ok(())
 }
 
-fn check_code_file(
+fn is_comment_line(trimmed: &[u8]) -> bool {
+    trimmed.starts_with(b"#") || trimmed.starts_with(b"//")
+}
+
+fn trim_ascii(mut s: &[u8]) -> &[u8] {
+    while let Some((&b, rest)) = s.split_first() {
+        if b.is_ascii_whitespace() {
+            s = rest;
+        } else {
+            break;
+        }
+    }
+    while let Some((&b, rest)) = s.split_last() {
+        if b.is_ascii_whitespace() {
+            s = rest;
+        } else {
+            break;
+        }
+    }
+    s
+}
+
+fn check_file_bytes(
     path: &Path,
     dangerous_rules: &[(&str, Regex)],
     secret_regex: &Regex,
     report: &mut ScanReport,
-) -> Result<(), String> {
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return Ok(()), // skip non-UTF8 files
+) {
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) => {
+            report.violations.push(Violation {
+                file: path.to_path_buf(),
+                line: 1,
+                rule: "unreadable-file".to_string(),
+                message: format!("File tidak dapat dibaca (fail-closed): {}", e),
+            });
+            return;
+        }
     };
 
-    for (idx, line) in content.lines().enumerate() {
+    for (idx, line) in bytes.split(|&b| b == b'\n').enumerate() {
         let line_no = idx + 1;
-        let trimmed = line.trim();
-        if trimmed.starts_with('#') || trimmed.starts_with("//") {
+        let trimmed = trim_ascii(line);
+        if is_comment_line(trimmed) {
             continue;
         }
 
@@ -162,8 +306,6 @@ fn check_code_file(
             });
         }
     }
-
-    Ok(())
 }
 
 fn check_dockerfile(path: &Path, report: &mut ScanReport) -> Result<(), String> {
@@ -238,16 +380,12 @@ mod tests {
     #[test]
     fn dangerous_os_system_is_caught() {
         let tmp = TempDir::new().unwrap();
-        fs::write(
-            tmp.path().join("bad.py"),
-            "import os\nos.system('id')\n",
-        )
-        .unwrap();
+        fs::write(tmp.path().join("bad.py"), OS_SYSTEM).unwrap();
 
         let report = scan_directory(tmp.path()).unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.violations.len(), 1);
-        assert!(report.violations[0].rule.contains("os.system()"));
+        assert!(report.violations[0].rule.contains(concat!("os.sys", "tem()")));
         assert_eq!(report.violations[0].line, 2);
     }
 
@@ -278,5 +416,121 @@ mod tests {
         let report = scan_directory(tmp.path()).unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.violations[0].rule, "dockerfile-non-root-user");
+    }
+
+    // ---- H-2 / M-2 regressions -------------------------------------------
+    // Fixtures are assembled with concat! so this source file does not itself
+    // contain the dangerous patterns (no filename-based exemptions anymore).
+    const OS_SYSTEM: &str = concat!("import os\nos.sys", "tem('id')\n");
+
+    fn rules(report: &ScanReport) -> Vec<String> {
+        report.violations.iter().map(|v| v.rule.clone()).collect()
+    }
+
+    #[test]
+    fn latin1_file_is_scanned_as_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let mut body = b"x = '\xe9t\xe9'\n".to_vec();
+        body.extend_from_slice(OS_SYSTEM.as_bytes());
+        fs::write(tmp.path().join("app.py"), body).unwrap();
+        let report = scan_directory(tmp.path()).unwrap();
+        assert!(!report.is_clean(), "invalid UTF-8 treated as clean");
+    }
+
+    #[test]
+    fn rust_shell_command_is_scanned() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("app.rs"),
+            concat!("fn main() { std::process::Command::new(\"s", "h\").arg(\"-c\"); }\n"),
+        )
+        .unwrap();
+        let report = scan_directory(tmp.path()).unwrap();
+        assert_eq!(report.scanned_files, 1);
+        assert!(!report.is_clean(), "app.rs shell exec not detected");
+    }
+
+    #[test]
+    fn nested_file_is_scanned() {
+        let tmp = TempDir::new().unwrap();
+        let deep = tmp.path().join("app/routes/v1");
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("api.py"), OS_SYSTEM).unwrap();
+        assert!(!scan_directory(tmp.path()).unwrap().is_clean());
+    }
+
+    #[test]
+    fn test_files_are_scanned() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("test_app.py"), OS_SYSTEM).unwrap();
+        assert!(!scan_directory(tmp.path()).unwrap().is_clean(), "test_* skipped");
+    }
+
+    #[test]
+    fn config_files_without_code_extension_are_scanned_for_secrets() {
+        for name in [".env", "settings.toml", "config.json", "app.properties"] {
+            let tmp = TempDir::new().unwrap();
+            fs::write(tmp.path().join(name), concat!("API_K", "EY = \"abcdef123456\"\n")).unwrap();
+            let report = scan_directory(tmp.path()).unwrap();
+            assert!(rules(&report).contains(&"hardcoded-secret".to_string()), "{name} not scanned");
+        }
+    }
+
+    #[test]
+    fn dependency_and_build_dirs_are_scanned_in_authoritative_mode() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("node_modules/pkg")).unwrap();
+        fs::write(tmp.path().join("node_modules/pkg/index.py"), OS_SYSTEM).unwrap();
+        assert!(!scan_directory(tmp.path()).unwrap().is_clean(), "node_modules skipped");
+    }
+
+    #[test]
+    fn symlink_cycle_terminates_and_counts_once() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("bad.py"), OS_SYSTEM).unwrap();
+        std::os::unix::fs::symlink(tmp.path(), tmp.path().join("loop")).unwrap();
+        let report = scan_directory(tmp.path()).unwrap();
+        let hits = rules(&report).iter().filter(|r| r.contains("os.system")).count();
+        assert_eq!(hits, 1, "symlink followed: {:?}", report.violations);
+    }
+
+    #[test]
+    fn symlink_escaping_root_is_not_followed_and_is_reported() {
+        let outside = TempDir::new().unwrap();
+        fs::write(outside.path().join("secret.py"), OS_SYSTEM).unwrap();
+        let tmp = TempDir::new().unwrap();
+        std::os::unix::fs::symlink(outside.path().join("secret.py"), tmp.path().join("link.py")).unwrap();
+        let report = scan_directory(tmp.path()).unwrap();
+        let r = rules(&report);
+        assert!(!r.iter().any(|x| x.contains("os.system")), "followed symlink outside root");
+        assert!(r.contains(&"symlink-escape".to_string()), "{r:?}");
+    }
+
+    #[test]
+    fn unreadable_file_fails_closed() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = TempDir::new().unwrap();
+        let f = tmp.path().join("hidden.py");
+        fs::write(&f, OS_SYSTEM).unwrap();
+        fs::set_permissions(&f, fs::Permissions::from_mode(0o000)).unwrap();
+        let report = scan_directory(tmp.path()).unwrap();
+        fs::set_permissions(&f, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(rules(&report).contains(&"unreadable-file".to_string()), "{:?}", report.violations);
+    }
+
+    #[test]
+    fn file_with_huge_number_of_matches_is_caught() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("app.py"), OS_SYSTEM.repeat(100_000)).unwrap();
+        assert!(!scan_directory(tmp.path()).unwrap().is_clean());
+    }
+
+    #[test]
+    fn local_mode_may_skip_build_dirs() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("target")).unwrap();
+        fs::write(tmp.path().join("target/x.py"), OS_SYSTEM).unwrap();
+        let opts = ScanOptions { skip_build_dirs: true };
+        assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
     }
 }

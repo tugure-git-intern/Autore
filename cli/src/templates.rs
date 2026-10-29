@@ -272,7 +272,8 @@ pipeline {{
                 if (fileExists('scripts/notify-telegram.sh')) {{
                     try {{
                         withCredentials([
-                            string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')
+                            string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN'),
+                            string(credentialsId: 'telegram-chat-id', variable: 'TELEGRAM_CHAT_ID')
                         ]) {{
                             sh './scripts/notify-telegram.sh'
                         }}

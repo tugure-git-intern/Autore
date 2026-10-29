@@ -198,6 +198,64 @@ class SecurityGateTest(unittest.TestCase):
             self.assertIn("Security Gate", res.stdout)
             self.assertIn("os.system", res.stdout)
 
+    def test_notify_telegram_hides_token_from_argv_and_disables_getupdates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            bin_dir = ws / "bin"
+            bin_dir.mkdir()
+            argv_log = ws / "curl_argv.txt"
+            stdin_log = ws / "curl_stdin.txt"
+            fake_curl = bin_dir / "curl"
+            fake_curl.write_text(
+                f'#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "{argv_log}"\n'
+                f'if [[ "$*" == *"--config"* ]]; then cat > "{stdin_log}"; fi\n',
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            env = os.environ.copy()
+            env.update(
+                {
+                    "PATH": f"{bin_dir}:{env.get('PATH', '')}",
+                    "WORKSPACE": str(ws),
+                    "BUILD_STATUS": "SUCCESS",
+                    "TELEGRAM_BOT_TOKEN": "999999:SUPER_SECRET_BOT_TOKEN_XYZ",
+                }
+            )
+            env.pop("TELEGRAM_CHAT_ID", None)
+
+            # Without TELEGRAM_CHAT_ID, curl must NOT be invoked (no getUpdates auto-discovery)
+            res = subprocess.run(
+                ["bash", str(NOTIFY_SCRIPT)], cwd=str(ws), env=env, capture_output=True, text=True
+            )
+            self.assertEqual(res.returncode, 0)
+            self.assertFalse(argv_log.exists(), "curl was called without explicit TELEGRAM_CHAT_ID")
+
+            # With explicit TELEGRAM_CHAT_ID, token must NOT appear in curl's argv
+            env["TELEGRAM_CHAT_ID"] = "5868902139"
+            res = subprocess.run(
+                ["bash", str(NOTIFY_SCRIPT)], cwd=str(ws), env=env, capture_output=True, text=True
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            self.assertTrue(argv_log.exists(), "curl was not called when chat_id was provided")
+            self.assertNotIn(
+                "SUPER_SECRET_BOT_TOKEN_XYZ",
+                argv_log.read_text(encoding="utf-8"),
+                "Bot token leaked in curl command-line arguments (/proc/pid/cmdline)",
+            )
+            self.assertIn("SUPER_SECRET_BOT_TOKEN_XYZ", stdin_log.read_text(encoding="utf-8"))
+
+    def test_jenkins_compose_binds_to_loopback(self):
+        compose = (REPO_ROOT / "sandbox" / "jenkins" / "docker-compose.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("127.0.0.1:8080:8080", compose)
+
+    def test_runner_scripts_create_workdir_with_0750(self):
+        for name in ("setup-agent.sh", "install-agent-service.sh"):
+            script = (REPO_ROOT / "runner" / name).read_text(encoding="utf-8")
+            self.assertIn('-m 0750 "${AGENT_WORKDIR}"', script, f"{name} workdir is not 0750")
+
 
 if __name__ == "__main__":
     unittest.main()

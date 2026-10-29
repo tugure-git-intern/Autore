@@ -1,9 +1,14 @@
 # Sandbox-only Jenkins controller — stands in for the office controller while
 # we prove the runner + pipeline. NOT for the office.
 #
-#   cd sandbox/jenkins && docker compose up -d
-#   Open from your laptop:  ssh -L 8080:localhost:8080 <user>@<vps>
-#                           then browse http://localhost:8080
+# Connectivity model (H-6):
+#   1. Local systemd agent on this host (jenkins-agent.service) connects directly
+#      over host loopback (http://localhost:8080/ via Inbound WebSocket).
+#   2. Operator browser on laptop connects via SSH local port forwarding:
+#        ssh -L 8080:127.0.0.1:8080 <user>@<vps>
+#      then open http://localhost:8080
+#   3. Remote agent on a separate host must connect either through an SSH tunnel
+#      or via an HTTPS reverse proxy (TLS) in front of 127.0.0.1:8080.
 #
 # Port 50000 is not published: the agent connects over WebSocket on 8080.
 services:
@@ -12,7 +17,7 @@ services:
     container_name: autore-jenkins
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
 

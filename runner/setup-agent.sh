@@ -70,7 +70,7 @@ for u in "${extra_users[@]}"; do
 done
 
 log "Preparing agent work directory ${AGENT_WORKDIR}"
-install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0755 "${AGENT_WORKDIR}"
+install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0750 "${AGENT_WORKDIR}"
 
 # Install Autore CLI to /usr/local/bin so the jenkins runner can execute it
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

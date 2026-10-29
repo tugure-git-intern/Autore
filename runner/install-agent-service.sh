@@ -68,7 +68,7 @@ chown "${AGENT_USER}:${AGENT_USER}" "${CONF_DIR}/secret"
 chmod 0600 "${CONF_DIR}/secret"
 unset AGENT_SECRET
 
-install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0755 "${AGENT_WORKDIR}"
+install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0750 "${AGENT_WORKDIR}"
 
 log "Installing systemd unit"
 install -m 0644 "${SCRIPT_DIR}/${UNIT_NAME}" "/etc/systemd/system/${UNIT_NAME}"

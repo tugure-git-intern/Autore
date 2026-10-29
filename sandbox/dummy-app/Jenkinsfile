@@ -124,18 +124,10 @@ Image tag  : ${env.APP_NAME}:${env.IMAGE_TAG}
                 env.BUILD_STATUS = currentBuild.currentResult ?: 'SUCCESS'
                 try {
                     withCredentials([
-                        string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')
+                        string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN'),
+                        string(credentialsId: 'telegram-chat-id', variable: 'TELEGRAM_CHAT_ID')
                     ]) {
-                        try {
-                            withCredentials([
-                                string(credentialsId: 'telegram-chat-id', variable: 'TELEGRAM_CHAT_ID')
-                            ]) {
-                                sh './scripts/notify-telegram.sh'
-                            }
-                        } catch (chatErr) {
-                            // telegram-chat-id is optional: notify-telegram.sh will auto-detect it from getUpdates
-                            sh './scripts/notify-telegram.sh'
-                        }
+                        sh './scripts/notify-telegram.sh'
                     }
                 } catch (err) {
                     // Credentials not configured in Jenkins yet — still print full audit report to build log

@@ -135,7 +135,13 @@ File `sandbox/services/docker-compose.yml` mem-pin penuh image dengan `@sha256:<
   - Image: `sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e`
   - Port UI & Raw Repo (`autore-releases`): `127.0.0.1:8082:8081` (loopback).
   - Port Docker Hosted Registry (`docker-hosted`): `127.0.0.1:5000:5000` (loopback).
-  - Kedua repository (`docker-hosted` dan `autore-releases`) dibuat dengan `writePolicy: "ALLOW_ONCE"` (**Disable redeploy**).
+  - **Otomatisasi Bootstrap (`sandbox/services/bootstrap-local-services.sh`):**
+    Skrip bootstrap menyiapkan Nexus secara otomatis dan *idempotent* melalui REST API (`http://127.0.0.1:8082/service/rest/v1`):
+    1. Menunggu endpoint `/service/rest/v1/status` siap (maksimal 180 detik) dan mengambil password admin dari `/nexus-data/admin.password` di container `autore-nexus`.
+    2. Menyetujui EULA Nexus 3.96 Community Edition (`GET`/`POST /service/rest/v1/system/eula` dengan mengubah `"accepted" : false` menjadi `"accepted" : true` beserta teks `disclaimer` verbatim).
+    3. Membuat repository `docker-hosted` (`POST /service/rest/v1/repositories/docker/hosted`, port `5000`, `forceBasicAuth: true`, `writePolicy: "ALLOW_ONCE"`) dan `autore-releases` (`POST /service/rest/v1/repositories/raw/hosted`, `writePolicy: "ALLOW_ONCE"`) apabila belum tersedia.
+    4. Menonaktifkan *Anonymous Access* (`PUT /service/rest/v1/security/anonymous` dengan `{"enabled":false}`) agar Docker CLI menerima challenge `401 WWW-Authenticate` saat `docker login`.
+    5. Memverifikasi kedua repository berstatus `writePolicy: "ALLOW_ONCE"` (**Disable redeploy**) dan `security/anonymous` berstatus `enabled: false`.
 
 ### 5.1 Cara Tes Lokal di Sandbox (Jaringan Docker Antar-Container)
 

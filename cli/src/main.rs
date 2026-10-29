@@ -9,7 +9,7 @@ use colored::Colorize;
 use inquire::{CustomType, Select, Text};
 use std::path::PathBuf;
 use std::process;
-use templates::{ generate_project_files, InitConfig, TechStack };
+use templates::{generate_project_files_with, validate_app_name, InitConfig, TechStack};
 
 #[derive(Parser)]
 #[command(
@@ -45,6 +45,10 @@ enum Commands {
         /// Direktori tujuan pembuatan file
         #[arg(long, default_value = ".")]
         output_dir: PathBuf,
+
+        /// Timpa file Dockerfile / Jenkinsfile / .dockerignore jika sudah ada
+        #[arg(long)]
+        force: bool,
     },
 
     /// Jalankan Security Gate: Static Guard + Gitleaks + Trivy (via Docker).
@@ -102,6 +106,7 @@ fn main() {
             app_port,
             deploy_port,
             output_dir,
+            force,
         } => {
             let resolved_name = match app_name {
                 Some(n) => n,
@@ -110,6 +115,10 @@ fn main() {
                     .prompt()
                     .unwrap_or_else(|_| process::exit(1)),
             };
+            if let Err(e) = validate_app_name(&resolved_name) {
+                eprintln!("{} {}", "ERROR:".red().bold(), e);
+                process::exit(1);
+            }
 
             let resolved_stack = match stack {
                 Some(s) => TechStack::from_str_loose(&s).unwrap_or_else(|| {
@@ -140,7 +149,7 @@ fn main() {
                 deploy_port,
             };
 
-            match generate_project_files(&cfg, &output_dir) {
+            match generate_project_files_with(&cfg, &output_dir, force) {
                 Ok(files) => {
                     println!(
                         "\n{}",

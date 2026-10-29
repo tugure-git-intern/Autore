@@ -1,4 +1,5 @@
 mod doctor;
+mod external;
 mod hooks;
 mod scanner;
 mod templates;
@@ -7,7 +8,7 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use inquire::{CustomType, Select, Text};
 use std::path::PathBuf;
-use std::process::{self, Command};
+use std::process;
 use templates::{ generate_project_files, InitConfig, TechStack };
 
 #[derive(Parser)]
@@ -46,14 +47,19 @@ enum Commands {
         output_dir: PathBuf,
     },
 
-    /// Jalankan pemeriksaan keamanan (Static Code Guard, Secret Scan, & Dockerfile Check)
+    /// Jalankan Security Gate: Static Guard + Gitleaks + Trivy (via Docker).
+    /// Gagal (exit 1) jika salah satu scanner tidak benar-benar berjalan.
     Scan {
         /// Direktori proyek yang akan dipindai
         #[arg(long, short, default_value = ".")]
         path: PathBuf,
 
-        /// Ikut menjalankan container Gitleaks & Trivy via Docker
+        /// Hanya static guard (untuk pre-commit lokal). NON-AUTHORITATIVE: jangan dipakai di CI.
         #[arg(long)]
+        no_docker: bool,
+
+        /// [Deprecated] Gitleaks & Trivy sekarang selalu dijalankan; flag ini diabaikan.
+        #[arg(long, hide = true)]
         docker: bool,
     },
 
@@ -153,7 +159,7 @@ fn main() {
             }
         }
 
-        Commands::Scan { path, docker } => {
+        Commands::Scan { path, no_docker, docker: _ } => {
             println!(
                 "{} Memindai keamanan kode di '{}'...",
                 "==>".cyan().bold(),
@@ -193,17 +199,18 @@ fn main() {
                 }
             }
 
-            if docker {
-                let abs_path = path.canonicalize().unwrap_or(path);
-                let script = abs_path.join("scripts").join("security-check.sh");
-                if script.exists() {
-                    let status = Command::new("bash")
-                        .arg(&script)
-                        .current_dir(&abs_path)
-                        .status();
-                    if !matches!(status, Ok(s) if s.success()) {
-                        process::exit(1);
-                    }
+            if no_docker {
+                println!(
+                    "{}",
+                    "⚠ Mode --no-docker: hanya static guard (NON-AUTHORITATIVE, Gitleaks & Trivy TIDAK dijalankan)."
+                        .yellow()
+                        .bold()
+                );
+            } else {
+                println!("{} Menjalankan Gitleaks & Trivy (Docker, image pinned)...", "==>".cyan().bold());
+                if let Err(e) = external::run_authoritative_scan(&path) {
+                    eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
+                    process::exit(1);
                 }
             }
 

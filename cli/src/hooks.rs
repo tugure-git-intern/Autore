@@ -26,9 +26,9 @@ set -euo pipefail
 printf '==> [Autore Pre-Commit Gate] Memeriksa keamanan kode sebelum commit...\n'
 
 if command -v autore >/dev/null 2>&1; then
-  autore scan --path "."
+  autore scan --no-docker --path "."
 elif [ -x "$HOME/.local/bin/autore" ]; then
-  "$HOME/.local/bin/autore" scan --path "."
+  "$HOME/.local/bin/autore" scan --no-docker --path "."
 elif [ -x "./scripts/security-check.sh" ]; then
   SECURITY_SKIP_DOCKER=1 ./scripts/security-check.sh
 else

@@ -179,16 +179,13 @@ pipeline {{
                     env.FAILED_STAGE = 'Security Gate (Secret & Code Scan)'
                 }}
                 sh '''
-                    if command -v autore >/dev/null 2>&1; then
-                        autore scan --path "$APP_DIR"
-                    elif [ -x /usr/local/bin/autore ]; then
+                    # Authoritative scanner = admin-installed, root-owned binary only.
+                    # No PATH lookup and no repo-provided script (repo is untrusted).
+                    if [ -x /usr/local/bin/autore ] && [ "$(stat -c %u /usr/local/bin/autore)" = "0" ]; then
                         /usr/local/bin/autore scan --path "$APP_DIR"
-                    elif [ -x ./scripts/security-check.sh ]; then
-                        ./scripts/security-check.sh
                     else
-                        echo "🚫 [SECURITY GATE ERROR] Scanner 'autore' tidak ditemukan di sistem runner!" >&2
+                        echo "🚫 [SECURITY GATE ERROR] Scanner trusted /usr/local/bin/autore (root-owned) tidak ditemukan di runner!" >&2
                         echo "Build DIBATALKAN demi keamanan (Fail-Closed / Default-Deny)." >&2
-                        echo "Pastikan 'autore' terpasang secara global di runner (/usr/local/bin/autore)." >&2
                         exit 1
                     fi
                 '''
@@ -318,9 +315,25 @@ mod tests {
         let content = render_jenkinsfile(&cfg);
 
         // Security Gate must fail-closed if scanner is missing (Default-Deny)
-        assert!(content.contains("if command -v autore >/dev/null 2>&1; then"));
-        assert!(content.contains("elif [ -x /usr/local/bin/autore ]; then"));
         assert!(content.contains("Fail-Closed / Default-Deny"));
         assert!(content.contains("exit 1"));
+    }
+
+    #[test]
+    fn jenkinsfile_security_gate_uses_only_trusted_scanner() {
+        let cfg = InitConfig {
+            app_name: "secure-app".to_string(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8081,
+        };
+        let content = render_jenkinsfile(&cfg);
+        // H-1: the authoritative scanner is the admin-installed absolute path,
+        // never PATH lookup and never a script shipped by the scanned repo.
+        assert!(content.contains("/usr/local/bin/autore scan --path \"$APP_DIR\""));
+        assert!(!content.contains("command -v autore"), "PATH lookup is repo-controllable");
+        assert!(!content.contains("security-check.sh"), "repo script must not be the gate");
+        assert!(!content.contains("--no-docker"), "CI must run Gitleaks + Trivy");
+        assert!(content.contains("stat -c %u /usr/local/bin/autore"), "must verify root ownership");
     }
 }

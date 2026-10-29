@@ -561,6 +561,10 @@ class SecurityGateTest(unittest.TestCase):
         self.assertIn("Alias name:", bootstrap_content)
         self.assertIn("emsign", bootstrap_content)
         self.assertIn("ALLOW_ONCE", bootstrap_content)
+        self.assertIn("/service/rest/v1/system/eula", bootstrap_content)
+        self.assertIn("/service/rest/v1/repositories/docker/hosted", bootstrap_content)
+        self.assertIn("/service/rest/v1/repositories/raw/hosted", bootstrap_content)
+        self.assertIn("/service/rest/v1/security/anonymous", bootstrap_content)
 
     def test_jenkins_shared_library_structure_and_security(self):
         groovy_file = REPO_ROOT / "jenkins-shared-library" / "vars" / "autorePipeline.groovy"

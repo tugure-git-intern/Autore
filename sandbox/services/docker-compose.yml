@@ -24,7 +24,7 @@ services:
     container_name: autore-nexus
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8082:8081"
+      - "100.80.3.14:8082:8081"
       - "127.0.0.1:5000:5000"
     environment:
       - INSTALL4J_ADD_VM_PARAMS=-Xms768m -Xmx768m -XX:MaxDirectMemorySize=512m -Djava.util.prefs.userRoot=/nexus-data/javaprefs

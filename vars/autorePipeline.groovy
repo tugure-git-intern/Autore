@@ -139,6 +139,7 @@ def call(Map config = [:]) {
                     sh """
                         export TELEGRAM_CHAT_ID="${telegramChatId}"
                         export APP_NAME="${APP_NAME}"
+                        export BUILD_STATUS="${currentBuild.currentResult}"
                         notify_cmd="./scripts/notify-telegram.sh"
                         if [ -x "\${notify_cmd}" ]; then
                           "\${notify_cmd}" || true

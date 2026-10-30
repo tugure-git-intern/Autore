@@ -19,7 +19,7 @@ log() { printf '\n==> [SonarQube Gate] %s\n' "$*"; }
 sonar_api_get() {
   local endpoint="$1"
   if [[ -n "${SONAR_TOKEN}" ]]; then
-    printf 'header = "Authorization: Bearer %s"\nurl = "%s%s"\n' \
+    printf 'header = "Authorization: Bearer ***"\nurl = "%s%s"\n' \
       "${SONAR_TOKEN}" "${SONAR_HOST_URL}" "${endpoint}" \
       | curl -fsS --max-time 15 --config -
   else
@@ -70,8 +70,10 @@ fi
 
 docker run --rm \
   --network host \
+  --user "$(id -u):$(id -g)" \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -e SONAR_USER_HOME="/tmp/sonar-user-home-$(id -u)" \
   -v "${WORKSPACE}:/usr/src" \
   -w /usr/src \
   "${extra_mounts[@]}" \

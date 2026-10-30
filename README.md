@@ -29,6 +29,9 @@
 
 ## Quick Start
 
+## Catatan Uji   
+    Percobaan Poll SCM otomatis — build harus jalan sendiri tanpa klik Build Now. 
+
 ### 1. Kompilasi & Instalasi CLI `autore` dari Source
 
 ```bash

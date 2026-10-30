@@ -84,7 +84,7 @@ flowchart LR
 2. **Native Rust Developer CLI (`cli/`)**
    - Binary native tanpa dependensi runtime interpreter (Python/Node).
    - Eksekusi instan untuk standarisasi proyek, pemindaian statis, dan diagnostik sistem.
-3. **Admin-Controlled Jenkins Shared Library (`jenkins-shared-library/`)**
+3. **Admin-Controlled Jenkins Shared Library (`vars/` di root repo)**
    - Pipeline CI/CD otoritatif (`vars/autorePipeline.groovy`) berada di repositori admin, bukan di repositori aplikasi.
    - Menghalangi modifikasi tidak sah terhadap gerbang pengujian dan kebijakan deployment.
 4. **SonarQube SAST & Quality Gate (`scripts/ci-sonarqube-gate.sh`)**
@@ -210,7 +210,7 @@ Autore/
 ├── cli/                        # Source code CLI Rust (autore)
 │   ├── Cargo.toml
 │   └── src/
-├── jenkins-shared-library/     # Jenkins Trusted Shared Library (Admin-controlled)
+├── vars/                       # Jenkins Trusted Shared Library (Admin-controlled)
 │   ├── vars/autorePipeline.groovy
 │   └── README.md
 ├── runner/                     # Provisioning & systemd service Jenkins Agent
@@ -241,5 +241,5 @@ Autore/
 > **STATUS ARSITEKTUR SANDBOX / POC VALIDATION:**
 > Konfigurasi runner (`runner/setup-agent.sh`) dan controller (`sandbox/jenkins/docker-compose.yml`) di repositori ini adalah **lingkungan uji coba (Sandbox)** dan **BELUM berstatus production-ready**:
 > 1. **C-1 (Keanggotaan Grup `docker` di Host):** User `jenkins` pada sandbox runner berada di dalam grup `docker` host (setara dengan akses `root`). Jangan menaruh kredensial produksi dan jangan menjalankan PR dari sumber luar yang tidak dipercaya. Untuk produksi kantor, runner wajib menggunakan container ephemeral + rootless builder sesuai [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
-> 2. **C-2 (Pipeline Otoritatif):** Pipeline build wajib dijalankan melalui *Jenkins Trusted Shared Library* yang dikontrol admin (`jenkins-shared-library/vars/autorePipeline.groovy`), bukan dari skrip yang dapat dimodifikasi oleh pembuat PR di repositori aplikasi.
+> 2. **C-2 (Pipeline Otoritatif):** Pipeline build wajib dijalankan melalui *Jenkins Trusted Shared Library* yang dikontrol admin (`vars/autorePipeline.groovy`), bukan dari skrip yang dapat dimodifikasi oleh pembuat PR di repositori aplikasi.
 > 3. **H-6 (Loopback Binding):** Controller Jenkins diikat ke `127.0.0.1:8080`. Akses web dari workstation developer wajib menggunakan secure SSH tunneling (`ssh -L 8080:127.0.0.1:8080 user@vps`).

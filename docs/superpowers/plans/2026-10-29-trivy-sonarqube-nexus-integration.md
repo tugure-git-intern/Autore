@@ -105,7 +105,7 @@ Stage 9: Deploy by @sha256:<digest> & Smoke Test
     - `sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae` (`127.0.0.1:9000:9000`, mount sanitized `cacerts:ro`)
     - `sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e` (`127.0.0.1:8082:8081` + `127.0.0.1:5000:5000`)
   - `sandbox/services/bootstrap-local-services.sh` — Mitigasi resmi `keytool -delete` untuk menghapus root CA eMudhra (`emsign*`) dari `cacerts` sebelum menyalakan SonarQube, serta inisialisasi repo Nexus `docker-hosted` dan `autore-releases` dengan `writePolicy: "ALLOW_ONCE"` (*Disable redeploy*).
-  - `jenkins-shared-library/vars/autorePipeline.groovy` + `jenkins-shared-library/README.md` — Paket Jenkins Trusted Shared Library yang dikontrol admin.
+  - `vars/autorePipeline.groovy` — Paket Jenkins Trusted Shared Library yang dikontrol admin.
 
 ---
 
@@ -190,8 +190,8 @@ Stage 9: Deploy by @sha256:<digest> & Smoke Test
 **Files:**
 - Create: `sandbox/services/docker-compose.yml`
 - Create: `sandbox/services/bootstrap-local-services.sh`
-- Create: `jenkins-shared-library/vars/autorePipeline.groovy`
-- Create: `jenkins-shared-library/README.md`
+- Create: `vars/autorePipeline.groovy`
+- Create: README.md (bagian library)
 
 - [ ] **Step 1: Tulis regression test di `sandbox/dummy-app/test_security_check.py` (RED)**
   - Memastikan `sandbox/services/docker-compose.yml` mem-pin `sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae` dan `sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e`, me-mount `cacerts` yang telah dimitigasi dari eMudhra (`:ro`), mengikat seluruh port ke `127.0.0.1`, mengatur `writePolicy: "ALLOW_ONCE"` di `bootstrap-local-services.sh`, dan memastikan `vars/autorePipeline.groovy` hanya memanggil binary/skrip dari lokasi admin-controlled (`/usr/local/bin/autore` & `/usr/local/lib/autore-ci/`) dengan full 40-hex `GIT_COMMIT`.

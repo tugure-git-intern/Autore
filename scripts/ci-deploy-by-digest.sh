@@ -27,8 +27,8 @@ DEPLOY_PORT="${DEPLOY_PORT:-8081}"
 HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-/health}"
 CANDIDATE_PORT=$((DEPLOY_PORT + 100))
 
-ACTIVE_CONTAINER="${APP_NAME}-active"
-CANDIDATE_CONTAINER="${APP_NAME}-candidate"
+ACTIVE_CONTAINER="${ACTIVE_CONTAINER_NAME:-${APP_NAME}-active}"
+CANDIDATE_CONTAINER="${CANDIDATE_CONTAINER_NAME:-${APP_NAME}-candidate}"
 
 log "Mempersiapkan deployment untuk image terverifikasi: ${IMAGE_REF}"
 log "Menjalankan container kandidat pada port sementara 127.0.0.1:${CANDIDATE_PORT}..."
@@ -71,8 +71,16 @@ docker run -d --name "${ACTIVE_CONTAINER}" \
   -p "127.0.0.1:${DEPLOY_PORT}:${CONTAINER_PORT}" \
   "${IMAGE_REF}"
 
-log "Verifikasi akhir port produksi http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT}..."
-if ! curl -fsS --max-time 5 "http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
+log "Verifikasi akhir port produksi http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT} (maks 10 detik)..."
+healthy=0
+for i in {1..10}; do
+  if curl -fsS --max-time 2 "http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
+    healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${healthy}" != "1" ]]; then
   echo "ERROR: Verifikasi port produksi gagal!" >&2
   exit 1
 fi

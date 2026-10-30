@@ -1,0 +1,7 @@
+# Allowlist: false positive rule curl-auth-user untuk health-check SonarQube LOKAL.
+# Bukan secret asli: kredensial default container lokal (admin:admin) yang hanya
+# valid di dalam sandbox (127.0.0.1). Secret produksi tetap diblokir.
+[allowlist]
+regexes = [
+  '''-u admin:admin http://127\.0\.0\.1:9000''',
+]

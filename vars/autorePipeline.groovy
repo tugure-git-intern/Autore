@@ -124,6 +124,9 @@ def call(Map config = [:]) {
                         if [ ! -x "${deploy_cmd}" ]; then
                           deploy_cmd="./scripts/ci-deploy-by-digest.sh"
                         fi
+                        export CONTAINER_PORT=8000
+                        export ACTIVE_CONTAINER_NAME=autore-dummy
+                        export CANDIDATE_CONTAINER_NAME=autore-dummy-candidate
                         "${deploy_cmd}" "${verified_digest}"
                     '''
                 }
@@ -136,6 +139,7 @@ def call(Map config = [:]) {
                     sh """
                         export TELEGRAM_CHAT_ID="${telegramChatId}"
                         export APP_NAME="${APP_NAME}"
+                        export BUILD_STATUS="${currentBuild.currentResult}"
                         notify_cmd="./scripts/notify-telegram.sh"
                         if [ -x "\${notify_cmd}" ]; then
                           "\${notify_cmd}" || true

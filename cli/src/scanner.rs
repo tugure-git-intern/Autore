@@ -97,7 +97,7 @@ fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
     if opts.skip_build_dirs {
         return matches!(
             name,
-            "target" | "node_modules" | "__pycache__" | ".superpowers" | ".venv" | "venv"
+            "target" | "node_modules" | "__pycache__" | ".superpowers" | ".venv" | "venv" | "dist" | ".cargo-cache" | ".scannerwork"
         );
     }
     false

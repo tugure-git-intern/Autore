@@ -24,6 +24,7 @@ services:
     container_name: autore-nexus
     restart: unless-stopped
     ports:
+      - "127.0.0.1:8082:8081"
       - "100.80.3.14:8082:8081"
       - "127.0.0.1:5000:5000"
     environment:

@@ -119,7 +119,7 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
     args.extend(
         [
             TRIVY_IMAGE, "fs", "--cache-dir", "/cache", "--scanners", "vuln,misconfig",
-            "--skip-check-update", "--severity", severity, "--exit-code", "1",
+            "--skip-check-update", "--ignore-unfixed", "--severity", severity, "--exit-code", "1",
             "--format", "json", "--output", "/out/trivy.json", "/repo",
         ]
         .map(String::from),
@@ -215,6 +215,7 @@ pub fn run_trivy_image(
         "--scanners".into(),
         "vuln".into(),
         "--skip-check-update".into(),
+        "--ignore-unfixed".into(),
         "--severity".into(),
         opts.severity.into(),
         "--exit-code".into(),

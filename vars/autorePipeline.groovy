@@ -124,6 +124,9 @@ def call(Map config = [:]) {
                         if [ ! -x "${deploy_cmd}" ]; then
                           deploy_cmd="./scripts/ci-deploy-by-digest.sh"
                         fi
+                        export CONTAINER_PORT=8000
+                        export ACTIVE_CONTAINER_NAME=autore-dummy
+                        export CANDIDATE_CONTAINER_NAME=autore-dummy-candidate
                         "${deploy_cmd}" "${verified_digest}"
                     '''
                 }

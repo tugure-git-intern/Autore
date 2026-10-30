@@ -69,6 +69,7 @@ elif [[ -f "${REPO_ROOT}/sandbox/services/mitigated-cacerts" ]]; then
 fi
 
 docker run --rm \
+  --network host \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
   -v "${WORKSPACE}:/usr/src" \

@@ -20,7 +20,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     docker build -q -t "${MUSL_BUILDER_IMAGE}" \
       -f "${MUSL_BUILDER_DOCKERFILE}" "$(dirname "${MUSL_BUILDER_DOCKERFILE}")"
   fi
-  CARGO_CACHE="${REPO_ROOT}/.cargo-cache"
+  CARGO_CACHE="${CARGO_CACHE_DIR:-${HOME}/.cache/autore/musl-cargo}"
   mkdir -p "${CARGO_CACHE}"
   log "Menjalankan kompilasi release musl di container ${MUSL_BUILDER_IMAGE}..."
   docker run --rm \

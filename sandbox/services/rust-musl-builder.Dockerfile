@@ -7,3 +7,4 @@ FROM rust:1.85-alpine@sha256:4333721398de61f53ccbe53b0b855bcc4bb49e55828e8f652d7
 
 RUN apk add --no-cache build-base \
  && rustup target add x86_64-unknown-linux-musl
+USER 1000:1000

@@ -184,7 +184,7 @@ Skrip bootstrap mengotomatisasi seluruh persiapan lokal secara idempoten:
 
 Skrip di atas secara otomatis:
 - Mengekstrak `cacerts` dari image SonarQube dan menghapus sertifikat root CA eMudhra (`emSign`) yang terdampak advisory keamanan SonarSource.
-- Menjalankan container SonarQube Community (`127.0.0.1:9000`) dan Sonatype Nexus OSS (`127.0.0.1:8082` & Docker port `5000`).
+- Menjalankan container SonarQube Community (`127.0.0.1:9000`) dan Sonatype Nexus OSS (`127.0.0.1:8082` untuk pipeline, `100.80.3.14:8082` via Tailscale, & Docker port `5000`).
 - Menyetujui EULA Nexus 3.96 Community Edition melalui REST API.
 - Membuat repositori `docker-hosted` (port `5000`) dan `autore-releases` (raw) dengan kebijakan `ALLOW_ONCE` (*Disable redeploy*).
 - Menonaktifkan *Anonymous Access* agar login Docker CLI menerima challenge `401 WWW-Authenticate`.
@@ -242,4 +242,4 @@ Autore/
 > Konfigurasi runner (`runner/setup-agent.sh`) dan controller (`sandbox/jenkins/docker-compose.yml`) di repositori ini adalah **lingkungan uji coba (Sandbox)** dan **BELUM berstatus production-ready**:
 > 1. **C-1 (Keanggotaan Grup `docker` di Host):** User `jenkins` pada sandbox runner berada di dalam grup `docker` host (setara dengan akses `root`). Jangan menaruh kredensial produksi dan jangan menjalankan PR dari sumber luar yang tidak dipercaya. Untuk produksi kantor, runner wajib menggunakan container ephemeral + rootless builder sesuai [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
 > 2. **C-2 (Pipeline Otoritatif):** Pipeline build wajib dijalankan melalui *Jenkins Trusted Shared Library* yang dikontrol admin (`vars/autorePipeline.groovy`), bukan dari skrip yang dapat dimodifikasi oleh pembuat PR di repositori aplikasi.
-> 3. **H-6 (Loopback Binding):** Controller Jenkins diikat ke `127.0.0.1:8080`. Akses web dari workstation developer wajib menggunakan secure SSH tunneling (`ssh -L 8080:127.0.0.1:8080 user@vps`).
+> 3. **H-6 (Akses Jaringan):** Binding saat ini — Jenkins `0.0.0.0:8080` (semua interface), Nexus `127.0.0.1:8082` (pipeline) + `100.80.3.14:8082` (tailnet), registry Docker `127.0.0.1:5000` (loopback). Akses web: Jenkins `http://100.80.3.14:8080` (Tailscale) / `http://192.168.0.89:8080` (LAN kantor), Nexus `http://100.80.3.14:8082` (Tailscale). **Target produksi:** ikat Jenkins ke interface tailnet saja (`100.80.3.14:8080`), bukan `0.0.0.0`, agar tidak terekspos ke seluruh LAN kantor.

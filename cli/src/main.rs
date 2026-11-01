@@ -33,24 +33,25 @@ fn claude_render_config() -> RenderConfig<'static> {
         .with_help_message(StyleSheet::new().with_fg(Color::DarkGrey))
 }
 
+// Palet oranye terakota khas Claude CLI (#D97757 / RGB 217, 119, 87).
+// Menggunakan raw ANSI 24-bit (\x1b[38;2;R;G;Bm) agar tetap tampil oranye Claude
+// saat dijalankan lewat SSH (tanpa downgrade ke 16-color kuning oleh crate colored).
 const BANNER_ROWS: [(&str, (u8, u8, u8)); 6] = [
-    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (255, 215, 70)),
-    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (255, 190, 62)),
-    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (250, 162, 56)),
-    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (240, 138, 62)),
-    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (228, 122, 74)),
-    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (217, 119, 87)),
+    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (235, 138, 104)),
+    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (229, 131, 98)),
+    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (223, 125, 92)),
+    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (217, 119, 87)),
+    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (204, 108, 77)),
+    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (185, 95, 66)),
 ];
 
 fn print_ascii_banner() {
     println!();
     for (line, (r, g, b)) in BANNER_ROWS {
-        println!("{}", line.truecolor(r, g, b).bold());
+        println!("\x1b[38;2;{r};{g};{b}m{line}\x1b[0m");
     }
     println!(
-        " {} {}",
-        "●".truecolor(217, 119, 87).bold(),
-        "DevSecOps & CI/CD Platform Tooling — v0.1.0".truecolor(217, 119, 87)
+        " \x1b[38;2;217;119;87m●\x1b[0m \x1b[38;2;217;119;87mDevSecOps & CI/CD Platform Tooling — v0.1.0\x1b[0m"
     );
     println!();
 }

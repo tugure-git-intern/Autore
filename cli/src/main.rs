@@ -6,6 +6,7 @@ mod templates;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{CustomType, Select, Text};
 use std::path::PathBuf;
 use std::process;
@@ -19,7 +20,61 @@ use templates::{generate_project_files_with, validate_app_name, InitConfig, Tech
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
+}
+
+fn claude_render_config() -> RenderConfig<'static> {
+    let orange = Color::Rgb { r: 217, g: 119, b: 87 };
+    RenderConfig::default_colored()
+        .with_prompt_prefix(Styled::new("●").with_fg(orange))
+        .with_highlighted_option_prefix(Styled::new("❯").with_fg(orange))
+        .with_selected_option(Some(StyleSheet::new().with_fg(orange)))
+        .with_answer(StyleSheet::new().with_fg(orange))
+        .with_help_message(StyleSheet::new().with_fg(Color::DarkGrey))
+}
+
+fn prompt_main_menu() -> Commands {
+    println!(
+        "\n{} {}",
+        "●".truecolor(217, 119, 87).bold(),
+        "Autore CLI — DevSecOps & CI/CD Platform".truecolor(217, 119, 87).bold()
+    );
+    let items = vec![
+        "• Buat Project Baru (Dockerfile & Jenkinsfile)",
+        "• Scan Keamanan Kode (Static + Gitleaks + Trivy)",
+        "• Pasang Satpam Git (Pre-Commit Hook)",
+        "• Copot Satpam Git (Uninstall Hook)",
+        "• Cek Kesehatan Sistem (Doctor)",
+    ];
+    let choice = Select::new("Pilih aksi:", items)
+        .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+        .prompt()
+        .unwrap_or_else(|_| process::exit(0));
+
+    match choice {
+        "• Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
+            app_name: None,
+            stack: None,
+            app_port: None,
+            deploy_port: 8081,
+            output_dir: PathBuf::from("."),
+            force: false,
+        },
+        "• Scan Keamanan Kode (Static + Gitleaks + Trivy)" => Commands::Scan {
+            path: PathBuf::from("."),
+            severity: "HIGH,CRITICAL".to_string(),
+            no_docker: false,
+            include_build_dirs: false,
+            docker: false,
+        },
+        "• Pasang Satpam Git (Pre-Commit Hook)" => Commands::Hook {
+            action: HookAction::Install { repo: PathBuf::from(".") },
+        },
+        "• Copot Satpam Git (Uninstall Hook)" => Commands::Hook {
+            action: HookAction::Uninstall { repo: PathBuf::from(".") },
+        },
+        _ => Commands::Doctor,
+    }
 }
 
 #[derive(Subcommand)]
@@ -124,9 +179,11 @@ enum HookAction {
 }
 
 fn main() {
+    inquire::set_global_render_config(claude_render_config());
     let cli = Cli::parse();
+    let command = cli.command.unwrap_or_else(prompt_main_menu);
 
-    match cli.command {
+    match command {
         Commands::Init {
             app_name,
             stack,

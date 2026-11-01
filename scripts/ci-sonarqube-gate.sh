@@ -91,6 +91,10 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
     chown -R "${HOST_UID}:${HOST_GID}" /cargo /work/clippy-report.json /work/clippy-stderr.txt /work/lcov.info
   ' || { echo "ERROR: tahap clippy/coverage Rust gagal" >&2; exit 1; }
   [[ -s "${LCOV_FILE}" ]] || { echo "ERROR: ${LCOV_FILE} kosong — coverage tidak terukur" >&2; exit 1; }
+  # lcov dari container memakai path absolut /work/...; Sonar membaca relatif
+  # terhadap /usr/src sehingga tanpa ini semua baris dianggap tak terpetakan.
+  sed -i "s|^SF:/work/|SF:|; s|^SF:${WORKSPACE}/|SF:|" "${LCOV_FILE}"
+  log "Contoh path lcov: $(grep -m1 '^SF:' "${LCOV_FILE}")"
   log "Clippy report & lcov siap (clippy: $(wc -c < "${CLIPPY_REPORT}") byte, lcov: $(grep -c '^SF:' "${LCOV_FILE}") file)."
 else
   echo "ERROR: ${WORKSPACE}/cli/Cargo.toml tidak ada — gerbang Rust tidak bisa dijalankan (dilarang lolos dengan laporan dummy)." >&2

@@ -3,6 +3,7 @@ mod external;
 mod hooks;
 mod scanner;
 mod templates;
+mod updater;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -15,7 +16,7 @@ use templates::{generate_project_files_with, validate_app_name, InitConfig, Tech
 #[derive(Parser)]
 #[command(
     name = "autore",
-    version = "0.1.0",
+    version = env!("AUTORE_VERSION"),
     about = "Autore CLI — DevSecOps & CI/CD Platform Tooling for Tugu Re IT Team"
 )]
 struct Cli {
@@ -51,7 +52,8 @@ fn print_ascii_banner() {
         println!("\x1b[38;2;{r};{g};{b}m{line}\x1b[0m");
     }
     println!(
-        " \x1b[38;2;217;119;87m●\x1b[0m \x1b[38;2;217;119;87mDevSecOps & CI/CD Platform Tooling — v0.1.0\x1b[0m"
+        " \x1b[38;2;217;119;87m●\x1b[0m \x1b[38;2;217;119;87mDevSecOps & CI/CD Platform Tooling — v{}\x1b[0m",
+        env!("AUTORE_VERSION")
     );
     println!();
 }
@@ -64,6 +66,7 @@ fn prompt_main_menu() -> Commands {
         "• Pasang Satpam Git (Pre-Commit Hook)",
         "• Copot Satpam Git (Uninstall Hook)",
         "• Cek Kesehatan Sistem (Doctor)",
+        "• Update Autore",
     ];
     let choice = Select::new("Pilih:", items)
         .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
@@ -92,6 +95,7 @@ fn prompt_main_menu() -> Commands {
         "• Copot Satpam Git (Uninstall Hook)" => Commands::Hook {
             action: HookAction::Uninstall { repo: PathBuf::from(".") },
         },
+        "• Update Autore" => Commands::Update,
         _ => Commands::Doctor,
     }
 }
@@ -185,6 +189,9 @@ enum Commands {
 
     /// Periksa kesehatan sistem Runner, Docker, Java, dan Jenkins
     Doctor,
+
+    /// Update Autore ke versi rilis stabil terbaru di GitHub Releases
+    Update,
 }
 
 #[derive(Subcommand)]
@@ -207,6 +214,9 @@ enum HookAction {
 }
 
 fn main() {
+    if let Ok(exe) = std::env::current_exe() {
+        updater::cleanup_stale_old_binary(&exe);
+    }
     inquire::set_global_render_config(claude_render_config());
     let cli = Cli::parse();
     let command = cli.command.unwrap_or_else(prompt_main_menu);
@@ -442,6 +452,13 @@ fn main() {
 
         Commands::Doctor => {
             if !doctor::print_doctor_report() {
+                process::exit(1);
+            }
+        }
+
+        Commands::Update => {
+            if let Err(e) = updater::run_self_update() {
+                eprintln!("{} {e}", "ERROR:".red().bold());
                 process::exit(1);
             }
         }

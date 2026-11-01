@@ -29,7 +29,22 @@
 
 ## Quick Start
 
-### 1. Kompilasi & Instalasi CLI `autore` dari Source
+### 1. Instalasi Cepat 1-Baris (Copy & Paste)
+
+Salin dan jalankan perintah berikut di terminal Linux Anda (otomatis mengunduh binary statis `musl`, memverifikasi `SHA256SUMS`, dan memasang `autore`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.sh | bash
+```
+
+Setelah terpasang, cukup ketik **`autore`** untuk membuka menu interaktif:
+
+```bash
+autore
+```
+
+<details>
+<summary><b>Alternatif: Kompilasi manual dari Source (Rust)</b></summary>
 
 ```bash
 # Kompilasi binary release berbasis Rust
@@ -38,10 +53,8 @@ cargo build --release --manifest-path cli/Cargo.toml
 # Pasang binary global (butuh akses sudo/root)
 sudo cp cli/target/release/autore /usr/local/bin/autore
 sudo chmod 0755 /usr/local/bin/autore
-
-# Verifikasi instalasi
-autore --help
 ```
+</details>
 
 ### 2. Perintah Cepat Harian Developer
 

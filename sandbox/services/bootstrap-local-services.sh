@@ -76,7 +76,8 @@ done
 
 if [[ "${sonar_ready}" == "1" ]]; then
   log "SonarQube aktif! Memverifikasi ketersediaan plugin native Rust..."
-  if curl -fsS -u admin:admin http://127.0.0.1:9000/api/languages/list 2>/dev/null | grep -q '"key":"rust"'; then
+  # Password admin bisa di-override via env var SONAR_ADMIN_PASSWORD (default 'admin' = password awal SonarQube).
+  if curl -fsS -u "admin:${SONAR_ADMIN_PASSWORD:-admin}" http://127.0.0.1:9000/api/languages/list 2>/dev/null | grep -q '"key":"rust"'; then
     log "✔ Plugin Rust aktif di SonarQube server."
   else
     echo "WARN: Plugin Rust belum terdeteksi di /api/languages/list" >&2

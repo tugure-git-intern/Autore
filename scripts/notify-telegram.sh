@@ -23,6 +23,11 @@ NODE_NAME="${NODE_NAME:-vps-runner-1}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-autore-cli}"
 JOB_NAME_SAFE="${JOB_NAME:-autore-e2e}"
 FAILED_STAGE="${FAILED_STAGE:--}"
+# Pipeline mencatat tahap yang sedang dicoba, jadi pada build sukses nilainya
+# masih terisi tahap terakhir. Tidak ada tahap gagal kalau statusnya SUCCESS.
+if [[ "${BUILD_STATUS}" == "SUCCESS" ]]; then
+  FAILED_STAGE="-"
+fi
 REASON_FILE="${WORKSPACE}/.security-gate-reason"
 TIMESTAMP="$(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')"
 

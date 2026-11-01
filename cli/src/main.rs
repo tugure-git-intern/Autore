@@ -96,6 +96,15 @@ fn prompt_main_menu() -> Commands {
     }
 }
 
+/// Tulis alasan blokir ke file yang dibaca notifier pipeline.
+/// ponytail: hapus dulu — `fs::write` menembus symlink, dan repo bisa meng-commit
+/// `.security-gate-reason` -> file lain yang writable oleh user runner.
+fn write_gate_reason(contents: &str) {
+    let path = std::path::Path::new(".security-gate-reason");
+    let _ = std::fs::remove_file(path); // hapus link-nya sendiri, bukan target
+    let _ = std::fs::write(path, contents);
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Generate Dockerfile & Jenkinsfile standar kantor untuk aplikasi baru
@@ -309,7 +318,7 @@ fn main() {
                                 v.message
                             ));
                         }
-                        let _ = std::fs::write(".security-gate-reason", reasons.join("; "));
+                        write_gate_reason(&reasons.join("; "));
                         process::exit(1);
                     }
                     println!(
@@ -342,7 +351,7 @@ fn main() {
                         "\n{} Perbaiki temuan di atas, lalu jalankan ulang: autore scan",
                         "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold()
                     );
-                    let _ = std::fs::write(".security-gate-reason", head);
+                    write_gate_reason(head);
                     process::exit(1);
                 }
             }
@@ -379,7 +388,7 @@ fn main() {
                 };
                 if let Err(e) = external::run_authoritative_image_scan(&opts) {
                     eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
-                    let _ = std::fs::write(".security-gate-reason", &e);
+                    write_gate_reason(e.lines().next().unwrap_or(&e));
                     process::exit(1);
                 }
             }

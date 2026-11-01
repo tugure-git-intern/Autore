@@ -312,14 +312,8 @@ pub fn run_trivy_image(
         ));
     }
     let user_trimmed = inspect_out.trim();
-    let user_lower = user_trimmed.to_ascii_lowercase();
-    let is_root = user_lower.is_empty()
-        || user_lower == "root"
-        || user_lower == "0"
-        || user_lower == "0:0"
-        || user_lower.starts_with("root:")
-        || user_lower.starts_with("0:");
-    if is_root {
+    // Pakai predikat yang sama dengan scanner Dockerfile: "00"/"000"/"000:000" juga uid 0.
+    if !crate::scanner::is_valid_non_root_user(user_trimmed) {
         let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
         return Err(format!(
             "Image {} berjalan sebagai root (UID 0, user: '{}'). Wajib menggunakan non-root USER.",
@@ -743,6 +737,24 @@ mod tests {
         let r = fake(0, None);
         let err = run_trivy_image(&docker, &opts, &r).unwrap_err();
         assert!(err.contains("latest"), "{err}");
+    }
+
+    #[test]
+    #[test]
+    fn trivy_image_fails_when_user_is_all_zero_digits() {
+        let _tmp = TempDir::new().unwrap();
+        let docker = PathBuf::from("/usr/bin/docker");
+        let opts = ImageScanOptions {
+            image: "127.0.0.1:5000/app:build-1-0000000000000000000000000000000000000000",
+            severity: "HIGH,CRITICAL",
+            sbom_output: None,
+        };
+        for user in ["00", "000", "000:000", "0:0", "+0", "-0"] {
+            let mut r = fake(0, None);
+            r.inspect_user = Some(user.to_string());
+            let err = run_trivy_image(&docker, &opts, &r).unwrap_err();
+            assert!(err.contains("root"), "USER {user} must be rejected: {err}");
+        }
     }
 
     #[test]

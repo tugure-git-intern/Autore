@@ -72,11 +72,12 @@ elif [[ -f "/home/tugure/Autore/sandbox/services/mitigated-cacerts" ]]; then
   extra_mounts+=(-v "/home/tugure/Autore/sandbox/services/mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro")
 fi
 
+export SONAR_TOKEN
 docker run --rm \
   --network host \
   --user "$(id -u):$(id -g)" \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-  -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -e SONAR_TOKEN \
   -e SONAR_USER_HOME="/tmp/sonar-user-home-$(id -u)" \
   -v "${WORKSPACE}:/usr/src" \
   -w /usr/src \

@@ -16,6 +16,10 @@ target/
 sandbox/services/mitigated-cacerts
 sandbox/services/.nexus-policy-spec.json
 
+# Autore gate output (ditulis saat scan gagal)
+.security-gate-reason
+**/.security-gate-reason
+
 # SonarQube & Scanner artifacts
 .scannerwork/
 **/.scannerwork/

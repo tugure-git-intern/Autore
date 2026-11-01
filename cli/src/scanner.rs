@@ -309,7 +309,8 @@ fn check_file_bytes(
     }
 }
 
-fn is_valid_non_root_user(raw: &str) -> bool {
+/// Satu-satunya definisi 'user non-root yang sah' (dipakai scanner & scan-image).
+pub(crate) fn is_valid_non_root_user(raw: &str) -> bool {
     if raw.is_empty() || raw.contains('$') {
         return false;
     }

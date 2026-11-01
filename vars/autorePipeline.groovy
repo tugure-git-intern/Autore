@@ -35,6 +35,7 @@ def call(Map config = [:]) {
             stage('1. Checkout & Audit Metadata') {
                 steps {
                     script { env.FAILED_STAGE = '1. Checkout & Audit Metadata' }
+                    sh 'rm -rf .security-gate-reason .verified-image-digest .scan-out.log dist'
                     script {
                         def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                         if (!(commit ==~ /^[0-9a-f]{40}$/)) {
@@ -55,14 +56,32 @@ def call(Map config = [:]) {
             stage('2. Autore Static Guard & Gitleaks') {
                 steps {
                     script { env.FAILED_STAGE = '2. Autore Static Guard & Gitleaks' }
-                    sh '/usr/local/bin/autore scan --path .'
+                    sh '''
+                        set +e
+                        /usr/local/bin/autore scan --path . 2>&1 | tee .scan-out.log
+                        rc=${PIPESTATUS[0]}
+                        set -e
+                        if [ "$rc" -ne 0 ]; then
+                          sed 's/\x1b\[[0-9;]*m//g' .scan-out.log | grep -E '✘|🚫|ERROR:' | sed 's/^[[:space:]]*✘[[:space:]]*//; s/^🚫 \[AUTORE SECURITY GATE — DIBLOKIR\][[:space:]]*//' | paste -sd '; ' - > .security-gate-reason
+                          exit "$rc"
+                        fi
+                    '''
                 }
             }
 
             stage('3. Trivy Source & Config Scan') {
                 steps {
                     script { env.FAILED_STAGE = '3. Trivy Source & Config Scan' }
-                    sh '/usr/local/bin/autore scan --severity HIGH,CRITICAL --path .'
+                    sh '''
+                        set +e
+                        /usr/local/bin/autore scan --severity HIGH,CRITICAL --path . 2>&1 | tee .scan-out.log
+                        rc=${PIPESTATUS[0]}
+                        set -e
+                        if [ "$rc" -ne 0 ]; then
+                          sed 's/\x1b\[[0-9;]*m//g' .scan-out.log | grep -E '✘|🚫|ERROR:' | sed 's/^[[:space:]]*✘[[:space:]]*//; s/^🚫 \[AUTORE SECURITY GATE — DIBLOKIR\][[:space:]]*//' | paste -sd '; ' - > .security-gate-reason
+                          exit "$rc"
+                        fi
+                    '''
                 }
             }
 

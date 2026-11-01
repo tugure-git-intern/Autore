@@ -32,7 +32,7 @@ if [[ -f "${REASON_FILE}" ]]; then
 fi
 
 FULL_DIGEST="belum-tersedia"
-SHORT_DIGEST="n/a"
+SHORT_DIGEST="belum dibuat (diblokir sebelum publish)"
 if [[ -f "${WORKSPACE}/.verified-image-digest" ]]; then
   FULL_DIGEST="$(tr -d '\r\n' < "${WORKSPACE}/.verified-image-digest")"
   DIGEST_HEX="${FULL_DIGEST#*@sha256:}"
@@ -46,7 +46,7 @@ if [[ -f "${WORKSPACE}/dist/SHA256SUMS" ]]; then
   SHORT_BIN_SHA="${FULL_BIN_SHA:0:12}"
 fi
 
-SBOM_SHORT="belum-ada"
+SBOM_SHORT="belum dibuat (diblokir sebelum image scan)"
 if [[ -f "${WORKSPACE}/dist/sbom.cdx.json" ]]; then
   SBOM_KB="$(( ($(wc -c < "${WORKSPACE}/dist/sbom.cdx.json" | tr -d ' ') + 1023) / 1024 ))KB"
   SBOM_SHORT="dist/sbom.cdx.json (${SBOM_KB})"

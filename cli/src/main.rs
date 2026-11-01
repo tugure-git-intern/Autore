@@ -65,7 +65,7 @@ fn prompt_main_menu() -> Commands {
         "• Copot Satpam Git (Uninstall Hook)",
         "• Cek Kesehatan Sistem (Doctor)",
     ];
-    let choice = Select::new("Pilih aksi:", items)
+    let choice = Select::new("Pilih:", items)
         .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
         .prompt()
         .unwrap_or_else(|_| process::exit(0));

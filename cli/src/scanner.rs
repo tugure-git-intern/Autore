@@ -545,6 +545,10 @@ mod tests {
         let f = tmp.path().join("hidden.py");
         fs::write(&f, OS_SYSTEM).unwrap();
         fs::set_permissions(&f, fs::Permissions::from_mode(0o000)).unwrap();
+        // Sebagai root (mis. di container builder) file 000 tetap terbaca, premis test hilang.
+        if fs::read(&f).is_ok() {
+            return;
+        }
         let report = scan_directory(tmp.path()).unwrap();
         fs::set_permissions(&f, fs::Permissions::from_mode(0o644)).unwrap();
         assert!(rules(&report).contains(&"unreadable-file".to_string()), "{:?}", report.violations);

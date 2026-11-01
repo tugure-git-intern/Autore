@@ -10,6 +10,8 @@ SONAR_HOST_URL="${SONAR_HOST_URL:-http://127.0.0.1:9000}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-autore-cli}"
 SONAR_TOKEN="${SONAR_TOKEN:-}"
 SONAR_SCANNER_IMAGE="${SONAR_SCANNER_IMAGE:-sonarsource/sonar-scanner-cli:12.3.0.4285_8.1.0@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7}"
+RUST_IMAGE="${RUST_IMAGE:-clux/muslrust@sha256:15a72a4abf1c593b0bea63a4a8f20e95c1e5a0696d7051eca87b9b850b2d7e43}"
+RUST_CACHE_DIR="${RUST_CACHE_DIR:-${HOME}/.cache/autore/rust-ci}"
 CE_TASK_TIMEOUT="${CE_TASK_TIMEOUT:-300}"
 CACERTS_MOUNT="${CACERTS_MOUNT:-}"
 
@@ -39,23 +41,59 @@ fi
 log "Preflight LULUS: bahasa 'rust' terdaftar di server (catatan: ini preflight, belum bukti analisis kode)."
 
 # ---------------------------------------------------------------------------
-# 2. Ekspor Laporan Clippy Host (sonar.rust.clippy.enabled=false + import report)
+# 2. Clippy + lcov coverage di container Rust (toolchain host tidak dipakai)
 # ---------------------------------------------------------------------------
-log "2/5: Menjalankan cargo clippy dan mengekspor clippy-report.json..."
+# Sebelumnya `command -v cargo` gagal di agent Jenkins, sehingga script menulis
+# clippy-report.json = "[]" (fallback) dan import clippy jadi tidak ada isinya.
+log "2/5: Menjalankan clippy + cargo llvm-cov di container Rust terpin..."
 CLIPPY_REPORT="${WORKSPACE}/clippy-report.json"
-rm -f "${CLIPPY_REPORT}"
+LCOV_FILE="${WORKSPACE}/lcov.info"
+rm -f "${CLIPPY_REPORT}" "${LCOV_FILE}"
 
-if command -v cargo >/dev/null 2>&1 && [[ -f "${WORKSPACE}/cli/Cargo.toml" || -f "${WORKSPACE}/Cargo.toml" ]]; then
-  manifest_arg=()
-  if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
-    manifest_arg=(--manifest-path "${WORKSPACE}/cli/Cargo.toml")
-  fi
-  cargo clippy "${manifest_arg[@]}" --all-targets --message-format=json -- -D warnings > "${CLIPPY_REPORT}"
-elif [[ ! -f "${CLIPPY_REPORT}" ]]; then
-  # Fallback dummy JSON report for testing if cargo not present
-  echo '[]' > "${CLIPPY_REPORT}"
+rust_tool() {
+  local host_uid host_gid
+  host_uid="$(id -u)"; host_gid="$(id -g)"
+  docker run --rm \
+    -e HOME=/tmp -e CARGO_HOME=/cargo \
+    -e PATH="/cargo/bin:/opt/cargo/bin:/usr/local/bin:/usr/bin:/bin" \
+    -e CARGO_TARGET_DIR=/cargo/target \
+    -e HOST_UID="${host_uid}" -e HOST_GID="${host_gid}" \
+    -v "${WORKSPACE}:/work" \
+    -v "${RUST_CACHE_DIR}:/cargo" \
+    -w /work \
+    "${RUST_IMAGE}" bash -lc "$1"
+}
+
+if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
+  mkdir -p "${RUST_CACHE_DIR}"
+  rust_tool '
+    set -euo pipefail
+    if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+      echo "Memasang cargo-llvm-cov (sekali saja, tersimpan di cache volume)..."
+      rustup component add llvm-tools-preview >/dev/null 2>&1 || true
+      cargo install --locked cargo-llvm-cov >/dev/null 2>&1
+    fi
+    command -v cargo-llvm-cov >/dev/null 2>&1 || { echo "ERROR: cargo-llvm-cov tidak tersedia" >&2; exit 1; }
+
+    echo "Menjalankan clippy (-D warnings)..."
+    if ! cargo clippy --manifest-path cli/Cargo.toml --all-targets --message-format=json -- -D warnings > clippy-report.json 2> clippy-stderr.txt; then
+      echo "ERROR: cargo clippy gagal (-D warnings). Ringkasan:" >&2
+      tail -25 clippy-stderr.txt >&2
+      exit 1
+    fi
+    grep -q "^\[" clippy-report.json || { echo "ERROR: clippy-report.json bukan JSON array" >&2; exit 1; }
+
+    echo "Mengukur coverage (cargo llvm-cov, lcov)..."
+    rustup component add llvm-tools-preview >/dev/null 2>&1 || true
+    cargo llvm-cov --manifest-path cli/Cargo.toml --lcov --output-path lcov.info
+    chown -R "${HOST_UID}:${HOST_GID}" /cargo /work/clippy-report.json /work/clippy-stderr.txt /work/lcov.info
+  ' || { echo "ERROR: tahap clippy/coverage Rust gagal" >&2; exit 1; }
+  [[ -s "${LCOV_FILE}" ]] || { echo "ERROR: ${LCOV_FILE} kosong — coverage tidak terukur" >&2; exit 1; }
+  log "Clippy report & lcov siap (clippy: $(wc -c < "${CLIPPY_REPORT}") byte, lcov: $(grep -c '^SF:' "${LCOV_FILE}") file)."
+else
+  echo "ERROR: ${WORKSPACE}/cli/Cargo.toml tidak ada — gerbang Rust tidak bisa dijalankan (dilarang lolos dengan laporan dummy)." >&2
+  exit 1
 fi
-log "Clippy report siap di: ${CLIPPY_REPORT}"
 
 # ---------------------------------------------------------------------------
 # 3. Jalankan SonarScanner CLI (Digest Pinned, clippy.enabled=false)
@@ -87,7 +125,8 @@ docker run --rm \
   -Dsonar.sources="." \
   -Dsonar.working.directory=/usr/src/.scannerwork \
   -Dsonar.rust.clippy.enabled=false \
-  -Dsonar.rust.clippyReport.reportPaths=clippy-report.json
+  -Dsonar.rust.clippyReport.reportPaths=clippy-report.json \
+  -Dsonar.rust.lcov.reportPaths=lcov.info
 
 # ---------------------------------------------------------------------------
 # 4. Polling Compute Engine Task hingga SUCCESS & Dapatkan analysisId

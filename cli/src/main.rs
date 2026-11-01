@@ -290,6 +290,7 @@ fn main() {
                                 .red()
                                 .bold()
                         );
+                        let mut reasons = Vec::new();
                         for v in &report.violations {
                             eprintln!(
                                 "  {} {}:{} [{}] — {}",
@@ -299,7 +300,15 @@ fn main() {
                                 v.rule.yellow(),
                                 v.message
                             );
+                            reasons.push(format!(
+                                "{}:{} [{}] — {}",
+                                v.file.display(),
+                                v.line,
+                                v.rule,
+                                v.message
+                            ));
                         }
+                        let _ = std::fs::write(".security-gate-reason", reasons.join("; "));
                         process::exit(1);
                     }
                     println!(
@@ -325,6 +334,7 @@ fn main() {
                 println!("{} Menjalankan Gitleaks & Trivy (Docker, image pinned, severity: {})...", "==>".cyan().bold(), severity);
                 if let Err(e) = external::run_authoritative_scan(&path, &severity) {
                     eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
+                    let _ = std::fs::write(".security-gate-reason", &e);
                     process::exit(1);
                 }
             }
@@ -361,6 +371,7 @@ fn main() {
                 };
                 if let Err(e) = external::run_authoritative_image_scan(&opts) {
                     eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
+                    let _ = std::fs::write(".security-gate-reason", &e);
                     process::exit(1);
                 }
             }

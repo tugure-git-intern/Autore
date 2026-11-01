@@ -34,94 +34,25 @@ fn claude_render_config() -> RenderConfig<'static> {
 }
 
 const BANNER_ROWS: [(&str, (u8, u8, u8)); 6] = [
-    (" ████╗ ██╗  ██╗██████╗ █████╗ ██████╗ ██████╗", (255, 220, 75)),
-    ("██╔═██╗██║  ██║╚═██╔═╝██╔══██╗██╔══██╗██╔═══╝", (255, 192, 62)),
-    ("██████║██║  ██║  ██║  ██║  ██║██████╔╝█████╗ ", (250, 162, 56)),
-    ("██╔═██║██║  ██║  ██║  ██║  ██║██╔══██╗██╔══╝ ", (240, 138, 62)),
-    ("██║ ██║╚█████╔╝  ██║  ╚█████╔╝██║  ██║██████╗", (228, 122, 74)),
-    ("╚═╝ ╚═╝ ╚════╝   ╚═╝   ╚════╝ ╚═╝  ╚═╝╚═════╝", (217, 119, 87)),
+    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (255, 215, 70)),
+    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (255, 190, 62)),
+    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (250, 162, 56)),
+    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (240, 138, 62)),
+    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (228, 122, 74)),
+    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (217, 119, 87)),
 ];
 
-fn detect_terminal_cols() -> usize {
-    if let Ok(val) = std::env::var("COLUMNS") {
-        if let Ok(cols) = val.trim().parse::<usize>() {
-            if cols > 0 {
-                return cols;
-            }
-        }
-    }
-    if let Ok(out) = std::process::Command::new("stty")
-        .arg("size")
-        .stdin(std::process::Stdio::inherit())
-        .output()
-    {
-        if out.status.success() {
-            if let Ok(txt) = String::from_utf8(out.stdout) {
-                if let Some(cols_str) = txt.split_whitespace().nth(1) {
-                    if let Ok(cols) = cols_str.parse::<usize>() {
-                        if cols > 0 {
-                            return cols;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    80
-}
-
-fn format_banner(cols: usize) -> String {
-    let mut autore_rows: Vec<String> = BANNER_ROWS
-        .iter()
-        .map(|(line, (r, g, b))| format!("[1;38;2;{r};{g};{b}m{line}[0m"))
-        .collect();
-    autore_rows.push(
-        "[1;38;2;217;119;87m●[0m [38;2;217;119;87mDevSecOps & CI/CD Platform Tooling — v0.1.0[0m".to_string(),
-    );
-
-    // Warna logo resmi TuguRe:
-    // Biru TuguRe (#1D3A8A / diperjelas untuk terminal): [1;38;2;55;115;240m
-    // Abu-abu chevron tengah (#9EA2A5): [1;38;2;165;172;180m
-    // Oranye chevron tagline (#F06421): [1;38;2;240;100;33m
-    let b = "[1;38;2;55;115;240m";
-    let g = "[1;38;2;165;172;180m";
-    let o = "[1;38;2;240;100;33m";
-    let lb = "[38;2;95;145;245m";
-    let r = "[0m";
-
-    // Baris logo TuguRe (lebar visual tepat 26 kolom per baris)
-    let tugure_rows: [String; 7] = [
-        format!("          {b}▄▄ ▄▄{r}           "),
-        format!("        {b}▄███ ███▄{r}         "),
-        format!("      {b}▄██{g}▛▀█ █▀▜{b}██▄{r}       "),
-        format!("    {b}▄██{g}▛▀ {b}██ ██{g} ▀▜{b}██▄{r}     "),
-        format!("    {b}T   U   G   U   R   E{r} "),
-        format!("{o}❯{r} {lb}from{r} {b}Trust{r} {lb}to{r} {b}Excellence{r}"),
-        String::from("                          "),
-    ];
-
-    let mut out = String::from("\n");
-    // Lebar gabungan: 2 (indent) + 45 (AUTORE) + 4 (spasi) + 26 (TuguRe) = 77 kolom
-    if cols >= 77 {
-        for i in 0..7 {
-            out.push_str(&format!("  {}    {}\n", autore_rows[i], tugure_rows[i]));
-        }
-    } else {
-        // Fallback atas-bawah untuk terminal sempit (logo TuguRe di atas banner AUTORE)
-        for row in &tugure_rows[..6] {
-            out.push_str(&format!("  {}\n", row));
-        }
-        out.push('\n');
-        for row in &autore_rows {
-            out.push_str(&format!("  {}\n", row));
-        }
-    }
-    out.push('\n');
-    out
-}
-
 fn print_ascii_banner() {
-    print!("{}", format_banner(detect_terminal_cols()));
+    println!();
+    for (line, (r, g, b)) in BANNER_ROWS {
+        println!("{}", line.truecolor(r, g, b).bold());
+    }
+    println!(
+        " {} {}",
+        "●".truecolor(217, 119, 87).bold(),
+        "DevSecOps & CI/CD Platform Tooling — v0.1.0".truecolor(217, 119, 87)
+    );
+    println!();
 }
 
 fn prompt_main_menu() -> Commands {
@@ -494,45 +425,11 @@ fn main() {
 mod tests {
     use super::*;
 
-    fn strip_ansi(input: &str) -> String {
-        let mut out = String::new();
-        let mut in_esc = false;
-        for ch in input.chars() {
-            if ch == '\x1b' {
-                in_esc = true;
-            } else if in_esc {
-                if ch == 'm' {
-                    in_esc = false;
-                }
-            } else {
-                out.push(ch);
-            }
-        }
-        out
-    }
-
     #[test]
-    fn banner_fits_standard_80_col_terminal_side_by_side() {
-        let rendered = format_banner(80);
-        let plain = strip_ansi(&rendered);
-        let lines: Vec<&str> = plain.lines().filter(|l| !l.trim().is_empty()).collect();
-        assert_eq!(lines.len(), 7);
-        for row in &lines {
-            assert_eq!(row.chars().count(), 77);
-        }
-        assert!(plain.contains("T   U   G   U   R   E"));
-        assert!(plain.contains("from Trust to Excellence"));
-    }
-
-    #[test]
-    fn banner_narrow_terminal_falls_back_top_down() {
-        let rendered = format_banner(60);
-        let plain = strip_ansi(&rendered);
-        let tugure_pos = plain.find("T   U   G   U   R   E").expect("logo tugure");
-        let autore_pos = plain.find("████╗").expect("banner autore");
-        assert!(tugure_pos < autore_pos);
-        for row in plain.lines() {
-            assert!(row.chars().count() <= 47);
+    fn banner_fits_standard_80_col_terminal() {
+        assert_eq!(BANNER_ROWS.len(), 6);
+        for (row, _) in BANNER_ROWS {
+            assert!(row.chars().count() <= 80);
         }
     }
 }

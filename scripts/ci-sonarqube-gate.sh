@@ -68,12 +68,13 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
   mkdir -p "${RUST_CACHE_DIR}"
   rust_tool '
     set -euo pipefail
+    rustup component add clippy llvm-tools-preview >/dev/null 2>&1 || true
     if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
       echo "Memasang cargo-llvm-cov (sekali saja, tersimpan di cache volume)..."
-      rustup component add llvm-tools-preview >/dev/null 2>&1 || true
       cargo install --locked cargo-llvm-cov >/dev/null 2>&1
     fi
     command -v cargo-llvm-cov >/dev/null 2>&1 || { echo "ERROR: cargo-llvm-cov tidak tersedia" >&2; exit 1; }
+    command -v cargo-clippy >/dev/null 2>&1 || { echo "ERROR: komponen clippy tidak tersedia" >&2; exit 1; }
 
     echo "Menjalankan clippy (-D warnings)..."
     if ! cargo clippy --manifest-path cli/Cargo.toml --all-targets --message-format=json -- -D warnings > clippy-report.json 2> clippy-stderr.txt; then
@@ -84,7 +85,6 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
     grep -q "^\[" clippy-report.json || { echo "ERROR: clippy-report.json bukan JSON array" >&2; exit 1; }
 
     echo "Mengukur coverage (cargo llvm-cov, lcov)..."
-    rustup component add llvm-tools-preview >/dev/null 2>&1 || true
     cargo llvm-cov --manifest-path cli/Cargo.toml --lcov --output-path lcov.info
     chown -R "${HOST_UID}:${HOST_GID}" /cargo /work/clippy-report.json /work/clippy-stderr.txt /work/lcov.info
   ' || { echo "ERROR: tahap clippy/coverage Rust gagal" >&2; exit 1; }

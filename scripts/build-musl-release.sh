@@ -3,7 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -n "${WORKSPACE:-}" && -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
+  REPO_ROOT="${WORKSPACE}"
+elif [[ -f "$(pwd)/cli/Cargo.toml" ]]; then
+  REPO_ROOT="$(pwd)"
+else
+  REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 TARGET="x86_64-unknown-linux-musl"
 

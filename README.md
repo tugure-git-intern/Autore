@@ -31,10 +31,14 @@
 
 ### 1. Instalasi Cepat 1-Baris (Copy & Paste)
 
-Salin dan jalankan perintah berikut di terminal Linux Anda (otomatis mengunduh binary statis `musl`, memverifikasi `SHA256SUMS`, dan memasang `autore`):
-
+**Untuk Linux / macOS / WSL (Terminal Bash):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.sh | bash
+```
+
+**Untuk Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
 ```
 
 Setelah terpasang, cukup ketik **`autore`** untuk membuka menu interaktif:

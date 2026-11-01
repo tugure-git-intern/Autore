@@ -34,7 +34,7 @@ curl -fsSL "${RELEASE_BASE}/${SUM_NAME}" -o "${TMP_DIR}/${SUM_NAME}"
 printf "  ${ORANGE}•${RESET} Memverifikasi integritas SHA-256 (fail-closed)...\n"
 (
   cd "${TMP_DIR}"
-  sha256sum -c "${SUM_NAME}" >/dev/null
+  grep " ${BIN_NAME}\$" "${SUM_NAME}" | sha256sum -c - >/dev/null
 )
 chmod 0755 "${TMP_DIR}/${BIN_NAME}"
 

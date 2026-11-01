@@ -1,4 +1,5 @@
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -66,6 +67,8 @@ elif command -v autore >/dev/null 2>&1; then
   autore scan "${{SCAN_FLAGS[@]}}" --path "."
 elif [ -x "$HOME/.local/bin/autore" ]; then
   "$HOME/.local/bin/autore" scan "${{SCAN_FLAGS[@]}}" --path "."
+elif [ -n "${{USERPROFILE:-}}" ] && [ -f "$USERPROFILE/.autore/bin/autore.exe" ]; then
+  "$USERPROFILE/.autore/bin/autore.exe" scan "${{SCAN_FLAGS[@]}}" --path "."
 else
   printf 'ERROR: binary autore tidak ditemukan di PATH.\n' >&2
   exit 1
@@ -85,11 +88,14 @@ printf '==> [Autore Pre-Commit Gate] LULUS! Commit diizinkan.\n'
     fs::write(&hook_path, script)
         .map_err(|e| format!("Gagal menulis file pre-commit hook: {}", e))?;
 
-    let mut perms = fs::metadata(&hook_path)
-        .map_err(|e| e.to_string())?
-        .permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&hook_path, perms).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&hook_path)
+            .map_err(|e| e.to_string())?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook_path, perms).map_err(|e| e.to_string())?;
+    }
 
     Ok(hook_path)
 }
@@ -125,7 +131,11 @@ pub fn is_hook_installed(repo_root: &Path) -> bool {
     let Ok(meta) = fs::metadata(&hook_path) else {
         return false;
     };
-    if !meta.is_file() || (meta.permissions().mode() & 0o111 == 0) {
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    if meta.permissions().mode() & 0o111 == 0 {
         return false;
     }
     if let Ok(content) = fs::read_to_string(hook_path) {

@@ -35,6 +35,7 @@ pub struct ScanContext {
     pub gid: u32,
 }
 
+#[cfg(unix)]
 pub fn resolve_trusted_binary(candidates: &[PathBuf], expected_owner: u32) -> Result<PathBuf, String> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let mut reasons = Vec::new();
@@ -62,6 +63,19 @@ pub fn resolve_trusted_binary(candidates: &[PathBuf], expected_owner: u32) -> Re
         "Binary docker trusted tidak ditemukan ({}). Scanner Gitleaks/Trivy tidak bisa dijalankan.",
         reasons.join("; ")
     ))
+}
+
+#[cfg(not(unix))]
+pub fn resolve_trusted_binary(_candidates: &[PathBuf], _expected_owner: u32) -> Result<PathBuf, String> {
+    let win_candidates = [
+        PathBuf::from(r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"),
+    ];
+    for path in &win_candidates {
+        if path.is_file() {
+            return Ok(path.clone());
+        }
+    }
+    Err(r"Docker Desktop (C:\Program Files\Docker\Docker\resources\bin\docker.exe) tidak ditemukan.".to_string())
 }
 
 fn docker_base(ctx: &ScanContext) -> Vec<String> {
@@ -322,7 +336,6 @@ impl Runner for ProcessRunner {
 /// Build a context (private 0700 report dir, trusted docker) and run both
 /// scanners. Any error means the gate must fail.
 pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), String> {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
     let docker = resolve_trusted_binary(
         &TRUSTED_DOCKER_PATHS.iter().map(PathBuf::from).collect::<Vec<_>>(),
         0,
@@ -335,18 +348,29 @@ pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), Strin
         .map(|d| d.as_nanos())
         .unwrap_or_default();
     let out_dir = std::env::temp_dir().join(format!("autore-scan-{}-{nanos}", std::process::id()));
-    std::fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&out_dir) // fails if it already exists (no pre-planted dir)
-        .map_err(|e| format!("Gagal membuat direktori laporan: {e}"))?;
-    let meta = std::fs::metadata(&out_dir).map_err(|e| e.to_string())?;
-    let cache_dir = match std::env::var_os("HOME") {
+    #[cfg(unix)]
+    let (uid, gid) = {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&out_dir)
+            .map_err(|e| format!("Gagal membuat direktori laporan: {e}"))?;
+        let meta = std::fs::metadata(&out_dir).map_err(|e| e.to_string())?;
+        (meta.uid(), meta.gid())
+    };
+    #[cfg(not(unix))]
+    let (uid, gid) = {
+        std::fs::create_dir(&out_dir)
+            .map_err(|e| format!("Gagal membuat direktori laporan: {e}"))?;
+        (1000u32, 1000u32)
+    };
+    let cache_dir = match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
         Some(h) => PathBuf::from(h).join(".cache/autore/trivy"),
         None => out_dir.join("cache"),
     };
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("Gagal membuat cache Trivy: {e}"))?;
 
-    let ctx = ScanContext { docker, target, out_dir: out_dir.clone(), cache_dir, uid: meta.uid(), gid: meta.gid() };
+    let ctx = ScanContext { docker, target, out_dir: out_dir.clone(), cache_dir, uid, gid };
     let result = (|| {
         run_gitleaks(&ctx, &ProcessRunner)?;
         println!("  ✔ Gitleaks LULUS (tidak ada secret bocor).");

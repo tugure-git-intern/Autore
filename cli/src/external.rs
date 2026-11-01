@@ -192,13 +192,16 @@ fn pick_fix(installed: &str, fixed_lists: &[String]) -> String {
         let same: Vec<&str> = cands.iter().copied().filter(|f| ver_key(f).first() == cur.first()).collect();
         let pool = if same.is_empty() { cands } else { same };
         if let Some(m) = pool.into_iter().min_by_key(|f| ver_key(f)) {
-            if best.map_or(true, |b| ver_key(m) > ver_key(b)) {
+            if best.is_none_or(|b| ver_key(m) > ver_key(b)) {
                 best = Some(m);
             }
         }
     }
     best.unwrap_or("-").to_string()
 }
+
+/// Ringkasan per paket: (peringkat terburuk, daftar versi perbaikan, jumlah CVE).
+type PkgVulns = std::collections::BTreeMap<(String, String), (usize, Vec<String>, usize)>;
 
 /// First line = short reason (also sent to Telegram); rest = table + fix steps.
 pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
@@ -207,7 +210,7 @@ pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
     let rank = |s: &str| ["CRITICAL", "HIGH", "MEDIUM", "LOW"].iter().position(|x| *x == s).unwrap_or(4);
     let paint = |r: usize, s: String| if r == 0 { s.red().bold().to_string() } else { s.yellow().to_string() };
     // target -> (pkg, installed) -> (worst rank, fixed lists, cve count)
-    let mut vulns: BTreeMap<String, BTreeMap<(String, String), (usize, Vec<String>, usize)>> = BTreeMap::new();
+    let mut vulns: BTreeMap<String, PkgVulns> = BTreeMap::new();
     let mut misconf = Vec::new();
     let mut n_cve = 0;
     for line in tsv.lines() {
@@ -818,7 +821,6 @@ mod tests {
         assert!(err.contains("latest"), "{err}");
     }
 
-    #[test]
     #[test]
     fn trivy_image_fails_when_user_is_all_zero_digits() {
         let _tmp = TempDir::new().unwrap();

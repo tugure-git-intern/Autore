@@ -27,6 +27,7 @@ pub struct ScanOptions {
     pub skip_build_dirs: bool,
 }
 
+#[allow(dead_code)]
 pub fn scan_directory(root: &Path) -> Result<ScanReport, String> {
     scan_directory_with(root, &ScanOptions::default())
 }

@@ -108,6 +108,50 @@ pub fn collect_checks() -> Vec<CheckResult> {
         }),
     }
 
+    match run_cmd(
+        "docker",
+        &[
+            "ps",
+            "--filter",
+            "name=autore-sonarqube",
+            "--format",
+            "{{.Status}}",
+        ],
+    ) {
+        Some(v) if !v.is_empty() => results.push(CheckResult {
+            name: "SonarQube SAST Server",
+            ok: true,
+            detail: format!("autore-sonarqube ({})", v),
+        }),
+        _ => results.push(CheckResult {
+            name: "SonarQube SAST Server",
+            ok: false,
+            detail: "container autore-sonarqube tidak berjalan".to_string(),
+        }),
+    }
+
+    match run_cmd(
+        "docker",
+        &[
+            "ps",
+            "--filter",
+            "name=autore-nexus",
+            "--format",
+            "{{.Status}}",
+        ],
+    ) {
+        Some(v) if !v.is_empty() => results.push(CheckResult {
+            name: "Sonatype Nexus Registry",
+            ok: true,
+            detail: format!("autore-nexus ({})", v),
+        }),
+        _ => results.push(CheckResult {
+            name: "Sonatype Nexus Registry",
+            ok: false,
+            detail: "container autore-nexus tidak berjalan".to_string(),
+        }),
+    }
+
     if std::path::Path::new("/usr/local/bin/autore").exists() {
         results.push(CheckResult {
             name: "Autore Global CLI (/usr/local/bin)",
@@ -197,4 +241,18 @@ pub fn print_doctor_report() -> bool {
         );
     }
     all_ok
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_checks_includes_sonarqube_and_nexus() {
+        let names: Vec<&str> = collect_checks().into_iter().map(|c| c.name).collect();
+        assert!(names.contains(&"Jenkins Controller (Sandbox)"));
+        assert!(names.contains(&"SonarQube SAST Server"));
+        assert!(names.contains(&"Sonatype Nexus Registry"));
+    }
 }

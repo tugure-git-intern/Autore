@@ -66,6 +66,10 @@ enum Commands {
         #[arg(long)]
         no_docker: bool,
 
+        /// Pindai juga direktori build/dependensi (target, node_modules, dist)
+        #[arg(long)]
+        include_build_dirs: bool,
+
         /// [Deprecated] Gitleaks & Trivy sekarang selalu dijalankan; flag ini diabaikan.
         #[arg(long, hide = true)]
         docker: bool,
@@ -191,7 +195,7 @@ fn main() {
             }
         }
 
-        Commands::Scan { path, severity, no_docker, docker: _ } => {
+        Commands::Scan { path, severity, no_docker, include_build_dirs, docker: _ } => {
             println!(
                 "{} Memindai keamanan kode di '{}'...",
                 "==>".cyan().bold(),
@@ -200,7 +204,7 @@ fn main() {
 
             let scan_res = scanner::scan_directory_with(
                 &path,
-                &scanner::ScanOptions { skip_build_dirs: true },
+                &scanner::ScanOptions { skip_build_dirs: !include_build_dirs },
             );
             match scan_res {
                 Ok(report) => {

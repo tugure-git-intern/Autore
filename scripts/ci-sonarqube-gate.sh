@@ -117,6 +117,9 @@ elif [[ -f "/home/tugure/Autore/sandbox/services/mitigated-cacerts" ]]; then
 fi
 
 export SONAR_TOKEN
+# Coverage: sandbox/ = app contoh latihan pipeline, cli/tests/ = kode test,
+# cli/src/main.rs = wiring argumen (dites lewat pemakaian, bukan unit test).
+# ponytail: kalau main.rs mulai berisi logika, cabut dari daftar exclusion.
 docker run --rm \
   --network host \
   --user "$(id -u):$(id -g)" \
@@ -132,7 +135,7 @@ docker run --rm \
   -Dsonar.working.directory=/usr/src/.scannerwork \
   -Dsonar.rust.clippy.enabled=false \
   -Dsonar.rust.clippyReport.reportPaths=clippy-report.json \
-  -Dsonar.coverage.exclusions="sandbox/**,cli/tests/**" \
+  -Dsonar.coverage.exclusions="sandbox/**,cli/tests/**,cli/src/main.rs" \
   -Dsonar.rust.lcov.reportPaths=lcov.info
 
 # ---------------------------------------------------------------------------

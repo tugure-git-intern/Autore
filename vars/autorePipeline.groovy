@@ -40,6 +40,11 @@ def call(Map config = [:]) {
                             error("GIT_COMMIT wajib berupa full 40-hex SHA (dilarang SHORT_SHA atau latest): '${commit}'")
                         }
                         env.FULL_GIT_COMMIT = commit
+                        env.SHORT_SHA = commit.take(7)
+                        env.IMAGE_TAG = "build-${BUILD_NUMBER}-commit-${commit}"
+                        env.AUDIT_AUTHOR = sh(script: "git log -1 --pretty='%an <%ae>'", returnStdout: true).trim()
+                        env.AUDIT_MESSAGE = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
+                        env.AUDIT_CAUSES = currentBuild.getBuildCauses().collect { it.shortDescription }.join(', ')
                         env.IMMUTABLE_IMAGE_TAG = "${NEXUS_DOCKER_REGISTRY}/${APP_NAME}:build-${BUILD_NUMBER}-commit-${commit}"
                         echo "Target Image Tag: ${env.IMMUTABLE_IMAGE_TAG}"
                     }

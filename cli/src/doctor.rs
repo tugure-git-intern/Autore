@@ -18,179 +18,94 @@ fn run_cmd(program: &str, args: &[&str]) -> Option<String> {
     combined.lines().next().map(|l| l.to_string())
 }
 
+fn check_cmd(name: &'static str, prog: &str, args: &[&str], missing_msg: &str) -> CheckResult {
+    match run_cmd(prog, args) {
+        Some(v) => CheckResult { name, ok: true, detail: v },
+        None => CheckResult { name, ok: false, detail: missing_msg.to_string() },
+    }
+}
+
+fn check_container(name: &'static str, container: &str) -> CheckResult {
+    let filter = format!("name={container}");
+    match run_cmd("docker", &["ps", "--filter", &filter, "--format", "{{.Status}}"]) {
+        Some(v) if !v.is_empty() => CheckResult {
+            name,
+            ok: true,
+            detail: format!("{container} ({v})"),
+        },
+        _ => CheckResult {
+            name,
+            ok: false,
+            detail: format!("container {container} tidak berjalan"),
+        },
+    }
+}
+
 pub fn collect_checks() -> Vec<CheckResult> {
-    let mut results = Vec::new();
+    let mut results = vec![
+        check_cmd("Git SCM", "git", &["--version"], "git tidak ditemukan di PATH"),
+        check_cmd("Java Runtime (Agent)", "java", &["-version"], "java tidak ditemukan (jalankan runner/setup-agent.sh)"),
+        check_cmd("Docker Engine", "docker", &["--version"], "docker tidak ditemukan"),
+        check_cmd("Docker Compose", "docker", &["compose", "version"], "docker compose v2 tidak ditemukan"),
+    ];
 
-    match run_cmd("git", &["--version"]) {
-        Some(v) => results.push(CheckResult {
-            name: "Git SCM",
-            ok: true,
-            detail: v,
-        }),
-        None => results.push(CheckResult {
-            name: "Git SCM",
-            ok: false,
-            detail: "git tidak ditemukan di PATH".to_string(),
-        }),
-    }
-
-    match run_cmd("java", &["-version"]) {
-        Some(v) => results.push(CheckResult {
-            name: "Java Runtime (Agent)",
-            ok: true,
-            detail: v,
-        }),
-        None => results.push(CheckResult {
-            name: "Java Runtime (Agent)",
-            ok: false,
-            detail: "java tidak ditemukan (jalankan runner/setup-agent.sh)".to_string(),
-        }),
-    }
-
-    match run_cmd("docker", &["--version"]) {
-        Some(v) => results.push(CheckResult {
-            name: "Docker Engine",
-            ok: true,
-            detail: v,
-        }),
-        None => results.push(CheckResult {
-            name: "Docker Engine",
-            ok: false,
-            detail: "docker tidak ditemukan".to_string(),
-        }),
-    }
-
-    match run_cmd("docker", &["compose", "version"]) {
-        Some(v) => results.push(CheckResult {
-            name: "Docker Compose",
-            ok: true,
-            detail: v,
-        }),
-        None => results.push(CheckResult {
-            name: "Docker Compose",
-            ok: false,
-            detail: "docker compose v2 tidak ditemukan".to_string(),
-        }),
-    }
-
-    match run_cmd("systemctl", &["is-active", "jenkins-agent"]) {
-        Some(v) if v == "active" => results.push(CheckResult {
-            name: "Jenkins Runner Service",
-            ok: true,
-            detail: "jenkins-agent.service (active / online)".to_string(),
-        }),
-        _ => results.push(CheckResult {
-            name: "Jenkins Runner Service",
-            ok: false,
-            detail: "jenkins-agent.service tidak aktif".to_string(),
-        }),
-    }
-
-    match run_cmd(
-        "docker",
-        &[
-            "ps",
-            "--filter",
-            "name=autore-jenkins",
-            "--format",
-            "{{.Status}}",
-        ],
-    ) {
-        Some(v) if !v.is_empty() => results.push(CheckResult {
-            name: "Jenkins Controller (Sandbox)",
-            ok: true,
-            detail: format!("autore-jenkins ({})", v),
-        }),
-        _ => results.push(CheckResult {
-            name: "Jenkins Controller (Sandbox)",
-            ok: false,
-            detail: "container autore-jenkins tidak berjalan di mesin ini".to_string(),
-        }),
-    }
-
-    match run_cmd(
-        "docker",
-        &[
-            "ps",
-            "--filter",
-            "name=autore-sonarqube",
-            "--format",
-            "{{.Status}}",
-        ],
-    ) {
-        Some(v) if !v.is_empty() => results.push(CheckResult {
-            name: "SonarQube SAST Server",
-            ok: true,
-            detail: format!("autore-sonarqube ({})", v),
-        }),
-        _ => results.push(CheckResult {
-            name: "SonarQube SAST Server",
-            ok: false,
-            detail: "container autore-sonarqube tidak berjalan".to_string(),
-        }),
-    }
-
-    match run_cmd(
-        "docker",
-        &[
-            "ps",
-            "--filter",
-            "name=autore-nexus",
-            "--format",
-            "{{.Status}}",
-        ],
-    ) {
-        Some(v) if !v.is_empty() => results.push(CheckResult {
-            name: "Sonatype Nexus Registry",
-            ok: true,
-            detail: format!("autore-nexus ({})", v),
-        }),
-        _ => results.push(CheckResult {
-            name: "Sonatype Nexus Registry",
-            ok: false,
-            detail: "container autore-nexus tidak berjalan".to_string(),
-        }),
-    }
-
-    if std::path::Path::new("/usr/local/bin/autore").exists() {
-        results.push(CheckResult {
-            name: "Autore Global CLI (/usr/local/bin)",
-            ok: true,
-            detail: "/usr/local/bin/autore (tersedia untuk runner)".to_string(),
-        });
-    } else {
-        results.push(CheckResult {
-            name: "Autore Global CLI (/usr/local/bin)",
-            ok: false,
-            detail: "/usr/local/bin/autore belum ada (butuh sudo install)".to_string(),
-        });
-    }
-
-    match run_cmd("df", &["-h", "/"]) {
-        Some(_) => {
-            let avail = Command::new("df")
-                .args(["-h", "--output=pcent,avail", "/"])
-                .output()
-                .ok()
-                .and_then(|o| {
-                    String::from_utf8_lossy(&o.stdout)
-                        .lines()
-                        .nth(1)
-                        .map(|s| s.trim().to_string())
-                })
-                .unwrap_or_else(|| "tersedia".to_string());
-            results.push(CheckResult {
-                name: "Disk Storage (/)",
-                ok: true,
-                detail: format!("Terpakai / Sisa: {}", avail),
-            });
+    let agent_active = run_cmd("systemctl", &["is-active", "jenkins-agent"])
+        .map(|v| v == "active")
+        .unwrap_or(false);
+    results.push(CheckResult {
+        name: "Jenkins Runner Service",
+        ok: agent_active,
+        detail: if agent_active {
+            "jenkins-agent.service (active / online)"
+        } else {
+            "jenkins-agent.service tidak aktif"
         }
-        None => results.push(CheckResult {
+        .to_string(),
+    });
+
+    for (label, cname) in [
+        ("Jenkins Controller (Sandbox)", "autore-jenkins"),
+        ("SonarQube SAST Server", "autore-sonarqube"),
+        ("Sonatype Nexus Registry", "autore-nexus"),
+    ] {
+        results.push(check_container(label, cname));
+    }
+
+    let bin_ok = std::path::Path::new("/usr/local/bin/autore").exists();
+    results.push(CheckResult {
+        name: "Autore Global CLI (/usr/local/bin)",
+        ok: bin_ok,
+        detail: if bin_ok {
+            "/usr/local/bin/autore (tersedia untuk runner)"
+        } else {
+            "/usr/local/bin/autore belum ada (butuh sudo install)"
+        }
+        .to_string(),
+    });
+
+    let disk_avail = Command::new("df")
+        .args(["-h", "--output=pcent,avail", "/"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .nth(1)
+                .map(|s| s.trim().to_string())
+        });
+    results.push(match disk_avail {
+        Some(avail) => CheckResult {
+            name: "Disk Storage (/)",
+            ok: true,
+            detail: format!("Terpakai / Sisa: {avail}"),
+        },
+        None => CheckResult {
             name: "Disk Storage (/)",
             ok: false,
             detail: "gagal mengecek disk".to_string(),
-        }),
-    }
+        },
+    });
 
     results
 }
@@ -203,46 +118,23 @@ pub fn print_doctor_report() -> bool {
             .cyan()
     );
     let checks = collect_checks();
-    let mut all_ok = true;
+    let all_ok = checks.iter().all(|c| c.ok);
 
     for item in &checks {
-        if item.ok {
-            println!(
-                "  {} {:<30} {}",
-                "✔".green().bold(),
-                item.name.bold(),
-                item.detail.dimmed()
-            );
-        } else {
-            all_ok = false;
-            println!(
-                "  {} {:<30} {}",
-                "✘".red().bold(),
-                item.name.bold(),
-                item.detail.yellow()
-            );
-        }
+        let icon = if item.ok { "✔".green().bold() } else { "✘".red().bold() };
+        let detail = if item.ok { item.detail.dimmed() } else { item.detail.yellow() };
+        println!("  {icon} {:<30} {detail}", item.name.bold());
     }
 
     println!();
-    if all_ok {
-        println!(
-            "{}",
-            "Status Sistem: SEHAT 100% — Runner & Pipeline siap digunakan!"
-                .green()
-                .bold()
-        );
+    let summary = if all_ok {
+        "Status Sistem: SEHAT 100% — Runner & Pipeline siap digunakan!".green().bold()
     } else {
-        println!(
-            "{}",
-            "Status Sistem: Beberapa komponen belum aktif (lihat tanda ✘ di atas)."
-                .yellow()
-                .bold()
-        );
-    }
+        "Status Sistem: Beberapa komponen belum aktif (lihat tanda ✘ di atas).".yellow().bold()
+    };
+    println!("{summary}");
     all_ok
 }
-
 
 #[cfg(test)]
 mod tests {

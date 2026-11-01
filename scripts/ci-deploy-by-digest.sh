@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # scripts/ci-deploy-by-digest.sh — Rollback-safe deployment using immutable digest reference (@sha256:<64-hex>).
+# Alur: jalankan kandidat di port sementara -> health check -> simpan image lama ->
+#       ganti container aktif -> health check produksi -> bila gagal, jalankan kembali image lama.
 set -euo pipefail
 
 log() { printf '\n==> [Deploy By Digest] %s\n' "$*"; }
@@ -30,6 +32,39 @@ CANDIDATE_PORT=$((DEPLOY_PORT + 100))
 ACTIVE_CONTAINER="${ACTIVE_CONTAINER_NAME:-${APP_NAME}-active}"
 CANDIDATE_CONTAINER="${CANDIDATE_CONTAINER_NAME:-${APP_NAME}-candidate}"
 
+health_at() {
+  local port="$1" i
+  for i in {1..10}; do
+    curl -fsS --max-time 2 "http://127.0.0.1:${port}${HEALTH_ENDPOINT}" >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+start_active() {
+  docker run -d --name "${ACTIVE_CONTAINER}" \
+    --restart unless-stopped \
+    -p "127.0.0.1:${DEPLOY_PORT}:${CONTAINER_PORT}" \
+    "$1"
+}
+
+# Hanya dipanggil setelah container baru gagal; mengembalikan image yang tadinya aktif.
+rollback() {
+  echo "ERROR: $1" >&2
+  if [[ -z "${old_image:-}" ]]; then
+    echo "Tidak ada image lama untuk rollback — port ${DEPLOY_PORT} kosong, perlu intervensi manual." >&2
+    return 1
+  fi
+  echo "Rollback: menjalankan kembali container lama (${old_image})..." >&2
+  docker rm -f "${ACTIVE_CONTAINER}" >/dev/null 2>&1 || true
+  if start_active "${old_image}" && health_at "${DEPLOY_PORT}"; then
+    echo "Rollback SUKSES: layanan lama sehat kembali di port ${DEPLOY_PORT}." >&2
+  else
+    echo "Rollback GAGAL: layanan lama juga tidak sehat — perlu intervensi manual." >&2
+  fi
+  return 1
+}
+
 log "Mempersiapkan deployment untuk image terverifikasi: ${IMAGE_REF}"
 log "Menjalankan container kandidat pada port sementara 127.0.0.1:${CANDIDATE_PORT}..."
 
@@ -41,16 +76,8 @@ docker run -d --name "${CANDIDATE_CONTAINER}" \
   "${IMAGE_REF}"
 
 log "Memeriksa health check kandidat pada http://127.0.0.1:${CANDIDATE_PORT}${HEALTH_ENDPOINT} (maks 10 detik)..."
-healthy=0
-for i in {1..10}; do
-  if curl -fsS --max-time 2 "http://127.0.0.1:${CANDIDATE_PORT}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
-    healthy=1
-    break
-  fi
-  sleep 1
-done
 
-if [[ "${healthy}" != "1" ]]; then
+if ! health_at "${CANDIDATE_PORT}"; then
   echo "ERROR: Container kandidat gagal lolos uji kesehatan (health check). Menghentikan kandidat..." >&2
   docker stop "${CANDIDATE_CONTAINER}" 2>/dev/null || true
   docker rm -f "${CANDIDATE_CONTAINER}" 2>/dev/null || true
@@ -60,29 +87,23 @@ fi
 
 log "Kandidat sehat! Melakukan pergantian ke port produksi 127.0.0.1:${DEPLOY_PORT}..."
 
-docker stop "${ACTIVE_CONTAINER}" 2>/dev/null || true
-docker rm -f "${ACTIVE_CONTAINER}" 2>/dev/null || true
+# Simpan image container aktif SEBELUM apa pun dihentikan, sebagai bahan rollback.
+old_image="$(docker inspect -f '{{.Config.Image}}' "${ACTIVE_CONTAINER}" 2>/dev/null || true)"
+if [[ -n "${old_image}" ]]; then
+  log "Rollback tersedia: ${old_image}"
+else
+  log "Tidak ada container aktif sebelumnya — tanpa rollback."
+fi
 
 docker stop "${CANDIDATE_CONTAINER}" 2>/dev/null || true
 docker rm -f "${CANDIDATE_CONTAINER}" 2>/dev/null || true
 
-docker run -d --name "${ACTIVE_CONTAINER}" \
-  --restart unless-stopped \
-  -p "127.0.0.1:${DEPLOY_PORT}:${CONTAINER_PORT}" \
-  "${IMAGE_REF}"
+docker stop "${ACTIVE_CONTAINER}" 2>/dev/null || true
+docker rm -f "${ACTIVE_CONTAINER}" 2>/dev/null || true
+
+start_active "${IMAGE_REF}" || rollback "container baru gagal dijalankan."
 
 log "Verifikasi akhir port produksi http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT} (maks 10 detik)..."
-healthy=0
-for i in {1..10}; do
-  if curl -fsS --max-time 2 "http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT}" >/dev/null 2>&1; then
-    healthy=1
-    break
-  fi
-  sleep 1
-done
-if [[ "${healthy}" != "1" ]]; then
-  echo "ERROR: Verifikasi port produksi gagal!" >&2
-  exit 1
-fi
+health_at "${DEPLOY_PORT}" || rollback "verifikasi port produksi gagal."
 
 log "SUKSES: Deployment berbasis digest @sha256 selesai dan berjalan aman!"

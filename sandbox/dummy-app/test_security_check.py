@@ -597,5 +597,99 @@ class SecurityGateTest(unittest.TestCase):
             self.assertIn(f"/usr/local/lib/autore-ci/{name}", groovy)
 
 
+    def _deploy_harness(self, tmp, prod_mode):
+        """Stub docker/curl. prod_mode='old' -> hanya image lama sehat (memaksa rollback),
+        'any' -> port produksi sehat (jalur sukses)."""
+        h = Path(tmp)
+        bin_dir = h / "bin"
+        state = h / "state"
+        bin_dir.mkdir()
+        state.mkdir()
+        calls = h / "calls.log"
+        calls.touch()
+        old_ref = f"127.0.0.1:5000/dummy-app@sha256:{'a' * 64}"
+        new_ref = f"127.0.0.1:5000/dummy-app@sha256:{'b' * 64}"
+
+        (bin_dir / "docker").write_text(
+            "#!/usr/bin/env bash\n"
+            f'echo "DOCKER $*" >> "{calls}"\n'
+            'sub="$1"; shift || true\n'
+            'if [[ "$sub" == "inspect" ]]; then echo "' + old_ref + '"; exit 0; fi\n'
+            'if [[ "$sub" == "run" ]]; then\n'
+            '  name=""; image=""\n'
+            '  args=("$@")\n'
+            '  for ((i=0; i<${#args[@]}; i++)); do\n'
+            '    case "${args[$i]}" in\n'
+            '      --name) name="${args[$((i+1))]}"; i=$((i+1)) ;;\n'
+            '      -p|--restart) i=$((i+1)) ;;\n'
+            '      *) image="${args[$i]}" ;;\n'
+            '    esac\n'
+            '  done\n'
+            '  echo "$image" > "' + str(state) + '/${name}.image"\n'
+            'fi\n'
+            'exit 0\n',
+            encoding="utf-8",
+        )
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            f'echo "CURL $*" >> "{calls}"\n'
+            'url="${!#}"\n'
+            'case "$url" in *":18081"*) : ;; *":18181"*) exit 0 ;; esac\n'
+            'if [[ "' + prod_mode + '" == "any" ]]; then exit 0; fi\n'
+            'img="$(cat "' + str(state) + '/demo.image" 2>/dev/null || echo none)"\n'
+            '[ "$img" = "' + old_ref + '" ] && exit 0 || exit 1\n',
+            encoding="utf-8",
+        )
+        for f in ("docker", "curl"):
+            (bin_dir / f).chmod(0o755)
+
+        env = os.environ.copy()
+        env["PATH"] = f"{bin_dir}:{env['PATH']}"
+        env["APP_NAME"] = "dummy-app"
+        env["ACTIVE_CONTAINER_NAME"] = "demo"
+        env["CANDIDATE_CONTAINER_NAME"] = "demo-candidate"
+        env["CONTAINER_PORT"] = "8000"
+        env["DEPLOY_PORT"] = "18081"
+        env["HEALTH_ENDPOINT"] = "/health"
+        return env, calls, old_ref, new_ref
+
+    def test_deploy_rolls_back_to_previous_image_when_prod_health_fails(self):
+        script = REPO_ROOT / "scripts" / "ci-deploy-by-digest.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            env, calls, old_ref, new_ref = self._deploy_harness(tmp, "old")
+            res = subprocess.run(
+                ["bash", str(script), new_ref], env=env, capture_output=True, text=True, timeout=120
+            )
+            self.assertNotEqual(res.returncode, 0, "deploy gagal harus keluar non-zero")
+            out = res.stdout + res.stderr
+            self.assertIn("Rollback SUKSES", out)
+            self.assertNotIn("SUKSES: Deployment berbasis digest", out)
+
+            runs = [l for l in calls.read_text(encoding="utf-8").splitlines() if l.startswith("DOCKER run")]
+            self.assertIn(new_ref, runs[0], "kandidat harus dijalankan lebih dulu")
+            self.assertIn(old_ref, runs[-1], "container terakhir harus memakai image lama (rollback)")
+            self.assertNotIn(old_ref, runs[0])
+            lines = calls.read_text(encoding="utf-8").splitlines()
+            inspect_idx = next(i for i, l in enumerate(lines) if l.startswith("DOCKER inspect"))
+            stop_idx = next(i for i, l in enumerate(lines) if l == "DOCKER stop demo")
+            self.assertLess(inspect_idx, stop_idx, "image lama harus disimpan sebelum container aktif dihentikan")
+
+    def test_deploy_without_failure_keeps_new_image_and_skips_rollback(self):
+        script = REPO_ROOT / "scripts" / "ci-deploy-by-digest.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            env, calls, old_ref, new_ref = self._deploy_harness(tmp, "any")
+            res = subprocess.run(
+                ["bash", str(script), new_ref], env=env, capture_output=True, text=True, timeout=120
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
+            out = res.stdout + res.stderr
+            self.assertIn("SUKSES: Deployment berbasis digest", out)
+            self.assertNotIn("Rollback SUKSES", out)
+            self.assertNotIn("Rollback GAGAL", out)
+
+            runs = [l for l in calls.read_text(encoding="utf-8").splitlines() if l.startswith("DOCKER run")]
+            self.assertIn(new_ref, runs[-1], "container aktif harus memakai image baru")
+
+
 if __name__ == "__main__":
     unittest.main()

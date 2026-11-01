@@ -583,6 +583,19 @@ class SecurityGateTest(unittest.TestCase):
         self.assertIn("ci-nexus-publish.sh", content)
         self.assertIn("ci-deploy-by-digest.sh", content)
 
+    def test_pipeline_only_uses_trusted_gate_scripts(self):
+        groovy = (REPO_ROOT / "vars" / "autorePipeline.groovy").read_text(encoding="utf-8")
+        self.assertNotIn("./scripts/", groovy, "pipeline tidak boleh memakai script dari repo yang dipindai")
+        self.assertNotIn("/home/", groovy, "tidak boleh ada path home user di-hardcode di pipeline")
+        for name in (
+            "ci-sonarqube-gate.sh",
+            "build-musl-release.sh",
+            "ci-nexus-publish.sh",
+            "ci-deploy-by-digest.sh",
+            "notify-telegram.sh",
+        ):
+            self.assertIn(f"/usr/local/lib/autore-ci/{name}", groovy)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,19 @@ def call(Map config = [:]) {
                     script { env.FAILED_STAGE = '1. Checkout & Audit Metadata' }
                     sh 'rm -rf .security-gate-reason .verified-image-digest dist'
                     script {
+                        // Script gate HANYA dari direktori yang dipasang admin (runner/setup-agent.sh).
+                        // Repo yang dipindai tidak boleh menyediakan kode yang menentukan lulus/gagal.
+                        def trusted = '/usr/local/lib/autore-ci'
+                        def needed = ['ci-sonarqube-gate.sh', 'build-musl-release.sh',
+                                      'ci-nexus-publish.sh', 'ci-deploy-by-digest.sh', 'notify-telegram.sh']
+                        def missing = needed.findAll { name ->
+                            sh(script: "test -x '${trusted}/${name}' && echo yes || echo no", returnStdout: true).trim() != 'yes'
+                        }
+                        if (missing) {
+                            error("Gate script tepercaya hilang: ${missing.join(', ')} (di ${trusted}). Jalankan runner/setup-agent.sh di runner; repo target tidak boleh menyediakan script gate.")
+                        }
+                    }
+                    script {
                         def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                         if (!(commit ==~ /^[0-9a-f]{40}$/)) {
                             error("GIT_COMMIT wajib berupa full 40-hex SHA (dilarang SHORT_SHA atau latest): '${commit}'")
@@ -71,13 +84,7 @@ def call(Map config = [:]) {
                 steps {
                     script { env.FAILED_STAGE = '4. Clippy & SonarQube SAST Gate' }
                     withCredentials([string(credentialsId: sonarCreds, variable: 'SONAR_TOKEN')]) {
-                        sh '''
-                            gate_cmd="/usr/local/lib/autore-ci/ci-sonarqube-gate.sh"
-                            if [ ! -x "${gate_cmd}" ]; then
-                              gate_cmd="./scripts/ci-sonarqube-gate.sh"
-                            fi
-                            "${gate_cmd}"
-                        '''
+                        sh '/usr/local/lib/autore-ci/ci-sonarqube-gate.sh'
                     }
                 }
             }
@@ -93,13 +100,7 @@ def call(Map config = [:]) {
                         docker build -t "${env.IMMUTABLE_IMAGE_TAG}" "\${target_dir}"
 
                         if [ -f "cli/Cargo.toml" ]; then
-                          build_musl="/usr/local/lib/autore-ci/build-musl-release.sh"
-                          if [ ! -x "\${build_musl}" ] && [ -x "./scripts/build-musl-release.sh" ]; then
-                            build_musl="./scripts/build-musl-release.sh"
-                          elif [ ! -x "\${build_musl}" ]; then
-                            build_musl="/home/tugure/Autore/scripts/build-musl-release.sh"
-                          fi
-                          "\${build_musl}"
+                          /usr/local/lib/autore-ci/build-musl-release.sh
                         else
                           mkdir -p dist
                         fi
@@ -140,13 +141,7 @@ def call(Map config = [:]) {
                             export GIT_COMMIT="${env.FULL_GIT_COMMIT}"
                             export NEXUS_DOCKER_REGISTRY="${NEXUS_DOCKER_REGISTRY}"
                             
-                            pub_cmd="/usr/local/lib/autore-ci/ci-nexus-publish.sh"
-                            if [ ! -x "\${pub_cmd}" ] && [ -x "./scripts/ci-nexus-publish.sh" ]; then
-                              pub_cmd="./scripts/ci-nexus-publish.sh"
-                            elif [ ! -x "\${pub_cmd}" ]; then
-                              pub_cmd="/home/tugure/Autore/scripts/ci-nexus-publish.sh"
-                            fi
-                            "\${pub_cmd}"
+                            /usr/local/lib/autore-ci/ci-nexus-publish.sh
                         """
                     }
                 }
@@ -158,9 +153,6 @@ def call(Map config = [:]) {
                     sh '''
                         verified_digest="$(cat .verified-image-digest)"
                         deploy_cmd="/usr/local/lib/autore-ci/ci-deploy-by-digest.sh"
-                        if [ ! -x "${deploy_cmd}" ]; then
-                          deploy_cmd="./scripts/ci-deploy-by-digest.sh"
-                        fi
                         export CONTAINER_PORT="${APP_PORT}"
                         export DEPLOY_PORT="${DEPLOY_PORT}"
                         export ACTIVE_CONTAINER_NAME="${APP_NAME}"
@@ -178,15 +170,7 @@ def call(Map config = [:]) {
                         export TELEGRAM_CHAT_ID="${telegramChatId}"
                         export APP_NAME="${APP_NAME}"
                         export BUILD_STATUS="${currentBuild.currentResult}"
-                        notify_cmd="/usr/local/lib/autore-ci/notify-telegram.sh"
-                        if [ ! -x "\${notify_cmd}" ] && [ -x "./scripts/notify-telegram.sh" ]; then
-                          notify_cmd="./scripts/notify-telegram.sh"
-                        elif [ ! -x "\${notify_cmd}" ]; then
-                          notify_cmd="/home/tugure/Autore/scripts/notify-telegram.sh"
-                        fi
-                        if [ -x "\${notify_cmd}" ]; then
-                          "\${notify_cmd}" || true
-                        fi
+                        /usr/local/lib/autore-ci/notify-telegram.sh || true
                     """
                 }
             }

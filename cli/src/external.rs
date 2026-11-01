@@ -556,7 +556,9 @@ mod tests {
                     .iter()
                     .find_map(|a| a.strip_suffix(":/out").or_else(|| a.strip_suffix(":/reports")).map(PathBuf::from));
                 if let Some(out) = out {
-                    let name = if args.iter().any(|a| a.contains("gitleaks")) {
+                    let name = if args.iter().any(|a| a.ends_with("trivy.tsv")) {
+                        "trivy.tsv"
+                    } else if args.iter().any(|a| a.contains("gitleaks")) {
                         "gitleaks.json"
                     } else if args.iter().any(|a| a == "image") && args.iter().any(|a| a == "cyclonedx") {
                         "sbom.cdx.json"
@@ -687,6 +689,54 @@ mod tests {
     fn trivy_garbage_report_fails_closed() {
         let tmp = TempDir::new().unwrap();
         assert!(run_trivy(&ctx(&tmp), &fake(0, Some("not json")), "HIGH,CRITICAL").is_err());
+    }
+
+    #[test]
+    fn ver_key_parses_numeric_segments() {
+        assert_eq!(ver_key("1.2.3"), vec![1, 2, 3]);
+        assert_eq!(ver_key("0:1.4.2-r0"), vec![0, 1, 4, 2, 0]);
+        assert_eq!(ver_key("v10"), vec![10]);
+        assert_eq!(ver_key(""), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn pick_fix_prefers_smallest_fix_in_same_major() {
+        assert_eq!(pick_fix("1.2.3", &["1.2.4".to_string()]), "1.2.4");
+        // kandidat tidak lebih baru dari versi terpasang -> tidak ada saran
+        assert_eq!(pick_fix("1.2.3", &["1.2.3".to_string(), "1.0.0".to_string()]), "-");
+        // satu daftar berisi banyak kandidat: ambil terkecil di major yang sama
+        assert_eq!(pick_fix("1.2.3", &["1.9.0,1.2.4,2.0.0".to_string()]), "1.2.4");
+        // dua CVE pada paket sama: harus versi yang menutup keduanya (maksimum dari minimum)
+        assert_eq!(pick_fix("1.0.0", &["1.1.0".to_string(), "1.3.0".to_string()]), "1.3.0");
+        // tidak ada major yang sama -> pakai kandidat tertinggi
+        assert_eq!(pick_fix("1.2.3", &["2.0.0".to_string()]), "2.0.0");
+        // perbandingan numerik, bukan leksikografis
+        assert_eq!(pick_fix("1.9.0", &["1.10.0".to_string()]), "1.10.0");
+        assert_eq!(pick_fix("1.2.3", &[]), "-");
+    }
+
+    #[test]
+    fn trivy_details_uses_tsv_summary_and_falls_back_when_empty() {
+        let tmp = TempDir::new().unwrap();
+        let tsv = "VULN\tHIGH\tsandbox/dummy-app/requirements.txt\tpillow\t9.0.0\t9.3.0\tCVE-2021-25289\n";
+        let out = trivy_details(&ctx(&tmp), &fake(1, Some(tsv)), "HIGH,CRITICAL");
+        assert!(out.starts_with("Trivy menemukan 1 celah HIGH,CRITICAL di 1 paket"), "{out}");
+        assert!(out.contains("pillow@9.0.0"), "{out}");
+        assert!(out.contains("9.3.0"), "saran versi perbaikan hilang: {out}");
+
+        let empty = TempDir::new().unwrap();
+        let out2 = trivy_details(&ctx(&empty), &fake(1, Some("")), "HIGH,CRITICAL");
+        assert_eq!(out2, "Trivy mendeteksi celah keamanan HIGH,CRITICAL / misconfiguration");
+    }
+
+    #[test]
+    fn summarize_trivy_first_line_is_short_reason() {
+        let tsv = "VULN\tCRITICAL\tapp/package-lock.json\tlodash\t4.17.11\t4.17.21\tCVE-2019-10744\n\
+                   VULN\tHIGH\tapp/package-lock.json\tlodash\t4.17.11\t4.17.21\tCVE-2020-8203\n";
+        let out = summarize_trivy(tsv, "HIGH,CRITICAL");
+        let head = out.lines().next().unwrap();
+        assert_eq!(head, "Trivy menemukan 2 celah HIGH,CRITICAL di 1 paket: lodash@4.17.11");
+        assert!(out.contains("npm audit fix"), "langkah perbaikan npm hilang: {out}");
     }
 
     #[test]

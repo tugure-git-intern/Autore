@@ -186,7 +186,7 @@ Expected: `deploy:200` (atau kode sukses sesuai dummy-app).
 
 ```bash
 cd ~/Autore
-echo 'AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE' >> sandbox/dummy-app/app.py
+printf 'AWS_ACCESS_KEY=%s\n' "$AWS_ACCESS_KEY" >> sandbox/dummy-app/app.py
 git add sandbox/dummy-app/app.py
 git commit -m "test(simulasi): sisipkan secret untuk uji fail-closed"
 git push origin main

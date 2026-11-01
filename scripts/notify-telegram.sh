@@ -4,11 +4,7 @@
 set -euo pipefail
 
 html_escape() {
-  local s="${1:-}"
-  s="${s//&/&amp;}"
-  s="${s//</&lt;}"
-  s="${s//>/&gt;}"
-  printf '%s' "${s}"
+  printf '%s' "${1:-}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
 
 WORKSPACE="${WORKSPACE:-$(pwd)}"
@@ -120,7 +116,7 @@ ${SECURITY_BLOCK}
 ${EVIDENCE_BLOCK}
 
 <b>Tautan</b>
-<a href="${JENKINS_URL}">Jenkins Log</a> • <a href="${SONAR_URL}">SonarQube</a> • <a href="${NEXUS_URL}">Nexus</a>"
+<a href=\"${JENKINS_URL}\">Jenkins Log</a> • <a href=\"${SONAR_URL}\">SonarQube</a> • <a href=\"${NEXUS_URL}\">Nexus</a>"
 
 # Pastikan di bawah batas 4096 karakter Telegram
 if (( ${#TELEGRAM_HTML} > 4000 )); then

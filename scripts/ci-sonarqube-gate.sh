@@ -132,6 +132,7 @@ docker run --rm \
   -Dsonar.working.directory=/usr/src/.scannerwork \
   -Dsonar.rust.clippy.enabled=false \
   -Dsonar.rust.clippyReport.reportPaths=clippy-report.json \
+  -Dsonar.coverage.exclusions="sandbox/**,cli/tests/**" \
   -Dsonar.rust.lcov.reportPaths=lcov.info
 
 # ---------------------------------------------------------------------------

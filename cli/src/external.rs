@@ -139,7 +139,7 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
         .map(String::from),
     );
     let code = runner.run(&ctx.docker, &args)?;
-    let well_formed = matches!(read_report(ctx, "trivy.json"), Some(b) if b.trim_start().starts_with('{') && b.contains("\"SchemaVersion\""));
+    let well_formed = matches!(&read_report(ctx, "trivy.json"), Some(b) if is_trivy_report(b));
     match (code, well_formed) {
         (0, true) => Ok(()),
         (1, true) => Err(trivy_details(ctx, runner, severity)),
@@ -148,6 +148,14 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
         )),
         _ => Err(format!("Trivy gagal berjalan (exit {code})")),
     }
+}
+
+/// Laporan Trivy yang sah wajib JSON utuh dengan SchemaVersion dan Results.
+/// (Trivy selalu menulis kunci "Results", termasuk saat kosong — jadi ini tidak
+/// memblokir project bersih; hanya menolak laporan terpotong/asing.)
+fn is_trivy_report(body: &str) -> bool {
+    let t = body.trim();
+    t.starts_with('{') && t.ends_with('}') && t.contains("\"SchemaVersion\"") && t.contains("\"Results\"")
 }
 
 /// Go template for `trivy convert`: one TSV row per vuln / misconfig.
@@ -679,6 +687,27 @@ mod tests {
     fn trivy_garbage_report_fails_closed() {
         let tmp = TempDir::new().unwrap();
         assert!(run_trivy(&ctx(&tmp), &fake(0, Some("not json")), "HIGH,CRITICAL").is_err());
+    }
+
+    #[test]
+    fn trivy_truncated_or_schema_only_report_fails_closed() {
+        let tmp = TempDir::new().unwrap();
+        for bad in [
+            r#"{"SchemaVersion": 2, "Results": [{"Tar"#,
+            r#"{"SchemaVersion": 2}"#,
+            r#"{"Results": []}"#,
+            "[]",
+        ] {
+            let err = run_trivy(&ctx(&tmp), &fake(0, Some(bad)), "HIGH,CRITICAL").unwrap_err();
+            assert!(err.contains("laporan valid"), "report {bad:?} harus ditolak: {err}");
+        }
+    }
+
+    #[test]
+    fn trivy_clean_report_with_empty_results_passes() {
+        let tmp = TempDir::new().unwrap();
+        let ok = r#"{"SchemaVersion": 2, "Results": []}"#;
+        run_trivy(&ctx(&tmp), &fake(0, Some(ok)), "HIGH,CRITICAL").unwrap();
     }
 
     #[test]

@@ -36,13 +36,13 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     -v "${REPO_ROOT}:/workspace" \
     -w /workspace \
     "${MUSL_BUILDER_IMAGE}" \
-    cargo build --manifest-path /workspace/cli/Cargo.toml --target "${TARGET}" --release
+    cargo build --locked --manifest-path /workspace/cli/Cargo.toml --target "${TARGET}" --release
 else
   log "docker tidak tersedia; fallback ke toolchain rustup host..."
   if ! rustup target list --installed | grep -q "^${TARGET}$"; then
     rustup target add "${TARGET}"
   fi
-  cargo build --manifest-path "${REPO_ROOT}/cli/Cargo.toml" --target "${TARGET}" --release
+  cargo build --locked --manifest-path "${REPO_ROOT}/cli/Cargo.toml" --target "${TARGET}" --release
 fi
 
 SRC_BIN="${REPO_ROOT}/cli/target/${TARGET}/release/autore"

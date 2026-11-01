@@ -31,10 +31,12 @@
 
 ### 1. Instalasi Cepat 1-Baris (Copy & Paste)
 
-**Untuk Linux / macOS / WSL (Terminal Bash):**
+**Untuk Linux x86_64 / WSL (Terminal Bash):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.sh | bash
 ```
+
+> Prasyarat: `autore scan` (mode penuh) butuh Docker daemon; `--no-docker` hanya static guard.
 
 **Untuk Windows (PowerShell):**
 ```powershell
@@ -131,7 +133,7 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 
 ```bash
 # 1. Scaffolding aplikasi baru
-autore init --lang python --name my-service
+autore init --app-name my-service --stack python
 
 # 2. Pemindaian pra-commit lokal (cepat, tanpa kontainer)
 autore scan --no-docker --path .

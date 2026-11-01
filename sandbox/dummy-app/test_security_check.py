@@ -372,7 +372,11 @@ class SecurityGateTest(unittest.TestCase):
             self.assertIn("/api/ce/task?id=ce-123", calls)
             self.assertIn("/api/qualitygates/project_status?analysisId=analysis-456", calls)
             self.assertIn("metricKeys=ncloc,ncloc_language_distribution", calls)
-            self.assertNotIn("squ_super_secret_token_12345", [arg for arg in calls.splitlines() if not arg.startswith("STDIN:")], "Token leaked in curl argv")
+            self.assertNotIn(
+                "squ_super_secret_token_12345",
+                "\n".join(arg for arg in calls.splitlines() if not arg.startswith("STDIN:")),
+                "Token leaked in curl argv",
+            )
 
     def test_sonarqube_gate_fails_when_rust_ncloc_zero(self):
         gate_script = REPO_ROOT / "scripts" / "ci-sonarqube-gate.sh"
@@ -533,7 +537,10 @@ class SecurityGateTest(unittest.TestCase):
 
             calls = call_log.read_text(encoding="utf-8")
             self.assertIn(f"/v2/dummy-app/manifests/sha256:{digest_hex}", calls)
-            self.assertNotIn("SuperSecretPassword123", [c for c in calls.splitlines() if not c.startswith("STDIN:")])
+            self.assertNotIn(
+                "SuperSecretPassword123",
+                "\n".join(c for c in calls.splitlines() if not c.startswith("STDIN:")),
+            )
 
     def test_deploy_by_digest_rejects_tag_without_sha256_digest(self):
         dep_script = REPO_ROOT / "scripts" / "ci-deploy-by-digest.sh"

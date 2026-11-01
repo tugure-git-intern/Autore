@@ -33,12 +33,30 @@ fn claude_render_config() -> RenderConfig<'static> {
         .with_help_message(StyleSheet::new().with_fg(Color::DarkGrey))
 }
 
-fn prompt_main_menu() -> Commands {
+const BANNER_ROWS: [(&str, (u8, u8, u8)); 6] = [
+    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (255, 215, 70)),
+    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (255, 190, 62)),
+    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (250, 162, 56)),
+    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (240, 138, 62)),
+    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (228, 122, 74)),
+    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (217, 119, 87)),
+];
+
+fn print_ascii_banner() {
+    println!();
+    for (line, (r, g, b)) in BANNER_ROWS {
+        println!("{}", line.truecolor(r, g, b).bold());
+    }
     println!(
-        "\n{} {}",
+        " {} {}",
         "●".truecolor(217, 119, 87).bold(),
-        "Autore CLI — DevSecOps & CI/CD Platform".truecolor(217, 119, 87).bold()
+        "DevSecOps & CI/CD Platform Tooling — v0.1.0".truecolor(217, 119, 87)
     );
+    println!();
+}
+
+fn prompt_main_menu() -> Commands {
+    print_ascii_banner();
     let items = vec![
         "• Buat Project Baru (Dockerfile & Jenkinsfile)",
         "• Scan Keamanan Kode (Static + Gitleaks + Trivy)",
@@ -398,6 +416,20 @@ fn main() {
             if !doctor::print_doctor_report() {
                 process::exit(1);
             }
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn banner_fits_standard_80_col_terminal() {
+        assert_eq!(BANNER_ROWS.len(), 6);
+        for (row, _) in BANNER_ROWS {
+            assert!(row.chars().count() <= 80);
         }
     }
 }

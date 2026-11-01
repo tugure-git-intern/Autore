@@ -104,7 +104,7 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
     args.extend(
         [
             "--network", "none", GITLEAKS_IMAGE, "detect", "--source=/repo", "--no-git",
-            "--redact", "--exit-code", "1", "--report-format", "json",
+            "--redact", "--no-banner", "--log-level", "error", "--exit-code", "1", "--report-format", "json",
             "--report-path", "/out/gitleaks.json",
         ]
         .map(String::from),
@@ -114,7 +114,7 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
     let well_formed = matches!(&body, Some(b) if b.starts_with('[') && b.ends_with(']'));
     match (code, well_formed) {
         (0, true) if body.as_deref() == Some("[]") => Ok(()),
-        (1, true) => Err("Gitleaks mendeteksi kebocoran Secret / API Key / Password".into()),
+        (1, true) => Err(summarize_gitleaks(body.as_deref().unwrap_or_default())),
         (0 | 1, _) => Err(format!(
             "Gitleaks tidak menghasilkan laporan valid (exit {code}) — scanner dianggap TIDAK berjalan"
         )),
@@ -132,7 +132,7 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
     ]);
     args.extend(
         [
-            TRIVY_IMAGE, "fs", "--cache-dir", "/cache", "--scanners", "vuln,misconfig",
+            TRIVY_IMAGE, "fs", "--quiet", "--cache-dir", "/cache", "--scanners", "vuln,misconfig",
             "--skip-check-update", "--ignore-unfixed", "--severity", severity, "--exit-code", "1",
             "--format", "json", "--output", "/out/trivy.json", "/repo",
         ]
@@ -142,12 +142,141 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
     let well_formed = matches!(read_report(ctx, "trivy.json"), Some(b) if b.trim_start().starts_with('{') && b.contains("\"SchemaVersion\""));
     match (code, well_formed) {
         (0, true) => Ok(()),
-        (1, true) => Err(format!("Trivy mendeteksi celah keamanan {severity} / misconfiguration")),
+        (1, true) => Err(trivy_details(ctx, runner, severity)),
         (0 | 1, false) => Err(format!(
             "Trivy tidak menghasilkan laporan valid (exit {code}) — scanner dianggap TIDAK berjalan"
         )),
         _ => Err(format!("Trivy gagal berjalan (exit {code})")),
     }
+}
+
+/// Go template for `trivy convert`: one TSV row per vuln / misconfig.
+const TRIVY_TSV_TEMPLATE: &str = "{{- range . }}{{ $t := .Target }}{{ range .Vulnerabilities }}VULN\t{{ .Severity }}\t{{ $t }}\t{{ .PkgName }}\t{{ .InstalledVersion }}\t{{ .FixedVersion }}\t{{ .VulnerabilityID }}\n{{ end }}{{ range .Misconfigurations }}MISCONF\t{{ .Severity }}\t{{ $t }}\t{{ .ID }}\t{{ .Title }}\t{{ .Resolution }}\n{{ end }}{{ end }}";
+
+/// Turn trivy.json into a human summary via the pinned image (offline).
+fn trivy_details(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> String {
+    let args: Vec<String> = [
+        "run", "--rm", "--network", "none", "--user", &format!("{}:{}", ctx.uid, ctx.gid),
+        "-e", "HOME=/tmp", "-v", &format!("{}:/out", ctx.out_dir.display()), TRIVY_IMAGE,
+        "convert", "--quiet", "--format", "template", "--template", TRIVY_TSV_TEMPLATE,
+        "--output", "/out/trivy.tsv", "/out/trivy.json",
+    ]
+    .map(String::from)
+    .to_vec();
+    let _ = runner.run(&ctx.docker, &args);
+    match read_report(ctx, "trivy.tsv") {
+        Some(t) if !t.trim().is_empty() => summarize_trivy(&t, severity),
+        _ => format!("Trivy mendeteksi celah keamanan {severity} / misconfiguration"),
+    }
+}
+
+fn ver_key(v: &str) -> Vec<u64> {
+    v.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).map(|s| s.parse().unwrap_or(0)).collect()
+}
+
+/// Smallest fixed version that clears every CVE, preferring the installed major.
+/// ponytail: numeric-only compare (ignores pre-release tags); swap to a semver crate if hints go wrong.
+fn pick_fix(installed: &str, fixed_lists: &[String]) -> String {
+    let cur = ver_key(installed);
+    let mut best: Option<&str> = None;
+    for list in fixed_lists {
+        let cands: Vec<&str> = list.split(',').map(str::trim).filter(|f| ver_key(f) > cur).collect();
+        let same: Vec<&str> = cands.iter().copied().filter(|f| ver_key(f).first() == cur.first()).collect();
+        let pool = if same.is_empty() { cands } else { same };
+        if let Some(m) = pool.into_iter().min_by_key(|f| ver_key(f)) {
+            if best.map_or(true, |b| ver_key(m) > ver_key(b)) {
+                best = Some(m);
+            }
+        }
+    }
+    best.unwrap_or("-").to_string()
+}
+
+/// First line = short reason (also sent to Telegram); rest = table + fix steps.
+pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
+    use colored::Colorize;
+    use std::collections::BTreeMap;
+    let rank = |s: &str| ["CRITICAL", "HIGH", "MEDIUM", "LOW"].iter().position(|x| *x == s).unwrap_or(4);
+    let paint = |r: usize, s: String| if r == 0 { s.red().bold().to_string() } else { s.yellow().to_string() };
+    // target -> (pkg, installed) -> (worst rank, fixed lists, cve count)
+    let mut vulns: BTreeMap<String, BTreeMap<(String, String), (usize, Vec<String>, usize)>> = BTreeMap::new();
+    let mut misconf = Vec::new();
+    let mut n_cve = 0;
+    for line in tsv.lines() {
+        match line.split('\t').collect::<Vec<_>>().as_slice() {
+            ["VULN", sev, target, pkg, ver, fix, _] => {
+                n_cve += 1;
+                let e = vulns.entry(target.to_string()).or_default()
+                    .entry((pkg.to_string(), ver.to_string())).or_insert((4, vec![], 0));
+                e.0 = e.0.min(rank(sev));
+                e.1.push(fix.to_string());
+                e.2 += 1;
+            }
+            ["MISCONF", sev, target, id, title, res] => misconf.push((rank(sev), format!("{sev:<8}"), format!("{target}  {id}: {title}\n              Saran: {res}"))),
+            _ => {}
+        }
+    }
+    let mut all: Vec<(usize, String)> = vulns.values().flatten().map(|((p, v), e)| (e.0, format!("{p}@{v}"))).collect();
+    all.sort();
+    let top: Vec<String> = all.iter().take(5).map(|x| x.1.clone()).collect();
+    let more = if all.len() > 5 { format!(", +{} lainnya", all.len() - 5) } else { String::new() };
+    let mut head = format!("Trivy menemukan {n_cve} celah {severity} di {} paket", all.len());
+    if !misconf.is_empty() {
+        head += &format!(" + {} misconfiguration", misconf.len());
+    }
+    if !top.is_empty() {
+        head += &format!(": {}{more}", top.join(", "));
+    }
+
+    let mut out = vec![head, String::new()];
+    let mut fixes = Vec::new();
+    for (target, pkgs) in &vulns {
+        out.push(format!("    {}", target.bold()));
+        let mut rows: Vec<_> = pkgs.iter().collect();
+        rows.sort_by_key(|((p, _), e)| (e.0, p.clone()));
+        for ((p, v), (r, lists, n)) in rows {
+            let sev = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"][*r];
+            out.push(format!("      {}  {p:<22} {v:<10} -> {:<10} ({n} CVE)", paint(*r, format!("{sev:<8}")), pick_fix(v, lists)));
+        }
+        let dir = Path::new(target).parent().map(|d| d.display().to_string()).unwrap_or_default();
+        let cd = if dir.is_empty() { String::new() } else { format!("cd {dir} && ") };
+        fixes.push(if target.ends_with("package-lock.json") {
+            format!("{cd}npm audit fix")
+        } else {
+            format!("update paket di {target} ke versi setelah tanda ->")
+        });
+    }
+    if !misconf.is_empty() {
+        misconf.sort();
+        out.push(format!("    {}", "Misconfiguration".bold()));
+        for (r, sev, msg) in &misconf {
+            out.push(format!("      {}  {msg}", paint(*r, sev.clone())));
+        }
+        fixes.push("perbaiki konfigurasi sesuai Saran di atas".into());
+    }
+    out.push(String::new());
+    out.push(format!("    {}", "Cara perbaiki:".bold()));
+    out.extend(fixes.iter().map(|f| format!("      {f}")));
+    out.join("\n")
+}
+
+/// Gitleaks report (pretty JSON) -> short reason + file:line list. Secrets stay redacted.
+pub fn summarize_gitleaks(json: &str) -> String {
+    let grab = |pat: &str| -> Vec<String> {
+        regex::Regex::new(pat).unwrap().captures_iter(json).map(|c| c[1].to_string()).collect()
+    };
+    let files = grab(r#""File":\s*"([^"]*)""#);
+    let lines = grab(r#""StartLine":\s*(\d+)"#);
+    let rules = grab(r#""RuleID":\s*"([^"]*)""#);
+    let mut out = vec![format!("Gitleaks menemukan {} secret bocor", rules.len()), String::new()];
+    for ((f, l), r) in files.iter().zip(&lines).zip(&rules) {
+        out.push(format!("      {}:{l}  [{r}]", f.trim_start_matches("/repo/")));
+    }
+    out.push(String::new());
+    out.push("    Cara perbaiki:".into());
+    out.push("      hapus secret dari kode, simpan di environment variable / Jenkins Credentials,".into());
+    out.push("      lalu ganti (rotate) secret yang terlanjur bocor.".into());
+    out.join("\n")
 }
 
 pub struct ImageScanOptions<'a> {
@@ -370,12 +499,16 @@ pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), Strin
     };
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("Gagal membuat cache Trivy: {e}"))?;
 
+    let first_run = !cache_dir.join("db/trivy.db").exists();
     let ctx = ScanContext { docker, target, out_dir: out_dir.clone(), cache_dir, uid, gid };
     let result = (|| {
         run_gitleaks(&ctx, &ProcessRunner)?;
-        println!("  ✔ Gitleaks LULUS (tidak ada secret bocor).");
+        println!("  ✔ [2/3] Gitleaks LULUS (tidak ada secret bocor).");
+        if first_run {
+            println!("  • Pertama kali: download database celah keamanan (~130 MB), mohon tunggu...");
+        }
         run_trivy(&ctx, &ProcessRunner, severity)?;
-        println!("  ✔ Trivy LULUS (tidak ada celah {severity}).");
+        println!("  ✔ [3/3] Trivy LULUS (tidak ada celah {severity}).");
         Ok(())
     })();
     let _ = std::fs::remove_dir_all(&out_dir);
@@ -570,6 +703,30 @@ mod tests {
         assert!(args.contains(TRIVY_IMAGE), "{args}");
         assert!(args.contains(&format!("{}:/repo:ro", c.target.display())), "{args}");
         assert!(args.contains("--severity HIGH,CRITICAL"), "{args}");
+    }
+
+    #[test]
+    fn trivy_summary_groups_packages_and_suggests_fix() {
+        colored::control::set_override(false);
+        let tsv = "VULN\tHIGH\tserver/package-lock.json\tbrace-expansion\t5.0.4\t5.0.10, 3.0.7\tCVE-1\n\
+                   VULN\tHIGH\tserver/package-lock.json\tbrace-expansion\t5.0.4\t5.0.11, 3.0.8\tCVE-2\n\
+                   VULN\tCRITICAL\tserver/package-lock.json\tform-data\t2.3.3\t2.5.4, 3.0.4, 4.0.4\tCVE-3\n\
+                   MISCONF\tHIGH\tDockerfile\tDS002\tImage user should not be root\tAdd USER\n";
+        let s = summarize_trivy(tsv, "HIGH,CRITICAL");
+        let head = s.lines().next().unwrap();
+        assert_eq!(head, "Trivy menemukan 3 celah HIGH,CRITICAL di 2 paket + 1 misconfiguration: form-data@2.3.3, brace-expansion@5.0.4");
+        assert!(s.contains("brace-expansion        5.0.4      -> 5.0.11"), "{s}");
+        assert!(s.contains("form-data              2.3.3      -> 2.5.4"), "{s}");
+        assert!(s.contains("cd server && npm audit fix"), "{s}");
+        assert!(s.contains("DS002"), "{s}");
+    }
+
+    #[test]
+    fn gitleaks_summary_lists_locations_without_secrets() {
+        let json = r#"[{"File": "/repo/app/x.py", "StartLine": 3, "Secret": "REDACTED", "RuleID": "github-pat"}]"#;
+        let s = summarize_gitleaks(json);
+        assert!(s.starts_with("Gitleaks menemukan 1 secret bocor"), "{s}");
+        assert!(s.contains("app/x.py:3  [github-pat]"), "{s}");
     }
 
     // ---- trivy image scan & sbom -------------------------------------------

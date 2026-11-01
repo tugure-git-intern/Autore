@@ -313,7 +313,7 @@ fn main() {
                         process::exit(1);
                     }
                     println!(
-                        "  {} Static Code, Secret & Dockerfile Guard LULUS ({} file diperiksa).",
+                        "  {} [1/3] Static Guard LULUS ({} file diperiksa).",
                         "✔".green().bold(),
                         report.scanned_files
                     );
@@ -332,10 +332,17 @@ fn main() {
                         .bold()
                 );
             } else {
-                println!("{} Menjalankan Gitleaks & Trivy (Docker, image pinned, severity: {})...", "==>".cyan().bold(), severity);
                 if let Err(e) = external::run_authoritative_scan(&path, &severity) {
-                    eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
-                    let _ = std::fs::write(".security-gate-reason", &e);
+                    let (head, body) = e.split_once('\n').unwrap_or((&e, ""));
+                    eprintln!("  {} {}", "✘".red().bold(), head);
+                    if !body.trim().is_empty() {
+                        eprintln!("{body}");
+                    }
+                    eprintln!(
+                        "\n{} Perbaiki temuan di atas, lalu jalankan ulang: autore scan",
+                        "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold()
+                    );
+                    let _ = std::fs::write(".security-gate-reason", head);
                     process::exit(1);
                 }
             }

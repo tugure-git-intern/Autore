@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:9000:9000"
+      - "100.80.3.14:9000:9000"
     environment:
       - SONAR_SEARCH_JAVAADDITIONALOPTS=-Xms512m -Xmx512m -Dnode.store.allow_mmap=false
       - SONAR_WEB_JAVAOPTS=-Xmx512m -Xms128m

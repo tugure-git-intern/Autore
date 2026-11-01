@@ -66,6 +66,10 @@ if [[ -n "${CACERTS_MOUNT}" && -f "${CACERTS_MOUNT}" ]]; then
   extra_mounts+=(-v "${CACERTS_MOUNT}:/opt/java/openjdk/lib/security/cacerts:ro")
 elif [[ -f "${REPO_ROOT}/sandbox/services/mitigated-cacerts" ]]; then
   extra_mounts+=(-v "${REPO_ROOT}/sandbox/services/mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro")
+elif [[ -f "/usr/local/lib/autore-ci/mitigated-cacerts" ]]; then
+  extra_mounts+=(-v "/usr/local/lib/autore-ci/mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro")
+elif [[ -f "/home/tugure/Autore/sandbox/services/mitigated-cacerts" ]]; then
+  extra_mounts+=(-v "/home/tugure/Autore/sandbox/services/mitigated-cacerts:/opt/java/openjdk/lib/security/cacerts:ro")
 fi
 
 docker run --rm \

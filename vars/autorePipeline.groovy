@@ -3,7 +3,10 @@
 
 def call(Map config = [:]) {
     def appName = config.appName ?: 'autore-dummy'
+    def appPort = config.appPort ?: 8000
     def deployPort = config.deployPort ?: 8081
+    def dockerfileDir = config.dockerfileDir ?: '.'
+    def sonarProjectKey = config.sonarProjectKey ?: (appName == 'autore-dummy' ? 'autore-cli' : appName)
     def sonarCreds = config.sonarCredentialsId ?: 'sonarqube-token'
     def nexusCreds = config.nexusCredentialsId ?: 'nexus-credentials'
     def telegramCreds = config.telegramCredentialsId ?: 'telegram-bot-token'
@@ -21,7 +24,10 @@ def call(Map config = [:]) {
 
         environment {
             APP_NAME = "${appName}"
+            APP_PORT = "${appPort}"
             DEPLOY_PORT = "${deployPort}"
+            DOCKERFILE_DIR = "${dockerfileDir}"
+            SONAR_PROJECT_KEY = "${sonarProjectKey}"
             NEXUS_DOCKER_REGISTRY = "${nexusRegistry}"
         }
 
@@ -69,13 +75,23 @@ def call(Map config = [:]) {
             stage('5. Build Image & Static musl Binary') {
                 steps {
                     sh """
-                        docker build -t "${env.IMMUTABLE_IMAGE_TAG}" sandbox/dummy-app
-                        
-                        build_musl="/usr/local/lib/autore-ci/build-musl-release.sh"
-                        if [ ! -x "\${build_musl}" ]; then
-                          build_musl="./scripts/build-musl-release.sh"
+                        target_dir="\${DOCKERFILE_DIR}"
+                        if [ ! -f "\${target_dir}/Dockerfile" ] && [ -f "sandbox/dummy-app/Dockerfile" ]; then
+                          target_dir="sandbox/dummy-app"
                         fi
-                        "\${build_musl}"
+                        docker build -t "${env.IMMUTABLE_IMAGE_TAG}" "\${target_dir}"
+
+                        if [ -f "cli/Cargo.toml" ]; then
+                          build_musl="/usr/local/lib/autore-ci/build-musl-release.sh"
+                          if [ ! -x "\${build_musl}" ] && [ -x "./scripts/build-musl-release.sh" ]; then
+                            build_musl="./scripts/build-musl-release.sh"
+                          elif [ ! -x "\${build_musl}" ]; then
+                            build_musl="/home/tugure/Autore/scripts/build-musl-release.sh"
+                          fi
+                          "\${build_musl}"
+                        else
+                          mkdir -p dist
+                        fi
                     """
                 }
             }
@@ -83,10 +99,14 @@ def call(Map config = [:]) {
             stage('6. Trivy Final Image Scan & SBOM') {
                 steps {
                     sh """
+                        mkdir -p dist
                         /usr/local/bin/autore scan-image \
                           --image "${env.IMMUTABLE_IMAGE_TAG}" \
                           --severity HIGH,CRITICAL \
                           --sbom-output dist/sbom.cdx.json
+                        if [ ! -f "dist/SHA256SUMS" ]; then
+                          (cd dist && sha256sum sbom.cdx.json > SHA256SUMS)
+                        fi
                     """
                 }
             }
@@ -107,8 +127,10 @@ def call(Map config = [:]) {
                             export NEXUS_DOCKER_REGISTRY="${NEXUS_DOCKER_REGISTRY}"
                             
                             pub_cmd="/usr/local/lib/autore-ci/ci-nexus-publish.sh"
-                            if [ ! -x "\${pub_cmd}" ]; then
+                            if [ ! -x "\${pub_cmd}" ] && [ -x "./scripts/ci-nexus-publish.sh" ]; then
                               pub_cmd="./scripts/ci-nexus-publish.sh"
+                            elif [ ! -x "\${pub_cmd}" ]; then
+                              pub_cmd="/home/tugure/Autore/scripts/ci-nexus-publish.sh"
                             fi
                             "\${pub_cmd}"
                         """
@@ -124,9 +146,10 @@ def call(Map config = [:]) {
                         if [ ! -x "${deploy_cmd}" ]; then
                           deploy_cmd="./scripts/ci-deploy-by-digest.sh"
                         fi
-                        export CONTAINER_PORT=8000
-                        export ACTIVE_CONTAINER_NAME=autore-dummy
-                        export CANDIDATE_CONTAINER_NAME=autore-dummy-candidate
+                        export CONTAINER_PORT="${APP_PORT}"
+                        export DEPLOY_PORT="${DEPLOY_PORT}"
+                        export ACTIVE_CONTAINER_NAME="${APP_NAME}"
+                        export CANDIDATE_CONTAINER_NAME="${APP_NAME}-candidate"
                         "${deploy_cmd}" "${verified_digest}"
                     '''
                 }
@@ -140,7 +163,12 @@ def call(Map config = [:]) {
                         export TELEGRAM_CHAT_ID="${telegramChatId}"
                         export APP_NAME="${APP_NAME}"
                         export BUILD_STATUS="${currentBuild.currentResult}"
-                        notify_cmd="./scripts/notify-telegram.sh"
+                        notify_cmd="/usr/local/lib/autore-ci/notify-telegram.sh"
+                        if [ ! -x "\${notify_cmd}" ] && [ -x "./scripts/notify-telegram.sh" ]; then
+                          notify_cmd="./scripts/notify-telegram.sh"
+                        elif [ ! -x "\${notify_cmd}" ]; then
+                          notify_cmd="/home/tugure/Autore/scripts/notify-telegram.sh"
+                        fi
                         if [ -x "\${notify_cmd}" ]; then
                           "\${notify_cmd}" || true
                         fi

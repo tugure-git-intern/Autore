@@ -84,6 +84,15 @@ elif [ -n "${SUDO_USER:-}" ] && [ -f "/home/${SUDO_USER}/.local/bin/autore" ]; t
   install -m 0755 "/home/${SUDO_USER}/.local/bin/autore" /usr/local/bin/autore
 fi
 
+if [ -d "${REPO_ROOT}/scripts" ]; then
+  log "Installing CI orchestrator scripts to /usr/local/lib/autore-ci"
+  install -d -o root -g root -m 0755 /usr/local/lib/autore-ci
+  install -o root -g root -m 0755 "${REPO_ROOT}"/scripts/*.sh /usr/local/lib/autore-ci/
+  if [ -f "${REPO_ROOT}/sandbox/services/mitigated-cacerts" ]; then
+    install -o root -g root -m 0644 "${REPO_ROOT}/sandbox/services/mitigated-cacerts" /usr/local/lib/autore-ci/mitigated-cacerts
+  fi
+fi
+
 log "Done. Versions:"
 java -version 2>&1 | head -1
 docker --version

@@ -567,8 +567,8 @@ class SecurityGateTest(unittest.TestCase):
         self.assertIn("/service/rest/v1/security/anonymous", bootstrap_content)
 
     def test_jenkins_shared_library_structure_and_security(self):
-        groovy_file = REPO_ROOT / "jenkins-shared-library" / "vars" / "autorePipeline.groovy"
-        self.assertTrue(groovy_file.exists(), "jenkins-shared-library/vars/autorePipeline.groovy must exist")
+        groovy_file = REPO_ROOT / "vars" / "autorePipeline.groovy"
+        self.assertTrue(groovy_file.exists(), "vars/autorePipeline.groovy must exist")
         content = groovy_file.read_text(encoding="utf-8")
         self.assertIn("^[0-9a-f]{40}$", content)
         self.assertIn("autore scan-image", content)

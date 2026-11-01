@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
-# notify-telegram.sh — Laporan audit CI/CD & DevSecOps transparan tanpa emoji ke Telegram & log Jenkins.
+# notify-telegram.sh — Kirim laporan audit CI/CD ringkas (parse_mode=HTML) ke Telegram
+# dan cetak hash lengkap di log konsol Jenkins.
 set -euo pipefail
+
+html_escape() {
+  local s="${1:-}"
+  s="${s//&/&amp;}"
+  s="${s//</&lt;}"
+  s="${s//>/&gt;}"
+  printf '%s' "${s}"
+}
 
 WORKSPACE="${WORKSPACE:-$(pwd)}"
 BUILD_STATUS="${BUILD_STATUS:-UNKNOWN}"
@@ -15,8 +24,6 @@ AUDIT_AUTHOR="${AUDIT_AUTHOR:-$(git log -1 --pretty='%an <%ae>' 2>/dev/null || e
 AUDIT_MESSAGE="${AUDIT_MESSAGE:-$(git log -1 --pretty=%s 2>/dev/null || echo -)}"
 AUDIT_CAUSES="${AUDIT_CAUSES:-SCM / Manual Trigger}"
 NODE_NAME="${NODE_NAME:-vps-runner-1}"
-IMAGE_TAG="${IMAGE_TAG:-build-${BUILD_NUMBER}-commit-${FULL_GIT_COMMIT}}"
-IMMUTABLE_IMAGE_TAG="${IMMUTABLE_IMAGE_TAG:-127.0.0.1:5000/${APP_NAME}:${IMAGE_TAG}}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-autore-cli}"
 JOB_NAME_SAFE="${JOB_NAME:-autore-e2e}"
 FAILED_STAGE="${FAILED_STAGE:--}"
@@ -28,114 +35,124 @@ if [[ -f "${REASON_FILE}" ]]; then
   GATE_REASON="$(cat "${REASON_FILE}")"
 fi
 
-VERIFIED_DIGEST="Belum tersedia (tahap publish belum tercapai)"
+FULL_DIGEST="belum-tersedia"
+SHORT_DIGEST="n/a"
 if [[ -f "${WORKSPACE}/.verified-image-digest" ]]; then
-  VERIFIED_DIGEST="$(tr -d '\r\n' < "${WORKSPACE}/.verified-image-digest")"
+  FULL_DIGEST="$(tr -d '\r\n' < "${WORKSPACE}/.verified-image-digest")"
+  DIGEST_HEX="${FULL_DIGEST#*@sha256:}"
+  SHORT_DIGEST="sha256:${DIGEST_HEX:0:12}"
 fi
 
-BIN_SHA256="Tidak berlaku (repo non-CLI)"
+FULL_BIN_SHA="tidak-berlaku"
+SHORT_BIN_SHA="n/a"
 if [[ -f "${WORKSPACE}/dist/SHA256SUMS" ]]; then
-  BIN_SHA256="$(head -n 1 "${WORKSPACE}/dist/SHA256SUMS" | awk '{print $1 " (" $2 ")"}')"
+  FULL_BIN_SHA="$(head -n 1 "${WORKSPACE}/dist/SHA256SUMS" | awk '{print $1}')"
+  SHORT_BIN_SHA="${FULL_BIN_SHA:0:12}"
 fi
 
-SBOM_INFO="Belum dibuat"
+SBOM_SHORT="belum-ada"
 if [[ -f "${WORKSPACE}/dist/sbom.cdx.json" ]]; then
-  SBOM_BYTES="$(wc -c < "${WORKSPACE}/dist/sbom.cdx.json" | tr -d ' ')"
-  SBOM_INFO="dist/sbom.cdx.json (${SBOM_BYTES} bytes, CycloneDX)"
+  SBOM_KB="$(( ($(wc -c < "${WORKSPACE}/dist/sbom.cdx.json" | tr -d ' ') + 1023) / 1024 ))KB"
+  SBOM_SHORT="dist/sbom.cdx.json (${SBOM_KB})"
 fi
 
-STAGES=(
-  "1. Checkout & Audit Metadata"
-  "2. Autore Static Guard & Gitleaks"
-  "3. Trivy Source & Config Scan"
-  "4. Clippy & SonarQube SAST Gate"
-  "5. Build Image & Static musl Binary"
-  "6. Trivy Final Image Scan & SBOM"
-  "7. Verify Checksums"
-  "8. Push to Nexus & Verify Remote Digest"
-  "9. Deploy by Verified Digest"
-)
+SHORT_IMAGE_TAG="${APP_NAME}:build-${BUILD_NUMBER}-${SHORT_SHA}"
 
-STAGE_SUMMARY=""
-failed_seen=0
-for st in "${STAGES[@]}"; do
-  if [[ "${BUILD_STATUS}" == "SUCCESS" ]]; then
-    mark="[LULUS]   "
-  elif [[ "${st}" == "${FAILED_STAGE}" ]]; then
-    mark="[GAGAL]   "
-    failed_seen=1
-  elif [[ "${failed_seen}" -eq 1 ]]; then
-    mark="[DILEWATI]"
-  elif [[ "${FAILED_STAGE}" == "-" ]]; then
-    mark="[CEK LOG] "
-  else
-    mark="[LULUS]   "
-  fi
-  STAGE_SUMMARY="${STAGE_SUMMARY}${mark} ${st}
-"
-done
+# Escape semua nilai dinamis untuk HTML Telegram
+E_APP="$(html_escape "${APP_NAME}")"
+E_BUILD="$(html_escape "${BUILD_NUMBER}")"
+E_TIME="$(html_escape "${TIMESTAMP}")"
+E_RUNNER="$(html_escape "${NODE_NAME}")"
+E_CAUSE="$(html_escape "${AUDIT_CAUSES}")"
+E_BRANCH="$(html_escape "${GIT_BRANCH}")"
+E_SHA="$(html_escape "${SHORT_SHA}")"
+E_AUTHOR="$(html_escape "${AUDIT_AUTHOR}")"
+E_MSG="$(html_escape "${AUDIT_MESSAGE}")"
+E_STAGE="$(html_escape "${FAILED_STAGE}")"
+E_IMG_TAG="$(html_escape "${SHORT_IMAGE_TAG}")"
+E_DIGEST="$(html_escape "${SHORT_DIGEST}")"
+E_BIN_SHA="$(html_escape "${SHORT_BIN_SHA}")"
+E_SBOM="$(html_escape "${SBOM_SHORT}")"
+
+JENKINS_URL="http://100.80.3.14:8080/job/${JOB_NAME_SAFE}/${BUILD_NUMBER}/console"
+SONAR_URL="http://100.80.3.14:9000/dashboard?id=${SONAR_PROJECT_KEY}"
+NEXUS_URL="http://100.80.3.14:8082/#browse/browse:autore-releases"
 
 if [[ "${BUILD_STATUS}" == "SUCCESS" ]]; then
-  STATUS_LABEL="SUKSES (DEPLOYED & VERIFIED)"
-  OUTCOME_SECTION="--- BUKTI ARTIFACT & DEPLOYMENT ---
-Image Tag       : ${IMMUTABLE_IMAGE_TAG}
-Verified Digest : ${VERIFIED_DIGEST}
-Binary SHA-256  : ${BIN_SHA256}
-SBOM Artifact   : ${SBOM_INFO}
-Health Check    : HTTP 200 OK (http://127.0.0.1:${DEPLOY_PORT}/health)"
+  HEADLINE="✅ <b>AUTORE CI/CD — ${E_APP} (SUKSES)</b>"
+  SECURITY_BLOCK="<b>Keamanan</b>
+✅ 9/9 gerbang lolos (Static, Gitleaks, Trivy FS/Image, SonarQube, SBOM, SHA256, Nexus ALLOW_ONCE, Digest)"
+  EVIDENCE_BLOCK="<b>Bukti</b>
+• Image: <code>${E_IMG_TAG}</code>
+• Digest: <code>${E_DIGEST}</code>
+• Binary SHA: <code>${E_BIN_SHA}</code> (<code>autore-linux-x86_64-musl</code>)
+• SBOM: <code>${E_SBOM}</code>
+• Health: <code>HTTP 200 OK</code> (<code>127.0.0.1:${DEPLOY_PORT}/health</code>)"
 else
-  STATUS_LABEL="GAGAL / DIBLOKIR (FAIL-CLOSED)"
+  HEADLINE="❌ <b>AUTORE CI/CD — ${E_APP} (GAGAL)</b>"
   if [[ -n "${GATE_REASON}" ]]; then
-    REASON_TEXT="${GATE_REASON}"
+    RAW_REASON="${GATE_REASON}"
   else
-    REASON_TEXT="Proses dihentikan pada tahap '${FAILED_STAGE}' (periksa log konsol Jenkins)"
+    RAW_REASON="Proses berhenti pada tahap '${FAILED_STAGE}' (cek Jenkins Log)"
   fi
-  OUTCOME_SECTION="--- DETAIL PENOLAKAN KEAMANAN / PIPELINE ---
-Tahap Berhenti  : ${FAILED_STAGE}
-Alasan Blokir   : ${REASON_TEXT}
-Digest Terakhir : ${VERIFIED_DIGEST}
-Tindakan Sistem : Deployment dibatalkan otomatis (container produksi lama tetap berjalan)"
+  E_REASON="$(html_escape "${RAW_REASON}")"
+  SECURITY_BLOCK="<b>Keamanan</b>
+❌ Gagal pada tahap: <code>${E_STAGE}</code>
+• Alasan: ${E_REASON}
+• Tindakan: Deployment dibatalkan otomatis (container lama tetap aman)"
+  EVIDENCE_BLOCK="<b>Bukti</b>
+• Image: <code>${E_IMG_TAG}</code>
+• Digest: <code>${E_DIGEST}</code>
+• SBOM: <code>${E_SBOM}</code>"
 fi
 
-REPORT_TEXT="[AUTORE CI/CD AUDIT REPORT]
-========================================================
-Status          : ${STATUS_LABEL}
-Build           : #${BUILD_NUMBER} (${JOB_NAME_SAFE})
-Waktu           : ${TIMESTAMP}
-Runner          : ${NODE_NAME}
-Pemicu          : ${AUDIT_CAUSES}
+TELEGRAM_HTML="${HEADLINE}
+Build <code>#${E_BUILD}</code> • ${E_TIME} • Runner <code>${E_RUNNER}</code>
 
---- IDENTITAS PERUBAHAN ---
-Aplikasi        : ${APP_NAME} (127.0.0.1:${DEPLOY_PORT} -> container:${APP_PORT})
-Branch          : ${GIT_BRANCH}
-Commit SHA      : ${FULL_GIT_COMMIT}
-Commit Pendek   : ${SHORT_SHA}
-Penulis         : ${AUDIT_AUTHOR}
-Pesan Commit    : ${AUDIT_MESSAGE}
+<b>Perubahan</b>
+• Branch: <code>${E_BRANCH}</code> (<code>${E_SHA}</code>)
+• Penulis: ${E_AUTHOR}
+• Pesan: ${E_MSG}
+• Pemicu: ${E_CAUSE}
 
---- STATUS 9 GERBANG KEAMANAN (FAIL-CLOSED) ---
-${STAGE_SUMMARY%$'\n'}
+${SECURITY_BLOCK}
 
-${OUTCOME_SECTION}
+${EVIDENCE_BLOCK}
 
---- TAUTAN AUDIT TRANSPARAN ---
-Jenkins Log     : http://100.80.3.14:8080/job/${JOB_NAME_SAFE}/${BUILD_NUMBER}/console
-SonarQube SAST  : http://100.80.3.14:9000/dashboard?id=${SONAR_PROJECT_KEY}
-Nexus Registry  : http://100.80.3.14:8082/#browse/browse:autore-releases
-========================================================"
+<b>Tautan</b>
+<a href="${JENKINS_URL}">Jenkins Log</a> • <a href="${SONAR_URL}">SonarQube</a> • <a href="${NEXUS_URL}">Nexus</a>"
 
-printf '\n%s\n' "${REPORT_TEXT}"
+# Pastikan di bawah batas 4096 karakter Telegram
+if (( ${#TELEGRAM_HTML} > 4000 )); then
+  TELEGRAM_HTML="${TELEGRAM_HTML:0:3990}..."
+fi
+
+# Cetak hash lengkap di Jenkins console log untuk jejak audit penuh
+printf '\n================ LAPORAN AUDIT JENKINS (HASH LENGKAP) ================\n'
+printf 'Status          : %s\n' "${BUILD_STATUS}"
+printf 'Aplikasi        : %s (Build #%s)\n' "${APP_NAME}" "${BUILD_NUMBER}"
+printf 'Pelaku          : %s\n' "${AUDIT_AUTHOR}"
+printf 'Commit Full SHA : %s ("%s")\n' "${FULL_GIT_COMMIT}" "${AUDIT_MESSAGE}"
+printf 'Tahap Gagal     : %s\n' "${FAILED_STAGE}"
+if [[ -n "${GATE_REASON}" ]]; then
+  printf 'Alasan Gagal    : %s\n' "${GATE_REASON}"
+fi
+printf 'Verified Digest : %s\n' "${FULL_DIGEST}"
+printf 'Binary SHA-256  : %s\n' "${FULL_BIN_SHA}"
+printf '================ PAYLOAD HTML TELEGRAM (%d chars) ================\n%s\n==================================================================\n' "${#TELEGRAM_HTML}" "${TELEGRAM_HTML}"
 
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
   if [[ ! "${TELEGRAM_CHAT_ID}" =~ ^-?[0-9]+$ ]]; then
     printf 'WARNING: TELEGRAM_CHAT_ID tidak valid (harus numerik); batal mengirim.\n' >&2
     exit 0
   fi
-  printf '==> Mengirim laporan ke Bot Telegram (chat_id: %s)...\n' "${TELEGRAM_CHAT_ID}"
+  printf '==> Mengirim laporan HTML ke Bot Telegram (chat_id: %s)...\n' "${TELEGRAM_CHAT_ID}"
   if printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "${TELEGRAM_BOT_TOKEN}" \
     | curl -fsS --max-time 15 --config - -X POST \
       --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-      --data-urlencode "text=${REPORT_TEXT}" >/dev/null; then
+      --data-urlencode "parse_mode=HTML" \
+      --data-urlencode "disable_web_page_preview=true" \
+      --data-urlencode "text=${TELEGRAM_HTML}" >/dev/null; then
     printf '==> Laporan Telegram berhasil terkirim!\n'
   else
     printf 'WARNING: Gagal mengirim pesan ke API Telegram (cek token/chat_id).\n' >&2

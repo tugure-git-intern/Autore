@@ -827,7 +827,7 @@ fn execute_command(
             }
         }
 
-        Commands::Update => match updater::run_self_update_interactive(interactive) {
+        Commands::Update => match updater::run_self_update() {
             Ok(()) => 0,
             Err(e) => {
                 eprintln!("{} {e}", "ERROR:".red().bold());

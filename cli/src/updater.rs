@@ -230,17 +230,8 @@ pub fn clean_exe_path(path: PathBuf) -> PathBuf {
 }
 
 pub fn restart_into(exe_path: &Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let _ = Command::new(exe_path).exec();
-    }
-    #[cfg(not(unix))]
-    {
-        if let Ok(mut child) = Command::new(exe_path).spawn() {
-            let _ = child.wait();
-            std::process::exit(0);
-        }
+    if let Ok(status) = Command::new(exe_path).status() {
+        std::process::exit(status.code().unwrap_or(0));
     }
 }
 

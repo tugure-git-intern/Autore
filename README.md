@@ -256,14 +256,17 @@ cargo test --manifest-path cli/Cargo.toml
 
 ```text
 Autore/
+├── install.sh                  # One-line installer Linux x86_64 (static musl + SHA-256)
+├── install.ps1                 # One-line installer Windows PowerShell (x86_64 + SHA-256)
+├── Jenkinsfile                 # Pipeline CI/CD utama repositori Autore
 ├── assets/                     # Visual branding (banner, badges)
 │   └── banner.png
 ├── cli/                        # Source code CLI Rust (autore)
 │   ├── Cargo.toml
+│   ├── build.rs
 │   └── src/
 ├── vars/                       # Jenkins Trusted Shared Library (Admin-controlled)
-│   ├── vars/autorePipeline.groovy
-│   └── README.md
+│   └── autorePipeline.groovy
 ├── runner/                     # Provisioning & systemd service Jenkins Agent
 │   ├── setup-agent.sh
 │   ├── install-agent-service.sh
@@ -273,6 +276,7 @@ Autore/
 │   ├── ci-nexus-publish.sh
 │   ├── ci-deploy-by-digest.sh
 │   ├── build-musl-release.sh
+│   ├── publish-release.sh
 │   ├── security-check.sh
 │   └── notify-telegram.sh
 ├── sandbox/                    # Lingkungan uji coba sandbox & dummy application

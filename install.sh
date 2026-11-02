@@ -53,11 +53,9 @@ mkdir -p "${TARGET_DIR}" 2>/dev/null || sudo mkdir -p "${TARGET_DIR}"
 DEST="${TARGET_DIR}/autore"
 
 if [[ -w "${TARGET_DIR}" ]]; then
-  cp "${TMP_DIR}/${BIN_NAME}" "${DEST}"
-  chmod 0755 "${DEST}"
+  install -m 0755 "${TMP_DIR}/${BIN_NAME}" "${DEST}"
 else
-  sudo cp "${TMP_DIR}/${BIN_NAME}" "${DEST}"
-  sudo chmod 0755 "${DEST}"
+  sudo install -m 0755 "${TMP_DIR}/${BIN_NAME}" "${DEST}"
 fi
 
 if [[ ":${PATH}:" != *":${TARGET_DIR}:"* ]]; then

@@ -40,7 +40,15 @@ try {
     Write-Host "  [OK] Checksum SHA-256 terverifikasi ($($ActualHash.Substring(0, 12))...)" -ForegroundColor Green
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    $OldExe = "$TargetExe.old"
+    if (Test-Path $OldExe) {
+        Remove-Item -Force $OldExe -ErrorAction SilentlyContinue
+    }
+    if (Test-Path $TargetExe) {
+        Move-Item -Path $TargetExe -Destination $OldExe -Force -ErrorAction SilentlyContinue
+    }
     Copy-Item -Path $TmpExe -Destination $TargetExe -Force
+    Remove-Item -Force $OldExe -ErrorAction SilentlyContinue
 
     # Tambahkan ke PATH User Windows secara permanen & sesi aktif saat ini
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")

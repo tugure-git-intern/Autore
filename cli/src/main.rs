@@ -82,15 +82,11 @@ pub fn bootstrap_interactive_project(
     Ok((project_dir, files, hook_path, git_created))
 }
 
-fn prompt_main_menu(show_banner: bool, active_project: Option<&std::path::Path>) -> Option<Commands> {
-    if show_banner {
-        print_ascii_banner();
-    } else {
-        println!();
-    }
+fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands> {
+    print_ascii_banner();
     if let Some(dir) = active_project {
         println!(
-            " {} Folder project aktif: {}",
+            " {} Folder project aktif: {}\n",
             "●".cyan().bold(),
             dir.display().to_string().bold()
         );
@@ -265,10 +261,8 @@ fn main() {
         return;
     }
 
-    let mut first = true;
     let mut active_project: Option<PathBuf> = None;
-    while let Some(command) = prompt_main_menu(first, active_project.as_deref()) {
-        first = false;
+    while let Some(command) = prompt_main_menu(active_project.as_deref()) {
         let _ = execute_command(command, true, &mut active_project);
     }
 }

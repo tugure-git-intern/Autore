@@ -58,6 +58,7 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
 ◉ Buat Project Baru (Dockerfile & Jenkinsfile)
 ○ Hapus Project
 ○ Scan Keamanan Kode (Static + Gitleaks + Trivy)
+○ Deploy / Sambungkan Project ke Jenkins
 ○ Pasang Satpam Git (Pre-Commit Hook)
 ○ Copot Satpam Git (Uninstall Hook)
 ○ Cek Kesehatan Sistem (Doctor)
@@ -156,6 +157,7 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 | `autore scan-image` | Memindai image container pasca-build: verifikasi UID non-root, pemindaian CVE (`HIGH,CRITICAL`), dan ekspor SBOM CycloneDX (`sbom.cdx.json`). | Container Image Scan |
 | `autore hook install \| uninstall \| status` | Memasang, mencopot (dengan pemulihan backup `.pre-commit.bak`), atau mengecek status pre-commit hook di `.git/hooks/pre-commit`. | Git Integration |
 | `autore doctor` | Mendiagnosis kesiapan sistem: Git, Java 21, Docker, Docker Compose, service systemd runner, lokasi binary `autore`, dan ruang disk. | System Diagnostics |
+| `autore deploy` | Menyimpan akses Jenkins sekali di `~/.config/autore/jenkins.conf`, menyiapkan commit & remote Git, membuat/memperbarui Job Pipeline di Jenkins, dan memicu `Build Now`. | Jenkins Onboarding |
 | `autore update` | Mengunduh rilis stabil terbaru dari GitHub Releases sesuai OS (`linux-x86_64-musl` / `windows-x86_64.exe`), memverifikasi `SHA256SUMS`, mengganti binary secara atomik, dan auto-restart. | Self-Updater |
 
 ### Contoh Penggunaan CLI

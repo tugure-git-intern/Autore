@@ -1,6 +1,7 @@
 mod doctor;
 mod external;
 mod hooks;
+mod jenkins;
 mod scanner;
 mod templates;
 mod updater;
@@ -8,7 +9,7 @@ mod updater;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
-use inquire::{Confirm, CustomType, Select, Text};
+use inquire::{Confirm, CustomType, Password, PasswordDisplayMode, Select, Text};
 use std::path::PathBuf;
 use std::process;
 use templates::{
@@ -272,6 +273,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
         "Buat Project Baru (Dockerfile & Jenkinsfile)",
         "Hapus Project",
         "Scan Keamanan Kode (Static + Gitleaks + Trivy)",
+        "Deploy / Sambungkan Project ke Jenkins",
         "Pasang Satpam Git (Pre-Commit Hook)",
         "Copot Satpam Git (Uninstall Hook)",
         "Cek Kesehatan Sistem (Doctor)",
@@ -298,6 +300,11 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
             no_docker: false,
             include_build_dirs: false,
             docker: false,
+        },
+        "Deploy / Sambungkan Project ke Jenkins" => Commands::Deploy {
+            path: PathBuf::from("."),
+            git_url: None,
+            reconfigure: false,
         },
         "Pasang Satpam Git (Pre-Commit Hook)" => Commands::Hook {
             action: HookAction::Install { repo: PathBuf::from(".") },
@@ -405,6 +412,21 @@ enum Commands {
 
     /// Update Autore ke versi rilis stabil terbaru di GitHub Releases
     Update,
+
+    /// Daftarkan project ke Jenkins CI/CD & langsung jalankan build otomatis
+    Deploy {
+        /// Direktori project yang akan dihubungkan ke Jenkins
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+
+        /// URL repositori Git (opsional; otomatis dibaca dari `git remote get-url origin`)
+        #[arg(long)]
+        git_url: Option<String>,
+
+        /// Ubah kredensial Jenkins yang tersimpan di ~/.config/autore/jenkins.conf
+        #[arg(long)]
+        reconfigure: bool,
+    },
 
     /// Hapus folder project Autore secara interaktif
     #[command(hide = true)]
@@ -848,6 +870,152 @@ fn execute_command(
                 1
             }
         },
+
+        Commands::Deploy {
+            path,
+            git_url,
+            reconfigure,
+        } => {
+            let target_dir = if interactive {
+                match pick_interactive_target_project(
+                    path,
+                    "Pilih project yang ingin disambungkan ke Jenkins:",
+                    active_project,
+                ) {
+                    Some(p) => p,
+                    None => return 0,
+                }
+            } else {
+                path
+            };
+
+            let conf_path = jenkins::default_config_path();
+            let mut jk_cfg = if reconfigure {
+                None
+            } else {
+                jenkins::load_config_from(&conf_path)
+            };
+
+            if jk_cfg.is_none() {
+                if !interactive {
+                    eprintln!(
+                        "{} Konfigurasi Jenkins belum ada di {}. Jalankan `autore` lewat menu untuk mengisi sekali.",
+                        "ERROR:".red().bold(),
+                        conf_path.display()
+                    );
+                    return 1;
+                }
+                println!(
+                    "  {} Setup akses Jenkins pertama kali (akan disimpan aman di {}):",
+                    "ℹ".cyan().bold(),
+                    conf_path.display()
+                );
+                let url = match Text::new("URL Jenkins:")
+                    .with_default("http://127.0.0.1:8080")
+                    .prompt()
+                {
+                    Ok(u) => u,
+                    Err(_) => return 0,
+                };
+                let user = match Text::new("Username Jenkins:")
+                    .with_default("admin")
+                    .prompt()
+                {
+                    Ok(u) => u,
+                    Err(_) => return 0,
+                };
+                let token = match Password::new("Password / API Token Jenkins:")
+                    .without_confirmation()
+                    .with_display_mode(PasswordDisplayMode::Masked)
+                    .prompt()
+                {
+                    Ok(t) => t,
+                    Err(_) => return 0,
+                };
+                let new_cfg = jenkins::JenkinsConfig { url, user, token };
+                if let Err(e) = jenkins::save_config_to(&conf_path, &new_cfg) {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    return 1;
+                }
+                println!(
+                    "  {} Akses Jenkins tersimpan di {} (klik berikutnya langsung jalan otomatis).",
+                    "✔".green().bold(),
+                    conf_path.display()
+                );
+                jk_cfg = jenkins::load_config_from(&conf_path);
+            }
+            let jk_cfg = match jk_cfg {
+                Some(c) => c,
+                None => return 1,
+            };
+
+            let job_name = jenkins::infer_project_job_name(&target_dir);
+            let existing_remote = jenkins::read_git_remote_origin(&target_dir);
+            let resolved_git_url = match (git_url, existing_remote) {
+                (Some(u), _) => u,
+                (None, Some(u)) => u,
+                (None, None) if interactive => {
+                    let default_repo = format!("https://github.com/tugure-git-intern/{job_name}.git");
+                    match Text::new("URL repositori GitHub:")
+                        .with_default(&default_repo)
+                        .with_help_message("Enter pakai default • atau tempel URL repo GitHub")
+                        .prompt()
+                    {
+                        Ok(u) => u.trim().to_string(),
+                        Err(_) => return 0,
+                    }
+                }
+                (None, None) => {
+                    eprintln!(
+                        "{} Remote git `origin` belum diatur. Gunakan `--git-url <URL>`.",
+                        "ERROR:".red().bold()
+                    );
+                    return 1;
+                }
+            };
+
+            println!(
+                "{} Menyiapkan Git & mendaftarkan project '{}' ke Jenkins ({})...",
+                "==>".cyan().bold(),
+                job_name,
+                jk_cfg.url
+            );
+            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url) {
+                eprintln!("{} {e}", "ERROR:".red().bold());
+                return 1;
+            }
+            let _ = std::process::Command::new("git")
+                .args(["push", "-q", "-u", "origin", "main"])
+                .current_dir(&target_dir)
+                .status();
+
+            match jenkins::register_and_trigger_jenkins(&jk_cfg, &job_name, &resolved_git_url, "main")
+            {
+                Ok(job_url) => {
+                    println!(
+                        "\n{} Project '{}' berhasil disambungkan & di-build di Jenkins!",
+                        "✔".green().bold(),
+                        job_name
+                    );
+                    println!("  • Folder project : {}", target_dir.display());
+                    println!("  • Repo Git       : {resolved_git_url}");
+                    println!("  • Job Jenkins    : {job_url}");
+                    println!("  • Status Build   : Sedang berjalan (notifikasi hasil akan dikirim ke Telegram)");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    if e.contains("401/403") {
+                        let _ = std::fs::remove_file(&conf_path);
+                        eprintln!(
+                            "  {} Kredensial lama dihapus. Pilih menu ini lagi untuk memasukkan password baru.",
+                            "ℹ".yellow()
+                        );
+                    }
+                    1
+                }
+            }
+        }
 
         Commands::DeleteProject => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

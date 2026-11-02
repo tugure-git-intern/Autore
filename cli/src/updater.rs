@@ -287,36 +287,55 @@ pub fn run_self_update_with(
     println!("{} Mengecek rilis stabil terbaru di GitHub ({repo})...", "==>".cyan().bold());
     let latest_tag = fetch_latest_tag(repo, api_base)?;
     let latest_clean = latest_tag.trim_start_matches('v');
+    let current_clean = current_version.trim_start_matches('v');
+    let version_is_newer = is_newer_version(current_clean, latest_clean)?;
 
-    if !is_newer_version(current_version, latest_clean)? {
+    if !version_is_newer && current_clean != latest_clean {
         println!(
-            "{} Sudah versi stabil terbaru (v{current_version}). Tidak ada yang perlu di-update.",
+            "{} Sudah versi stabil terbaru (v{current_clean}). Tidak ada yang perlu di-update.",
             "✔".green().bold()
         );
         return Ok(false);
     }
 
-    println!(
-        "{} Versi baru tersedia: v{current_version} -> v{latest_clean}. Mengunduh & memverifikasi...",
-        "==>".cyan().bold()
-    );
-
     let tmp_dir = std::env::temp_dir().join(format!("autore-update-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal membuat folder sementara: {e}"))?;
 
-    let result = (|| {
+    let result = (|| -> Result<bool, String> {
         let bin_url = format!("{dl_base}/{latest_tag}/{}", platform.asset_name);
         let sums_url = format!("{dl_base}/{latest_tag}/SHA256SUMS");
         let tmp_bin = tmp_dir.join(platform.asset_name);
         let tmp_sums = tmp_dir.join("SHA256SUMS");
 
-        download_to(&bin_url, &tmp_bin)?;
         download_to(&sums_url, &tmp_sums)?;
-
         let sums_text = fs::read_to_string(&tmp_sums)
             .map_err(|e| format!("Gagal membaca SHA256SUMS: {e}"))?;
         let expected = parse_expected_sha256(&sums_text, platform.asset_name)?;
+
+        if !version_is_newer {
+            let local_sha = compute_file_sha256(exe_path).unwrap_or_default();
+            if local_sha == expected {
+                println!(
+                    "{} Sudah versi & build terbaru (v{current_clean}, sha256: {}...). Tidak ada yang perlu di-update.",
+                    "✔".green().bold(),
+                    &expected[..12]
+                );
+                return Ok(false);
+            }
+            println!(
+                "{} Build baru terdeteksi di rilis v{latest_clean} (sha256: {}...). Mengunduh & memverifikasi...",
+                "==>".cyan().bold(),
+                &expected[..12]
+            );
+        } else {
+            println!(
+                "{} Versi baru tersedia: v{current_clean} -> v{latest_clean}. Mengunduh & memverifikasi...",
+                "==>".cyan().bold()
+            );
+        }
+
+        download_to(&bin_url, &tmp_bin)?;
         let actual = compute_file_sha256(&tmp_bin)?;
         if expected != actual {
             return Err(format!(
@@ -330,11 +349,14 @@ pub fn run_self_update_with(
         );
 
         replace_binary_safely_for_os(&tmp_bin, exe_path, platform.os)?;
-        Ok(())
+        Ok(true)
     })();
 
     let _ = fs::remove_dir_all(&tmp_dir);
-    result?;
+    let did_update = result?;
+    if !did_update {
+        return Ok(false);
+    }
 
     println!(
         "\n{} Autore berhasil di-update ke v{latest_clean} di {}",
@@ -429,9 +451,17 @@ mod tests {
         )
         .unwrap();
 
-        // Versi sama dengan CURRENT_VERSION -> tidak download
+        // Versi sama & hash sama -> tidak download ulang
+        let cur_dl_dir = tmp.path().join(format!("dl/v{CURRENT_VERSION}"));
+        fs::create_dir_all(&cur_dl_dir).unwrap();
         let target_exe = tmp.path().join("installed-autore");
         fs::write(&target_exe, b"old").unwrap();
+        let old_sha = compute_file_sha256(&target_exe).unwrap();
+        fs::write(
+            cur_dl_dir.join("SHA256SUMS"),
+            format!("{old_sha}  autore-linux-x86_64-musl\n"),
+        )
+        .unwrap();
         fs::write(
             api_dir.join("latest"),
             format!(r#"{{"tag_name":"v{CURRENT_VERSION}"}}"#),
@@ -439,7 +469,7 @@ mod tests {
         .unwrap();
         let api_url = format!("file://{}", tmp.path().display());
         let dl_url = format!("file://{}/dl", tmp.path().display());
-        run_self_update_with(
+        assert!(!run_self_update_with(
             "linux",
             "x86_64",
             CURRENT_VERSION,
@@ -448,8 +478,29 @@ mod tests {
             &api_url,
             &dl_url,
         )
-        .unwrap();
+        .unwrap());
         assert_eq!(fs::read(&target_exe).unwrap(), b"old");
+
+        // Versi sama (mis. tetap v0.3.0) TAPI hash di GitHub berubah -> tetap update!
+        let hotfix_bin = cur_dl_dir.join("autore-linux-x86_64-musl");
+        fs::write(&hotfix_bin, b"same-version-new-build").unwrap();
+        let hotfix_sha = compute_file_sha256(&hotfix_bin).unwrap();
+        fs::write(
+            cur_dl_dir.join("SHA256SUMS"),
+            format!("{hotfix_sha}  autore-linux-x86_64-musl\n"),
+        )
+        .unwrap();
+        assert!(run_self_update_with(
+            "linux",
+            "x86_64",
+            CURRENT_VERSION,
+            &target_exe,
+            "tugure-git-intern/Autore",
+            &api_url,
+            &dl_url,
+        )
+        .unwrap());
+        assert_eq!(fs::read(&target_exe).unwrap(), b"same-version-new-build");
 
         // Versi lebih baru -> download + verifikasi SHA-256 + replace atomik
         fs::write(api_dir.join("latest"), r#"{"tag_name":"v99.0.0"}"#).unwrap();

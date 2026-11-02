@@ -237,13 +237,20 @@ fn view_items(items: &[Item], ui: &Ui) -> Vec<Item> {
 }
 
 /// Tulis satu frame ke layar. Dipisah agar bisa diuji tanpa TTY (mis. ke Vec<u8>).
+///
+/// Sengaja TIDAK memakai `Clear(FromCursorDown)`: mengosongkan sekujur layar lalu
+/// menggambarnya ulang bikin layar kedip. Tiap baris dibersihkan sendiri
+/// (`Clear(CurrentLine)`) sebelum ditulis, jadi sisa teks lama tetap terhapus rapi.
 fn paint<W: Write>(out: &mut W, screen: &str) -> io::Result<()> {
-    queue!(
-        out,
-        MoveTo(0, 0),
-        Clear(ClearType::FromCursorDown),
-        Print(screen)
-    )?;
+    let mut buf: Vec<u8> = Vec::with_capacity(screen.len() + 64);
+    queue!(buf, MoveTo(0, 0))?;
+    for (i, baris) in screen.split("\r\n").enumerate() {
+        if i > 0 {
+            buf.extend_from_slice(b"\r\n");
+        }
+        queue!(buf, Clear(ClearType::CurrentLine), Print(baris))?;
+    }
+    out.write_all(&buf)?;
     out.flush()
 }
 
@@ -512,6 +519,8 @@ pub struct Session {
     stdout_asli: i32,
     /// Baris digeser dari bawah di panel log (0 = selalu ikut baris terbaru).
     scroll: usize,
+    /// Frame terakhir yang sudah digambar — frame identik tidak ditulis ulang (kedip).
+    frame: String,
 }
 
 impl Session {
@@ -538,6 +547,7 @@ impl Session {
             rx,
             stdout_asli,
             scroll: 0,
+            frame: String::new(),
         };
         if execute!(sesi.tty, EnterAlternateScreen, Hide).is_err() {
             sesi.restore();
@@ -640,7 +650,13 @@ impl Session {
             ask,
             scroll: self.scroll,
         };
-        let _ = paint(&mut self.tty, &render(&view, cols, rows));
+        let layar = render(&view, cols, rows);
+        if layar == self.frame {
+            return;
+        }
+        if paint(&mut self.tty, &layar).is_ok() {
+            self.frame = layar;
+        }
     }
 
     /// Tombol gulir panel log. `true` = sudah dipakai (jangan diteruskan ke menu).
@@ -998,6 +1014,7 @@ fn pad_plain(s: &str, w: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     /// Gambar satu frame dengan item disaring sesuai isi baris input di `ui`.
     fn layar(
@@ -1563,7 +1580,7 @@ mod tests {
     }
 
     /// Sesi tanpa TTY: layar ditulis ke file sementara, supaya alur run/tanya/gulir bisa dites.
-    fn sesi_uji() -> (Session, Sender<Question>) {
+    fn sesi_uji(nama: &str) -> (Session, PathBuf, Sender<Question>) {
         static MENU_UJI: [Item; 2] = [
             Item {
                 label: "Mulai Project Baru (1-Klik)",
@@ -1576,10 +1593,11 @@ mod tests {
                 hints: "",
             },
         ];
-        let layar = std::env::temp_dir().join(format!("autore-layar-{}", std::process::id()));
+        let layar =
+            std::env::temp_dir().join(format!("autore-layar-{}-{nama}", std::process::id()));
         let (tx, rx) = channel();
         let sesi = Session {
-            tty: File::create(layar).expect("file layar uji"),
+            tty: File::create(&layar).expect("file layar uji"),
             items: &MENU_UJI,
             ui: Ui::default(),
             pending: None,
@@ -1589,8 +1607,9 @@ mod tests {
             rx,
             stdout_asli: -1,
             scroll: 0,
+            frame: String::new(),
         };
-        (sesi, tx)
+        (sesi, layar, tx)
     }
 
     /// Pembaca pipe: per baris, CRLF dibuang, karakter kendali dibuang, sisa akhir ikut.
@@ -1622,7 +1641,7 @@ mod tests {
     /// `run` menunggu pekerjaan selesai sambil menggambar, lalu menulis baris hasil ke log.
     #[test]
     fn run_menjalankan_pekerjaan_dan_mencatat_hasil() {
-        let (mut sesi, _tx) = sesi_uji();
+        let (mut sesi, _layar, _tx) = sesi_uji("run");
         let log = Arc::clone(&sesi.log);
         let kode = sesi.run("Doctor", move || {
             log.push("cek git ok".to_string());
@@ -1641,17 +1660,14 @@ mod tests {
         sesi.set_status("✘ terakhir: Gagal");
         sesi.set_project(Some("/tmp/demo".to_string()));
         sesi.gambar();
-        let layar = std::fs::read_to_string(
-            std::env::temp_dir().join(format!("autore-layar-{}", std::process::id())),
-        )
-        .unwrap();
+        let layar = std::fs::read_to_string(&_layar).unwrap();
         assert!(layar.contains("/tmp/demo") && layar.contains("cek git ok"));
     }
 
     /// Pertanyaan masuk lewat kanal, fokus pindah ke input, Enter mengirim jawaban balik.
     #[test]
     fn pertanyaan_dari_kanal_dijawab_lewat_sesi() {
-        let (mut sesi, tx) = sesi_uji();
+        let (mut sesi, _layar, tx) = sesi_uji("tanya");
         let (balas, terima) = channel();
         tx.send(Question {
             ask: Ask::Text {
@@ -1677,7 +1693,7 @@ mod tests {
     /// PgUp/PgDn/End menggulir log; tombol lain diteruskan ke menu.
     #[test]
     fn gulir_log_dibatasi_jumlah_baris() {
-        let (mut sesi, _tx) = sesi_uji();
+        let (mut sesi, _layar, _tx) = sesi_uji("gulir");
         for i in 0..8 {
             sesi.log.push(format!("baris {i}"));
         }
@@ -1713,5 +1729,40 @@ mod tests {
     fn status_panjang_diringkas() {
         assert_eq!(ringkas("siap", 10), "siap");
         assert_eq!(ringkas("jalan: Mulai Project Baru", 10), "jalan: Mu…");
+    }
+
+    /// Tulis frame: tanpa clear sekujur layar (sumber kedip), tiap baris dibersihkan sendiri.
+    #[test]
+    fn paint_tidak_mengosongkan_layar_penuh() {
+        let mut out: Vec<u8> = Vec::new();
+        paint(&mut out, "a\r\nbb").unwrap();
+        let teks = String::from_utf8(out).unwrap();
+        assert!(teks.starts_with("\x1b[1;1H"), "mulai dari pojok kiri atas");
+        assert!(!teks.contains("\x1b[J"), "tidak mengosongkan sekujur layar");
+        let bersih = "\x1b[2K"; // Clear(CurrentLine) crossterm
+        assert_eq!(
+            teks.matches(bersih).count(),
+            2,
+            "tiap baris dibersihkan sendiri"
+        );
+    }
+
+    /// Frame identik tidak ditulis ulang — layar tidak kedip saat tidak ada perubahan.
+    #[test]
+    fn frame_identik_tidak_ditulis_ulang() {
+        let (mut sesi, _layar, _tx) = sesi_uji("frame");
+        let ukuran = |s: &Session| s.tty.metadata().map(|m| m.len()).unwrap_or(0);
+        sesi.gambar();
+        let sekali = ukuran(&sesi);
+        assert!(sekali > 0);
+        sesi.tick();
+        assert_eq!(
+            ukuran(&sesi),
+            sekali,
+            "gambar ulang tanpa perubahan harus dilewati"
+        );
+        sesi.log.push("halo".to_string());
+        sesi.tick();
+        assert!(ukuran(&sesi) > sekali, "perubahan log tetap digambar");
     }
 }

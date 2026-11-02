@@ -9,12 +9,23 @@ TAG="v${VERSION}"
 REPO="${AUTORE_GITHUB_REPO:-tugure-git-intern/Autore}"
 ARTIFACT_DIR="${1:-/tmp}"
 
-for f in "autore-linux-x86_64-musl" "autore-windows-x86_64.exe" "SHA256SUMS"; do
-  if [[ ! -f "${ARTIFACT_DIR}/${f}" ]]; then
-    echo "ERROR: File aset tidak ditemukan: ${ARTIFACT_DIR}/${f}" >&2
-    exit 1
+if [[ ! -f "${ARTIFACT_DIR}/autore-linux-x86_64-musl" ]]; then
+  echo "ERROR: File aset tidak ditemukan: ${ARTIFACT_DIR}/autore-linux-x86_64-musl" >&2
+  exit 1
+fi
+
+if [[ ! -f "${ARTIFACT_DIR}/autore-windows-x86_64.exe" && -f "/tmp/autore-windows-x86_64.exe" ]]; then
+  cp "/tmp/autore-windows-x86_64.exe" "${ARTIFACT_DIR}/autore-windows-x86_64.exe"
+fi
+
+(
+  cd "${ARTIFACT_DIR}"
+  if [[ -f "autore-windows-x86_64.exe" ]]; then
+    sha256sum autore-linux-x86_64-musl autore-windows-x86_64.exe > SHA256SUMS
+  else
+    sha256sum autore-linux-x86_64-musl > SHA256SUMS
   fi
-done
+)
 
 echo "==> Mengunggah aset rilis ${TAG} ke GitHub (${REPO}) dari ${ARTIFACT_DIR}..."
 TAG="${TAG}" REPO="${REPO}" ARTIFACT_DIR="${ARTIFACT_DIR}" python3 - <<'PY'
@@ -64,7 +75,8 @@ except urllib.error.HTTPError:
     rel = json.loads(urllib.request.urlopen(req).read().decode())
 
 rid = rel["id"]
-assets = ("autore-linux-x86_64-musl", "autore-windows-x86_64.exe", "SHA256SUMS")
+candidates = ["autore-linux-x86_64-musl", "autore-windows-x86_64.exe", "SHA256SUMS"]
+assets = [name for name in candidates if os.path.exists(os.path.join(art_dir, name))]
 
 for a in rel.get("assets", []):
     if a.get("name") in assets:

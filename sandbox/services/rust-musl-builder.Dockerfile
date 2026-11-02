@@ -9,3 +9,4 @@ RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends gcc-mingw-w64-x86-64 \
  && rm -rf /var/lib/apt/lists/* \
  && rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
+USER 1000:1000

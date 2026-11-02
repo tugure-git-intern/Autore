@@ -33,6 +33,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   mkdir -p "${CARGO_CACHE}"
   log "Menjalankan kompilasi release Linux musl & Windows (.exe) di container ${MUSL_BUILDER_IMAGE}..."
   docker run --rm \
+    --user 0:0 \
     -e CARGO_HOME="/cargo" \
     -e AUTORE_RELEASE_VERSION="${RELEASE_TAG}" \
     -e HOST_UID="$(id -u)" \

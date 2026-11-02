@@ -6,7 +6,7 @@
 //! perintah yang interaktif (tanya nama project, token, dll.) bisa jalan seperti biasa.
 
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::{Print, ResetColor};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
@@ -25,6 +25,32 @@ pub struct Item {
     pub label: &'static str,
     pub desc: &'static str,
     pub hints: &'static str,
+}
+
+/// Aksi hasil satu tombol. Dipisah dari loop I/O supaya bisa diuji tanpa TTY.
+#[derive(Debug, PartialEq)]
+enum Outcome {
+    Move(usize),
+    Run,
+    Quit,
+    Stay,
+}
+
+fn outcome_for(key: KeyEvent, selected: usize, max_index: usize) -> Outcome {
+    match key.code {
+        KeyCode::Up => Outcome::Move(selected.saturating_sub(1)),
+        KeyCode::Down => Outcome::Move((selected + 1).min(max_index)),
+        KeyCode::Home => Outcome::Move(0),
+        KeyCode::End => Outcome::Move(max_index),
+        KeyCode::Enter => Outcome::Run,
+        KeyCode::Esc => Outcome::Quit,
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Outcome::Quit,
+        KeyCode::Char('q') if key.modifiers.is_empty() => Outcome::Quit,
+        // Ctrl+J datang sebagai Char('j') ber-modifier CONTROL — jangan dianggap navigasi.
+        KeyCode::Char('k') if key.modifiers.is_empty() => Outcome::Move(selected.saturating_sub(1)),
+        KeyCode::Char('j') if key.modifiers.is_empty() => Outcome::Move((selected + 1).min(max_index)),
+        _ => Outcome::Stay,
+    }
 }
 
 /// Tampilkan menu full-screen. `None` = user keluar (q/Esc/Ctrl-C).
@@ -63,23 +89,11 @@ pub fn select_action(
             break None;
         }
         match event::read() {
-            Ok(Event::Key(k)) => match k.code {
-                KeyCode::Up => selected = selected.saturating_sub(1),
-                KeyCode::Down => selected = (selected + 1).min(max_index),
-                // Ctrl+J datang sebagai Char('j') ber-modifier CONTROL — jangan dianggap navigasi.
-                KeyCode::Char('k') if k.modifiers.is_empty() => {
-                    selected = selected.saturating_sub(1)
-                }
-                KeyCode::Char('j') if k.modifiers.is_empty() => {
-                    selected = (selected + 1).min(max_index)
-                }
-                KeyCode::Char('q') if k.modifiers.is_empty() => break None,
-                KeyCode::Home => selected = 0,
-                KeyCode::End => selected = items.len() - 1,
-                KeyCode::Enter => break Some(selected),
-                KeyCode::Esc => break None,
-                KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => break None,
-                _ => {}
+            Ok(Event::Key(k)) => match outcome_for(k, selected, max_index) {
+                Outcome::Move(i) => selected = i,
+                Outcome::Run => break Some(selected),
+                Outcome::Quit => break None,
+                Outcome::Stay => {}
             },
             Ok(_) => {}
             Err(_) => break None,
@@ -311,5 +325,86 @@ mod tests {
         assert_eq!(visible_len(&format!("{BOLD}abc{RESET}")), 3);
         assert_eq!(visible_len(&pad_plain("abc", 6)), 6);
         assert_eq!(visible_len(&pad_plain("abcdefgh", 4)), 4);
+    }
+
+    fn tap(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    #[test]
+    fn navigasi_berhenti_di_ujung_dan_tombol_asing_diabaikan() {
+        let last = 8;
+        assert_eq!(outcome_for(tap(KeyCode::Up), 0, last), Outcome::Move(0));
+        assert_eq!(outcome_for(tap(KeyCode::Down), last, last), Outcome::Move(last));
+        assert_eq!(outcome_for(tap(KeyCode::Down), 3, last), Outcome::Move(4));
+        assert_eq!(outcome_for(tap(KeyCode::Up), 3, last), Outcome::Move(2));
+        assert_eq!(outcome_for(tap(KeyCode::Home), 5, last), Outcome::Move(0));
+        assert_eq!(outcome_for(tap(KeyCode::End), 1, last), Outcome::Move(last));
+        assert_eq!(outcome_for(tap(KeyCode::Char('j')), 0, last), Outcome::Move(1));
+        assert_eq!(outcome_for(tap(KeyCode::Char('k')), 2, last), Outcome::Move(1));
+        assert_eq!(outcome_for(tap(KeyCode::F(5)), 3, last), Outcome::Stay);
+        // Ctrl+J (baris baru di mode raw) tidak boleh menggeser menu.
+        assert_eq!(
+            outcome_for(
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
+                3,
+                last
+            ),
+            Outcome::Stay
+        );
+    }
+
+    #[test]
+    fn enter_jalankan_dan_q_esc_ctrl_c_keluar() {
+        assert_eq!(outcome_for(tap(KeyCode::Enter), 2, 8), Outcome::Run);
+        assert_eq!(outcome_for(tap(KeyCode::Esc), 2, 8), Outcome::Quit);
+        assert_eq!(outcome_for(tap(KeyCode::Char('q')), 2, 8), Outcome::Quit);
+        assert_eq!(
+            outcome_for(
+                KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                2,
+                8
+            ),
+            Outcome::Quit
+        );
+    }
+
+    #[test]
+    fn baris_status_kuat_untuk_semua_kombinasi_project_dan_catatan() {
+        for (project, last) in [
+            (None, None),
+            (Some("qlinic"), None),
+            (None, Some("✔ terakhir: Cek Kesehatan Sistem (Doctor)")),
+            (Some("qlinic"), Some("✘ terakhir: Hapus Project (kode 1)")),
+        ] {
+            let screen = draw(&sample(), 0, project, last, 110, 14);
+            assert_eq!(screen.split("\r\n").count(), 14);
+            let tail = screen.split("\r\n").last().unwrap();
+            assert_eq!(visible_len(tail), 110);
+            assert!(tail.contains("q"));
+            match project {
+                Some(p) => assert!(tail.contains(p), "nama project harus tampil: {tail}"),
+                None => assert!(!tail.contains("project aktif")),
+            }
+        }
+        // Terminal sempit: tetap satu baris pas lebar, isi boleh terpotong.
+        let narrow = draw(&sample(), 0, Some("qlinic"), Some("catatan"), 30, 8);
+        let tail = narrow.split("\r\n").last().unwrap();
+        assert_eq!(visible_len(tail), 30);
+    }
+
+    #[test]
+    fn terminal_kecil_tidak_panic_dan_nama_item_panjang_dipotong() {
+        let mut items = sample();
+        items.push(Item {
+            label: "Scan Keamanan Kode (Static + Gitleaks + Trivy + Semgrep + Detekt)",
+            desc: "Menjalankan pemeriksaan keamanan menyeluruh pada source code.",
+            hints: "Butuh Docker untuk Trivy.",
+        });
+        let screen = draw(&items, items.len() - 1, Some("/tmp/x"), Some("catatan"), 24, 6);
+        assert_eq!(screen.split("\r\n").count(), 6);
+        for line in screen.split("\r\n") {
+            assert_eq!(visible_len(line), 24);
+        }
     }
 }

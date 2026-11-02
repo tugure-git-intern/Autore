@@ -251,6 +251,17 @@ fn pick_interactive_target_project(
     }
 }
 
+/// Enter ditekan (bukan tombol lain)? Dipisah supaya bisa diuji tanpa terminal.
+fn enter_pressed(event: std::io::Result<crossterm::event::Event>) -> bool {
+    matches!(
+        event,
+        Ok(crossterm::event::Event::Key(crossterm::event::KeyEvent {
+            code: crossterm::event::KeyCode::Enter,
+            ..
+        }))
+    )
+}
+
 /// Tahan layar setelah aksi selesai: satu tombol, tidak perlu pilih menu lagi.
 fn prompt_after_action() -> bool {
     println!(
@@ -262,13 +273,7 @@ fn prompt_after_action() -> bool {
     if !std::io::stdout().is_terminal() {
         return false;
     }
-    matches!(
-        crossterm::event::read(),
-        Ok(crossterm::event::Event::Key(crossterm::event::KeyEvent {
-            code: crossterm::event::KeyCode::Enter,
-            ..
-        }))
-    )
+    enter_pressed(crossterm::event::read())
 }
 
 /// Seluruh item menu — satu sumber kebenaran untuk TUI dan mode teks.
@@ -366,6 +371,21 @@ fn commands_for(index: usize) -> Commands {
     }
 }
 
+/// Label menu -> index-nya. Dipakai mode teks (bukan TUI) supaya pencocokan label
+/// tidak tersebar di beberapa tempat.
+fn label_index(label: &str) -> Option<usize> {
+    MENU.iter().position(|i| i.label == label)
+}
+
+/// Catatan status baris terakhir (dipakai TUI): sukses atau gagal + kode keluar.
+fn note_for(index: usize, code: i32) -> String {
+    if code == 0 {
+        format!("✔ terakhir: {}", MENU[index].label)
+    } else {
+        format!("✘ terakhir: {} (keluar dengan kode {code})", MENU[index].label)
+    }
+}
+
 /// Menu utama: TUI layar penuh kalau terminal interaktif, daftar teks kalau bukan
 /// (mis. output dipipe ke file). Mengembalikan index menu + perintah yang dipilih.
 fn prompt_main_menu(
@@ -390,7 +410,7 @@ fn prompt_main_menu(
             .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
             .prompt()
             .ok()?;
-        MENU.iter().position(|i| i.label == picked)?
+        label_index(picked)?
     };
 
     Some((index, commands_for(index)))
@@ -652,11 +672,7 @@ fn main() {
     while let Some((index, command)) = prompt_main_menu(active_project.as_deref(), last_note.as_deref())
     {
         let code = execute_command(command, true, &mut active_project);
-        last_note = Some(if code == 0 {
-            format!("✔ terakhir: {}", MENU[index].label)
-        } else {
-            format!("✘ terakhir: {} (keluar dengan kode {code})", MENU[index].label)
-        });
+        last_note = Some(note_for(index, code));
         if !prompt_after_action() {
             break;
         }
@@ -1570,5 +1586,65 @@ mod tests {
 
         // Menolak menghapus folder yang bukan project Autore
         assert!(delete_project_safely(&plain, &mut active).is_err());
+    }
+
+    #[test]
+    fn setiap_index_menu_dipetakan_ke_perintah_yang_benar() {
+        assert!(matches!(commands_for(0), Commands::QuickStart { .. }));
+        assert!(matches!(commands_for(1), Commands::Init { .. }));
+        assert!(matches!(commands_for(2), Commands::DeleteProject));
+        assert!(matches!(commands_for(3), Commands::Scan { .. }));
+        assert!(matches!(commands_for(4), Commands::Deploy { .. }));
+        assert!(matches!(
+            commands_for(5),
+            Commands::Hook {
+                action: HookAction::Install { .. }
+            }
+        ));
+        assert!(matches!(
+            commands_for(6),
+            Commands::Hook {
+                action: HookAction::Uninstall { .. }
+            }
+        ));
+        // 7 = Cek Kesehatan Sistem, lewat jalur default; index asing juga Doctor.
+        assert!(matches!(commands_for(7), Commands::Doctor));
+        assert!(matches!(commands_for(99), Commands::Doctor));
+    }
+
+    #[test]
+    fn label_menu_selalu_bisa_dikembalikan_ke_index() {
+        for (i, item) in MENU.iter().enumerate() {
+            assert_eq!(label_index(item.label), Some(i), "label: {}", item.label);
+        }
+        assert_eq!(label_index("menu yang tidak ada"), None);
+    }
+
+    #[test]
+    fn catatan_status_membedakan_sukses_dan_gagal() {
+        assert_eq!(note_for(0, 0), format!("✔ terakhir: {}", MENU[0].label));
+
+        let gagal = note_for(7, 1);
+        assert!(gagal.starts_with("✘ terakhir: "), "{gagal}");
+        assert!(gagal.contains(MENU[7].label), "{gagal}");
+        assert!(gagal.ends_with("(keluar dengan kode 1)"), "{gagal}");
+    }
+
+    #[test]
+    fn hanya_tombol_enter_yang_dianggap_lanjut() {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+        let key = |code: KeyCode| Event::Key(KeyEvent::new(code, KeyModifiers::empty()));
+
+        assert!(enter_pressed(Ok(key(KeyCode::Enter))));
+        assert!(!enter_pressed(Ok(key(KeyCode::Char('q')))));
+        assert!(!enter_pressed(Ok(key(KeyCode::Esc))));
+        assert!(!enter_pressed(Ok(Event::Resize(80, 24))));
+        assert!(!enter_pressed(Err(std::io::Error::other("stdin habis"))));
+    }
+
+    #[test]
+    fn jeda_setelah_aksi_tidak_menggantung_kalau_bukan_terminal() {
+        // Di dalam cargo test stdout bukan TTY: harus langsung false tanpa menunggu tombol.
+        assert!(!prompt_after_action());
     }
 }

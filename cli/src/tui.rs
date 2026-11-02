@@ -128,18 +128,19 @@ fn handle_key(ui: &mut Ui, key: KeyEvent, items: &[Item]) -> Act {
 
     match ui.focus {
         Focus::Menu => {
-            if is_typing(&key) {
-                ui.focus = Focus::Input;
-                if let KeyCode::Char(c) = key.code {
-                    ui.input.push(c);
-                }
-                return Act::Stay;
-            }
             match outcome_for(key, ui.selected, items.len().saturating_sub(1)) {
                 Outcome::Move(i) => ui.selected = i,
                 Outcome::Run => return Act::Run(ui.selected),
                 Outcome::Quit => return Act::Quit,
-                Outcome::Stay => {}
+                // Tombol biasa (bukan q/j/k/panah/Enter/Esc) = user mulai mengetik.
+                Outcome::Stay => {
+                    if is_typing(&key) {
+                        ui.focus = Focus::Input;
+                        if let KeyCode::Char(c) = key.code {
+                            ui.input.push(c);
+                        }
+                    }
+                }
             }
         }
         Focus::Input => match key.code {
@@ -202,43 +203,54 @@ pub fn select_action(
         return None;
     }
 
-    let mut ui = Ui::default();
-    let result = loop {
-        let (cols, rows) = match terminal::size() {
-            Ok(v) => v,
-            Err(_) => break None,
-        };
-        // Hanya item yang lolos filter yang digambar; palette = menu yang tersaring.
-        let shown: Vec<Item> = visible_indices(items, &ui.input)
-            .into_iter()
-            .map(|i| items[i])
-            .collect();
-        let screen = render(&shown, &ui, project, last, cols, rows);
-        if queue!(
-            out,
-            MoveTo(0, 0),
-            Clear(ClearType::FromCursorDown),
-            Print(screen)
-        )
-        .and_then(|_| out.flush())
-        .is_err()
-        {
-            break None;
-        }
-        match event::read() {
-            Ok(Event::Key(k)) => match handle_key(&mut ui, k, items) {
-                Act::Stay => {}
-                Act::Run(i) => break Some(i),
-                Act::Quit => break None,
-            },
-            Ok(_) => {}
-            Err(_) => break None,
-        }
-    };
+    let result = run_ui(&mut out, items, project, last);
 
     let _ = execute!(out, ResetColor, LeaveAlternateScreen, Show);
     let _ = terminal::disable_raw_mode();
     result
+}
+
+/// Item yang ikut digambar: menu penuh, atau hasil filter saat palette terbuka.
+fn view_items(items: &[Item], ui: &Ui) -> Vec<Item> {
+    visible_indices(items, &ui.input)
+        .into_iter()
+        .map(|i| items[i])
+        .collect()
+}
+
+/// Tulis satu frame ke layar. Dipisah agar bisa diuji tanpa TTY (mis. ke Vec<u8>).
+fn paint<W: Write>(out: &mut W, screen: &str) -> io::Result<()> {
+    queue!(
+        out,
+        MoveTo(0, 0),
+        Clear(ClearType::FromCursorDown),
+        Print(screen)
+    )?;
+    out.flush()
+}
+
+/// Loop interaksi: gambar -> baca tombol -> ubah fokus, sampai user menjalankan atau keluar.
+fn run_ui<W: Write>(
+    out: &mut W,
+    items: &[Item],
+    project: Option<&str>,
+    last: Option<&str>,
+) -> Option<usize> {
+    let mut ui = Ui::default();
+    loop {
+        let (cols, rows) = terminal::size().ok()?;
+        let screen = render(&view_items(items, &ui), &ui, project, last, cols, rows);
+        paint(out, &screen).ok()?;
+        match event::read() {
+            Ok(Event::Key(k)) => match handle_key(&mut ui, k, items) {
+                Act::Stay => {}
+                Act::Run(i) => return Some(i),
+                Act::Quit => return None,
+            },
+            Ok(_) => {}
+            Err(_) => return None,
+        }
+    }
 }
 
 fn render(
@@ -352,10 +364,7 @@ fn render(
     }
 
     lines.push(status_bar(cols, project, last));
-    while lines.len() < rows {
-        lines.push(blank_row(cols));
-    }
-    lines.truncate(rows);
+    debug_assert_eq!(lines.len(), rows, "tinggi layar harus pas {rows} baris");
     lines.join("\r\n")
 }
 
@@ -684,6 +693,89 @@ mod tests {
         let short = draw(&items, 0, None, None, 60, 11);
         assert!(!short.contains("Type a command..."));
         assert!(short.split("\r\n").last().unwrap().contains("autore v"));
+    }
+
+    #[test]
+    fn tombol_di_menu_geser_jalankan_dan_keluar() {
+        let items = sample();
+        let mut ui = Ui::default();
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Down), &items), Act::Stay);
+        assert_eq!(ui.selected, 1);
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Up), &items), Act::Stay);
+        assert_eq!(ui.selected, 0);
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Enter), &items), Act::Run(0));
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Char('q')), &items), Act::Quit);
+        assert_eq!(
+            handle_key(
+                &mut ui,
+                KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                &items
+            ),
+            Act::Quit
+        );
+        // Esc saat fokus di menu = keluar (perilaku lama, tidak berubah).
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Esc), &items), Act::Quit);
+    }
+
+    #[test]
+    fn tombol_asing_saat_input_dan_palette_diabaikan() {
+        let items = sample();
+        let mut ui = Ui {
+            selected: 0,
+            focus: Focus::Input,
+            input: "scan".into(),
+        };
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Up), &items), Act::Stay);
+        assert_eq!(ui.input, "scan");
+        // Palette: panah naik/turun menggerakkan sorotan, backspace menyaring ulang.
+        ui.focus = Focus::Palette;
+        ui.input = "a".into();
+        handle_key(&mut ui, tap(KeyCode::Down), &items);
+        assert_eq!(ui.selected, 1);
+        handle_key(&mut ui, tap(KeyCode::Up), &items);
+        assert_eq!(ui.selected, 0);
+        handle_key(&mut ui, tap(KeyCode::Backspace), &items);
+        assert_eq!(ui.input, "");
+        assert_eq!(ui.selected, 0);
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::F(5)), &items), Act::Stay);
+        // Filter kosong hasil ketikan yang tidak cocok: Enter tidak menjalankan apa pun.
+        ui.input = "zzz".into();
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Enter), &items), Act::Stay);
+    }
+
+    #[test]
+    fn palette_menggambar_mode_dan_menulis_frame_ke_penulis_apa_pun() {
+        let items = sample();
+        let ui = Ui {
+            selected: 0,
+            focus: Focus::Palette,
+            input: "hapus".into(),
+        };
+        let screen = render(&view_items(&items, &ui), &ui, Some("/tmp/p"), None, 100, 24);
+        assert!(screen.contains("[command palette]"), "mode palette harus tampil");
+        let baris_input = screen
+            .split("\r\n")
+            .find(|r| r.contains("hapus") && r.contains('>'))
+            .expect("teks ketikan ada di baris input");
+        assert!(baris_input.contains(CYAN), "border input menyala saat fokus");
+        // view_items menyaring sesuai ketikan, index tetap mengarah ke item asli.
+        let tampil = view_items(&items, &ui);
+        assert_eq!(tampil.len(), 1);
+        assert_eq!(tampil[0].label, "Hapus Project");
+        // paint() bisa dipakai tanpa TTY: hasilnya frame penuh + kode pindah kursor.
+        let mut buf: Vec<u8> = Vec::new();
+        assert!(paint(&mut buf, "halo").is_ok());
+        let keluaran = String::from_utf8_lossy(&buf).to_string();
+        assert!(keluaran.contains("halo"));
+        assert!(keluaran.contains("\x1b[1;1H"), "kursor harus balik ke kiri atas");
+    }
+
+    #[test]
+    fn run_ui_menyerah_rapi_tanpa_terminal() {
+        // Tanpa TTY (seperti saat `cargo test`), event::read/size gagal — harus keluar None, bukan panic.
+        let items = sample();
+        let mut buf: Vec<u8> = Vec::new();
+        assert_eq!(run_ui(&mut buf, &items, Some("/tmp/x"), None), None);
     }
 
     #[test]

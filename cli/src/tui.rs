@@ -44,6 +44,7 @@ pub fn select_action(
     }
 
     let mut selected = 0usize;
+    let max_index = items.len() - 1;
     let result = loop {
         let (cols, rows) = match terminal::size() {
             Ok(v) => v,
@@ -64,19 +65,13 @@ pub fn select_action(
         match event::read() {
             Ok(Event::Key(k)) => match k.code {
                 KeyCode::Up => selected = selected.saturating_sub(1),
-                KeyCode::Down => {
-                    if selected + 1 < items.len() {
-                        selected += 1;
-                    }
-                }
+                KeyCode::Down => selected = (selected + 1).min(max_index),
                 // Ctrl+J datang sebagai Char('j') ber-modifier CONTROL — jangan dianggap navigasi.
                 KeyCode::Char('k') if k.modifiers.is_empty() => {
                     selected = selected.saturating_sub(1)
                 }
                 KeyCode::Char('j') if k.modifiers.is_empty() => {
-                    if selected + 1 < items.len() {
-                        selected += 1;
-                    }
+                    selected = (selected + 1).min(max_index)
                 }
                 KeyCode::Char('q') if k.modifiers.is_empty() => break None,
                 KeyCode::Home => selected = 0,

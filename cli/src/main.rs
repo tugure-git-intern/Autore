@@ -204,6 +204,60 @@ pub fn delete_project_safely(
     Ok(moved_to)
 }
 
+/// Saat menu Scan atau Hook dipilih dari luar folder project, tampilkan daftar project yang tersedia
+/// agar user bisa memilih project mana yang ingin di-scan / dipasang Satpam Git.
+fn pick_interactive_target_project(
+    default_path: PathBuf,
+    prompt_title: &str,
+    active_project: &mut Option<PathBuf>,
+) -> Option<PathBuf> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| default_path.clone());
+    if active_project.is_some() || is_autore_project_dir(&cwd) {
+        return Some(cwd);
+    }
+    let candidates = discover_deletable_projects(&cwd);
+    if candidates.is_empty() {
+        return Some(cwd);
+    }
+    let mut labels: Vec<String> = candidates
+        .iter()
+        .map(|p| {
+            let name = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("project");
+            format!("• {name}  ({})", p.display())
+        })
+        .collect();
+    labels.push(format!("• Folder saat ini  ({})", cwd.display()));
+
+    let picked = Select::new(prompt_title, labels.clone())
+        .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+        .prompt()
+        .ok()?;
+    let idx = labels.iter().position(|l| l == &picked).unwrap_or(0);
+    if idx < candidates.len() {
+        let target = candidates[idx].clone();
+        let _ = std::env::set_current_dir(&target);
+        *active_project = Some(target.clone());
+        Some(target)
+    } else {
+        Some(cwd)
+    }
+}
+
+/// Tahan layar setelah aksi di menu selesai supaya hasil bacaan tidak langsung tertutup banner.
+fn prompt_after_action() -> bool {
+    println!();
+    let opts = vec!["• Kembali ke Menu Utama", "• Keluar dari Autore"];
+    matches!(
+        Select::new("Selanjutnya:", opts)
+            .with_help_message("Enter kembali ke menu • Esc keluar")
+            .prompt(),
+        Ok("• Kembali ke Menu Utama")
+    )
+}
+
 fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands> {
     print_ascii_banner();
     if let Some(dir) = active_project {
@@ -392,6 +446,9 @@ fn main() {
     let mut active_project: Option<PathBuf> = None;
     while let Some(command) = prompt_main_menu(active_project.as_deref()) {
         let _ = execute_command(command, true, &mut active_project);
+        if !prompt_after_action() {
+            break;
+        }
     }
 }
 
@@ -552,15 +609,27 @@ fn execute_command(
         }
 
         Commands::Scan { path, severity, no_docker, include_build_dirs, docker: _ } => {
+            let target_path = if interactive {
+                match pick_interactive_target_project(
+                    path,
+                    "Pilih project yang ingin di-scan:",
+                    active_project,
+                ) {
+                    Some(p) => p,
+                    None => return 0,
+                }
+            } else {
+                path
+            };
             clear_gate_reason();
             println!(
                 "{} Memindai keamanan kode di '{}'...",
                 "==>".cyan().bold(),
-                path.display()
+                target_path.display()
             );
 
             let scan_res = scanner::scan_directory_with(
-                &path,
+                &target_path,
                 &scanner::ScanOptions { skip_build_dirs: !include_build_dirs },
             );
             match scan_res {
@@ -612,7 +681,7 @@ fn execute_command(
                         .yellow()
                         .bold()
                 );
-            } else if let Err(e) = external::run_authoritative_scan(&path, &severity) {
+            } else if let Err(e) = external::run_authoritative_scan(&target_path, &severity) {
                 let (head, body) = e.split_once('\n').unwrap_or((&e, ""));
                 eprintln!("  {} {}", "✘".red().bold(), head);
                 if !body.trim().is_empty() {
@@ -673,37 +742,65 @@ fn execute_command(
         }
 
         Commands::Hook { action } => match action {
-            HookAction::Install { repo } => match hooks::install_pre_commit_hook(&repo) {
-                Ok(hook_path) => {
-                    println!(
-                        "{} Satpam Pintu 1 (pre-commit hook) aktif di: {}",
-                        "✔".green().bold(),
-                        hook_path.display()
-                    );
-                    println!(
-                        "  Setiap `git commit` kini otomatis diperiksa oleh `autore scan`!"
-                    );
-                    0
+            HookAction::Install { repo } => {
+                let target_repo = if interactive {
+                    match pick_interactive_target_project(
+                        repo,
+                        "Pilih project yang ingin dipasang Satpam Git:",
+                        active_project,
+                    ) {
+                        Some(p) => p,
+                        None => return 0,
+                    }
+                } else {
+                    repo
+                };
+                match hooks::install_pre_commit_hook(&target_repo) {
+                    Ok(hook_path) => {
+                        println!(
+                            "{} Satpam Pintu 1 (pre-commit hook) aktif di: {}",
+                            "✔".green().bold(),
+                            hook_path.display()
+                        );
+                        println!(
+                            "  Setiap `git commit` kini otomatis diperiksa oleh `autore scan`!"
+                        );
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        1
+                    }
                 }
-                Err(e) => {
-                    eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    1
+            }
+            HookAction::Uninstall { repo } => {
+                let target_repo = if interactive {
+                    match pick_interactive_target_project(
+                        repo,
+                        "Pilih project yang ingin dicopot Satpam Git-nya:",
+                        active_project,
+                    ) {
+                        Some(p) => p,
+                        None => return 0,
+                    }
+                } else {
+                    repo
+                };
+                match hooks::uninstall_pre_commit_hook(&target_repo) {
+                    Ok(true) => {
+                        println!("{} Pre-commit hook berhasil dicopot.", "✔".green().bold());
+                        0
+                    }
+                    Ok(false) => {
+                        println!("Info: Pre-commit hook belum terpasang.");
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        1
+                    }
                 }
-            },
-            HookAction::Uninstall { repo } => match hooks::uninstall_pre_commit_hook(&repo) {
-                Ok(true) => {
-                    println!("{} Pre-commit hook berhasil dicopot.", "✔".green().bold());
-                    0
-                }
-                Ok(false) => {
-                    println!("Info: Pre-commit hook belum terpasang.");
-                    0
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    1
-                }
-            },
+            }
             HookAction::Status { repo } => {
                 if hooks::is_hook_installed(&repo) {
                     println!(
@@ -730,7 +827,7 @@ fn execute_command(
             }
         }
 
-        Commands::Update => match updater::run_self_update() {
+        Commands::Update => match updater::run_self_update_interactive(interactive) {
             Ok(()) => 0,
             Err(e) => {
                 eprintln!("{} {e}", "ERROR:".red().bold());

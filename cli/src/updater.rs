@@ -220,7 +220,12 @@ fn compute_file_sha256(path: &Path) -> Result<String, String> {
     Err("Tidak dapat menghitung SHA-256 (sha256sum / certutil tidak tersedia)".to_string())
 }
 
+#[allow(dead_code)]
 pub fn run_self_update() -> Result<(), String> {
+    run_self_update_interactive(false)
+}
+
+pub fn run_self_update_interactive(interactive: bool) -> Result<(), String> {
     let exe_path = std::env::current_exe()
         .and_then(|p| p.canonicalize().or(Ok(p)))
         .map_err(|e| format!("Gagal mendeteksi lokasi binary autore: {e}"))?;
@@ -229,7 +234,7 @@ pub fn run_self_update() -> Result<(), String> {
         .unwrap_or_else(|_| "https://api.github.com".to_string());
     let dl_base = std::env::var("AUTORE_RELEASE_BASE")
         .unwrap_or_else(|_| format!("https://github.com/{repo}/releases/download"));
-    run_self_update_with(
+    run_self_update_with_mode(
         std::env::consts::OS,
         std::env::consts::ARCH,
         CURRENT_VERSION,
@@ -237,9 +242,11 @@ pub fn run_self_update() -> Result<(), String> {
         &repo,
         &api_base,
         &dl_base,
+        interactive,
     )
 }
 
+#[allow(dead_code)]
 pub fn run_self_update_with(
     os: &str,
     arch: &str,
@@ -248,6 +255,20 @@ pub fn run_self_update_with(
     repo: &str,
     api_base: &str,
     dl_base: &str,
+) -> Result<(), String> {
+    run_self_update_with_mode(os, arch, current_version, exe_path, repo, api_base, dl_base, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_self_update_with_mode(
+    os: &str,
+    arch: &str,
+    current_version: &str,
+    exe_path: &Path,
+    repo: &str,
+    api_base: &str,
+    dl_base: &str,
+    interactive: bool,
 ) -> Result<(), String> {
     let platform = resolve_platform_for(os, arch)?;
     cleanup_stale_old_binary(exe_path);
@@ -265,19 +286,63 @@ pub fn run_self_update_with(
     println!("{} Mengecek rilis stabil terbaru di GitHub ({repo})...", "==>".cyan().bold());
     let latest_tag = fetch_latest_tag(repo, api_base)?;
     let latest_clean = latest_tag.trim_start_matches('v');
+    let newer = is_newer_version(current_version, latest_clean)?;
 
-    if !is_newer_version(current_version, latest_clean)? {
+    if !newer {
         println!(
-            "{} Sudah versi stabil terbaru (v{current_version}). Tidak ada yang perlu di-update.",
+            "  {} Versi rilis GitHub: v{latest_clean} (sudah sama dengan versi terpasang v{current_version}).",
             "✔".green().bold()
         );
-        return Ok(());
+        if !interactive {
+            println!(
+                "{} Sudah versi stabil terbaru (v{current_version}). Tidak ada yang perlu di-update.",
+                "✔".green().bold()
+            );
+            return Ok(());
+        }
+        println!();
+        let opts = vec![
+            format!("• Kembali (tetap pakai v{current_version} saat ini)"),
+            format!("• Unduh & pasang ulang binary v{latest_clean} terbaru dari GitHub Releases"),
+        ];
+        match inquire::Select::new("Pilihan Update Autore:", opts)
+            .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+            .prompt()
+        {
+            Ok(c) if c.contains("Unduh & pasang ulang") => {
+                println!(
+                    "{} Mengunduh ulang & memverifikasi binary v{latest_clean}...",
+                    "==>".cyan().bold()
+                );
+            }
+            _ => {
+                println!("  {}", "ℹ Update dilewati — binary saat ini tetap dipakai.".yellow());
+                return Ok(());
+            }
+        }
+    } else {
+        println!(
+            "{} Versi baru tersedia: v{current_version} -> v{latest_clean}.",
+            "==>".cyan().bold()
+        );
+        if interactive {
+            let opts = vec![
+                format!("• Update sekarang ke v{latest_clean}"),
+                "• Batal".to_string(),
+            ];
+            match inquire::Select::new("Pilihan Update Autore:", opts)
+                .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+                .prompt()
+            {
+                Ok(c) if c.contains("Update sekarang") => {}
+                _ => {
+                    println!("  {}", "ℹ Update dibatalkan.".yellow());
+                    return Ok(());
+                }
+            }
+        }
+        println!("{} Mengunduh & memverifikasi v{latest_clean}...", "==>".cyan().bold());
     }
-
-    println!(
-        "{} Versi baru tersedia: v{current_version} -> v{latest_clean}. Mengunduh & memverifikasi...",
-        "==>".cyan().bold()
-    );
 
     let tmp_dir = std::env::temp_dir().join(format!("autore-update-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)

@@ -115,8 +115,13 @@ pub fn replace_binary_safely_for_os(
 ) -> Result<(), String> {
     let staged = staged_new_path(target_exe);
     fs::copy(downloaded_file, &staged).map_err(|e| {
+        let hint = if e.kind() == std::io::ErrorKind::PermissionDenied {
+            crate::elevation_hint(target_exe)
+        } else {
+            String::new()
+        };
         format!(
-            "Gagal menulis file baru '{}' (cek izin tulis folder): {e}",
+            "Gagal menulis file baru '{}' (cek izin tulis folder): {e}{hint}",
             staged.display()
         )
     })?;

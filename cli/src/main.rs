@@ -338,6 +338,18 @@ fn write_gate_reason(contents: &str) {
     let _ = std::fs::write(".security-gate-reason", contents);
 }
 
+/// Saran perintah saat binary Autore tidak bisa ditimpa (mis. terpasang di /usr/local/bin).
+pub(crate) fn elevation_hint(target_exe: &std::path::Path) -> String {
+    let shown = target_exe.display();
+    if shown.to_string().starts_with("/usr") || shown.to_string().starts_with("/opt") {
+        format!(
+            "\n  i Binary terpasang di folder sistem ({shown}). Jalankan sekali: sudo autore update\n  i Atau pasang versi user: install -m 0755 <autore-baru> ~/.local/bin/autore"
+        )
+    } else {
+        "\n  i Periksa izin tulis folder tersebut, lalu ulangi `autore update`.".to_string()
+    }
+}
+
 /// Port host bebas pertama mulai `start` — supaya alur 1-klik tidak bentrok port.
 fn pick_free_port(start: u16) -> u16 {
     (start..=start.saturating_add(40))

@@ -17,3 +17,6 @@ regex = "1.11"
 
 [dev-dependencies]
 tempfile = "3.13"
+
+[patch.crates-io]
+inquire = { path = "vendor/inquire-0.7.5" }

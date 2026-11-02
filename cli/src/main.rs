@@ -30,7 +30,8 @@ fn claude_render_config() -> RenderConfig<'static> {
     let orange = Color::Rgb { r: 217, g: 119, b: 87 };
     RenderConfig::default_colored()
         .with_prompt_prefix(Styled::new("●").with_fg(orange))
-        .with_highlighted_option_prefix(Styled::new("❯").with_fg(orange))
+        .with_highlighted_option_prefix(Styled::new("◉").with_fg(orange))
+        .with_unhighlighted_option_prefix(Styled::new("○").with_fg(Color::DarkGrey))
         .with_selected_option(Some(StyleSheet::new().with_fg(orange)))
         .with_answer(StyleSheet::new().with_fg(orange))
         .with_help_message(StyleSheet::new().with_fg(Color::DarkGrey))
@@ -226,10 +227,10 @@ fn pick_interactive_target_project(
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("project");
-            format!("• {name}  ({})", p.display())
+            format!("{name}  ({})", p.display())
         })
         .collect();
-    labels.push(format!("• Folder saat ini  ({})", cwd.display()));
+    labels.push(format!("Folder saat ini  ({})", cwd.display()));
 
     let picked = Select::new(prompt_title, labels.clone())
         .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
@@ -249,12 +250,12 @@ fn pick_interactive_target_project(
 /// Tahan layar setelah aksi di menu selesai supaya hasil bacaan tidak langsung tertutup banner.
 fn prompt_after_action() -> bool {
     println!();
-    let opts = vec!["• Kembali ke Menu Utama", "• Keluar dari Autore"];
+    let opts = vec!["Kembali ke Menu Utama", "Keluar dari Autore"];
     matches!(
         Select::new("Selanjutnya:", opts)
             .with_help_message("Enter kembali ke menu • Esc keluar")
             .prompt(),
-        Ok("• Kembali ke Menu Utama")
+        Ok("Kembali ke Menu Utama")
     )
 }
 
@@ -268,13 +269,13 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
         );
     }
     let items = vec![
-        "• Buat Project Baru (Dockerfile & Jenkinsfile)",
-        "• Hapus Project",
-        "• Scan Keamanan Kode (Static + Gitleaks + Trivy)",
-        "• Pasang Satpam Git (Pre-Commit Hook)",
-        "• Copot Satpam Git (Uninstall Hook)",
-        "• Cek Kesehatan Sistem (Doctor)",
-        "• Update Autore",
+        "Buat Project Baru (Dockerfile & Jenkinsfile)",
+        "Hapus Project",
+        "Scan Keamanan Kode (Static + Gitleaks + Trivy)",
+        "Pasang Satpam Git (Pre-Commit Hook)",
+        "Copot Satpam Git (Uninstall Hook)",
+        "Cek Kesehatan Sistem (Doctor)",
+        "Update Autore",
     ];
     let choice = Select::new("Pilih:", items)
         .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
@@ -282,7 +283,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
         .ok()?;
 
     Some(match choice {
-        "• Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
+        "Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
             app_name: None,
             stack: None,
             app_port: None,
@@ -290,21 +291,21 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
             output_dir: PathBuf::from("."),
             force: false,
         },
-        "• Hapus Project" => Commands::DeleteProject,
-        "• Scan Keamanan Kode (Static + Gitleaks + Trivy)" => Commands::Scan {
+        "Hapus Project" => Commands::DeleteProject,
+        "Scan Keamanan Kode (Static + Gitleaks + Trivy)" => Commands::Scan {
             path: PathBuf::from("."),
             severity: "HIGH,CRITICAL".to_string(),
             no_docker: false,
             include_build_dirs: false,
             docker: false,
         },
-        "• Pasang Satpam Git (Pre-Commit Hook)" => Commands::Hook {
+        "Pasang Satpam Git (Pre-Commit Hook)" => Commands::Hook {
             action: HookAction::Install { repo: PathBuf::from(".") },
         },
-        "• Copot Satpam Git (Uninstall Hook)" => Commands::Hook {
+        "Copot Satpam Git (Uninstall Hook)" => Commands::Hook {
             action: HookAction::Uninstall { repo: PathBuf::from(".") },
         },
-        "• Update Autore" => Commands::Update,
+        "Update Autore" => Commands::Update,
         _ => Commands::Doctor,
     })
 }
@@ -853,9 +854,9 @@ fn execute_command(
                         .and_then(|n| n.to_str())
                         .unwrap_or("project");
                     if active_project.as_deref() == Some(p.as_path()) || p == &cwd {
-                        format!("• {name}  ({}, aktif)", p.display())
+                        format!("{name}  ({}, aktif)", p.display())
                     } else {
-                        format!("• {name}  ({})", p.display())
+                        format!("{name}  ({})", p.display())
                     }
                 })
                 .collect();

@@ -103,6 +103,11 @@ log "Digest terverifikasi secara kriptografis: ${VERIFIED_REF}"
 # 6. Unggah Artifact Raw (Binary musl, SBOM, SHA256SUMS) ke Nexus Raw Repo
 # ---------------------------------------------------------------------------
 if [[ -d "${DIST_DIR}" ]]; then
+  if [[ -f "${WORKSPACE}/cli/Cargo.toml" && -x "${WORKSPACE}/scripts/publish-release.sh" ]]; then
+    log "Mempublikasikan binary Linux & Windows terbaru ke GitHub Releases..."
+    "${WORKSPACE}/scripts/publish-release.sh" "${DIST_DIR}" || true
+  fi
+
   log "Mengunggah release artifacts dari ${DIST_DIR} ke Nexus Raw Repository..."
   RELEASE_PATH="build-${BUILD_NUMBER}-commit-${GIT_COMMIT}"
   

@@ -1,0 +1,96 @@
+# docs/github-actions-ci-release.yml
+# Salin ke .github/workflows/ci-release.yml bila Personal Access Token GitHub
+# sudah diberi centang scope `workflow`.
+name: Autore CI & Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-release:
+    name: Gate, Cross-Build (Linux musl & Windows) & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install musl & MinGW cross-compilers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends musl-tools gcc-mingw-w64-x86-64
+
+      - name: Install Rust stable toolchain & targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: x86_64-unknown-linux-musl,x86_64-pc-windows-gnu
+
+      - name: Rust cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "cli -> target"
+
+      - name: Extract release version from cli/Cargo.toml
+        id: ver
+        run: |
+          VER="$(grep -E '^version\s*=\s*"' cli/Cargo.toml | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Clippy & Unit/Integration Tests
+        working-directory: cli
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
+
+      - name: Build static Linux x86_64 (musl) & Windows x86_64 (.exe)
+        working-directory: cli
+        env:
+          AUTORE_RELEASE_VERSION: ${{ steps.ver.outputs.tag }}
+        run: |
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          cargo build --release --locked --target x86_64-pc-windows-gnu
+          cp target/x86_64-unknown-linux-musl/release/autore ../autore-linux-x86_64-musl
+          cp target/x86_64-pc-windows-gnu/release/autore.exe ../autore-windows-x86_64.exe
+          chmod +x ../autore-linux-x86_64-musl
+
+      - name: Run Autore Static Security Gate & Generate SHA256SUMS
+        run: |
+          ./autore-linux-x86_64-musl --version
+          ./autore-linux-x86_64-musl scan --no-docker --path .
+          sha256sum autore-linux-x86_64-musl autore-windows-x86_64.exe > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish binaries & SHA256SUMS to GitHub Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "${TAG}" "${GITHUB_SHA}"
+          git push origin -f "${TAG}"
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release create "${TAG}" \
+              autore-linux-x86_64-musl \
+              autore-windows-x86_64.exe \
+              SHA256SUMS \
+              --title "Autore CLI ${TAG}" \
+              --notes "Rilis otomatis ${TAG} (Linux x86_64 static musl & Windows x86_64 + SHA256SUMS)."
+          else
+            gh release upload "${TAG}" \
+              autore-linux-x86_64-musl \
+              autore-windows-x86_64.exe \
+              SHA256SUMS \
+              --clobber
+          fi

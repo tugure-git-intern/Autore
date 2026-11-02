@@ -21,8 +21,8 @@ const REV: &str = "\x1b[7m";
 const LEFT_W: usize = 49;
 /// Tinggi minimum layar supaya banner blok ikut tampil (banner 8 + panel + kotak perintah + status).
 const BANNER_MIN_ROWS: usize = 20;
-/// Tinggi minimum supaya kotak perintah (3 baris) ikut ditampilkan.
-const CMD_BLOCK_MIN: usize = 14;
+/// Tinggi minimum supaya baris bantuan + baris input perintah (total 4 baris) ikut tampil.
+const COMMAND_BLOCK_MIN: usize = 12;
 
 /// Banner blok "AUTORE" — gradasi oranye terakota (#E18A68 -> #B95F42).
 /// Dipakai TUI (tengah atas) dan mode teks (`print_ascii_banner`).
@@ -35,6 +35,7 @@ pub(crate) const BANNER: [(&str, (u8, u8, u8)); 6] = [
     (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (185, 95, 66)),
 ];
 
+#[derive(Clone, Copy)]
 pub struct Item {
     pub label: &'static str,
     pub desc: &'static str,
@@ -50,6 +51,33 @@ enum Outcome {
     Stay,
 }
 
+/// Fokus keyboard: menu kiri, baris input perintah, atau command palette (Ctrl+K).
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+enum Focus {
+    #[default]
+    Menu,
+    Input,
+    Palette,
+}
+
+/// Fokus + teks input. `selected` selalu index ke daftar yang sedang tampil
+/// (menu penuh, atau hasil filter saat palette terbuka).
+#[derive(Debug, Default)]
+struct Ui {
+    selected: usize,
+    focus: Focus,
+    input: String,
+}
+
+/// Hasil satu tombol untuk seluruh fokus. `Run` memakai index item asli (bukan index tampilan).
+#[derive(Debug, PartialEq)]
+enum Act {
+    Stay,
+    Run(usize),
+    Quit,
+}
+
+/// Tombol yang dicatat input saat fokus di menu/input/palette.
 fn outcome_for(key: KeyEvent, selected: usize, max_index: usize) -> Outcome {
     match key.code {
         KeyCode::Up => Outcome::Move(selected.saturating_sub(1)),
@@ -64,6 +92,97 @@ fn outcome_for(key: KeyEvent, selected: usize, max_index: usize) -> Outcome {
         KeyCode::Char('k') if key.modifiers.is_empty() => Outcome::Move(selected.saturating_sub(1)),
         KeyCode::Char('j') if key.modifiers.is_empty() => Outcome::Move((selected + 1).min(max_index)),
         _ => Outcome::Stay,
+    }
+}
+
+/// Index item yang lolos filter (cocok sebagian, abaikan besar-kecil huruf).
+/// Filter kosong = semua item, jadi menu biasa dan command palette pakai jalur yang sama.
+fn visible_indices(items: &[Item], query: &str) -> Vec<usize> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return (0..items.len()).collect();
+    }
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, it)| it.label.to_lowercase().contains(&q))
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Huruf biasa saat fokus di menu: pindah fokus ke baris input dan simpan hurufnya.
+fn is_typing(key: &KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Char(c) if key.modifiers.is_empty() && !c.is_control())
+        || key.modifiers.contains(KeyModifiers::ALT)
+}
+
+/// Satu tombol -> satu aksi. Tidak menyentuh terminal, jadi bisa diuji langsung.
+fn handle_key(ui: &mut Ui, key: KeyEvent, items: &[Item]) -> Act {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    if ctrl && matches!(key.code, KeyCode::Char('k')) {
+        // Ctrl+K: buka command palette, isinya perintah yang sama dengan menu kiri.
+        ui.focus = Focus::Palette;
+        ui.selected = 0;
+        return Act::Stay;
+    }
+
+    match ui.focus {
+        Focus::Menu => {
+            if is_typing(&key) {
+                ui.focus = Focus::Input;
+                if let KeyCode::Char(c) = key.code {
+                    ui.input.push(c);
+                }
+                return Act::Stay;
+            }
+            match outcome_for(key, ui.selected, items.len().saturating_sub(1)) {
+                Outcome::Move(i) => ui.selected = i,
+                Outcome::Run => return Act::Run(ui.selected),
+                Outcome::Quit => return Act::Quit,
+                Outcome::Stay => {}
+            }
+        }
+        Focus::Input => match key.code {
+            KeyCode::Esc => ui.focus = Focus::Menu,
+            KeyCode::Backspace => {
+                ui.input.pop();
+            }
+            KeyCode::Enter => return run_from_input(ui, items),
+            KeyCode::Char(c) if key.modifiers.is_empty() && !c.is_control() => ui.input.push(c),
+            _ => {}
+        },
+        // Palette: ketikan menyaring daftar, sama persis dengan menu kiri saat filter kosong.
+        Focus::Palette => match key.code {
+            KeyCode::Esc => ui.focus = Focus::Menu,
+            KeyCode::Backspace => {
+                ui.input.pop();
+                ui.selected = 0;
+            }
+            KeyCode::Char(c) if key.modifiers.is_empty() && !c.is_control() => {
+                ui.input.push(c);
+                ui.selected = 0;
+            }
+            KeyCode::Up => ui.selected = ui.selected.saturating_sub(1),
+            KeyCode::Down => ui.selected = ui.selected.saturating_add(1),
+            KeyCode::Enter => {
+                let visible = visible_indices(items, &ui.input);
+                if let Some(&idx) = visible.get(ui.selected) {
+                    return Act::Run(idx);
+                }
+            }
+            _ => {}
+        },
+    }
+    let visible = visible_indices(items, &ui.input);
+    ui.selected = ui.selected.min(visible.len().saturating_sub(1));
+    Act::Stay
+}
+
+/// Enter di baris input: jalankan perintah yang cocok dengan yang diketik.
+fn run_from_input(ui: &mut Ui, items: &[Item]) -> Act {
+    match visible_indices(items, &ui.input).first() {
+        Some(&idx) => Act::Run(idx),
+        None => Act::Stay,
     }
 }
 
@@ -83,14 +202,18 @@ pub fn select_action(
         return None;
     }
 
-    let mut selected = 0usize;
-    let max_index = items.len() - 1;
+    let mut ui = Ui::default();
     let result = loop {
         let (cols, rows) = match terminal::size() {
             Ok(v) => v,
             Err(_) => break None,
         };
-        let screen = draw(items, selected, project, last, cols, rows);
+        // Hanya item yang lolos filter yang digambar; palette = menu yang tersaring.
+        let shown: Vec<Item> = visible_indices(items, &ui.input)
+            .into_iter()
+            .map(|i| items[i])
+            .collect();
+        let screen = render(&shown, &ui, project, last, cols, rows);
         if queue!(
             out,
             MoveTo(0, 0),
@@ -103,11 +226,10 @@ pub fn select_action(
             break None;
         }
         match event::read() {
-            Ok(Event::Key(k)) => match outcome_for(k, selected, max_index) {
-                Outcome::Move(i) => selected = i,
-                Outcome::Run => break Some(selected),
-                Outcome::Quit => break None,
-                Outcome::Stay => {}
+            Ok(Event::Key(k)) => match handle_key(&mut ui, k, items) {
+                Act::Stay => {}
+                Act::Run(i) => break Some(i),
+                Act::Quit => break None,
             },
             Ok(_) => {}
             Err(_) => break None,
@@ -119,14 +241,15 @@ pub fn select_action(
     result
 }
 
-fn draw(
+fn render(
     items: &[Item],
-    selected: usize,
+    ui: &Ui,
     project: Option<&str>,
     last: Option<&str>,
     cols: u16,
     rows: u16,
 ) -> String {
+    let selected = ui.selected.min(items.len().saturating_sub(1));
     let cols = (cols as usize).max(20);
     let rows = (rows as usize).max(6);
     let left_w = LEFT_W.min(cols.saturating_sub(22)).max(12);
@@ -151,11 +274,14 @@ fn draw(
         lines.push(blank_row(cols));
     }
 
-    // Sisa tinggi dibagi: panel menu/penjelasan, kotak perintah, baris status.
-    let cmd_block = if rows >= CMD_BLOCK_MIN { 3 } else { 0 };
+    // Sisa tinggi dibagi: panel menu/penjelasan, baris bantuan + input, baris status.
+    let cmd_block = if rows >= COMMAND_BLOCK_MIN { 4 } else { 0 };
     let avail = rows.saturating_sub(lines.len() + cmd_block + 1);
     let body_h = avail.saturating_sub(2);
-    let detail: Vec<String> = detail_lines(&items[selected], right_w.saturating_sub(2));
+    let detail: Vec<String> = match items.get(selected) {
+        Some(it) => detail_lines(it, right_w.saturating_sub(2)),
+        None => Vec::new(),
+    };
 
     // Kepala panel: ┌──┬──┐
     lines.push(format!(
@@ -167,6 +293,9 @@ fn draw(
     for i in 0..body_h {
         let label = match items.get(i) {
             Some(it) => format!("{} {}", if i == selected { "▸" } else { " " }, it.label),
+            None if i == 0 && items.is_empty() => {
+                format!("  {DIM}(tidak ada perintah cocok){RESET}")
+            }
             None => String::new(),
         };
         let left_cell = if i == selected {
@@ -185,15 +314,41 @@ fn draw(
         "─".repeat(right_w + 2)
     ));
 
-    // Kotak perintah: satu baris panduan, seperti prompt input di aplikasi lain.
-    if cmd_block == 3 {
+    // Baris bantuan (tetap) + baris input perintah, tepat di atas baris status.
+    if cmd_block == 4 {
         let inner = cols.saturating_sub(2);
-        let hint = format!(
-            "{CYAN}>{RESET} {DIM}↑/↓ geser  •  Enter jalankan  •  q keluar{RESET}"
-        );
-        lines.push(format!("┌{}┐", "─".repeat(inner)));
-        lines.push(format!("│{}│", pad_plain(&hint, inner)));
-        lines.push(format!("└{}┘", "─".repeat(inner)));
+        let palette = if ui.focus == Focus::Palette {
+            format!("{CYAN}[command palette]{RESET}  ")
+        } else {
+            String::new()
+        };
+        lines.push(pad_plain(
+            &format!("  {palette}{DIM}↑/↓ geser  •  Enter jalankan  •  q keluar{RESET}"),
+            cols,
+        ));
+
+        let border = if ui.focus == Focus::Menu { "" } else { CYAN };
+        if ui.input.is_empty() {
+            lines.push(format!(
+                "{border}┌{}┐{RESET}",
+                "─".repeat(inner)
+            ));
+            lines.push(format!(
+                "{border}│{RESET}{}│{RESET}",
+                pad_plain(
+                    &format!("{CYAN}>{RESET} {DIM}Type a command... (Ctrl+K for menu){RESET}"),
+                    inner
+                )
+            ));
+        } else {
+            let cursor = if ui.focus == Focus::Menu { "" } else { "\x1b[7m \x1b[0m" };
+            lines.push(format!("{border}┌{}┐{RESET}", "─".repeat(inner)));
+            lines.push(format!(
+                "{border}│{RESET}{}│{RESET}",
+                pad_plain(&format!("{CYAN}>{RESET} {}{cursor}", ui.input), inner)
+            ));
+        }
+        lines.push(format!("{border}└{}┘{RESET}", "─".repeat(inner)));
     }
 
     lines.push(status_bar(cols, project, last));
@@ -331,6 +486,23 @@ fn pad_plain(s: &str, w: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Gambar layar lewat jalur menu biasa (fokus di menu kiri, input kosong).
+    fn draw(
+        items: &[Item],
+        selected: usize,
+        project: Option<&str>,
+        last: Option<&str>,
+        cols: u16,
+        rows: u16,
+    ) -> String {
+        let ui = Ui {
+            selected,
+            focus: Focus::Menu,
+            input: String::new(),
+        };
+        render(items, &ui, project, last, cols, rows)
+    }
 
     fn sample() -> Vec<Item> {
         vec![
@@ -507,6 +679,100 @@ mod tests {
         assert_eq!(screen.split("\r\n").count(), 6);
         for line in screen.split("\r\n") {
             assert_eq!(visible_len(line), 24);
+        }
+        // Layar pendek: baris bantuan + input dilewati, status tetap baris terakhir.
+        let short = draw(&items, 0, None, None, 60, 11);
+        assert!(!short.contains("Type a command..."));
+        assert!(short.split("\r\n").last().unwrap().contains("autore v"));
+    }
+
+    #[test]
+    fn baris_input_tampil_di_atas_status_dan_placeholder_muncul() {
+        let ui = Ui::default();
+        let screen = render(&sample(), &ui, None, None, 100, 24);
+        let rows: Vec<&str> = screen.split("\r\n").collect();
+        let input_row = rows
+            .iter()
+            .position(|r| r.contains("Type a command... (Ctrl+K for menu)"))
+            .expect("baris input perintah harus ada");
+        let help_row = rows
+            .iter()
+            .position(|r| r.contains("Enter jalankan"))
+            .expect("baris bantuan harus ada");
+        assert_eq!(help_row, input_row - 2, "bantuan tepat di atas kotak input");
+        assert!(rows[input_row].contains('>'), "harus diawali '>'");
+        // Kotak input menempel di atas status bar; status bar tetap baris terakhir.
+        assert_eq!(input_row + 2, rows.len() - 1, "tidak ada celah sebelum status bar");
+        assert!(rows.last().unwrap().contains("autore v"));
+        for row in &rows {
+            assert_eq!(visible_len(row), 100);
+        }
+        // Fokus di menu: border kotak input tidak berwarna.
+        assert!(!rows[input_row - 1].contains(CYAN));
+    }
+
+    #[test]
+    fn mengetik_memindahkan_fokus_ke_baris_input_dan_esc_kembali_ke_menu() {
+        let items = sample();
+        let mut ui = Ui::default();
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Char('s')), &items), Act::Stay);
+        assert_eq!(ui.focus, Focus::Input);
+        assert_eq!(ui.input, "s");
+        for c in "can".chars() {
+            handle_key(&mut ui, tap(KeyCode::Char(c)), &items);
+        }
+        assert_eq!(ui.input, "scan");
+        // Esc mengembalikan fokus ke menu, teks tetap ada.
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Esc), &items), Act::Stay);
+        assert_eq!(ui.focus, Focus::Menu);
+        assert_eq!(ui.input, "scan");
+        // Backspace hanya jalan saat input fokus.
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Backspace), &items), Act::Stay);
+        assert_eq!(ui.input, "scan");
+        ui.focus = Focus::Input;
+        handle_key(&mut ui, tap(KeyCode::Backspace), &items);
+        assert_eq!(ui.input, "sca");
+    }
+
+    #[test]
+    fn ctrl_k_buka_palette_yang_menyaring_perintah_menu() {
+        let items = sample();
+        let mut ui = Ui::default();
+        let ctrl_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL);
+        assert_eq!(handle_key(&mut ui, ctrl_k, &items), Act::Stay);
+        assert_eq!(ui.focus, Focus::Palette);
+        // Filter kosong = semua perintah menu kiri.
+        assert_eq!(visible_indices(&items, ""), vec![0, 1]);
+        // Ketik "hapus" -> hanya item "Hapus Project" yang lolos, Enter menjalankan index asli 1.
+        for c in "hapus".chars() {
+            handle_key(&mut ui, tap(KeyCode::Char(c)), &items);
+        }
+        assert_eq!(visible_indices(&items, &ui.input), vec![1]);
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Enter), &items), Act::Run(1));
+        // Esc dari palette juga kembali ke menu, bukan keluar.
+        let mut ui2 = Ui::default();
+        handle_key(&mut ui2, ctrl_k, &items);
+        assert_eq!(handle_key(&mut ui2, tap(KeyCode::Esc), &items), Act::Stay);
+        assert_eq!(ui2.focus, Focus::Menu);
+    }
+
+    #[test]
+    fn enter_di_input_menjalankan_perintah_yang_cocok() {
+        let items = sample();
+        let mut ui = Ui {
+            selected: 0,
+            focus: Focus::Input,
+            input: "mulai".into(),
+        };
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Enter), &items), Act::Run(0));
+        // Kata yang tidak cocok: tidak menjalankan apa pun.
+        ui.input = "zzz".into();
+        assert_eq!(handle_key(&mut ui, tap(KeyCode::Enter), &items), Act::Stay);
+        // Palette tanpa hasil: layar tetap penuh lebar & tidak panic.
+        let screen = render(&[], &ui, None, None, 80, 24);
+        assert!(screen.contains("(tidak ada perintah cocok)"));
+        for row in screen.split("\r\n") {
+            assert_eq!(visible_len(row), 80);
         }
     }
 }

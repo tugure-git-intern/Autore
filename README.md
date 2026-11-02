@@ -66,15 +66,17 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
 │   Update Autore                                 │ sekali, lalu disimpan).                        │
 │                                                 │                                                │
 └─────────────────────────────────────────────────┴────────────────────────────────────────────────┘
+  ↑/↓ geser  •  Enter jalankan  •  q keluar
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│> ↑/↓ geser  •  Enter jalankan  •  q keluar                                                       │
+│> Type a command... (Ctrl+K for menu)                                                             │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-(belum ada project)              siap                             autore v0.5.1
+(belum ada project)              siap                             autore v0.5.2
 ```
 
 Banner **AUTORE** (FIGlet blok, gradasi oranye terakota) tampil di tengah atas. Panel kiri = menu,
-panel kanan = penjelasan item yang sedang disorot, kotak perintah = tombol pintas, bar bawah =
-3 segmen: lokasi project, status aksi terakhir (hijau kalau sukses, merah kalau gagal), versi.
+panel kanan = penjelasan item yang sedang disorot, baris bantuan = tombol pintas, baris input
+perintah (`>` + placeholder) = tempat mengetik, bar bawah = 3 segmen rapat: lokasi project (biru),
+status aksi terakhir (hijau kalau siap/sukses, merah kalau gagal), versi yang sedang jalan (putih).
 Kalau layar terlalu pendek, banner dan kotak perintah otomatis disembunyikan supaya menu tetap utuh.
 Saat sebuah aksi berjalan, Autore keluar sementara dari layar penuh
 supaya pertanyaan interaktif (nama project, token, password) tampil normal; setelah selesai
@@ -179,7 +181,7 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 
 | Perintah | Deskripsi | Mode Operasi |
 | :--- | :--- | :--- |
-| `autore` *(tanpa argumen)* | Membuka **TUI layar penuh**: panel menu (↑/↓, Enter, q), panel penjelasan item, dan bar status aksi terakhir. Otomatis jatuh ke menu teks kalau output bukan terminal. | Interactive TUI |
+| `autore` *(tanpa argumen)* | Membuka **TUI layar penuh**: panel menu (↑/↓, Enter, q), panel penjelasan item, baris input perintah (`>` + placeholder, Ctrl+K buka command palette berisi perintah yang sama dengan menu, Esc balik ke menu), dan bar status 3 segmen. Otomatis jatuh ke menu teks kalau output bukan terminal. | Interactive TUI |
 | `autore quick-start` | Alur 1-klik: buat file pipeline → buat repo GitHub + push → daftar ke Jenkins → trigger build. Tanya kredensial sekali, simpan, lalu `--path` bisa diarahkan ke mana saja (default: nama folder saat ini). | Interaktif / Non-interaktif (`--app-name`, `--stack`, `--app-port`, `--deploy-port`) |
 | `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go (`--deploy-port` untuk isolasi port host multi-project, `--force` untuk menimpa). | Interaktif / Non-interaktif |
 | `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek, serta membersihkan `.security-gate-reason` lama saat lulus. | Authoritative (Full) / `--no-docker` (Pre-commit) |

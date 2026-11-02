@@ -267,12 +267,17 @@ fn prompt_after_action() -> bool {
 }
 
 // ── Jalur prompt interaktif ──────────────────────────────────────────────────
-// Layar interaktif -> kotak tanya TUI, jadi user tidak keluar dari tampilan TUI.
-// Output dipipe (skrip/CI) -> `inquire` seperti semula.
+// Sesi TUI hidup -> pertanyaan muncul di baris input bawah, user tidak keluar layar.
+// Tanpa sesi (output dipipe, perintah `autore <cmd>` satu kali) -> `inquire` seperti semula.
 // ponytail: satu tempat; begitu semua prompt pindah TUI, hapus cabang `inquire`-nya.
 
+/// Ada sesi TUI yang bisa menjawab pertanyaan? (kalau tidak: `inquire` biasa)
+fn tui_hidup() -> bool {
+    tui::hub_active()
+}
+
 fn ui_ask_text(label: &str, default: &str) -> Option<String> {
-    if std::io::stdout().is_terminal() {
+    if tui_hidup() {
         tui::ask_text(label, default)
     } else {
         Text::new(label).with_default(default).prompt().ok()
@@ -280,7 +285,7 @@ fn ui_ask_text(label: &str, default: &str) -> Option<String> {
 }
 
 fn ui_ask_secret(label: &str) -> Option<String> {
-    if std::io::stdout().is_terminal() {
+    if tui_hidup() {
         tui::ask_secret(label)
     } else {
         Password::new(label)
@@ -293,8 +298,8 @@ fn ui_ask_secret(label: &str) -> Option<String> {
 
 /// Pilih satu dari `options`; hasil = index. `None` = batal.
 fn ui_ask_choose(label: &str, options: &[String]) -> Option<usize> {
-    if std::io::stdout().is_terminal() {
-        tui::ask_choose(label, options)
+    if tui_hidup() {
+        tui::ask_choice(label, options)
     } else {
         let picked = Select::new(label, options.to_vec()).prompt().ok()?;
         options.iter().position(|o| *o == picked)
@@ -302,8 +307,8 @@ fn ui_ask_choose(label: &str, options: &[String]) -> Option<usize> {
 }
 
 fn ui_ask_confirm(label: &str, default_ya: bool) -> Option<bool> {
-    if std::io::stdout().is_terminal() {
-        tui::ask_confirm(label, default_ya)
+    if tui_hidup() {
+        tui::ask_yes_no(label, default_ya)
     } else {
         Confirm::new(label).with_default(default_ya).prompt().ok()
     }
@@ -311,7 +316,7 @@ fn ui_ask_confirm(label: &str, default_ya: bool) -> Option<bool> {
 
 /// Angka (port) lewat kotak teks TUI; salah ketik -> tanya ulang.
 fn ui_ask_u16(label: &str, default: u16) -> Option<u16> {
-    if !std::io::stdout().is_terminal() {
+    if !tui_hidup() {
         return CustomType::<u16>::new(label)
             .with_default(default)
             .prompt()
@@ -445,34 +450,33 @@ fn note_for(index: usize, code: i32) -> String {
     }
 }
 
-/// Menu utama: TUI layar penuh kalau terminal interaktif, daftar teks kalau bukan
-/// (mis. output dipipe ke file). Mengembalikan index menu + perintah yang dipilih.
+/// Label folder project aktif untuk segmen kiri baris status.
+fn project_label(active: Option<&std::path::Path>) -> Option<String> {
+    active.map(|p| p.display().to_string())
+}
+
+/// Menu utama mode teks — dipakai kalau output dipipe atau TUI tak tersedia.
 fn prompt_main_menu(
     active_project: Option<&std::path::Path>,
     last_note: Option<&str>,
 ) -> Option<(usize, Commands)> {
-    let project_label = active_project.map(|p| p.display().to_string());
-
-    let index = if std::io::stdout().is_terminal() {
-        tui::select_action(MENU, project_label.as_deref(), last_note)?
-    } else {
-        print_ascii_banner();
-        if let Some(dir) = active_project {
-            println!(
-                " {} Folder project aktif: {}\n",
-                "●".cyan().bold(),
-                dir.display().to_string().bold()
-            );
-        }
-        let labels: Vec<&str> = MENU.iter().map(|i| i.label).collect();
-        let picked = Select::new("Pilih:", labels)
-            .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
-            .prompt()
-            .ok()?;
-        label_index(picked)?
-    };
-
-    Some((index, commands_for(index)))
+    print_ascii_banner();
+    if let Some(dir) = active_project {
+        println!(
+            " {} Folder project aktif: {}\n",
+            "●".cyan().bold(),
+            dir.display().to_string().bold()
+        );
+    }
+    if let Some(note) = last_note {
+        println!("  {note}\n");
+    }
+    let labels: Vec<&str> = MENU.iter().map(|i| i.label).collect();
+    let picked = Select::new("Pilih:", labels)
+        .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
+        .prompt()
+        .ok()?;
+    Some((label_index(picked)?, commands_for(label_index(picked)?)))
 }
 
 fn clear_gate_reason() {
@@ -718,10 +722,46 @@ fn main() {
 
     let mut active_project: Option<PathBuf> = None;
     let mut last_note: Option<String> = None;
-    while let Some((index, command)) = prompt_main_menu(active_project.as_deref(), last_note.as_deref())
-    {
-        let code = execute_command(command, true, &mut active_project);
+
+    // Terminal interaktif -> satu sesi TUI untuk seluruh alur: menu, log proses, dan
+    // pertanyaan semua di layar yang sama. Output dipipe -> daftar teks seperti semula.
+    if !std::io::stdout().is_terminal() {
+        text_menu_loop(&mut active_project, &mut last_note);
+        return;
+    }
+    let Some(mut sesi) = tui::Session::start(MENU, project_label(active_project.as_deref())) else {
+        text_menu_loop(&mut active_project, &mut last_note);
+        return;
+    };
+
+    // Folder project aktif dipakai bareng thread pekerja, jadi dibagi lewat Arc<Mutex>.
+    let proyek = std::sync::Arc::new(std::sync::Mutex::new(active_project.clone()));
+    while let Some(index) = sesi.pick() {
+        if let Some(note) = last_note.take() {
+            sesi.set_status(note);
+        }
+        let command = commands_for(index);
+        let label = MENU[index].label;
+        let proyek_thread = std::sync::Arc::clone(&proyek);
+        let code = sesi.run(label, move || {
+            let mut aktif = proyek_thread.lock().unwrap_or_else(|e| e.into_inner());
+            execute_command(command, true, &mut aktif)
+        });
         last_note = Some(note_for(index, code));
+        sesi.set_status(note_for(index, code));
+        let kini = proyek.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        sesi.set_project(project_label(kini.as_deref()));
+    }
+    sesi.close();
+}
+
+/// Menu utama mode teks sampai user keluar (dipakai kalau TUI tidak bisa dipakai).
+fn text_menu_loop(active_project: &mut Option<PathBuf>, last_note: &mut Option<String>) {
+    while let Some((index, command)) =
+        prompt_main_menu(active_project.as_deref(), last_note.as_deref())
+    {
+        let code = execute_command(command, true, active_project);
+        *last_note = Some(note_for(index, code));
         if !prompt_after_action() {
             break;
         }
@@ -1102,6 +1142,15 @@ fn execute_command(
 
         Commands::Update => match updater::run_self_update() {
             Ok(Some(exe_path)) => {
+                // Di sesi TUI jangan exit dari thread pekerja: terminal belum dipulihkan.
+                // ponytail: belum restart otomatis; tambah kalau sesi bisa di-close dari sini.
+                if tui_hidup() {
+                    println!(
+                        "  {} Update terpasang. Tekan q lalu jalankan `autore` lagi.",
+                        "↻".cyan().bold()
+                    );
+                    return 0;
+                }
                 if interactive {
                     println!(
                         "  {} Memuat ulang Autore ke versi terbaru...",

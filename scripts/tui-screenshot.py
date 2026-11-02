@@ -20,11 +20,14 @@ BIN = "/home/mectov/Autore/cli/target/release/autore"
 SCRATCH = "/home/mectov/.hermes/cache/scratch"
 
 
-def ambil(keys: list, cols: int = 100, rows: int = 32, tunggu: float = 1.5) -> str:
+def ambil(keys: list, cols: int = 100, rows: int = 32, tunggu: float = 1.5,
+          jeda: float = 0.7) -> str:
     m, s = pty.openpty()
     fcntl.ioctl(s, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    # TUI menggambar ke /dev/tty: anak harus punya pty ini sebagai controlling terminal.
     p = subprocess.Popen([BIN], stdin=s, stdout=s, stderr=s, close_fds=True,
-                         cwd="/home/mectov/Autore")
+                         cwd="/home/mectov/Autore",
+                         preexec_fn=lambda: (os.setsid(), fcntl.ioctl(0, termios.TIOCSCTTY, 0)))
     os.close(s)
     buf = b""
     end = time.time() + tunggu
@@ -37,7 +40,7 @@ def ambil(keys: list, cols: int = 100, rows: int = 32, tunggu: float = 1.5) -> s
                 break
     for k in keys:
         os.write(m, k)
-        end = time.time() + 0.7
+        end = time.time() + jeda
         while time.time() < end:
             r, _, _ = select.select([m], [], [], 0.2)
             if r:
@@ -45,6 +48,17 @@ def ambil(keys: list, cols: int = 100, rows: int = 32, tunggu: float = 1.5) -> s
                     buf += os.read(m, 65536)
                 except OSError:
                     break
+    # Frame ditulis dalam beberapa syscall; kalau pembacaan berhenti di tengah frame,
+    # frame terakhir jadi terpotong. Karena frame berulang terus, ambil frame
+    # lengkap terakhir yang sudah terkumpul.
+    end = time.time() + 1.2
+    while time.time() < end:
+        r, _, _ = select.select([m], [], [], 0.15)
+        if r:
+            try:
+                buf += os.read(m, 65536)
+            except OSError:
+                break
     os.write(m, b"q")
     time.sleep(0.4)
     try:
@@ -52,10 +66,12 @@ def ambil(keys: list, cols: int = 100, rows: int = 32, tunggu: float = 1.5) -> s
     except Exception:
         p.kill()
     text = buf.decode("utf-8", "replace")
-    # Ambil frame terakhir saja: mulai dari MoveTo(0,0) paling akhir.
-    tail = text.rsplit("\x1b[1;1H", 1)[-1].lstrip("\x1b[J")
-    baris = tail.split("\r\n")
-    return "\r\n".join(baris[:rows])
+    # Tiap frame diawali MoveTo(0,0); frame yang terpotong di akhir dibuang.
+    for potong in reversed(text.split("\x1b[1;1H")):
+        baris = potong.lstrip("\x1b[J").split("\r\n")
+        if len(baris) >= rows:
+            return "\r\n".join(baris[:rows])
+    return text.rsplit("\x1b[1;1H", 1)[-1].lstrip("\x1b[J")
 
 
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
@@ -126,8 +142,8 @@ body{{margin:0;background:#161616;font:15px/1.25 "DejaVu Sans Mono",monospace}}
 <div class="term">{isi}</div>"""
 
 
-def screenshot(nama: str, keys: list) -> str:
-    layar = ambil(keys)
+def screenshot(nama: str, keys: list, jeda: float = 0.7) -> str:
+    layar = ambil(keys, jeda=jeda)
     html_path = os.path.join(SCRATCH, f"{nama}.html")
     png_path = os.path.join(SCRATCH, f"{nama}.png")
     with open(html_path, "w", encoding="utf-8") as f:
@@ -142,10 +158,13 @@ def screenshot(nama: str, keys: list) -> str:
 
 
 if __name__ == "__main__":
+    # 1. Layar diam: panel kanan = penjelasan menu yang sedang disorot.
     screenshot("autore-tui-default", [])
+    # 2. Command palette (Ctrl+K) menyaring perintah yang sama dengan menu kiri.
     screenshot("autore-tui-palette", [b"\x0b", b"s", b"c", b"a", b"n"])
-    # Menu 1 (Mulai Project Baru) -> kotak "Nama project" -> ketik -> kotak pilih teknologi.
-    # Tanpa Enter terakhir: tidak ada file/repo yang dibuat.
-    screenshot("autore-tui-ask-text", [b"\r", b"d", b"e", b"m", b"o"])
-    screenshot("autore-tui-ask-choose", [b"\r", b"\x15", b"demo", b"\r", b"\x1b[B"])
+    # 3. Menu 0 (Mulai Project Baru) -> pertanyaan muncul di baris input bawah,
+    #    tanpa pop-up & tanpa keluar layar. Tanpa Enter: tidak ada yang dijalankan.
+    screenshot("autore-tui-tanya", [b"\r", b"d", b"e", b"m", b"o"])
+    # 4. Menu 7 (Doctor) dijalankan -> output proses mengalir ke panel kanan.
+    screenshot("autore-tui-log", [b"\x1b[B"] * 7 + [b"\r"], jeda=4.0)
     sys.exit(0)

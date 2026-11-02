@@ -58,8 +58,43 @@ fn print_ascii_banner() {
     println!();
 }
 
-fn prompt_main_menu() -> Commands {
-    print_ascii_banner();
+/// Tentukan folder target untuk `Buat Project Baru` dari menu interaktif:
+/// jika folder saat ini sudah bernama `app_name`, pakai langsung; jika tidak, buat subfolder `./<app_name>`.
+pub fn resolve_interactive_project_dir(cwd: &std::path::Path, app_name: &str) -> PathBuf {
+    if cwd.file_name().and_then(|n| n.to_str()) == Some(app_name) {
+        cwd.to_path_buf()
+    } else {
+        cwd.join(app_name)
+    }
+}
+
+/// Bootstrap project lengkap dari menu interaktif:
+/// buat folder `./<app_name>` -> `git init -b main` -> generate 3 file -> pasang pre-commit hook.
+pub fn bootstrap_interactive_project(
+    base_dir: &std::path::Path,
+    cfg: &InitConfig,
+    force: bool,
+) -> Result<(PathBuf, Vec<PathBuf>, PathBuf, bool), String> {
+    let project_dir = resolve_interactive_project_dir(base_dir, &cfg.app_name);
+    let files = generate_project_files_with(cfg, &project_dir, force)?;
+    let git_created = hooks::ensure_git_repo_main(&project_dir)?;
+    let hook_path = hooks::install_pre_commit_hook(&project_dir)?;
+    Ok((project_dir, files, hook_path, git_created))
+}
+
+fn prompt_main_menu(show_banner: bool, active_project: Option<&std::path::Path>) -> Option<Commands> {
+    if show_banner {
+        print_ascii_banner();
+    } else {
+        println!();
+    }
+    if let Some(dir) = active_project {
+        println!(
+            " {} Folder project aktif: {}",
+            "●".cyan().bold(),
+            dir.display().to_string().bold()
+        );
+    }
     let items = vec![
         "• Buat Project Baru (Dockerfile & Jenkinsfile)",
         "• Scan Keamanan Kode (Static + Gitleaks + Trivy)",
@@ -69,11 +104,11 @@ fn prompt_main_menu() -> Commands {
         "• Update Autore",
     ];
     let choice = Select::new("Pilih:", items)
-        .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+        .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
         .prompt()
-        .unwrap_or_else(|_| process::exit(0));
+        .ok()?;
 
-    match choice {
+    Some(match choice {
         "• Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
             app_name: None,
             stack: None,
@@ -97,7 +132,7 @@ fn prompt_main_menu() -> Commands {
         },
         "• Update Autore" => Commands::Update,
         _ => Commands::Doctor,
-    }
+    })
 }
 
 fn clear_gate_reason() {
@@ -222,8 +257,27 @@ fn main() {
     }
     inquire::set_global_render_config(claude_render_config());
     let cli = Cli::parse();
-    let command = cli.command.unwrap_or_else(prompt_main_menu);
+    if let Some(command) = cli.command {
+        let code = execute_command(command, false, &mut None);
+        if code != 0 {
+            process::exit(code);
+        }
+        return;
+    }
 
+    let mut first = true;
+    let mut active_project: Option<PathBuf> = None;
+    while let Some(command) = prompt_main_menu(first, active_project.as_deref()) {
+        first = false;
+        let _ = execute_command(command, true, &mut active_project);
+    }
+}
+
+fn execute_command(
+    command: Commands,
+    interactive: bool,
+    active_project: &mut Option<PathBuf>,
+) -> i32 {
     match command {
         Commands::Init {
             app_name,
@@ -235,36 +289,43 @@ fn main() {
         } => {
             let resolved_name = match app_name {
                 Some(n) => n,
-                None => Text::new("Nama aplikasi:")
-                    .with_default("my-tugure-app")
-                    .prompt()
-                    .unwrap_or_else(|_| process::exit(1)),
+                None => match Text::new("Nama aplikasi:").prompt() {
+                    Ok(n) => n.trim().to_string(),
+                    Err(_) => return 1,
+                },
             };
             if let Err(e) = validate_app_name(&resolved_name) {
                 eprintln!("{} {}", "ERROR:".red().bold(), e);
-                process::exit(1);
+                return 1;
             }
 
             let resolved_stack = match stack {
-                Some(s) => TechStack::from_str_loose(&s).unwrap_or_else(|| {
-                    eprintln!(
-                        "{} Stack '{}' tidak dikenali. Pilih: python, nodejs, java, go",
-                        "ERROR:".red().bold(),
-                        s
-                    );
-                    process::exit(1);
-                }),
-                None => Select::new("Pilih bahasa / Tech Stack:", TechStack::all())
-                    .prompt()
-                    .unwrap_or_else(|_| process::exit(1)),
+                Some(s) => match TechStack::from_str_loose(&s) {
+                    Some(st) => st,
+                    None => {
+                        eprintln!(
+                            "{} Stack '{}' tidak dikenali. Pilih: python, nodejs, java, go",
+                            "ERROR:".red().bold(),
+                            s
+                        );
+                        return 1;
+                    }
+                },
+                None => match Select::new("Pilih bahasa / Tech Stack:", TechStack::all()).prompt() {
+                    Ok(st) => st,
+                    Err(_) => return 1,
+                },
             };
 
             let resolved_port = match app_port {
                 Some(p) => p,
-                None => CustomType::<u16>::new("Port aplikasi di dalam container:")
+                None => match CustomType::<u16>::new("Port aplikasi di dalam container:")
                     .with_default(resolved_stack.default_port())
                     .prompt()
-                    .unwrap_or_else(|_| process::exit(1)),
+                {
+                    Ok(p) => p,
+                    Err(_) => return 1,
+                },
             };
 
             let cfg = InitConfig {
@@ -274,21 +335,53 @@ fn main() {
                 deploy_port,
             };
 
-            match generate_project_files_with(&cfg, &output_dir, force) {
-                Ok(files) => {
-                    println!(
-                        "\n{}",
-                        "✔ Berhasil men-generate file pipeline standar kantor:"
-                            .green()
-                            .bold()
-                    );
-                    for f in files {
-                        println!("  • {}", f.display());
+            if interactive {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                match bootstrap_interactive_project(&cwd, &cfg, force) {
+                    Ok((project_dir, files, hook_path, git_created)) => {
+                        let _ = std::env::set_current_dir(&project_dir);
+                        *active_project = Some(project_dir.clone());
+                        println!(
+                            "\n{}",
+                            "✔ Project baru berhasil disiapkan otomatis:"
+                                .green()
+                                .bold()
+                        );
+                        println!("  • Folder project : {}", project_dir.display());
+                        if git_created {
+                            println!("  • Git repository : aktif (branch 'main')");
+                        } else {
+                            println!("  • Git repository : sudah ada");
+                        }
+                        for f in files {
+                            println!("  • File pipeline  : {}", f.display());
+                        }
+                        println!("  • Satpam Git     : aktif ({})", hook_path.display());
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        1
                     }
                 }
-                Err(e) => {
-                    eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    process::exit(1);
+            } else {
+                match generate_project_files_with(&cfg, &output_dir, force) {
+                    Ok(files) => {
+                        println!(
+                            "\n{}",
+                            "✔ Berhasil men-generate file pipeline standar kantor:"
+                                .green()
+                                .bold()
+                        );
+                        for f in files {
+                            println!("  • {}", f.display());
+                        }
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        1
+                    }
                 }
             }
         }
@@ -333,7 +426,7 @@ fn main() {
                             ));
                         }
                         write_gate_reason(&reasons.join("; "));
-                        process::exit(1);
+                        return 1;
                     }
                     println!(
                         "  {} [1/3] Static Guard LULUS ({} file diperiksa).",
@@ -343,7 +436,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    process::exit(1);
+                    return 1;
                 }
             }
 
@@ -354,26 +447,25 @@ fn main() {
                         .yellow()
                         .bold()
                 );
-            } else {
-                if let Err(e) = external::run_authoritative_scan(&path, &severity) {
-                    let (head, body) = e.split_once('\n').unwrap_or((&e, ""));
-                    eprintln!("  {} {}", "✘".red().bold(), head);
-                    if !body.trim().is_empty() {
-                        eprintln!("{body}");
-                    }
-                    eprintln!(
-                        "\n{} Perbaiki temuan di atas, lalu jalankan ulang: autore scan",
-                        "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold()
-                    );
-                    write_gate_reason(head);
-                    process::exit(1);
+            } else if let Err(e) = external::run_authoritative_scan(&path, &severity) {
+                let (head, body) = e.split_once('\n').unwrap_or((&e, ""));
+                eprintln!("  {} {}", "✘".red().bold(), head);
+                if !body.trim().is_empty() {
+                    eprintln!("{body}");
                 }
+                eprintln!(
+                    "\n{} Perbaiki temuan di atas, lalu jalankan ulang: autore scan",
+                    "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold()
+                );
+                write_gate_reason(head);
+                return 1;
             }
 
             println!(
                 "{}",
                 "✔ SEMUA PEMERIKSAAN KEAMANAN LULUS!".green().bold()
             );
+            0
         }
 
         Commands::ScanImage { image, severity, sbom_output, no_docker } => {
@@ -387,7 +479,7 @@ fn main() {
             if image == "latest" || image.ends_with(":latest") {
                 eprintln!("\n{} Tag :latest dilarang. Gunakan immutable commit tag.", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold());
                 write_gate_reason("Tag :latest dilarang. Gunakan immutable commit tag.");
-                process::exit(1);
+                return 1;
             }
             if no_docker {
                 println!(
@@ -405,13 +497,14 @@ fn main() {
                 if let Err(e) = external::run_authoritative_image_scan(&opts) {
                     eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
                     write_gate_reason(e.lines().next().unwrap_or(&e));
-                    process::exit(1);
+                    return 1;
                 }
             }
             println!(
                 "{}",
                 "✔ PEMERIKSAAN DOCKER IMAGE LULUS!".green().bold()
             );
+            0
         }
 
         Commands::Hook { action } => match action {
@@ -425,18 +518,25 @@ fn main() {
                     println!(
                         "  Setiap `git commit` kini otomatis diperiksa oleh `autore scan`!"
                     );
+                    0
                 }
                 Err(e) => {
                     eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    process::exit(1);
+                    1
                 }
             },
             HookAction::Uninstall { repo } => match hooks::uninstall_pre_commit_hook(&repo) {
-                Ok(true) => println!("{} Pre-commit hook berhasil dicopot.", "✔".green().bold()),
-                Ok(false) => println!("Info: Pre-commit hook belum terpasang."),
+                Ok(true) => {
+                    println!("{} Pre-commit hook berhasil dicopot.", "✔".green().bold());
+                    0
+                }
+                Ok(false) => {
+                    println!("Info: Pre-commit hook belum terpasang.");
+                    0
+                }
                 Err(e) => {
                     eprintln!("{} {}", "ERROR:".red().bold(), e);
-                    process::exit(1);
+                    1
                 }
             },
             HookAction::Status { repo } => {
@@ -453,21 +553,25 @@ fn main() {
                         "BELUM TERPASANG (jalankan `autore hook install`)".yellow()
                     );
                 }
+                0
             }
         },
 
         Commands::Doctor => {
-            if !doctor::print_doctor_report() {
-                process::exit(1);
+            if doctor::print_doctor_report() {
+                0
+            } else {
+                1
             }
         }
 
-        Commands::Update => {
-            if let Err(e) = updater::run_self_update() {
+        Commands::Update => match updater::run_self_update() {
+            Ok(()) => 0,
+            Err(e) => {
                 eprintln!("{} {e}", "ERROR:".red().bold());
-                process::exit(1);
+                1
             }
-        }
+        },
     }
 }
 
@@ -475,6 +579,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn banner_fits_standard_80_col_terminal() {
@@ -482,5 +587,45 @@ mod tests {
         for (row, _) in BANNER_ROWS {
             assert!(row.chars().count() <= 80);
         }
+    }
+
+    #[test]
+    fn interactive_project_dir_creates_subfolder_unless_already_in_matching_dir() {
+        let base = PathBuf::from("/tmp/workspace");
+        assert_eq!(
+            resolve_interactive_project_dir(&base, "klaim-api"),
+            PathBuf::from("/tmp/workspace/klaim-api")
+        );
+
+        let same = PathBuf::from("/tmp/workspace/klaim-api");
+        assert_eq!(
+            resolve_interactive_project_dir(&same, "klaim-api"),
+            PathBuf::from("/tmp/workspace/klaim-api")
+        );
+    }
+
+    #[test]
+    fn bootstrap_interactive_project_creates_dir_git_main_files_and_hook() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = InitConfig {
+            app_name: "klaim-api".to_string(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8081,
+        };
+        let (project_dir, files, hook_path, git_created) =
+            bootstrap_interactive_project(tmp.path(), &cfg, false).unwrap();
+
+        assert_eq!(project_dir, tmp.path().join("klaim-api"));
+        assert!(git_created);
+        assert_eq!(files.len(), 3);
+        assert!(project_dir.join("Dockerfile").exists());
+        assert!(project_dir.join("Jenkinsfile").exists());
+        assert!(project_dir.join(".dockerignore").exists());
+        assert!(hook_path.exists());
+        assert!(hooks::is_hook_installed(&project_dir));
+
+        let head = std::fs::read_to_string(project_dir.join(".git/HEAD")).unwrap();
+        assert!(head.contains("refs/heads/main"), "expected branch main, got {head}");
     }
 }

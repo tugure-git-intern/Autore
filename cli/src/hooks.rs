@@ -32,6 +32,38 @@ fn resolve_git_dir(repo_root: &Path) -> Result<PathBuf, String> {
     ))
 }
 
+pub fn ensure_git_repo_main(repo_root: &Path) -> Result<bool, String> {
+    if resolve_git_dir(repo_root).is_ok() {
+        return Ok(false);
+    }
+    let out = std::process::Command::new("git")
+        .args(["init", "-q", "-b", "main"])
+        .current_dir(repo_root)
+        .output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            return Ok(true);
+        }
+    }
+    // Fallback untuk git lama yang belum mengenal -b pada `git init`
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(repo_root)
+        .output()
+        .map_err(|e| format!("Gagal menjalankan git init: {e}"))?;
+    if !init.status.success() {
+        return Err(format!(
+            "git init gagal: {}",
+            String::from_utf8_lossy(&init.stderr).trim()
+        ));
+    }
+    let _ = std::process::Command::new("git")
+        .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+        .current_dir(repo_root)
+        .output();
+    Ok(true)
+}
+
 pub fn install_pre_commit_hook(repo_root: &Path) -> Result<PathBuf, String> {
     let git_dir = resolve_git_dir(repo_root)?;
     let hooks_dir = git_dir.join("hooks");

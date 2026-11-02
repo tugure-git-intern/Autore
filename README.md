@@ -52,7 +52,7 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
  ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
  ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
  ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
- ● DevSecOps & CI/CD Platform Tooling — v0.4.0
+ ● DevSecOps & CI/CD Platform Tooling — v0.4.1
 
 ● Pilih:
 ◉ Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)

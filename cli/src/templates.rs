@@ -179,6 +179,29 @@ autorePipeline(
     )
 }
 
+pub const RESERVED_INFRA_PORTS: &[(u16, &str)] = &[
+    (5000, "Nexus Docker Registry"),
+    (8080, "Jenkins Controller"),
+    (8082, "Nexus Web UI"),
+    (9000, "SonarQube Server"),
+];
+
+pub fn validate_deploy_port(port: u16) -> Result<(), String> {
+    if port < 1024 {
+        return Err(format!(
+            "Port deploy {port} terlalu rendah (gunakan port >= 1024 agar tidak butuh root)"
+        ));
+    }
+    for (reserved, service) in RESERVED_INFRA_PORTS {
+        if port == *reserved {
+            return Err(format!(
+                "Port {port} sudah dipakai oleh infrastruktur CI/CD ({service}). Pilih port lain (contoh: 8081, 8083, 8084)"
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_app_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.len() > 63 {
         return Err(
@@ -211,6 +234,7 @@ pub fn generate_project_files_with(
     force: bool,
 ) -> Result<Vec<PathBuf>, String> {
     validate_app_name(&cfg.app_name)?;
+    validate_deploy_port(cfg.deploy_port)?;
     fs::create_dir_all(output_dir)
         .map_err(|e| format!("Gagal membuat direktori '{}': {}", output_dir.display(), e))?;
 
@@ -290,6 +314,22 @@ mod tests {
         }
         for good in ["my-tugure-app", "service_1", "autore-dummy"] {
             assert!(validate_app_name(good).is_ok(), "{good:?} rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_reserved_infra_and_privileged_deploy_ports() {
+        for bad in [80, 443, 1023, 5000, 8080, 8082, 9000] {
+            assert!(
+                validate_deploy_port(bad).is_err(),
+                "Reserved/privileged port {bad} should be rejected"
+            );
+        }
+        for good in [8081, 8083, 8084, 3000, 8000] {
+            assert!(
+                validate_deploy_port(good).is_ok(),
+                "Valid deploy port {good} rejected"
+            );
         }
     }
 

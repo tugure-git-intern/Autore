@@ -11,7 +11,9 @@ use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, CustomType, Select, Text};
 use std::path::PathBuf;
 use std::process;
-use templates::{generate_project_files_with, validate_app_name, InitConfig, TechStack};
+use templates::{
+    generate_project_files_with, validate_app_name, validate_deploy_port, InitConfig, TechStack,
+};
 
 #[derive(Parser)]
 #[command(
@@ -230,7 +232,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
             app_name: None,
             stack: None,
             app_port: None,
-            deploy_port: 8081,
+            deploy_port: None,
             output_dir: PathBuf::from("."),
             force: false,
         },
@@ -281,9 +283,9 @@ enum Commands {
         #[arg(long)]
         app_port: Option<u16>,
 
-        /// Port host untuk deployment container
-        #[arg(long, default_value_t = 8081)]
-        deploy_port: u16,
+        /// Port host untuk deployment container (default: 8081)
+        #[arg(long)]
+        deploy_port: Option<u16>,
 
         /// Direktori tujuan pembuatan file
         #[arg(long, default_value = ".")]
@@ -448,11 +450,35 @@ fn execute_command(
                 },
             };
 
+            let resolved_deploy_port = match deploy_port {
+                Some(p) => {
+                    if let Err(e) = validate_deploy_port(p) {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        return 1;
+                    }
+                    p
+                }
+                None if interactive => loop {
+                    match CustomType::<u16>::new("Port deploy di server (host):")
+                        .with_default(8081)
+                        .with_help_message("Enter pakai 8081 • isi 8083, 8084, dst untuk project berikutnya")
+                        .prompt()
+                    {
+                        Ok(p) => match validate_deploy_port(p) {
+                            Ok(()) => break p,
+                            Err(e) => eprintln!("{} {}", "ERROR:".red().bold(), e),
+                        },
+                        Err(_) => return 1,
+                    }
+                },
+                None => 8081,
+            };
+
             let cfg = InitConfig {
                 app_name: resolved_name,
                 stack: resolved_stack,
                 app_port: resolved_port,
-                deploy_port,
+                deploy_port: resolved_deploy_port,
             };
 
             if interactive {

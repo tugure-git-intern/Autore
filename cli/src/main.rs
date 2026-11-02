@@ -44,18 +44,10 @@ fn claude_render_config() -> RenderConfig<'static> {
 // Palet oranye terakota khas Claude CLI (#D97757 / RGB 217, 119, 87).
 // Menggunakan raw ANSI 24-bit (\x1b[38;2;R;G;Bm) agar tetap tampil oranye Claude
 // saat dijalankan lewat SSH (tanpa downgrade ke 16-color kuning oleh crate colored).
-const BANNER_ROWS: [(&str, (u8, u8, u8)); 6] = [
-    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (235, 138, 104)),
-    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (229, 131, 98)),
-    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (223, 125, 92)),
-    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (217, 119, 87)),
-    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (204, 108, 77)),
-    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (185, 95, 66)),
-];
-
+// Barisnya dipakai bersama TUI (banner tengah atas) — satu sumber kebenaran.
 fn print_ascii_banner() {
     println!();
-    for (line, (r, g, b)) in BANNER_ROWS {
+    for (line, (r, g, b)) in tui::BANNER {
         println!("\x1b[38;2;{r};{g};{b}m{line}\x1b[0m");
     }
     println!(
@@ -1478,8 +1470,8 @@ mod tests {
 
     #[test]
     fn banner_fits_standard_80_col_terminal() {
-        assert_eq!(BANNER_ROWS.len(), 6);
-        for (row, _) in BANNER_ROWS {
+        assert_eq!(tui::BANNER.len(), 6);
+        for (row, _) in tui::BANNER {
             assert!(row.chars().count() <= 80);
         }
     }

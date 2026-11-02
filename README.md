@@ -46,7 +46,14 @@ irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 
 Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka TUI layar penuh:
 
 ```text
- AUTORE v0.5.0 DevSecOps & CI/CD Platform
+                    █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗
+                   ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
+                   ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗
+                   ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
+                   ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
+                   ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+                          DevSecOps & CI/CD Platform  •  v0.5.1
+
 ┌─────────────────────────────────────────────────┬────────────────────────────────────────────────┐
 │ ▸ Mulai Project Baru (1-Klik)                   │ Mulai Project Baru (1-Klik)                    │
 │   Buat Project Baru (Dockerfile & Jenkinsfile)  │                                                │
@@ -59,11 +66,17 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
 │   Update Autore                                 │ sekali, lalu disimpan).                        │
 │                                                 │                                                │
 └─────────────────────────────────────────────────┴────────────────────────────────────────────────┘
-↑/↓ geser  Enter jalankan  q keluar                       ✔ terakhir: Cek Kesehatan Sistem (Doctor)
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│> ↑/↓ geser  •  Enter jalankan  •  q keluar                                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+(belum ada project)              siap                             autore v0.5.1
 ```
 
-Panel kiri = menu, panel kanan = penjelasan item yang sedang disorot, bar bawah = tombol cepat
-plus status aksi terakhir. Saat sebuah aksi berjalan, Autore keluar sementara dari layar penuh
+Banner **AUTORE** (FIGlet blok, gradasi oranye terakota) tampil di tengah atas. Panel kiri = menu,
+panel kanan = penjelasan item yang sedang disorot, kotak perintah = tombol pintas, bar bawah =
+3 segmen: lokasi project, status aksi terakhir (hijau kalau sukses, merah kalau gagal), versi.
+Kalau layar terlalu pendek, banner dan kotak perintah otomatis disembunyikan supaya menu tetap utuh.
+Saat sebuah aksi berjalan, Autore keluar sementara dari layar penuh
 supaya pertanyaan interaktif (nama project, token, password) tampil normal; setelah selesai
 tekan **Enter** untuk kembali ke menu atau **q** untuk keluar.
 

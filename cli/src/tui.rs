@@ -15,11 +15,25 @@ use std::io::{self, Write};
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const CYAN: &str = "\x1b[36m";
-const YELLOW: &str = "\x1b[33m";
 const DIM: &str = "\x1b[2m";
 const REV: &str = "\x1b[7m";
 /// Lebar maksimum panel kiri (judul menu) — cukup untuk label terpanjang (47 karakter).
 const LEFT_W: usize = 49;
+/// Tinggi minimum layar supaya banner blok ikut tampil (banner 8 + panel + kotak perintah + status).
+const BANNER_MIN_ROWS: usize = 20;
+/// Tinggi minimum supaya kotak perintah (3 baris) ikut ditampilkan.
+const CMD_BLOCK_MIN: usize = 14;
+
+/// Banner blok "AUTORE" — gradasi oranye terakota (#E18A68 -> #B95F42).
+/// Dipakai TUI (tengah atas) dan mode teks (`print_ascii_banner`).
+pub(crate) const BANNER: [(&str, (u8, u8, u8)); 6] = [
+    ("  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗", (235, 138, 104)),
+    (" ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝", (229, 131, 98)),
+    (" ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗  ", (223, 125, 92)),
+    (" ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝  ", (217, 119, 87)),
+    (" ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗", (204, 108, 77)),
+    (" ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝", (185, 95, 66)),
+];
 
 pub struct Item {
     pub label: &'static str,
@@ -117,16 +131,31 @@ fn draw(
     let rows = (rows as usize).max(6);
     let left_w = LEFT_W.min(cols.saturating_sub(22)).max(12);
     let right_w = cols.saturating_sub(left_w + 5);
-
-    let title_label = format!(
-        " {}AUTORE v{}{} ",
-        BOLD,
-        env!("CARGO_PKG_VERSION"),
-        RESET
-    );
-    let title_hint = format!("{DIM}DevSecOps & CI/CD Platform{RESET} ");
     let mut lines: Vec<String> = Vec::with_capacity(rows);
-    lines.push(compose_row(&[(&title_label, 0), (&title_hint, 1)], cols));
+
+    // Banner AUTORE di tengah atas + subjudul (hanya kalau layar cukup tinggi).
+    if rows >= BANNER_MIN_ROWS {
+        for (row, (r, g, b)) in BANNER {
+            lines.push(center(
+                &format!("\x1b[38;2;{r};{g};{b}m{row}{RESET}"),
+                cols,
+            ));
+        }
+        lines.push(center(
+            &format!(
+                "{DIM}DevSecOps & CI/CD Platform  •  v{}{RESET}",
+                env!("CARGO_PKG_VERSION")
+            ),
+            cols,
+        ));
+        lines.push(blank_row(cols));
+    }
+
+    // Sisa tinggi dibagi: panel menu/penjelasan, kotak perintah, baris status.
+    let cmd_block = if rows >= CMD_BLOCK_MIN { 3 } else { 0 };
+    let avail = rows.saturating_sub(lines.len() + cmd_block + 1);
+    let body_h = avail.saturating_sub(2);
+    let detail: Vec<String> = detail_lines(&items[selected], right_w.saturating_sub(2));
 
     // Kepala panel: ┌──┬──┐
     lines.push(format!(
@@ -134,9 +163,6 @@ fn draw(
         "─".repeat(left_w),
         "─".repeat(right_w + 2)
     ));
-
-    let body_h = rows.saturating_sub(4);
-    let detail: Vec<String> = detail_lines(&items[selected], right_w.saturating_sub(2));
 
     for i in 0..body_h {
         let label = match items.get(i) {
@@ -159,29 +185,59 @@ fn draw(
         "─".repeat(right_w + 2)
     ));
 
-    let keys = format!(
-        "{CYAN}↑/↓{RESET} geser  {CYAN}Enter{RESET} jalankan  {CYAN}q{RESET} keluar"
-    );
-    let where_ = match (project, last) {
-        (Some(p), Some(l)) => format!("{DIM}{l}{RESET} {DIM}•{RESET} {YELLOW}{p}{RESET}"),
-        (Some(p), None) => format!("{DIM}project aktif:{RESET} {YELLOW}{p}{RESET}"),
-        (None, Some(l)) => format!("{DIM}{l}{RESET}"),
-        (None, None) => String::new(),
-    };
-    let where_ = if where_.is_empty() {
-        where_
-    } else {
-        format!("   {where_}")
-    };
-    lines.push(compose_row(&[(&keys, 0), (&where_, 1)], cols));
+    // Kotak perintah: satu baris panduan, seperti prompt input di aplikasi lain.
+    if cmd_block == 3 {
+        let inner = cols.saturating_sub(2);
+        let hint = format!(
+            "{CYAN}>{RESET} {DIM}↑/↓ geser  •  Enter jalankan  •  q keluar{RESET}"
+        );
+        lines.push(format!("┌{}┐", "─".repeat(inner)));
+        lines.push(format!("│{}│", pad_plain(&hint, inner)));
+        lines.push(format!("└{}┘", "─".repeat(inner)));
+    }
 
+    lines.push(status_bar(cols, project, last));
+    while lines.len() < rows {
+        lines.push(blank_row(cols));
+    }
+    lines.truncate(rows);
     lines.join("\r\n")
 }
 
-/// Satu baris dengan isi kiri + isi kanan, di-pad/dipotong sesuai lebar terminal.
-fn compose_row(cells: &[(&str, usize)], cols: usize) -> String {
-    let plain: String = cells.iter().map(|(t, _)| t.to_string()).collect();
-    pad_plain(&plain, cols)
+/// Baris kosong selebar layar (agar layar penuh benar-benar tertutup).
+fn blank_row(cols: usize) -> String {
+    " ".repeat(cols)
+}
+
+/// Teks di tengah, di-pad pas selebar `cols`; kode ANSI tidak ikut dihitung.
+fn center(text: &str, cols: usize) -> String {
+    let w = visible_len(text);
+    if w >= cols {
+        return pad_plain(text, cols);
+    }
+    let left = (cols - w) / 2;
+    format!("{}{}{}", " ".repeat(left), text, " ".repeat(cols - w - left))
+}
+
+/// Baris status 3 segmen: lokasi project (biru), aksi terakhir (hijau/merah), versi.
+fn status_bar(cols: usize, project: Option<&str>, last: Option<&str>) -> String {
+    let w1 = cols / 3;
+    let w2 = cols / 3;
+    let w3 = cols - w1 - w2;
+    let left = format!(
+        "\x1b[44m\x1b[97m{}",
+        pad_plain(project.unwrap_or("(belum ada project)"), w1)
+    );
+    let (bg, fg) = match last {
+        Some(l) if l.starts_with('✘') => ("\x1b[41m", "\x1b[97m"),
+        _ => ("\x1b[42m", "\x1b[30m"),
+    };
+    let mid = format!("{bg}{fg}{}", pad_plain(last.unwrap_or("siap"), w2));
+    let right = format!(
+        "\x1b[47m\x1b[30m{}",
+        pad_plain(&format!("autore v{}", env!("CARGO_PKG_VERSION")), w3)
+    );
+    format!("{left}\x1b[0m{mid}\x1b[0m{right}\x1b[0m")
 }
 
 fn detail_lines(item: &Item, width: usize) -> Vec<String> {
@@ -381,16 +437,62 @@ mod tests {
             assert_eq!(screen.split("\r\n").count(), 14);
             let tail = screen.split("\r\n").last().unwrap();
             assert_eq!(visible_len(tail), 110);
-            assert!(tail.contains("q"));
+            assert!(tail.contains("autore v"), "versi harus tampil: {tail}");
             match project {
                 Some(p) => assert!(tail.contains(p), "nama project harus tampil: {tail}"),
-                None => assert!(!tail.contains("project aktif")),
+                None => assert!(tail.contains("(belum ada project)"), "{tail}"),
             }
         }
+        // Segmen tengah ikut berubah warna: hijau saat siap/sukses, merah saat gagal.
+        let ok = draw(&sample(), 0, None, None, 100, 20);
+        assert!(ok.split("\r\n").last().unwrap().contains("\x1b[42m"));
+        let fail = draw(&sample(), 0, None, Some("✘ terakhir: Doctor (kode 1)"), 100, 20);
+        assert!(fail.split("\r\n").last().unwrap().contains("\x1b[41m"));
         // Terminal sempit: tetap satu baris pas lebar, isi boleh terpotong.
         let narrow = draw(&sample(), 0, Some("qlinic"), Some("catatan"), 30, 8);
         let tail = narrow.split("\r\n").last().unwrap();
         assert_eq!(visible_len(tail), 30);
+    }
+
+    #[test]
+    fn banner_autore_tampil_di_tengah_atas() {
+        let screen = draw(&sample(), 0, None, None, 100, 30);
+        let rows: Vec<&str> = screen.split("\r\n").collect();
+        // Enam baris banner paling atas, semua pas selebar layar dan benar-benar di tengah.
+        for (i, row) in rows[..6].iter().enumerate() {
+            let text = BANNER[i].0;
+            let (r, g, b) = BANNER[i].1;
+            let prefix = format!("\x1b[38;2;{r};{g};{b}m");
+            let left = row.find(&prefix).expect("kode warna banner hilang");
+            let right = 100 - visible_len(text) - left;
+            assert!(
+                left.abs_diff(right) <= 1,
+                "banner tidak di tengah (kiri {left}, kanan {right})"
+            );
+            assert_eq!(visible_len(row), 100);
+        }
+        assert!(rows[6].contains("DevSecOps & CI/CD Platform"));
+        // Layar tinggi tapi sempit: banner lebih lebar dari layar, tetap satu baris penuh.
+        let narrow = draw(&sample(), 0, None, None, 30, 22);
+        for row in narrow.split("\r\n") {
+            assert_eq!(visible_len(row), 30);
+        }
+        // Kotak perintah muncul di atas baris status, plus panduan tombol.
+        assert!(rows.iter().any(|r| r.contains("Enter jalankan")));
+        assert!(rows.last().unwrap().contains("autore v"));
+    }
+
+    #[test]
+    fn layar_pendek_turun_tanpa_banner_dan_tanpa_kotak_perintah() {
+        let screen = draw(&sample(), 0, None, None, 80, 10);
+        let rows: Vec<&str> = screen.split("\r\n").collect();
+        assert_eq!(rows.len(), 10);
+        assert!(!screen.contains('█'), "banner harus dilewati di layar pendek");
+        assert!(!screen.contains("Enter jalankan"), "kotak perintah dilewati");
+        assert!(rows.last().unwrap().contains("autore v"));
+        for row in &rows {
+            assert_eq!(visible_len(row), 80);
+        }
     }
 
     #[test]

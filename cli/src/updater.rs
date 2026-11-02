@@ -220,16 +220,42 @@ fn compute_file_sha256(path: &Path) -> Result<String, String> {
     Err("Tidak dapat menghitung SHA-256 (sha256sum / certutil tidak tersedia)".to_string())
 }
 
-pub fn run_self_update() -> Result<(), String> {
-    let exe_path = std::env::current_exe()
+pub fn clean_exe_path(path: PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(stripped) = s.strip_suffix(" (deleted)") {
+        PathBuf::from(stripped)
+    } else {
+        path
+    }
+}
+
+pub fn restart_into(exe_path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let _ = Command::new(exe_path).exec();
+    }
+    #[cfg(not(unix))]
+    {
+        if let Ok(mut child) = Command::new(exe_path).spawn() {
+            let _ = child.wait();
+            std::process::exit(0);
+        }
+    }
+}
+
+pub fn run_self_update() -> Result<Option<PathBuf>, String> {
+    let raw_exe = std::env::current_exe()
         .and_then(|p| p.canonicalize().or(Ok(p)))
         .map_err(|e| format!("Gagal mendeteksi lokasi binary autore: {e}"))?;
+    let was_deleted_in_ram = raw_exe.to_string_lossy().ends_with(" (deleted)");
+    let exe_path = clean_exe_path(raw_exe);
     let repo = std::env::var("AUTORE_GITHUB_REPO").unwrap_or_else(|_| DEFAULT_REPO.to_string());
     let api_base = std::env::var("AUTORE_GITHUB_API")
         .unwrap_or_else(|_| "https://api.github.com".to_string());
     let dl_base = std::env::var("AUTORE_RELEASE_BASE")
         .unwrap_or_else(|_| format!("https://github.com/{repo}/releases/download"));
-    run_self_update_with(
+    let updated = run_self_update_with(
         std::env::consts::OS,
         std::env::consts::ARCH,
         CURRENT_VERSION,
@@ -237,7 +263,12 @@ pub fn run_self_update() -> Result<(), String> {
         &repo,
         &api_base,
         &dl_base,
-    )
+    )?;
+    if updated || was_deleted_in_ram {
+        Ok(Some(exe_path))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn run_self_update_with(
@@ -248,7 +279,7 @@ pub fn run_self_update_with(
     repo: &str,
     api_base: &str,
     dl_base: &str,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let platform = resolve_platform_for(os, arch)?;
     cleanup_stale_old_binary(exe_path);
 
@@ -271,7 +302,7 @@ pub fn run_self_update_with(
             "{} Sudah versi stabil terbaru (v{current_version}). Tidak ada yang perlu di-update.",
             "✔".green().bold()
         );
-        return Ok(());
+        return Ok(false);
     }
 
     println!(
@@ -319,7 +350,7 @@ pub fn run_self_update_with(
         "✔".green().bold(),
         exe_path.display()
     );
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -335,6 +366,10 @@ mod tests {
         let win = resolve_platform_for("windows", "x86_64").unwrap();
         assert_eq!(win.asset_name, "autore-windows-x86_64.exe");
 
+        assert_eq!(
+            clean_exe_path(PathBuf::from("/home/tugure/.local/bin/autore (deleted)")),
+            PathBuf::from("/home/tugure/.local/bin/autore")
+        );
         assert!(resolve_platform_for("macos", "aarch64").is_err());
         assert!(resolve_platform_for("linux", "aarch64").is_err());
     }

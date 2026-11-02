@@ -829,7 +829,20 @@ fn execute_command(
         }
 
         Commands::Update => match updater::run_self_update() {
-            Ok(()) => 0,
+            Ok(Some(exe_path)) => {
+                if interactive {
+                    println!(
+                        "  {} Memuat ulang Autore ke versi terbaru...",
+                        "↻".cyan().bold()
+                    );
+                    if prompt_after_action() {
+                        updater::restart_into(&exe_path);
+                    }
+                    process::exit(0);
+                }
+                0
+            }
+            Ok(None) => 0,
             Err(e) => {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 1

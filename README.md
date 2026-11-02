@@ -43,11 +43,33 @@ curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/insta
 irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
 ```
 
-Setelah terpasang, cukup ketik **`autore`** untuk membuka menu interaktif:
+Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka menu interaktif:
 
-```bash
-autore
+```text
+  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗
+ ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
+ ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗
+ ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
+ ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
+ ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+ ● DevSecOps & CI/CD Platform Tooling — v0.3.0
+
+● Pilih:
+◉ Buat Project Baru (Dockerfile & Jenkinsfile)
+○ Hapus Project
+○ Scan Keamanan Kode (Static + Gitleaks + Trivy)
+○ Pasang Satpam Git (Pre-Commit Hook)
+○ Copot Satpam Git (Uninstall Hook)
+○ Cek Kesehatan Sistem (Doctor)
+○ Update Autore
+[↑/↓ geser • Enter pilih • Esc selesai]
 ```
+
+Saat memilih **`Buat Project Baru`** lewat menu interaktif, Autore otomatis menyiapkan:
+1. Folder project `./<nama-aplikasi>` (tidak bersarang kalau bikin project ke-2).
+2. `Dockerfile`, `Jenkinsfile` (lengkap dengan `deployPort`), dan `.dockerignore`.
+3. Starter minimal dengan endpoint `/health` (jika kode aplikasi belum ada; kode existing tidak disentuh).
+4. Inisialisasi `git init -b main` + pemasangan otomatis **Satpam Git** (`.git/hooks/pre-commit`).
 
 <details>
 <summary><b>Alternatif: Kompilasi manual dari Source (Rust)</b></summary>
@@ -68,14 +90,19 @@ sudo chmod 0755 /usr/local/bin/autore
 # Periksa kesehatan lingkungan runner & perkakas sistem
 autore doctor
 
-# Pasang Satpam Pintu 1 (Git Pre-Commit Hook otomatis)
+# Update Autore ke rilis stabil terbaru di GitHub (verifikasi SHA-256 otomatis)
+autore update
+
+# Pasang / cek / copot Satpam Pintu 1 (Git Pre-Commit Hook)
 autore hook install
+autore hook status
+autore hook uninstall
 
 # Pindai keamanan lokal pra-commit tanpa docker (<1 detik)
 autore scan --no-docker --path .
 
 # Generate scaffolding standar (Dockerfile, Jenkinsfile, .dockerignore)
-autore init
+autore init --app-name klaim-api --stack python --app-port 8000 --deploy-port 8083
 ```
 
 ---
@@ -123,17 +150,19 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 
 | Perintah | Deskripsi | Mode Operasi |
 | :--- | :--- | :--- |
-| `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go dengan proteksi *no-clobber* (`--force` untuk menimpa). | Interaktif / Non-interaktif |
-| `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek. | Authoritative (Full) / `--no-docker` (Pre-commit) |
+| `autore` *(tanpa argumen)* | Membuka menu interaktif TUI (`Buat Project Baru`, `Hapus Project`, `Scan`, `Satpam Git`, `Doctor`, `Update Autore`) dengan pemilih project otomatis dan loop menu. | Interactive TUI |
+| `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go (`--deploy-port` untuk isolasi port host multi-project, `--force` untuk menimpa). | Interaktif / Non-interaktif |
+| `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek, serta membersihkan `.security-gate-reason` lama saat lulus. | Authoritative (Full) / `--no-docker` (Pre-commit) |
 | `autore scan-image` | Memindai image container pasca-build: verifikasi UID non-root, pemindaian CVE (`HIGH,CRITICAL`), dan ekspor SBOM CycloneDX (`sbom.cdx.json`). | Container Image Scan |
-| `autore hook install` | Memasang script pre-commit hook otomatis di `.git/hooks/pre-commit`, mem-backup hook yang sudah ada dan merangkainya (*chaining*). | Git Integration |
-| `autore doctor` | Mendiagnosis kesiapan sistem: ketersediaan Git, Java 21, Docker, Docker Compose, service systemd runner, izin binary `/usr/local/bin/autore`, dan kapasitas penyimpanan. | System Diagnostics |
+| `autore hook install \| uninstall \| status` | Memasang, mencopot (dengan pemulihan backup `.pre-commit.bak`), atau mengecek status pre-commit hook di `.git/hooks/pre-commit`. | Git Integration |
+| `autore doctor` | Mendiagnosis kesiapan sistem: Git, Java 21, Docker, Docker Compose, service systemd runner, lokasi binary `autore`, dan ruang disk. | System Diagnostics |
+| `autore update` | Mengunduh rilis stabil terbaru dari GitHub Releases sesuai OS (`linux-x86_64-musl` / `windows-x86_64.exe`), memverifikasi `SHA256SUMS`, mengganti binary secara atomik, dan auto-restart. | Self-Updater |
 
 ### Contoh Penggunaan CLI
 
 ```bash
-# 1. Scaffolding aplikasi baru
-autore init --app-name my-service --stack python
+# 1. Scaffolding aplikasi baru (custom port deploy agar tidak bentrok dengan service lain)
+autore init --app-name my-service --stack python --app-port 8000 --deploy-port 8083
 
 # 2. Pemindaian pra-commit lokal (cepat, tanpa kontainer)
 autore scan --no-docker --path .
@@ -145,6 +174,9 @@ autore scan --path .
 autore scan-image --image 127.0.0.1:5000/my-service:build-1-commit-e77d5049f8a12b3c4d5e6f708192a3b4c5d6e7f8 \
   --severity HIGH,CRITICAL \
   --sbom-output dist/sbom.cdx.json
+
+# 5. Update binary Autore ke rilis terbaru
+autore update
 ```
 
 ---

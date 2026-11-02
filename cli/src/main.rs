@@ -8,7 +8,7 @@ mod updater;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
-use inquire::{CustomType, Select, Text};
+use inquire::{Confirm, CustomType, Select, Text};
 use std::path::PathBuf;
 use std::process;
 use templates::{generate_project_files_with, validate_app_name, InitConfig, TechStack};
@@ -58,14 +58,35 @@ fn print_ascii_banner() {
     println!();
 }
 
+pub fn is_autore_project_dir(dir: &std::path::Path) -> bool {
+    dir.join(".git").exists()
+        || dir.join("Dockerfile").exists()
+        || dir.join("Jenkinsfile").exists()
+}
+
+pub fn has_existing_pipeline_files(dir: &std::path::Path) -> bool {
+    dir.join("Dockerfile").exists()
+        || dir.join("Jenkinsfile").exists()
+        || dir.join(".dockerignore").exists()
+}
+
 /// Tentukan folder target untuk `Buat Project Baru` dari menu interaktif:
-/// jika folder saat ini sudah bernama `app_name`, pakai langsung; jika tidak, buat subfolder `./<app_name>`.
+/// 1) Jika folder saat ini bernama sama dengan `app_name`, pakai langsung (`cwd`).
+/// 2) Jika sedang berada di dalam project lain (ada `.git`/`Dockerfile`/`Jenkinsfile`),
+///    taruh sejajar di sebelah project itu (`parent.join(app_name)`), bukan di dalam perutnya.
+/// 3) Selain itu, buat subfolder `./<app_name>`.
 pub fn resolve_interactive_project_dir(cwd: &std::path::Path, app_name: &str) -> PathBuf {
     if cwd.file_name().and_then(|n| n.to_str()) == Some(app_name) {
-        cwd.to_path_buf()
-    } else {
-        cwd.join(app_name)
+        return cwd.to_path_buf();
     }
+    if is_autore_project_dir(cwd) {
+        if let Some(parent) = cwd.parent() {
+            if !parent.as_os_str().is_empty() {
+                return parent.join(app_name);
+            }
+        }
+    }
+    cwd.join(app_name)
 }
 
 /// Bootstrap project lengkap dari menu interaktif:
@@ -331,7 +352,26 @@ fn execute_command(
 
             if interactive {
                 let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                match bootstrap_interactive_project(&cwd, &cfg, force) {
+                let target_dir = resolve_interactive_project_dir(&cwd, &cfg.app_name);
+                let mut effective_force = force;
+                if !effective_force && has_existing_pipeline_files(&target_dir) {
+                    let prompt_msg = format!(
+                        "Project '{}' ({}) sudah punya Dockerfile/Jenkinsfile. Timpa dengan yang baru?",
+                        cfg.app_name,
+                        target_dir.display()
+                    );
+                    match Confirm::new(&prompt_msg).with_default(false).prompt() {
+                        Ok(true) => effective_force = true,
+                        _ => {
+                            println!(
+                                "{}",
+                                "  ℹ Dibatalkan — file project lama tidak diubah.".yellow()
+                            );
+                            return 0;
+                        }
+                    }
+                }
+                match bootstrap_interactive_project(&cwd, &cfg, effective_force) {
                     Ok((project_dir, files, hook_path, git_created)) => {
                         let _ = std::env::set_current_dir(&project_dir);
                         *active_project = Some(project_dir.clone());
@@ -585,17 +625,42 @@ mod tests {
 
     #[test]
     fn interactive_project_dir_creates_subfolder_unless_already_in_matching_dir() {
-        let base = PathBuf::from("/tmp/workspace");
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path().join("workspace");
+        std::fs::create_dir_all(&base).unwrap();
         assert_eq!(
             resolve_interactive_project_dir(&base, "klaim-api"),
-            PathBuf::from("/tmp/workspace/klaim-api")
+            base.join("klaim-api")
         );
 
-        let same = PathBuf::from("/tmp/workspace/klaim-api");
+        let same = base.join("klaim-api");
+        std::fs::create_dir_all(&same).unwrap();
         assert_eq!(
             resolve_interactive_project_dir(&same, "klaim-api"),
-            PathBuf::from("/tmp/workspace/klaim-api")
+            same
         );
+    }
+
+    #[test]
+    fn interactive_project_dir_places_second_project_as_sibling_not_nested() {
+        let tmp = TempDir::new().unwrap();
+        let cfg_a = InitConfig {
+            app_name: "project-a".to_string(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8081,
+        };
+        let (dir_a, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_a, false).unwrap();
+        assert_eq!(dir_a, tmp.path().join("project-a"));
+
+        // Saat sudah berada di dalam project-a lalu buat project-b, harus sejajar di samping project-a
+        let dir_b = resolve_interactive_project_dir(&dir_a, "project-b");
+        assert_eq!(dir_b, tmp.path().join("project-b"));
+
+        // Kalau ketik project-a lagi dari dalam project-a, tetap menunjuk ke project-a
+        let dir_a_again = resolve_interactive_project_dir(&dir_a, "project-a");
+        assert_eq!(dir_a_again, tmp.path().join("project-a"));
+        assert!(has_existing_pipeline_files(&dir_a_again));
     }
 
     #[test]

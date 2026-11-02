@@ -144,4 +144,8 @@ def screenshot(nama: str, keys: list) -> str:
 if __name__ == "__main__":
     screenshot("autore-tui-default", [])
     screenshot("autore-tui-palette", [b"\x0b", b"s", b"c", b"a", b"n"])
+    # Menu 1 (Mulai Project Baru) -> kotak "Nama project" -> ketik -> kotak pilih teknologi.
+    # Tanpa Enter terakhir: tidak ada file/repo yang dibuat.
+    screenshot("autore-tui-ask-text", [b"\r", b"d", b"e", b"m", b"o"])
+    screenshot("autore-tui-ask-choose", [b"\r", b"\x15", b"demo", b"\r", b"\x1b[B"])
     sys.exit(0)

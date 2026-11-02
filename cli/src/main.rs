@@ -228,11 +228,7 @@ fn pick_interactive_target_project(
         .collect();
     labels.push(format!("Folder saat ini  ({})", cwd.display()));
 
-    let picked = Select::new(prompt_title, labels.clone())
-        .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
-        .prompt()
-        .ok()?;
-    let idx = labels.iter().position(|l| l == &picked).unwrap_or(0);
+    let idx = ui_ask_choose(prompt_title, &labels)?;
     if idx < candidates.len() {
         let target = candidates[idx].clone();
         let _ = std::env::set_current_dir(&target);
@@ -255,6 +251,8 @@ fn enter_pressed(event: std::io::Result<crossterm::event::Event>) -> bool {
 }
 
 /// Tahan layar setelah aksi selesai: satu tombol, tidak perlu pilih menu lagi.
+/// ponytail: sengaja tetap di layar normal — kotak TUI (alternate screen) akan menutupi
+/// hasil perintah sebelum sempat dibaca. Pindah ke TUI setelah output tampil di panel log.
 fn prompt_after_action() -> bool {
     println!(
         "\n{} Enter kembali ke menu  •  {} keluar",
@@ -266,6 +264,75 @@ fn prompt_after_action() -> bool {
         return false;
     }
     enter_pressed(crossterm::event::read())
+}
+
+// ── Jalur prompt interaktif ──────────────────────────────────────────────────
+// Layar interaktif -> kotak tanya TUI, jadi user tidak keluar dari tampilan TUI.
+// Output dipipe (skrip/CI) -> `inquire` seperti semula.
+// ponytail: satu tempat; begitu semua prompt pindah TUI, hapus cabang `inquire`-nya.
+
+fn ui_ask_text(label: &str, default: &str) -> Option<String> {
+    if std::io::stdout().is_terminal() {
+        tui::ask_text(label, default)
+    } else {
+        Text::new(label).with_default(default).prompt().ok()
+    }
+}
+
+fn ui_ask_secret(label: &str) -> Option<String> {
+    if std::io::stdout().is_terminal() {
+        tui::ask_secret(label)
+    } else {
+        Password::new(label)
+            .without_confirmation()
+            .with_display_mode(PasswordDisplayMode::Masked)
+            .prompt()
+            .ok()
+    }
+}
+
+/// Pilih satu dari `options`; hasil = index. `None` = batal.
+fn ui_ask_choose(label: &str, options: &[String]) -> Option<usize> {
+    if std::io::stdout().is_terminal() {
+        tui::ask_choose(label, options)
+    } else {
+        let picked = Select::new(label, options.to_vec()).prompt().ok()?;
+        options.iter().position(|o| *o == picked)
+    }
+}
+
+fn ui_ask_confirm(label: &str, default_ya: bool) -> Option<bool> {
+    if std::io::stdout().is_terminal() {
+        tui::ask_confirm(label, default_ya)
+    } else {
+        Confirm::new(label).with_default(default_ya).prompt().ok()
+    }
+}
+
+/// Angka (port) lewat kotak teks TUI; salah ketik -> tanya ulang.
+fn ui_ask_u16(label: &str, default: u16) -> Option<u16> {
+    if !std::io::stdout().is_terminal() {
+        return CustomType::<u16>::new(label)
+            .with_default(default)
+            .prompt()
+            .ok();
+    }
+    loop {
+        let isi = tui::ask_text(label, &default.to_string())?;
+        if let Ok(v) = isi.trim().parse::<u16>() {
+            return Some(v);
+        }
+    }
+}
+
+/// Label tech stack untuk kotak pilih.
+fn stack_labels() -> Vec<String> {
+    TechStack::all().iter().map(|s| s.to_string()).collect()
+}
+
+/// Tech stack dari index kotak pilih.
+fn stack_at(index: usize) -> Option<TechStack> {
+    TechStack::all().get(index).copied()
 }
 
 /// Seluruh item menu — satu sumber kebenaran untuk TUI dan mode teks.
@@ -473,19 +540,9 @@ fn ensure_jenkins_config(
         "i".cyan().bold(),
         conf_path.display()
     );
-    let url = Text::new("URL Jenkins:")
-        .with_default("http://127.0.0.1:8080")
-        .prompt()
-        .ok()?;
-    let user = Text::new("Username Jenkins:")
-        .with_default("admin")
-        .prompt()
-        .ok()?;
-    let token = Password::new("Password / API Token Jenkins:")
-        .without_confirmation()
-        .with_display_mode(PasswordDisplayMode::Masked)
-        .prompt()
-        .ok()?;
+    let url = ui_ask_text("URL Jenkins", "http://127.0.0.1:8080")?;
+    let user = ui_ask_text("Username Jenkins", "admin")?;
+    let token = ui_ask_secret("Password / API Token Jenkins")?;
     let new_cfg = jenkins::JenkinsConfig { url, user, token };
     if let Err(e) = jenkins::save_config_to(conf_path, &new_cfg) {
         eprintln!("{} {e}", "ERROR:".red().bold());
@@ -687,9 +744,9 @@ fn execute_command(
         } => {
             let resolved_name = match app_name {
                 Some(n) => n,
-                None => match Text::new("Nama aplikasi:").prompt() {
-                    Ok(n) => n.trim().to_string(),
-                    Err(_) => return 1,
+                None => match ui_ask_text("Nama aplikasi", "") {
+                    Some(n) => n.trim().to_string(),
+                    None => return 1,
                 },
             };
             if let Err(e) = validate_app_name(&resolved_name) {
@@ -709,20 +766,22 @@ fn execute_command(
                         return 1;
                     }
                 },
-                None => match Select::new("Pilih bahasa / Tech Stack:", TechStack::all()).prompt() {
-                    Ok(st) => st,
-                    Err(_) => return 1,
+                None => match ui_ask_choose("Pilih bahasa / Tech Stack", &stack_labels())
+                    .and_then(stack_at)
+                {
+                    Some(st) => st,
+                    None => return 1,
                 },
             };
 
             let resolved_port = match app_port {
                 Some(p) => p,
-                None => match CustomType::<u16>::new("Port aplikasi di dalam container:")
-                    .with_default(resolved_stack.default_port())
-                    .prompt()
-                {
-                    Ok(p) => p,
-                    Err(_) => return 1,
+                None => match ui_ask_u16(
+                    "Port aplikasi di dalam container",
+                    resolved_stack.default_port(),
+                ) {
+                    Some(p) => p,
+                    None => return 1,
                 },
             };
 
@@ -735,16 +794,12 @@ fn execute_command(
                     p
                 }
                 None if interactive => loop {
-                    match CustomType::<u16>::new("Port deploy di server (host):")
-                        .with_default(8081)
-                        .with_help_message("Enter pakai 8081 • isi 8083, 8084, dst untuk project berikutnya")
-                        .prompt()
-                    {
-                        Ok(p) => match validate_deploy_port(p) {
+                    match ui_ask_u16("Port deploy di server (host)", 8081) {
+                        Some(p) => match validate_deploy_port(p) {
                             Ok(()) => break p,
-                            Err(e) => eprintln!("{} {}", "ERROR:".red().bold(), e),
+                            Err(e) => eprintln!("{} {e}", "ERROR:".red().bold()),
                         },
-                        Err(_) => return 1,
+                        None => return 1,
                     }
                 },
                 None => 8081,
@@ -767,15 +822,14 @@ fn execute_command(
                         cfg.app_name,
                         target_dir.display()
                     );
-                    match Confirm::new(&prompt_msg).with_default(false).prompt() {
-                        Ok(true) => effective_force = true,
-                        _ => {
-                            println!(
-                                "{}",
-                                "  ℹ Dibatalkan — file project lama tidak diubah.".yellow()
-                            );
-                            return 0;
-                        }
+                    if ui_ask_confirm(&prompt_msg, false) == Some(true) {
+                        effective_force = true;
+                    } else {
+                        println!(
+                            "{}",
+                            "  i Dibatalkan — file project lama tidak diubah.".yellow()
+                        );
+                        return 0;
                     }
                 }
                 match bootstrap_interactive_project(&cwd, &cfg, effective_force) {
@@ -1098,13 +1152,9 @@ fn execute_command(
                 (None, Some(u)) => u,
                 (None, None) if interactive => {
                     let default_repo = format!("https://github.com/tugure-git-intern/{job_name}.git");
-                    match Text::new("URL repositori GitHub:")
-                        .with_default(&default_repo)
-                        .with_help_message("Enter pakai default • atau tempel URL repo GitHub")
-                        .prompt()
-                    {
-                        Ok(u) => u.trim().to_string(),
-                        Err(_) => return 0,
+                    match ui_ask_text("URL repositori GitHub", &default_repo) {
+                        Some(u) => u.trim().to_string(),
+                        None => return 0,
                     }
                 }
                 (None, None) => {
@@ -1179,13 +1229,9 @@ fn execute_command(
 
             let resolved_name = match app_name {
                 Some(n) => n.trim().to_string(),
-                None if interactive => match Text::new("Nama project:")
-                    .with_default(&default_name)
-                    .with_help_message("Enter pakai nama folder saat ini")
-                    .prompt()
-                {
-                    Ok(n) => n.trim().to_string(),
-                    Err(_) => return 0,
+                None if interactive => match ui_ask_text("Nama project", &default_name) {
+                    Some(n) => n.trim().to_string(),
+                    None => return 0,
                 },
                 None => default_name,
             };
@@ -1207,9 +1253,9 @@ fn execute_command(
                     }
                 },
                 None if interactive => {
-                    match Select::new("Teknologi project:", TechStack::all()).prompt() {
-                        Ok(st) => st,
-                        Err(_) => return 0,
+                    match ui_ask_choose("Teknologi project", &stack_labels()).and_then(stack_at) {
+                        Some(st) => st,
+                        None => return 0,
                     }
                 }
                 None => TechStack::Python,
@@ -1259,12 +1305,11 @@ fn execute_command(
                     "Folder {} sudah punya Dockerfile/Jenkinsfile. Timpa dengan yang baru?",
                     target_dir.display()
                 );
-                match Confirm::new(&msg).with_default(false).prompt() {
-                    Ok(true) => effective_force = true,
-                    _ => {
-                        println!("{}", "  i Dibatalkan — file lama tidak diubah.".yellow());
-                        return 0;
-                    }
+                if ui_ask_confirm(&msg, false) == Some(true) {
+                    effective_force = true;
+                } else {
+                    println!("{}", "  i Dibatalkan — file lama tidak diubah.".yellow());
+                    return 0;
                 }
             }
             match generate_project_files_with(&cfg, &target_dir, effective_force) {
@@ -1289,12 +1334,8 @@ fn execute_command(
                         "  {} Belum ada token GitHub. Buat sekali di https://github.com/settings/tokens (centang scope 'repo').",
                         "i".cyan().bold()
                     );
-                    match Password::new("Token GitHub:")
-                        .without_confirmation()
-                        .with_display_mode(PasswordDisplayMode::Masked)
-                        .prompt()
-                    {
-                        Ok(t) => match github::save_token(&t) {
+                    match ui_ask_secret("Token GitHub") {
+                        Some(t) => match github::save_token(&t) {
                             Ok(p) => {
                                 println!(
                                     "  {} Token GitHub tersimpan di {}",
@@ -1308,7 +1349,7 @@ fn execute_command(
                                 return 1;
                             }
                         },
-                        Err(_) => return 0,
+                        None => return 0,
                     }
                 }
                 None => {
@@ -1415,14 +1456,10 @@ fn execute_command(
                 })
                 .collect();
 
-            let picked = match Select::new("Pilih project yang ingin dihapus:", labels.clone())
-                .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
-                .prompt()
-            {
-                Ok(choice) => choice,
-                Err(_) => return 0,
+            let idx = match ui_ask_choose("Pilih project yang ingin dihapus", &labels) {
+                Some(i) => i,
+                None => return 0,
             };
-            let idx = labels.iter().position(|l| l == &picked).unwrap_or(0);
             let target = &candidates[idx];
             let name = target
                 .file_name()
@@ -1434,8 +1471,8 @@ fn execute_command(
                 name,
                 target.display()
             );
-            match Confirm::new(&confirm_msg).with_default(false).prompt() {
-                Ok(true) => match delete_project_safely(target, active_project) {
+            if ui_ask_confirm(&confirm_msg, false) == Some(true) {
+                match delete_project_safely(target, active_project) {
                     Ok(moved) => {
                         println!(
                             "\n{} Project '{}' berhasil dihapus ({})",
@@ -1452,11 +1489,10 @@ fn execute_command(
                         eprintln!("{} {e}", "ERROR:".red().bold());
                         1
                     }
-                },
-                _ => {
-                    println!("  {}", "ℹ Penghapusan dibatalkan.".yellow());
-                    0
                 }
+            } else {
+                println!("  {}", "i Penghapusan dibatalkan.".yellow());
+                0
             }
         }
     }
@@ -1467,6 +1503,96 @@ fn execute_command(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn stack_kotak_pilih_cocok_dengan_techstack() {
+        let labels = stack_labels();
+        assert_eq!(labels.len(), TechStack::all().len());
+        assert_eq!(stack_at(0), Some(TechStack::Python));
+        assert_eq!(labels[0], TechStack::Python.to_string());
+        assert_eq!(
+            stack_at(99),
+            None,
+            "index di luar daftar = batal, bukan panic"
+        );
+    }
+
+    #[test]
+    fn prompt_interaktif_menyerah_rapi_tanpa_terminal() {
+        // `cargo test` tanpa TTY: jalur prompt harus balik None, bukan panic/menggantung.
+        assert_eq!(ui_ask_text("Nama", "x"), None);
+        assert_eq!(ui_ask_secret("Token"), None);
+        assert_eq!(ui_ask_choose("Pilih", &["a".to_string()]), None);
+        assert_eq!(ui_ask_confirm("Yakin?", false), None);
+        assert_eq!(ui_ask_u16("Port", 8081), None);
+    }
+
+    fn init_cmd(stack: Option<&str>, app_port: Option<u16>) -> Commands {
+        Commands::Init {
+            app_name: Some("demo-app".to_string()),
+            stack: stack.map(str::to_string),
+            app_port,
+            deploy_port: None,
+            output_dir: PathBuf::from("."),
+            force: false,
+        }
+    }
+
+    #[test]
+    fn init_interaktif_berhenti_saat_prompt_batal() {
+        // Tanpa TTY setiap kotak tanya = batal -> alur berhenti (kode 1), tidak menulis file.
+        let mut act = None;
+        let tanpa_nama = Commands::Init {
+            app_name: None,
+            stack: None,
+            app_port: None,
+            deploy_port: None,
+            output_dir: PathBuf::from("."),
+            force: false,
+        };
+        assert_eq!(execute_command(tanpa_nama, true, &mut act), 1);
+        assert_eq!(execute_command(init_cmd(None, None), true, &mut act), 1);
+        assert_eq!(execute_command(init_cmd(Some("python"), None), true, &mut act), 1);
+        assert_eq!(execute_command(init_cmd(Some("python"), Some(8000)), true, &mut act), 1);
+        assert!(act.is_none());
+    }
+
+    #[test]
+    fn quickstart_interaktif_batal_tidak_menimpa_file_lama() {
+        let tmp = TempDir::new().unwrap();
+        let qs = |name: Option<&str>, stack: Option<&str>| Commands::QuickStart {
+            path: tmp.path().to_path_buf(),
+            app_name: name.map(str::to_string),
+            stack: stack.map(str::to_string),
+            app_port: None,
+            deploy_port: None,
+        };
+        let mut act = None;
+        assert_eq!(execute_command(qs(None, None), true, &mut act), 0);
+        assert_eq!(execute_command(qs(Some("demo-app"), None), true, &mut act), 0);
+
+        let dir = tmp.path().join("demo-app");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Dockerfile"), "FROM lama").unwrap();
+        assert_eq!(
+            execute_command(qs(Some("demo-app"), Some("python")), true, &mut act),
+            0
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("Dockerfile")).unwrap(),
+            "FROM lama",
+            "konfirmasi batal = file lama utuh"
+        );
+        assert!(act.is_none());
+    }
+
+    #[test]
+    fn setup_jenkins_interaktif_batal_tidak_menyimpan() {
+        let tmp = TempDir::new().unwrap();
+        let conf = tmp.path().join("jenkins.toml");
+        assert!(ensure_jenkins_config(&conf, true, false).is_none());
+        assert!(!conf.exists());
+    }
 
     #[test]
     fn banner_fits_standard_80_col_terminal() {

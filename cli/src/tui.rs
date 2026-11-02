@@ -10,13 +10,14 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::{Print, ResetColor};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const CYAN: &str = "\x1b[36m";
 const DIM: &str = "\x1b[2m";
 const REV: &str = "\x1b[7m";
+const ORANGE: &str = "\x1b[38;2;217;119;87m";
 /// Lebar maksimum panel kiri (judul menu) — cukup untuk label terpanjang (47 karakter).
 const LEFT_W: usize = 49;
 /// Tinggi minimum layar supaya banner blok ikut tampil (banner 8 + panel + kotak perintah + status).
@@ -251,6 +252,240 @@ fn run_ui<W: Write>(
             Err(_) => return None,
         }
     }
+}
+
+// ── Kotak tanya TUI ──────────────────────────────────────────────────────────
+// Dipakai alur interaktif supaya user tidak pernah keluar dari layar TUI:
+// menu -> kotak tanya -> proses -> menu lagi, semuanya di alternate screen.
+
+/// Jenis kotak tanya: `Text` = input bebas, `Choose` = pilih satu dari daftar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Ask {
+    Text { secret: bool },
+    Choose,
+}
+
+/// Isi kotak tanya; dipisah dari I/O supaya bisa diuji tanpa TTY.
+#[derive(Debug, Default)]
+struct AskState {
+    buf: String,
+    sel: usize,
+}
+
+#[derive(Debug, PartialEq)]
+enum AskAct {
+    Stay,
+    Submit,
+    Cancel,
+}
+
+/// Satu tombol di kotak tanya -> satu aksi.
+fn ask_key(kind: Ask, st: &mut AskState, key: KeyEvent, count: usize) -> AskAct {
+    let plain = key.modifiers.is_empty();
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    match kind {
+        Ask::Text { .. } => match key.code {
+            KeyCode::Esc => AskAct::Cancel,
+            KeyCode::Enter => AskAct::Submit,
+            KeyCode::Backspace => {
+                st.buf.pop();
+                AskAct::Stay
+            }
+            KeyCode::Char('u') if ctrl => {
+                st.buf.clear();
+                AskAct::Stay
+            }
+            KeyCode::Char(c) if plain && !c.is_control() => {
+                st.buf.push(c);
+                AskAct::Stay
+            }
+            _ => AskAct::Stay,
+        },
+        Ask::Choose => match key.code {
+            KeyCode::Esc => AskAct::Cancel,
+            KeyCode::Enter => AskAct::Submit,
+            KeyCode::Up => {
+                st.sel = st.sel.saturating_sub(1);
+                AskAct::Stay
+            }
+            KeyCode::Down => {
+                st.sel = (st.sel + 1).min(count.saturating_sub(1));
+                AskAct::Stay
+            }
+            KeyCode::Char('k') if plain => {
+                st.sel = st.sel.saturating_sub(1);
+                AskAct::Stay
+            }
+            KeyCode::Char('j') if plain => {
+                st.sel = (st.sel + 1).min(count.saturating_sub(1));
+                AskAct::Stay
+            }
+            _ => AskAct::Stay,
+        },
+    }
+}
+
+/// Satu frame kotak tanya: border di tengah layar, sisa baris dikosongkan.
+fn ask_frame(
+    kind: Ask,
+    label: &str,
+    st: &AskState,
+    default: &str,
+    options: &[String],
+    cols: u16,
+    rows: u16,
+) -> String {
+    let cols = (cols as usize).max(20);
+    let rows = (rows as usize).max(6);
+    let inner = 68.min(cols.saturating_sub(4)).max(20);
+    let mut body: Vec<String> = wrap(label, inner.saturating_sub(2))
+        .iter()
+        .map(|l| format!("{BOLD}{l}{RESET}"))
+        .collect();
+    match kind {
+        Ask::Text { secret } => {
+            if !default.is_empty() {
+                body.push(format!("{DIM}Enter = pakai default: {default}{RESET}"));
+            }
+            body.push(String::new());
+            let shown = if secret {
+                "*".repeat(st.buf.chars().count())
+            } else {
+                st.buf.clone()
+            };
+            body.push(format!("{CYAN}>{RESET} {shown}\x1b[7m \x1b[0m"));
+            body.push(String::new());
+            body.push(format!(
+                "{DIM}Enter lanjut  •  Esc batal  •  Ctrl+U hapus{RESET}"
+            ));
+        }
+        Ask::Choose => {
+            if options.is_empty() {
+                body.push(format!("{DIM}(tidak ada pilihan){RESET}"));
+            }
+            for (i, o) in options.iter().enumerate() {
+                let line = format!("{} {o}", if i == st.sel { "▸" } else { " " });
+                if i == st.sel {
+                    body.push(format!("{REV}{}", pad_plain(&line, inner.saturating_sub(2))));
+                } else {
+                    body.push(line);
+                }
+            }
+            body.push(String::new());
+            body.push(format!(
+                "{DIM}↑/↓ geser  •  Enter pilih  •  Esc batal{RESET}"
+            ));
+        }
+    }
+
+    // Banner AUTORE tetap di tengah atas, kotak oranye di bawahnya — senada dengan menu.
+    let mut screen: Vec<String> = Vec::new();
+    if rows >= BANNER_MIN_ROWS {
+        for (row, (r, g, b)) in BANNER {
+            screen.push(center(&format!("\x1b[38;2;{r};{g};{b}m{row}{RESET}"), cols));
+        }
+        screen.push(blank_row(cols));
+    }
+    let edge = |s: String| center(&format!("{ORANGE}{s}{RESET}"), cols);
+    let mut lines: Vec<String> = vec![edge(format!("┌{}┐", "─".repeat(inner)))];
+    for b in &body {
+        lines.push(center(
+            &format!(
+                "{ORANGE}│{RESET} {} {ORANGE}│{RESET}",
+                pad_plain(b, inner.saturating_sub(2))
+            ),
+            cols,
+        ));
+    }
+    lines.push(edge(format!("└{}┘", "─".repeat(inner))));
+
+    let top = screen.len();
+    for _ in 0..rows.saturating_sub(top + lines.len()) / 2 {
+        screen.push(blank_row(cols));
+    }
+    screen.extend(lines);
+    screen.truncate(rows); // ponytail: layar pendek -> kotak dipotong, bukan panic
+    while screen.len() < rows {
+        screen.push(blank_row(cols));
+    }
+    screen.join("\r\n")
+}
+
+/// Loop kotak tanya: gambar -> baca tombol -> sampai Submit/Cancel. `None` = batal atau I/O gagal.
+fn dialog_loop(
+    kind: Ask,
+    label: &str,
+    default: &str,
+    options: &[String],
+    start: usize,
+) -> Option<AskState> {
+    let mut st = AskState {
+        buf: String::new(),
+        sel: start,
+    };
+    let mut out = io::stdout();
+    // ponytail: di `cargo test` (walau dari terminal sungguhan) jangan pernah menunggu tombol.
+    if cfg!(test) || !out.is_terminal() {
+        return None;
+    }
+    terminal::enable_raw_mode().ok()?;
+    if execute!(out, EnterAlternateScreen, Hide).is_err() {
+        let _ = terminal::disable_raw_mode();
+        return None;
+    }
+    let hasil = loop {
+        let Ok((cols, rows)) = terminal::size() else {
+            break None;
+        };
+        let screen = ask_frame(kind, label, &st, default, options, cols, rows);
+        if paint(&mut out, &screen).is_err() {
+            break None;
+        }
+        match event::read() {
+            Ok(Event::Key(k)) => match ask_key(kind, &mut st, k, options.len()) {
+                AskAct::Stay => {}
+                AskAct::Submit => break Some(()),
+                AskAct::Cancel => break None,
+            },
+            Ok(_) => {}
+            Err(_) => break None,
+        }
+    };
+
+    let _ = execute!(out, ResetColor, LeaveAlternateScreen, Show);
+    let _ = terminal::disable_raw_mode();
+    hasil.map(|_| st)
+}
+
+/// Tanya teks di layar TUI. `None` = user batal (Esc) atau terminal tak mendukung.
+pub fn ask_text(label: &str, default: &str) -> Option<String> {
+    let st = dialog_loop(Ask::Text { secret: false }, label, default, &[], 0)?;
+    Some(text_or_default(&st.buf, default))
+}
+
+/// Isi kosong (cuma Enter) = pakai default.
+fn text_or_default(buf: &str, default: &str) -> String {
+    match buf.trim() {
+        "" => default.to_string(),
+        isi => isi.to_string(),
+    }
+}
+
+/// Tanya rahasia (token/password) — isi disamarkan.
+pub fn ask_secret(label: &str) -> Option<String> {
+    dialog_loop(Ask::Text { secret: true }, label, "", &[], 0).map(|st| st.buf)
+}
+
+/// Pilih satu dari daftar; hasil = index. `None` = batal.
+pub fn ask_choose(label: &str, options: &[String]) -> Option<usize> {
+    dialog_loop(Ask::Choose, label, "", options, 0)
+        .map(|st| st.sel.min(options.len().saturating_sub(1)))
+}
+
+/// Konfirmasi ya/tidak; `None` = batal (dianggap tidak).
+pub fn ask_confirm(label: &str, default_ya: bool) -> Option<bool> {
+    let opts = ["Ya".to_string(), "Tidak".to_string()];
+    dialog_loop(Ask::Choose, label, "", &opts, usize::from(!default_ya)).map(|st| st.sel == 0)
 }
 
 fn render(
@@ -768,6 +1003,158 @@ mod tests {
         let keluaran = String::from_utf8_lossy(&buf).to_string();
         assert!(keluaran.contains("halo"));
         assert!(keluaran.contains("\x1b[1;1H"), "kursor harus balik ke kiri atas");
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn kotak_teks_simpan_ketikan_escape_dan_submit() {
+        let mut st = AskState::default();
+        let kind = Ask::Text { secret: false };
+        assert_eq!(
+            ask_key(kind, &mut st, key(KeyCode::Char('h')), 0),
+            AskAct::Stay
+        );
+        assert_eq!(
+            ask_key(kind, &mut st, key(KeyCode::Char('i')), 0),
+            AskAct::Stay
+        );
+        assert_eq!(st.buf, "hi");
+        ask_key(kind, &mut st, key(KeyCode::Backspace), 0);
+        assert_eq!(st.buf, "h");
+        ask_key(
+            kind,
+            &mut st,
+            KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+            0,
+        );
+        assert_eq!(st.buf, "", "Ctrl+U mengosongkan isi");
+        ask_key(kind, &mut st, key(KeyCode::Char('j')), 0);
+        assert_eq!(st.buf, "j", "'j' huruf biasa di kotak teks, bukan navigasi");
+        assert_eq!(
+            ask_key(kind, &mut st, key(KeyCode::Enter), 0),
+            AskAct::Submit
+        );
+        assert_eq!(ask_key(kind, &mut st, key(KeyCode::Esc), 0), AskAct::Cancel);
+    }
+
+    #[test]
+    fn kotak_pilih_j_k_dan_tombol_lain() {
+        let mut st = AskState::default();
+        ask_key(Ask::Choose, &mut st, key(KeyCode::Char('j')), 3);
+        assert_eq!(st.sel, 1);
+        ask_key(Ask::Choose, &mut st, key(KeyCode::Char('k')), 3);
+        assert_eq!(st.sel, 0);
+        assert_eq!(ask_key(Ask::Choose, &mut st, key(KeyCode::Tab), 3), AskAct::Stay);
+        assert_eq!(
+            ask_key(Ask::Text { secret: false }, &mut st, key(KeyCode::Tab), 0),
+            AskAct::Stay
+        );
+        assert_eq!(st.sel, 0);
+    }
+
+    #[test]
+    fn teks_kosong_pakai_default() {
+        assert_eq!(text_or_default("  ", "web-app"), "web-app");
+        assert_eq!(text_or_default(" demo ", "web-app"), "demo");
+    }
+
+    #[test]
+    fn kotak_pilih_geser_dan_berhenti_di_batas() {
+        let mut st = AskState::default();
+        assert_eq!(
+            ask_key(Ask::Choose, &mut st, key(KeyCode::Up), 3),
+            AskAct::Stay
+        );
+        assert_eq!(st.sel, 0, "tidak bisa geser di atas pilihan pertama");
+        for _ in 0..4 {
+            ask_key(Ask::Choose, &mut st, key(KeyCode::Down), 3);
+        }
+        assert_eq!(st.sel, 2, "mentok di pilihan terakhir");
+        assert_eq!(
+            ask_key(Ask::Choose, &mut st, key(KeyCode::Enter), 3),
+            AskAct::Submit
+        );
+        assert_eq!(
+            ask_key(Ask::Choose, &mut st, key(KeyCode::Esc), 3),
+            AskAct::Cancel
+        );
+    }
+
+    #[test]
+    fn frame_teks_menampilkan_label_default_dan_border() {
+        let st = AskState::default();
+        let f = ask_frame(
+            Ask::Text { secret: false },
+            "Nama aplikasi",
+            &st,
+            "web-app",
+            &[],
+            100,
+            24,
+        );
+        assert_eq!(f.split("\r\n").count(), 24);
+        assert!(f.contains("Nama aplikasi"));
+        assert!(f.contains("default: web-app"));
+        assert!(f.contains('┌') && f.contains('└'));
+    }
+
+    #[test]
+    fn frame_teks_rahasia_menyamarkan_isi() {
+        let st = AskState {
+            buf: "token-rahasia".to_string(),
+            sel: 0,
+        };
+        let f = ask_frame(
+            Ask::Text { secret: true },
+            "Token GitHub",
+            &st,
+            "",
+            &[],
+            80,
+            20,
+        );
+        assert!(f.contains("*************"));
+        assert!(
+            !f.contains("token-rahasia"),
+            "isi rahasia tidak boleh tampil"
+        );
+        assert_eq!(visible_len(f.lines().next().unwrap_or("")), 80);
+    }
+
+    #[test]
+    fn frame_pilih_menyorot_pilihan_aktif_dan_menangani_daftar_kosong() {
+        let st = AskState {
+            buf: String::new(),
+            sel: 1,
+        };
+        let f = ask_frame(
+            Ask::Choose,
+            "Selesai — lanjut?",
+            &st,
+            "",
+            &["Kembali ke Menu".to_string(), "Keluar".to_string()],
+            90,
+            18,
+        );
+        assert!(f.contains("Kembali ke Menu") && f.contains("Keluar"));
+        assert!(f.contains("\x1b[7m"), "pilihan aktif disorot terbalik");
+        assert_eq!(f.split("\r\n").count(), 18);
+
+        let kosong = ask_frame(Ask::Choose, "Pilih", &st, "", &[], 40, 6);
+        assert!(kosong.contains("(tidak ada pilihan)"));
+        assert_eq!(kosong.split("\r\n").count(), 6);
+    }
+
+    #[test]
+    fn kotak_tanya_menyerah_rapi_tanpa_terminal() {
+        // Tanpa TTY semua kotak tanya mengembalikan None, bukan panic.
+        assert_eq!(ask_text("Nama aplikasi", "web-app"), None);
+        assert_eq!(ask_secret("Token GitHub"), None);
+        assert_eq!(ask_choose("Pilih project", &["a".to_string()]), None);
+        assert_eq!(ask_confirm("Yakin hapus?", false), None);
     }
 
     #[test]

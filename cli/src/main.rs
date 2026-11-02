@@ -100,13 +100,16 @@ fn prompt_main_menu() -> Commands {
     }
 }
 
+fn clear_gate_reason() {
+    let _ = std::fs::remove_file(std::path::Path::new(".security-gate-reason"));
+}
+
 /// Tulis alasan blokir ke file yang dibaca notifier pipeline.
 /// ponytail: hapus dulu — `fs::write` menembus symlink, dan repo bisa meng-commit
 /// `.security-gate-reason` -> file lain yang writable oleh user runner.
 fn write_gate_reason(contents: &str) {
-    let path = std::path::Path::new(".security-gate-reason");
-    let _ = std::fs::remove_file(path); // hapus link-nya sendiri, bukan target
-    let _ = std::fs::write(path, contents);
+    clear_gate_reason(); // hapus link-nya sendiri, bukan target
+    let _ = std::fs::write(".security-gate-reason", contents);
 }
 
 #[derive(Subcommand)]
@@ -291,6 +294,7 @@ fn main() {
         }
 
         Commands::Scan { path, severity, no_docker, include_build_dirs, docker: _ } => {
+            clear_gate_reason();
             println!(
                 "{} Memindai keamanan kode di '{}'...",
                 "==>".cyan().bold(),
@@ -373,6 +377,7 @@ fn main() {
         }
 
         Commands::ScanImage { image, severity, sbom_output, no_docker } => {
+            clear_gate_reason();
             println!(
                 "{} Memeriksa keamanan Docker image '{}' (severity: {})...",
                 "==>".cyan().bold(),
@@ -381,6 +386,7 @@ fn main() {
             );
             if image == "latest" || image.ends_with(":latest") {
                 eprintln!("\n{} Tag :latest dilarang. Gunakan immutable commit tag.", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold());
+                write_gate_reason("Tag :latest dilarang. Gunakan immutable commit tag.");
                 process::exit(1);
             }
             if no_docker {

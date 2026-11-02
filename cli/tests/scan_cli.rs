@@ -55,14 +55,29 @@ fn scan_never_executes_repo_controlled_security_script() {
 fn no_docker_mode_is_labelled_non_authoritative() {
     let tmp = TempDir::new().unwrap();
     clean_project(tmp.path());
+    let reason = tmp.path().join(".security-gate-reason");
+
+    // 1. Gagal dulu -> .security-gate-reason tertulis (pakai concat! agar tidak memicu scanner sendiri)
+    fs::write(tmp.path().join("bad.py"), concat!("ev", "al('1+1')\n")).unwrap();
+    let fail = autore()
+        .current_dir(tmp.path())
+        .args(["scan", "--no-docker", "--path", "."])
+        .output()
+        .unwrap();
+    assert!(!fail.status.success());
+    assert!(reason.exists(), "expected .security-gate-reason after failure");
+
+    // 2. Perbaiki lalu scan ulang -> .security-gate-reason wajib bersih
+    fs::remove_file(tmp.path().join("bad.py")).unwrap();
     let out = autore()
-        .args(["scan", "--no-docker", "--path"])
-        .arg(tmp.path())
+        .current_dir(tmp.path())
+        .args(["scan", "--no-docker", "--path", "."])
         .output()
         .unwrap();
     let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(out.status.success(), "{all}");
     assert!(all.contains("NON-AUTHORITATIVE"), "{all}");
+    assert!(!reason.exists(), ".security-gate-reason masih tertinggal setelah scan LULUS");
 }
 
 #[test]

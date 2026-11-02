@@ -1,5 +1,6 @@
 mod doctor;
 mod external;
+mod github;
 mod hooks;
 mod jenkins;
 mod scanner;
@@ -270,6 +271,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
         );
     }
     let items = vec![
+        "Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)",
         "Buat Project Baru (Dockerfile & Jenkinsfile)",
         "Hapus Project",
         "Scan Keamanan Kode (Static + Gitleaks + Trivy)",
@@ -285,6 +287,13 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
         .ok()?;
 
     Some(match choice {
+        "Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)" => Commands::QuickStart {
+            path: PathBuf::from("."),
+            app_name: None,
+            stack: None,
+            app_port: None,
+            deploy_port: None,
+        },
         "Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
             app_name: None,
             stack: None,
@@ -327,6 +336,73 @@ fn clear_gate_reason() {
 fn write_gate_reason(contents: &str) {
     clear_gate_reason(); // hapus link-nya sendiri, bukan target
     let _ = std::fs::write(".security-gate-reason", contents);
+}
+
+/// Port host bebas pertama mulai `start` — supaya alur 1-klik tidak bentrok port.
+fn pick_free_port(start: u16) -> u16 {
+    (start..=start.saturating_add(40))
+        .find(|p| std::net::TcpListener::bind(("0.0.0.0", *p)).is_ok())
+        .unwrap_or(start)
+}
+
+/// Push branch `main` ke `origin`. `false` = gagal (pemanggil yang memutuskan).
+fn git_push_main(dir: &std::path::Path) -> bool {
+    std::process::Command::new("git")
+        .args(["push", "-q", "-u", "origin", "main"])
+        .current_dir(dir)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Konfigurasi Jenkins: pakai yang tersimpan, atau tanya sekali di sesi interaktif.
+fn ensure_jenkins_config(
+    conf_path: &std::path::Path,
+    interactive: bool,
+    reconfigure: bool,
+) -> Option<jenkins::JenkinsConfig> {
+    if !reconfigure {
+        if let Some(cfg) = jenkins::load_config_from(conf_path) {
+            return Some(cfg);
+        }
+    }
+    if !interactive {
+        eprintln!(
+            "{} Konfigurasi Jenkins belum ada di {}. Jalankan `autore` lewat menu untuk mengisi sekali.",
+            "ERROR:".red().bold(),
+            conf_path.display()
+        );
+        return None;
+    }
+    println!(
+        "  {} Setup akses Jenkins pertama kali (akan disimpan aman di {}):",
+        "i".cyan().bold(),
+        conf_path.display()
+    );
+    let url = Text::new("URL Jenkins:")
+        .with_default("http://127.0.0.1:8080")
+        .prompt()
+        .ok()?;
+    let user = Text::new("Username Jenkins:")
+        .with_default("admin")
+        .prompt()
+        .ok()?;
+    let token = Password::new("Password / API Token Jenkins:")
+        .without_confirmation()
+        .with_display_mode(PasswordDisplayMode::Masked)
+        .prompt()
+        .ok()?;
+    let new_cfg = jenkins::JenkinsConfig { url, user, token };
+    if let Err(e) = jenkins::save_config_to(conf_path, &new_cfg) {
+        eprintln!("{} {e}", "ERROR:".red().bold());
+        return None;
+    }
+    println!(
+        "  {} Akses Jenkins tersimpan di {} (klik berikutnya langsung jalan otomatis).",
+        "✔".green().bold(),
+        conf_path.display()
+    );
+    jenkins::load_config_from(conf_path)
 }
 
 #[derive(Subcommand)]
@@ -426,6 +502,29 @@ enum Commands {
         /// Ubah kredensial Jenkins yang tersimpan di ~/.config/autore/jenkins.conf
         #[arg(long)]
         reconfigure: bool,
+    },
+
+    /// Alur 1-klik: buat file pipeline, buat repo GitHub, push, daftar ke Jenkins, trigger build
+    QuickStart {
+        /// Direktori induk tempat project baru dibuat
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+
+        /// Nama project (default: nama folder saat ini)
+        #[arg(long)]
+        app_name: Option<String>,
+
+        /// Tech stack: python, nodejs, java, go
+        #[arg(long)]
+        stack: Option<String>,
+
+        /// Port internal aplikasi di dalam container
+        #[arg(long)]
+        app_port: Option<u16>,
+
+        /// Port host untuk deployment (default: port bebas pertama mulai 8081)
+        #[arg(long)]
+        deploy_port: Option<u16>,
     },
 
     /// Hapus folder project Autore secara interaktif
@@ -890,63 +989,9 @@ fn execute_command(
             };
 
             let conf_path = jenkins::default_config_path();
-            let mut jk_cfg = if reconfigure {
-                None
-            } else {
-                jenkins::load_config_from(&conf_path)
-            };
-
-            if jk_cfg.is_none() {
-                if !interactive {
-                    eprintln!(
-                        "{} Konfigurasi Jenkins belum ada di {}. Jalankan `autore` lewat menu untuk mengisi sekali.",
-                        "ERROR:".red().bold(),
-                        conf_path.display()
-                    );
-                    return 1;
-                }
-                println!(
-                    "  {} Setup akses Jenkins pertama kali (akan disimpan aman di {}):",
-                    "ℹ".cyan().bold(),
-                    conf_path.display()
-                );
-                let url = match Text::new("URL Jenkins:")
-                    .with_default("http://127.0.0.1:8080")
-                    .prompt()
-                {
-                    Ok(u) => u,
-                    Err(_) => return 0,
-                };
-                let user = match Text::new("Username Jenkins:")
-                    .with_default("admin")
-                    .prompt()
-                {
-                    Ok(u) => u,
-                    Err(_) => return 0,
-                };
-                let token = match Password::new("Password / API Token Jenkins:")
-                    .without_confirmation()
-                    .with_display_mode(PasswordDisplayMode::Masked)
-                    .prompt()
-                {
-                    Ok(t) => t,
-                    Err(_) => return 0,
-                };
-                let new_cfg = jenkins::JenkinsConfig { url, user, token };
-                if let Err(e) = jenkins::save_config_to(&conf_path, &new_cfg) {
-                    eprintln!("{} {e}", "ERROR:".red().bold());
-                    return 1;
-                }
-                println!(
-                    "  {} Akses Jenkins tersimpan di {} (klik berikutnya langsung jalan otomatis).",
-                    "✔".green().bold(),
-                    conf_path.display()
-                );
-                jk_cfg = jenkins::load_config_from(&conf_path);
-            }
-            let jk_cfg = match jk_cfg {
+            let jk_cfg = match ensure_jenkins_config(&conf_path, interactive, reconfigure) {
                 Some(c) => c,
-                None => return 1,
+                None => return 0,
             };
 
             let job_name = jenkins::infer_project_job_name(&target_dir);
@@ -984,10 +1029,7 @@ fn execute_command(
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
             }
-            let _ = std::process::Command::new("git")
-                .args(["push", "-q", "-u", "origin", "main"])
-                .current_dir(&target_dir)
-                .status();
+            let _ = git_push_main(&target_dir);
 
             match jenkins::register_and_trigger_jenkins(&jk_cfg, &job_name, &resolved_git_url, "main")
             {
@@ -1010,6 +1052,240 @@ fn execute_command(
                         eprintln!(
                             "  {} Kredensial lama dihapus. Pilih menu ini lagi untuk memasukkan password baru.",
                             "ℹ".yellow()
+                        );
+                    }
+                    1
+                }
+            }
+        }
+
+        Commands::QuickStart {
+            path,
+            app_name,
+            stack,
+            app_port,
+            deploy_port,
+        } => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let base_dir = if path == std::path::Path::new(".") {
+                cwd.clone()
+            } else {
+                path
+            };
+
+            let default_name = cwd
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.to_ascii_lowercase().replace(' ', "-"))
+                .filter(|n| validate_app_name(n).is_ok())
+                .unwrap_or_else(|| "project-baru".to_string());
+
+            let resolved_name = match app_name {
+                Some(n) => n.trim().to_string(),
+                None if interactive => match Text::new("Nama project:")
+                    .with_default(&default_name)
+                    .with_help_message("Enter pakai nama folder saat ini")
+                    .prompt()
+                {
+                    Ok(n) => n.trim().to_string(),
+                    Err(_) => return 0,
+                },
+                None => default_name,
+            };
+            if let Err(e) = validate_app_name(&resolved_name) {
+                eprintln!("{} {}", "ERROR:".red().bold(), e);
+                return 1;
+            }
+
+            let resolved_stack = match stack {
+                Some(s) => match TechStack::from_str_loose(&s) {
+                    Some(st) => st,
+                    None => {
+                        eprintln!(
+                            "{} Stack '{}' tidak dikenali. Pilih: python, nodejs, java, go",
+                            "ERROR:".red().bold(),
+                            s
+                        );
+                        return 1;
+                    }
+                },
+                None if interactive => {
+                    match Select::new("Teknologi project:", TechStack::all()).prompt() {
+                        Ok(st) => st,
+                        Err(_) => return 0,
+                    }
+                }
+                None => TechStack::Python,
+            };
+
+            let resolved_app_port = app_port.unwrap_or_else(|| resolved_stack.default_port());
+            let resolved_deploy_port = match deploy_port {
+                Some(p) => {
+                    if let Err(e) = validate_deploy_port(p) {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        return 1;
+                    }
+                    p
+                }
+                None => pick_free_port(8081),
+            };
+
+            let cfg = InitConfig {
+                app_name: resolved_name,
+                stack: resolved_stack,
+                app_port: resolved_app_port,
+                deploy_port: resolved_deploy_port,
+            };
+            let target_dir = resolve_interactive_project_dir(&base_dir, &cfg.app_name);
+
+            println!(
+                "\n{} Alur 1-klik — project '{}'",
+                "●".cyan().bold(),
+                cfg.app_name.bold()
+            );
+            println!("  • Folder      : {}", target_dir.display());
+            println!("  • Teknologi   : {}", cfg.stack);
+            println!("  • Port app    : {}", cfg.app_port);
+            println!("  • Port deploy : {}\n", cfg.deploy_port);
+
+            let mut effective_force = false;
+            if has_existing_pipeline_files(&target_dir) {
+                if !interactive {
+                    eprintln!(
+                        "{} Folder {} sudah punya Dockerfile/Jenkinsfile. Pilih folder lain.",
+                        "ERROR:".red().bold(),
+                        target_dir.display()
+                    );
+                    return 1;
+                }
+                let msg = format!(
+                    "Folder {} sudah punya Dockerfile/Jenkinsfile. Timpa dengan yang baru?",
+                    target_dir.display()
+                );
+                match Confirm::new(&msg).with_default(false).prompt() {
+                    Ok(true) => effective_force = true,
+                    _ => {
+                        println!("{}", "  i Dibatalkan — file lama tidak diubah.".yellow());
+                        return 0;
+                    }
+                }
+            }
+            match generate_project_files_with(&cfg, &target_dir, effective_force) {
+                Ok(files) => {
+                    println!("  {} File pipeline dibuat:", "1/4".green().bold());
+                    for f in files {
+                        println!("      • {}", f.display());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    return 1;
+                }
+            }
+            let _ = std::env::set_current_dir(&target_dir);
+            *active_project = Some(target_dir.clone());
+
+            let token = match github::resolve_token() {
+                Some(t) => t,
+                None if interactive => {
+                    println!(
+                        "  {} Belum ada token GitHub. Buat sekali di https://github.com/settings/tokens (centang scope 'repo').",
+                        "i".cyan().bold()
+                    );
+                    match Password::new("Token GitHub:")
+                        .without_confirmation()
+                        .with_display_mode(PasswordDisplayMode::Masked)
+                        .prompt()
+                    {
+                        Ok(t) => match github::save_token(&t) {
+                            Ok(p) => {
+                                println!(
+                                    "  {} Token GitHub tersimpan di {}",
+                                    "✔".green().bold(),
+                                    p.display()
+                                );
+                                t
+                            }
+                            Err(e) => {
+                                eprintln!("{} {e}", "ERROR:".red().bold());
+                                return 1;
+                            }
+                        },
+                        Err(_) => return 0,
+                    }
+                }
+                None => {
+                    eprintln!(
+                        "{} Token GitHub tidak ditemukan. Set AUTORE_GITHUB_TOKEN atau jalankan lewat menu.",
+                        "ERROR:".red().bold()
+                    );
+                    return 1;
+                }
+            };
+
+            let owner = match github::whoami(&token) {
+                Ok(o) => o,
+                Err(e) => {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    return 1;
+                }
+            };
+            let (full_name, created) = match github::ensure_repo(&token, &owner, &cfg.app_name) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    return 1;
+                }
+            };
+            println!(
+                "  {} Repo GitHub {} {}",
+                "2/4".green().bold(),
+                full_name,
+                if created { "(baru dibuat)" } else { "(sudah ada)" }
+            );
+
+            let git_url = format!("https://github.com/{full_name}.git");
+            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &git_url) {
+                eprintln!("{} {e}", "ERROR:".red().bold());
+                return 1;
+            }
+            println!("  {} Push ke Git...", "3/4".green().bold());
+            if !git_push_main(&target_dir) {
+                eprintln!(
+                    "{} Gagal push ke {}. Pastikan token GitHub punya izin tulis ke repo itu.",
+                    "ERROR:".red().bold(),
+                    git_url
+                );
+                return 1;
+            }
+            println!("      • {} terkirim", git_url);
+
+            let conf_path = jenkins::default_config_path();
+            let jk_cfg = match ensure_jenkins_config(&conf_path, interactive, false) {
+                Some(c) => c,
+                None => return 1,
+            };
+
+            match jenkins::register_and_trigger_jenkins(&jk_cfg, &cfg.app_name, &git_url, "main") {
+                Ok(job_url) => {
+                    println!(
+                        "\n{} Project '{}' siap & build-nya sudah jalan!",
+                        "✔".green().bold(),
+                        cfg.app_name
+                    );
+                    println!("  • Folder project : {}", target_dir.display());
+                    println!("  • Repo GitHub    : {full_name}");
+                    println!("  • Job Jenkins    : {job_url}");
+                    println!("  • Status build   : berjalan (hasil dikirim ke Telegram)");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("{} {e}", "ERROR:".red().bold());
+                    if e.contains("401/403") {
+                        let _ = std::fs::remove_file(&conf_path);
+                        eprintln!(
+                            "  {} Kredensial Jenkins lama dihapus. Ulangi menu ini untuk memasukkan password baru.",
+                            "i".yellow()
                         );
                     }
                     1

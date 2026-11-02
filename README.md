@@ -52,10 +52,11 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
  ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
  ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
  ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
- ● DevSecOps & CI/CD Platform Tooling — v0.3.0
+ ● DevSecOps & CI/CD Platform Tooling — v0.4.0
 
 ● Pilih:
-◉ Buat Project Baru (Dockerfile & Jenkinsfile)
+◉ Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)
+○ Buat Project Baru (Dockerfile & Jenkinsfile)
 ○ Hapus Project
 ○ Scan Keamanan Kode (Static + Gitleaks + Trivy)
 ○ Deploy / Sambungkan Project ke Jenkins
@@ -65,6 +66,18 @@ Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka 
 ○ Update Autore
 [↑/↓ geser • Enter pilih • Esc selesai]
 ```
+
+**Paling gampang buat pemula — pilih `Mulai Project Baru (1-Klik)`.** Satu kali Enter, Autore
+mengerjakan 4 langkah sekaligus tanpa perlu paham Git/Jenkins:
+
+1. Bertanya nama project + teknologi, lalu menulis `Dockerfile`, `Jenkinsfile`, `.dockerignore`.
+2. Membuat repo GitHub (`<username>/<nama-project>`) dan nge-push kode ke sana.
+3. Mendaftarkan project ke Jenkins (job pipeline) memakai kredensial tersimpan.
+4. Memicu build pertama — hasilnya dikirim ke Telegram.
+
+Kalau token GitHub atau akses Jenkins belum ada, Autore menanyakannya sekali lalu menyimpannya
+(`~/.config/autore/github_token`, `~/.config/autore/jenkins.conf`) sehingga pilihan berikutnya
+langsung jalan otomatis.
 
 Saat memilih **`Buat Project Baru`** lewat menu interaktif, Autore otomatis menyiapkan:
 1. Folder project `./<nama-aplikasi>` (tidak bersarang kalau bikin project ke-2).
@@ -151,7 +164,8 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 
 | Perintah | Deskripsi | Mode Operasi |
 | :--- | :--- | :--- |
-| `autore` *(tanpa argumen)* | Membuka menu interaktif TUI (`Buat Project Baru`, `Hapus Project`, `Scan`, `Satpam Git`, `Doctor`, `Update Autore`) dengan pemilih project otomatis dan loop menu. | Interactive TUI |
+| `autore` *(tanpa argumen)* | Membuka menu interaktif TUI (`Mulai Project Baru (1-Klik)`, `Buat Project Baru`, `Hapus Project`, `Scan`, `Satpam Git`, `Doctor`, `Update Autore`) dengan pemilih project otomatis dan loop menu. | Interactive TUI |
+| `autore quick-start` | Alur 1-klik: buat file pipeline → buat repo GitHub + push → daftar ke Jenkins → trigger build. Tanya kredensial sekali, simpan, lalu `--path` bisa diarahkan ke mana saja (default: nama folder saat ini). | Interaktif / Non-interaktif (`--app-name`, `--stack`, `--app-port`, `--deploy-port`) |
 | `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go (`--deploy-port` untuk isolasi port host multi-project, `--force` untuk menimpa). | Interaktif / Non-interaktif |
 | `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek, serta membersihkan `.security-gate-reason` lama saat lulus. | Authoritative (Full) / `--no-docker` (Pre-commit) |
 | `autore scan-image` | Memindai image container pasca-build: verifikasi UID non-root, pemindaian CVE (`HIGH,CRITICAL`), dan ekspor SBOM CycloneDX (`sbom.cdx.json`). | Container Image Scan |

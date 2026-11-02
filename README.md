@@ -43,29 +43,31 @@ curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/insta
 irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
 ```
 
-Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka menu interaktif:
+Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka TUI layar penuh:
 
 ```text
-  █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗
- ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
- ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗
- ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
- ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
- ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
- ● DevSecOps & CI/CD Platform Tooling — v0.4.1
-
-● Pilih:
-◉ Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)
-○ Buat Project Baru (Dockerfile & Jenkinsfile)
-○ Hapus Project
-○ Scan Keamanan Kode (Static + Gitleaks + Trivy)
-○ Deploy / Sambungkan Project ke Jenkins
-○ Pasang Satpam Git (Pre-Commit Hook)
-○ Copot Satpam Git (Uninstall Hook)
-○ Cek Kesehatan Sistem (Doctor)
-○ Update Autore
-[↑/↓ geser • Enter pilih • Esc selesai]
+ AUTORE v0.5.0 DevSecOps & CI/CD Platform
+┌─────────────────────────────────────────────────┬────────────────────────────────────────────────┐
+│ ▸ Mulai Project Baru (1-Klik)                   │ Mulai Project Baru (1-Klik)                    │
+│   Buat Project Baru (Dockerfile & Jenkinsfile)  │                                                │
+│   Hapus Project                                 │ Alur otomatis paling gampang: tulis            │
+│   Scan Keamanan Kode (Static + Gitleaks + Trivy)│ Dockerfile & Jenkinsfile, buat repo GitHub,    │
+│   Deploy / Sambungkan Project ke Jenkins        │ push, daftar ke Jenkins, lalu trigger build    │
+│   Pasang Satpam Git (Pre-Commit Hook)           │ pertama.                                       │
+│   Copot Satpam Git (Uninstall Hook)             │                                                │
+│   Cek Kesehatan Sistem (Doctor)                 │ Butuh: token GitHub + akses Jenkins (ditanya   │
+│   Update Autore                                 │ sekali, lalu disimpan).                        │
+│                                                 │                                                │
+└─────────────────────────────────────────────────┴────────────────────────────────────────────────┘
+↑/↓ geser  Enter jalankan  q keluar                       ✔ terakhir: Cek Kesehatan Sistem (Doctor)
 ```
+
+Panel kiri = menu, panel kanan = penjelasan item yang sedang disorot, bar bawah = tombol cepat
+plus status aksi terakhir. Saat sebuah aksi berjalan, Autore keluar sementara dari layar penuh
+supaya pertanyaan interaktif (nama project, token, password) tampil normal; setelah selesai
+tekan **Enter** untuk kembali ke menu atau **q** untuk keluar.
+
+Kalau output `autore` dipipe ke file (bukan terminal), menu otomatis jatuh ke mode teks biasa.
 
 **Paling gampang buat pemula — pilih `Mulai Project Baru (1-Klik)`.** Satu kali Enter, Autore
 mengerjakan 4 langkah sekaligus tanpa perlu paham Git/Jenkins:
@@ -164,7 +166,7 @@ CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengemban
 
 | Perintah | Deskripsi | Mode Operasi |
 | :--- | :--- | :--- |
-| `autore` *(tanpa argumen)* | Membuka menu interaktif TUI (`Mulai Project Baru (1-Klik)`, `Buat Project Baru`, `Hapus Project`, `Scan`, `Satpam Git`, `Doctor`, `Update Autore`) dengan pemilih project otomatis dan loop menu. | Interactive TUI |
+| `autore` *(tanpa argumen)* | Membuka **TUI layar penuh**: panel menu (↑/↓, Enter, q), panel penjelasan item, dan bar status aksi terakhir. Otomatis jatuh ke menu teks kalau output bukan terminal. | Interactive TUI |
 | `autore quick-start` | Alur 1-klik: buat file pipeline → buat repo GitHub + push → daftar ke Jenkins → trigger build. Tanya kredensial sekali, simpan, lalu `--path` bisa diarahkan ke mana saja (default: nama folder saat ini). | Interaktif / Non-interaktif (`--app-name`, `--stack`, `--app-port`, `--deploy-port`) |
 | `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go (`--deploy-port` untuk isolasi port host multi-project, `--force` untuk menimpa). | Interaktif / Non-interaktif |
 | `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek, serta membersihkan `.security-gate-reason` lama saat lulus. | Authoritative (Full) / `--no-docker` (Pre-commit) |

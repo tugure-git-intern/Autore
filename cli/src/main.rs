@@ -5,12 +5,14 @@ mod hooks;
 mod jenkins;
 mod scanner;
 mod templates;
+mod tui;
 mod updater;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, CustomType, Password, PasswordDisplayMode, Select, Text};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process;
 use templates::{
@@ -249,52 +251,86 @@ fn pick_interactive_target_project(
     }
 }
 
-/// Tahan layar setelah aksi di menu selesai supaya hasil bacaan tidak langsung tertutup banner.
+/// Tahan layar setelah aksi selesai: satu tombol, tidak perlu pilih menu lagi.
 fn prompt_after_action() -> bool {
-    println!();
-    let opts = vec!["Kembali ke Menu Utama", "Keluar dari Autore"];
+    println!(
+        "\n{} Enter kembali ke menu  •  {} keluar",
+        "●".cyan().bold(),
+        "q".cyan().bold()
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    if !std::io::stdout().is_terminal() {
+        return false;
+    }
     matches!(
-        Select::new("Selanjutnya:", opts)
-            .with_help_message("Enter kembali ke menu • Esc keluar")
-            .prompt(),
-        Ok("Kembali ke Menu Utama")
+        crossterm::event::read(),
+        Ok(crossterm::event::Event::Key(crossterm::event::KeyEvent {
+            code: crossterm::event::KeyCode::Enter,
+            ..
+        }))
     )
 }
 
-fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands> {
-    print_ascii_banner();
-    if let Some(dir) = active_project {
-        println!(
-            " {} Folder project aktif: {}\n",
-            "●".cyan().bold(),
-            dir.display().to_string().bold()
-        );
-    }
-    let items = vec![
-        "Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)",
-        "Buat Project Baru (Dockerfile & Jenkinsfile)",
-        "Hapus Project",
-        "Scan Keamanan Kode (Static + Gitleaks + Trivy)",
-        "Deploy / Sambungkan Project ke Jenkins",
-        "Pasang Satpam Git (Pre-Commit Hook)",
-        "Copot Satpam Git (Uninstall Hook)",
-        "Cek Kesehatan Sistem (Doctor)",
-        "Update Autore",
-    ];
-    let choice = Select::new("Pilih:", items)
-        .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
-        .prompt()
-        .ok()?;
+/// Seluruh item menu — satu sumber kebenaran untuk TUI dan mode teks.
+const MENU: &[tui::Item] = &[
+    tui::Item {
+        label: "Mulai Project Baru (1-Klik)",
+        desc: "Alur otomatis paling gampang: tulis Dockerfile & Jenkinsfile, buat repo GitHub, push, daftar ke Jenkins, lalu trigger build pertama.",
+        hints: "Butuh: token GitHub + akses Jenkins (ditanya sekali, lalu disimpan).",
+    },
+    tui::Item {
+        label: "Buat Project Baru (Dockerfile & Jenkinsfile)",
+        desc: "Menulis Dockerfile, Jenkinsfile, dan .dockerignore plus starter /health. Tidak menyentuh GitHub maupun Jenkins.",
+        hints: "Cocok kalau mau atur repo & Jenkins sendiri.",
+    },
+    tui::Item {
+        label: "Hapus Project",
+        desc: "Menghapus folder project Autore dari disk (dipilih lewat daftar).",
+        hints: "Permanen, tidak bisa dibatalkan.",
+    },
+    tui::Item {
+        label: "Scan Keamanan Kode (Static + Gitleaks + Trivy)",
+        desc: "Menjalankan Static Byte Guard native, Gitleaks (rahasia), dan Trivy (CVE + misconfig) pada file project.",
+        hints: "Mode penuh butuh Docker; tanpa Docker pakai --no-docker.",
+    },
+    tui::Item {
+        label: "Deploy / Sambungkan Project ke Jenkins",
+        desc: "Simpan akses Jenkins sekali, siapkan commit & remote Git, buat/perbarui job pipeline, lalu Build Now.",
+        hints: "Dipakai kalau project-nya sudah ada dan cuma mau disambungkan.",
+    },
+    tui::Item {
+        label: "Pasang Satpam Git (Pre-Commit Hook)",
+        desc: "Memasang hook pre-commit di .git/hooks/pre-commit supaya kode diperiksa sebelum commit.",
+        hints: "Otomatis dipasang juga saat project baru dibuat.",
+    },
+    tui::Item {
+        label: "Copot Satpam Git (Uninstall Hook)",
+        desc: "Melepas hook pre-commit dan memulihkan backup .pre-commit.bak kalau ada.",
+        hints: "Aman, hanya menyentuh .git/hooks.",
+    },
+    tui::Item {
+        label: "Cek Kesehatan Sistem (Doctor)",
+        desc: "Memeriksa Git, Java 21, Docker, Docker Compose, service runner, lokasi binary, dan ruang disk.",
+        hints: "Jalankan ini kalau ada langkah yang gagal.",
+    },
+    tui::Item {
+        label: "Update Autore",
+        desc: "Mengunduh rilis stabil terbaru dari GitHub Releases, memverifikasi SHA-256, lalu mengganti binary ini.",
+        hints: "Kalau binary di folder sistem: jalankan sekali dengan sudo.",
+    },
+];
 
-    Some(match choice {
-        "Mulai Project Baru (1-Klik: File → GitHub → Jenkins → Build)" => Commands::QuickStart {
+/// Pemetaan index menu -> perintah CLI. Satu tempat, dipakai TUI & mode teks.
+fn commands_for(index: usize) -> Commands {
+    match index {
+        0 => Commands::QuickStart {
             path: PathBuf::from("."),
             app_name: None,
             stack: None,
             app_port: None,
             deploy_port: None,
         },
-        "Buat Project Baru (Dockerfile & Jenkinsfile)" => Commands::Init {
+        1 => Commands::Init {
             app_name: None,
             stack: None,
             app_port: None,
@@ -302,28 +338,62 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
             output_dir: PathBuf::from("."),
             force: false,
         },
-        "Hapus Project" => Commands::DeleteProject,
-        "Scan Keamanan Kode (Static + Gitleaks + Trivy)" => Commands::Scan {
+        2 => Commands::DeleteProject,
+        3 => Commands::Scan {
             path: PathBuf::from("."),
             severity: "HIGH,CRITICAL".to_string(),
             no_docker: false,
             include_build_dirs: false,
             docker: false,
         },
-        "Deploy / Sambungkan Project ke Jenkins" => Commands::Deploy {
+        4 => Commands::Deploy {
             path: PathBuf::from("."),
             git_url: None,
             reconfigure: false,
         },
-        "Pasang Satpam Git (Pre-Commit Hook)" => Commands::Hook {
-            action: HookAction::Install { repo: PathBuf::from(".") },
+        5 => Commands::Hook {
+            action: HookAction::Install {
+                repo: PathBuf::from("."),
+            },
         },
-        "Copot Satpam Git (Uninstall Hook)" => Commands::Hook {
-            action: HookAction::Uninstall { repo: PathBuf::from(".") },
+        6 => Commands::Hook {
+            action: HookAction::Uninstall {
+                repo: PathBuf::from("."),
+            },
         },
-        "Update Autore" => Commands::Update,
+        8 => Commands::Update,
         _ => Commands::Doctor,
-    })
+    }
+}
+
+/// Menu utama: TUI layar penuh kalau terminal interaktif, daftar teks kalau bukan
+/// (mis. output dipipe ke file). Mengembalikan index menu + perintah yang dipilih.
+fn prompt_main_menu(
+    active_project: Option<&std::path::Path>,
+    last_note: Option<&str>,
+) -> Option<(usize, Commands)> {
+    let project_label = active_project.map(|p| p.display().to_string());
+
+    let index = if std::io::stdout().is_terminal() {
+        tui::select_action(MENU, project_label.as_deref(), last_note)?
+    } else {
+        print_ascii_banner();
+        if let Some(dir) = active_project {
+            println!(
+                " {} Folder project aktif: {}\n",
+                "●".cyan().bold(),
+                dir.display().to_string().bold()
+            );
+        }
+        let labels: Vec<&str> = MENU.iter().map(|i| i.label).collect();
+        let picked = Select::new("Pilih:", labels)
+            .with_help_message("↑/↓ geser • Enter pilih • Esc selesai")
+            .prompt()
+            .ok()?;
+        MENU.iter().position(|i| i.label == picked)?
+    };
+
+    Some((index, commands_for(index)))
 }
 
 fn clear_gate_reason() {
@@ -578,8 +648,15 @@ fn main() {
     }
 
     let mut active_project: Option<PathBuf> = None;
-    while let Some(command) = prompt_main_menu(active_project.as_deref()) {
-        let _ = execute_command(command, true, &mut active_project);
+    let mut last_note: Option<String> = None;
+    while let Some((index, command)) = prompt_main_menu(active_project.as_deref(), last_note.as_deref())
+    {
+        let code = execute_command(command, true, &mut active_project);
+        last_note = Some(if code == 0 {
+            format!("✔ terakhir: {}", MENU[index].label)
+        } else {
+            format!("✘ terakhir: {} (keluar dengan kode {code})", MENU[index].label)
+        });
         if !prompt_after_action() {
             break;
         }

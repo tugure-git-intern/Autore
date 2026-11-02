@@ -103,6 +103,105 @@ pub fn bootstrap_interactive_project(
     Ok((project_dir, files, hook_path, git_created))
 }
 
+/// Apakah `dir` adalah repositori Autore CLI itu sendiri (tidak boleh dihapus lewat menu Hapus Project)?
+pub fn is_autore_source_repo(dir: &std::path::Path) -> bool {
+    dir.join("cli/Cargo.toml").exists() && dir.join("vars/autorePipeline.groovy").exists()
+}
+
+/// Apakah `dir` adalah project user yang boleh dihapus?
+/// Wajib memiliki `Dockerfile` atau `Jenkinsfile`, bukan root/home, dan bukan repo sumber Autore.
+pub fn is_deletable_user_project(dir: &std::path::Path) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    if !(dir.join("Dockerfile").exists() || dir.join("Jenkinsfile").exists()) {
+        return false;
+    }
+    if is_autore_source_repo(dir) {
+        return false;
+    }
+    if dir.parent().is_none() {
+        return false;
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        if dir == std::path::Path::new(&home) {
+            return false;
+        }
+    }
+    if let Ok(up) = std::env::var("USERPROFILE") {
+        if dir == std::path::Path::new(&up) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Cari semua folder project user yang bisa dihapus di sekitar `cwd`.
+pub fn discover_deletable_projects(cwd: &std::path::Path) -> Vec<PathBuf> {
+    let base = if is_autore_project_dir(cwd) {
+        cwd.parent().unwrap_or(cwd)
+    } else {
+        cwd
+    };
+    let mut found = Vec::new();
+    if is_deletable_user_project(cwd) {
+        found.push(cwd.to_path_buf());
+    }
+    if let Ok(entries) = std::fs::read_dir(base) {
+        let mut siblings: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| !s.starts_with('.'))
+                    .unwrap_or(false)
+                    && is_deletable_user_project(p)
+            })
+            .collect();
+        siblings.sort();
+        for p in siblings {
+            if !found.contains(&p) {
+                found.push(p);
+            }
+        }
+    }
+    found
+}
+
+/// Hapus folder project user dengan aman; jika `cwd` berada di dalam `target`, pindah ke parent dulu.
+pub fn delete_project_safely(
+    target: &std::path::Path,
+    active_project: &mut Option<PathBuf>,
+) -> Result<Option<PathBuf>, String> {
+    if !is_deletable_user_project(target) {
+        return Err(format!(
+            "Direktori '{}' bukan project Autore yang valid untuk dihapus.",
+            target.display()
+        ));
+    }
+    let mut moved_to = None;
+    if let Ok(cwd) = std::env::current_dir() {
+        let canon_cwd = cwd.canonicalize().unwrap_or(cwd);
+        let canon_target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+        if canon_cwd.starts_with(&canon_target) {
+            if let Some(parent) = canon_target.parent() {
+                let _ = std::env::set_current_dir(parent);
+                moved_to = Some(parent.to_path_buf());
+            }
+        }
+    }
+    if let Some(act) = active_project {
+        let canon_act = act.canonicalize().unwrap_or_else(|_| act.clone());
+        let canon_target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+        if canon_act == canon_target {
+            *active_project = None;
+        }
+    }
+    std::fs::remove_dir_all(target)
+        .map_err(|e| format!("Gagal menghapus '{}': {e}", target.display()))?;
+    Ok(moved_to)
+}
+
 fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands> {
     print_ascii_banner();
     if let Some(dir) = active_project {
@@ -114,6 +213,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
     }
     let items = vec![
         "• Buat Project Baru (Dockerfile & Jenkinsfile)",
+        "• Hapus Project",
         "• Scan Keamanan Kode (Static + Gitleaks + Trivy)",
         "• Pasang Satpam Git (Pre-Commit Hook)",
         "• Copot Satpam Git (Uninstall Hook)",
@@ -134,6 +234,7 @@ fn prompt_main_menu(active_project: Option<&std::path::Path>) -> Option<Commands
             output_dir: PathBuf::from("."),
             force: false,
         },
+        "• Hapus Project" => Commands::DeleteProject,
         "• Scan Keamanan Kode (Static + Gitleaks + Trivy)" => Commands::Scan {
             path: PathBuf::from("."),
             severity: "HIGH,CRITICAL".to_string(),
@@ -247,6 +348,10 @@ enum Commands {
 
     /// Update Autore ke versi rilis stabil terbaru di GitHub Releases
     Update,
+
+    /// Hapus folder project Autore secara interaktif
+    #[command(hide = true)]
+    DeleteProject,
 }
 
 #[derive(Subcommand)]
@@ -606,6 +711,76 @@ fn execute_command(
                 1
             }
         },
+
+        Commands::DeleteProject => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let candidates = discover_deletable_projects(&cwd);
+            if candidates.is_empty() {
+                println!(
+                    "{}",
+                    "  ℹ Tidak ada folder project Autore yang ditemukan di sekitar sini.".yellow()
+                );
+                return 0;
+            }
+            let labels: Vec<String> = candidates
+                .iter()
+                .map(|p| {
+                    let name = p
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("project");
+                    if active_project.as_deref() == Some(p.as_path()) || p == &cwd {
+                        format!("• {name}  ({}, aktif)", p.display())
+                    } else {
+                        format!("• {name}  ({})", p.display())
+                    }
+                })
+                .collect();
+
+            let picked = match Select::new("Pilih project yang ingin dihapus:", labels.clone())
+                .with_help_message("↑/↓ geser • Enter pilih • Esc batal")
+                .prompt()
+            {
+                Ok(choice) => choice,
+                Err(_) => return 0,
+            };
+            let idx = labels.iter().position(|l| l == &picked).unwrap_or(0);
+            let target = &candidates[idx];
+            let name = target
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("project");
+
+            let confirm_msg = format!(
+                "Yakin hapus permanen project '{}' ({})?",
+                name,
+                target.display()
+            );
+            match Confirm::new(&confirm_msg).with_default(false).prompt() {
+                Ok(true) => match delete_project_safely(target, active_project) {
+                    Ok(moved) => {
+                        println!(
+                            "\n{} Project '{}' berhasil dihapus ({})",
+                            "✔".green().bold(),
+                            name,
+                            target.display()
+                        );
+                        if let Some(parent) = moved {
+                            println!("  • Fokus direktori kembali ke: {}", parent.display());
+                        }
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{} {e}", "ERROR:".red().bold());
+                        1
+                    }
+                },
+                _ => {
+                    println!("  {}", "ℹ Penghapusan dibatalkan.".yellow());
+                    0
+                }
+            }
+        }
     }
 }
 
@@ -686,5 +861,44 @@ mod tests {
 
         let head = std::fs::read_to_string(project_dir.join(".git/HEAD")).unwrap();
         assert!(head.contains("refs/heads/main"), "expected branch main, got {head}");
+    }
+
+    #[test]
+    fn discover_and_delete_project_safely_only_touches_valid_projects() {
+        let tmp = TempDir::new().unwrap();
+        let cfg_a = InitConfig {
+            app_name: "project-a".to_string(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8081,
+        };
+        let cfg_b = InitConfig {
+            app_name: "project-b".to_string(),
+            stack: TechStack::NodeJs,
+            app_port: 3000,
+            deploy_port: 8081,
+        };
+        let (dir_a, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_a, false).unwrap();
+        let (dir_b, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_b, false).unwrap();
+        // Folder biasa tanpa Dockerfile/Jenkinsfile tidak boleh ikut muncul
+        let plain = tmp.path().join("dokumen-biasa");
+        std::fs::create_dir_all(&plain).unwrap();
+
+        let found_from_root = discover_deletable_projects(tmp.path());
+        assert_eq!(found_from_root, vec![dir_a.clone(), dir_b.clone()]);
+
+        // Dari dalam project-a tetap bisa melihat project-a dan project-b
+        let found_from_a = discover_deletable_projects(&dir_a);
+        assert_eq!(found_from_a, vec![dir_a.clone(), dir_b.clone()]);
+
+        let mut active = Some(dir_a.clone());
+        delete_project_safely(&dir_a, &mut active).unwrap();
+        assert!(!dir_a.exists());
+        assert!(active.is_none());
+        assert!(dir_b.exists());
+        assert!(plain.exists());
+
+        // Menolak menghapus folder yang bukan project Autore
+        assert!(delete_project_safely(&plain, &mut active).is_err());
     }
 }

@@ -26,16 +26,25 @@ fi
 APP_NAME="${APP_NAME:-autore-dummy}"
 CONTAINER_PORT="${CONTAINER_PORT:-8080}"
 DEPLOY_PORT="${DEPLOY_PORT:-8081}"
-HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-/health}"
+# Pintu uji: default coba /health dulu, kalau tidak ada (404) baru /.
+# HEALTH_ENDPOINT diisi = hanya path itu yang dipakai (tidak ada fallback).
+HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-}"
+if [[ -n "${HEALTH_ENDPOINT}" ]]; then
+  HEALTH_PATHS=("${HEALTH_ENDPOINT}")
+else
+  HEALTH_PATHS=(/health /)
+fi
 CANDIDATE_PORT=$((DEPLOY_PORT + 100))
 
 ACTIVE_CONTAINER="${ACTIVE_CONTAINER_NAME:-${APP_NAME}-active}"
 CANDIDATE_CONTAINER="${CANDIDATE_CONTAINER_NAME:-${APP_NAME}-candidate}"
 
 health_at() {
-  local port="$1" i
+  local port="$1" i path
   for i in {1..10}; do
-    curl -fsS --max-time 2 "http://127.0.0.1:${port}${HEALTH_ENDPOINT}" >/dev/null 2>&1 && return 0
+    for path in "${HEALTH_PATHS[@]}"; do
+      curl -fsS --max-time 2 "http://127.0.0.1:${port}${path}" >/dev/null 2>&1 && return 0
+    done
     sleep 1
   done
   return 1
@@ -75,7 +84,7 @@ docker run -d --name "${CANDIDATE_CONTAINER}" \
   -p "127.0.0.1:${CANDIDATE_PORT}:${CONTAINER_PORT}" \
   "${IMAGE_REF}"
 
-log "Memeriksa health check kandidat pada http://127.0.0.1:${CANDIDATE_PORT}${HEALTH_ENDPOINT} (maks 10 detik)..."
+log "Memeriksa health check kandidat pada http://127.0.0.1:${CANDIDATE_PORT}${HEALTH_PATHS[*]} (maks 10 detik)..."
 
 if ! health_at "${CANDIDATE_PORT}"; then
   echo "ERROR: Container kandidat gagal lolos uji kesehatan (health check). Menghentikan kandidat..." >&2
@@ -103,7 +112,7 @@ docker rm -f "${ACTIVE_CONTAINER}" 2>/dev/null || true
 
 start_active "${IMAGE_REF}" || rollback "container baru gagal dijalankan."
 
-log "Verifikasi akhir port produksi http://127.0.0.1:${DEPLOY_PORT}${HEALTH_ENDPOINT} (maks 10 detik)..."
+log "Verifikasi akhir port produksi http://127.0.0.1:${DEPLOY_PORT}${HEALTH_PATHS[*]} (maks 10 detik)..."
 health_at "${DEPLOY_PORT}" || rollback "verifikasi port produksi gagal."
 
 log "SUKSES: Deployment berbasis digest @sha256 selesai dan berjalan aman!"

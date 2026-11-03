@@ -135,19 +135,25 @@
   h1 b { font-weight: 700; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; max-width: 62ch; }
 
-  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .95fr); gap: 18px; align-items: start; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .95fr); gap: 20px; align-items: stretch; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
   .card .head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line-soft); }
   .card .head h2 { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
   .card .head p { margin: 0; font-size: 12.5px; color: var(--muted); }
   .card .body { padding: 18px; }
   .card.plain { box-shadow: none; }
+  aside > .card { height: 100%; }
+  /* Panel kiri ikut tinggi panel kanan supaya dua kolom tampak sejajar (gaya console);
+     baris pill ditambatkan ke bawah supaya ruang sisa tidak terlihat menggantung. */
+  #kartu-buat { height: 100%; display: flex; flex-direction: column; }
+  #kartu-buat .body { flex: 1; display: flex; flex-direction: column; }
+  #kartu-buat .autos { margin-top: auto; }
 
   label.fl { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
   .field { display: flex; gap: 10px; }
   input[type=text] {
-    flex: 1; min-width: 0;
-    padding: 11px 13px; font: inherit; font-size: 14px;
+    flex: 1; min-width: 0; height: 44px;
+    padding: 0 13px; font: inherit; font-size: 14px;
     color: var(--ink); background: var(--surface);
     border: 1px solid var(--line); border-radius: var(--r);
   }
@@ -158,8 +164,8 @@
 
   button.btn {
     font: inherit; font-size: 13px; font-weight: 600;
-    padding: 11px 18px; border-radius: var(--r); border: 1px solid transparent;
-    background: var(--accent); color: var(--accent-ink); cursor: pointer; min-height: 42px;
+    padding: 0 18px; border-radius: var(--r); border: 1px solid transparent;
+    background: var(--accent); color: var(--accent-ink); cursor: pointer; height: 44px;
     display: inline-flex; align-items: center; gap: 8px;
   }
   button.btn:hover:not(:disabled) { filter: brightness(.96); }
@@ -172,8 +178,8 @@
   button.linklike { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 
-  .autos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
-  .auto { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .autos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+  .auto { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
   .auto b { font-weight: 600; color: var(--ink-soft); }
 
   /* ---------- summary side ---------- */
@@ -606,7 +612,7 @@
     var bl = document.createElement("button");
     bl.className = sukses ? "ghost btn" : "btn";
     bl.textContent = sukses ? "Buat aplikasi lagi" : "Coba lagi";
-    bl.addEventListener("click", function () { location.reload(); });
+    bl.addEventListener("click", ulangi);
     aksi.appendChild(bl);
 
     var semua = barisLog.join("\n");
@@ -618,6 +624,20 @@
       $("toggle-log-hasil").textContent = "Sembunyikan detail teknis";
     }
     simpanRiwayat({ nama: nm, status: data.status, tautan: data.tautan || "", pesan: data.pesan || "", saat: Date.now() });
+  }
+
+  function ulangi() {
+    kartuHasil.classList.add("hidden");
+    tampil(kartuBuat, true);
+    tampil(kartuJalan, false);
+    namaEl.value = "";
+    namaEl.disabled = false;
+    tombol.disabled = false;
+    $("judul-halaman").innerHTML = "Mau bikin <b>aplikasi</b> apa?";
+    $("sub-halaman").textContent = "Tulis namanya saja. Autore yang menyiapkan kerangka aplikasi, pipeline keamanan, sampai menjalankannya di server.";
+    chipServer("server siap", "live");
+    pindah("buat");
+    namaEl.focus();
   }
 
   function ikutiLog(saatHasil) {

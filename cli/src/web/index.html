@@ -160,6 +160,18 @@
   input[type=text]::placeholder { color: var(--muted); opacity: .75; }
   input[type=text]:focus { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: -1px; }
   .hint { font-size: 11.5px; color: var(--muted); margin-top: 7px; }
+  /* Pertanyaan di bawah digambar dari `autore kemampuan`, bukan ditulis di sini. */
+  #tanyaan { display: grid; gap: 14px; margin-top: 16px; }
+  .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+  .seg button {
+    font: inherit; font-size: 12.5px; padding: 8px 12px; border-radius: var(--r);
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  .seg button:hover { background: var(--line-soft); }
+  .seg button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .bantuan { font-size: 11.5px; color: var(--muted); margin-top: 7px; }
+  .angka { margin-top: 8px; max-width: 150px; }
+  .angka input { width: 100%; height: 38px; }
   .err { font-size: 12.5px; color: var(--bad); margin-top: 8px; min-height: 0; }
 
   button.btn {
@@ -318,6 +330,7 @@
               </div>
               <div class="hint" id="hint-nama">Huruf kecil, angka, dan tanda minus. Tekan Enter untuk mulai.</div>
               <div class="err" id="galat" role="alert"></div>
+              <div id="tanyaan"></div>
               <div class="autos">
                 <span class="auto">stack: <b>python</b></span>
                 <span class="auto">port: <b>otomatis</b></span>
@@ -337,13 +350,13 @@
               <ol class="steps" id="tahap">
                 <li class="now"><span class="ic">◐</span><div><div class="t">Menyiapkan kerangka aplikasi</div><div class="d">Dockerfile, pipeline, dan penanda keamanan</div></div></li>
                 <li class="todo"><span class="ic">○</span><div><div class="t">Membuat repo &amp; mengirim kode</div><div class="d">GitHub kantor, otomatis</div></div></li>
-                <li class="todo"><span class="ic">○</span><div><div class="t">Build &amp; periksa keamanan</div><div class="d">Dijalankan oleh Jenkins</div></div></li>
-                <li class="todo"><span class="ic">○</span><div><div class="t">Menjalankan di server</div><div class="d">Container baru, versi lama tetap aman</div></div></li>
+                <li class="todo"><span class="ic">○</span><div><div class="t">Build, periksa keamanan &amp; pasang di server</div><div class="d">Dikerjakan Jenkins; versi lama tetap aman</div></div></li>
                 <li class="todo"><span class="ic">○</span><div><div class="t">Memeriksa aplikasi hidup</div><div class="d">Uji kesehatan sebelum dinyatakan jadi</div></div></li>
               </ol>
               <div class="logwrap">
                 <div class="logbar">
                   <button class="linklike" id="toggle-log" aria-expanded="false" aria-controls="log">Lihat detail teknis</button>
+                  <button class="linklike" id="batal" title="Hentikan proses di dashboard ini">Batalkan</button>
                   <span class="chip" id="waktu-jalan">00:00</span>
                   <span class="sp"></span>
                   <button class="ghost btn" id="salin-log">Salin log</button>
@@ -426,6 +439,7 @@
   var KUNCI_RIWAYAT = "autore.riwayat.v1";
 
   var namaEl = $("nama"), tombol = $("tombol-buat"), galat = $("galat");
+  var jawaban = {};
   var kartuBuat = $("kartu-buat"), kartuJalan = $("kartu-jalan"), kartuHasil = $("kartu-hasil");
   var tahap = Array.prototype.slice.call(document.querySelectorAll("#tahap li"));
   var logEl = $("log"), logHasil = $("log-hasil");
@@ -453,7 +467,75 @@
   function jam(d) {
     try { return new Date(d).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
   }
-  function cekNama(v) { return /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(v); }
+  function cekNama(v) { return /^[a-z0-9][a-z0-9_-]{0,62}$/.test(v); }
+
+  /* ---------- pertanyaan dari CLI ---------- */
+  // Sumbernya `autore kemampuan`. Kalau CLI diam, form tetap jalan dengan nilai
+  // bawaan server — halaman ini tidak pernah menyimpan sendiri daftar pertanyaannya.
+  var kotakTanyaAngka = null;
+
+  // ponytail: cuma pertanyaan "alamat" yang butuh angka. Umumkan kalau nanti ada
+  // pertanyaan angka lain (jenis: "angka" dari CLI).
+  function tampilkanKotakAngka(kotak) {
+    if (kotakTanyaAngka) return;
+    var bungkus = document.createElement("div");
+    bungkus.className = "angka";
+    var inp = document.createElement("input");
+    inp.type = "text"; inp.inputMode = "numeric"; inp.placeholder = "contoh: 8081";
+    inp.addEventListener("input", function () {
+      jawaban.alamat = (inp.value || "").replace(/[^0-9]/g, "");
+    });
+    bungkus.appendChild(inp);
+    kotak.appendChild(bungkus);
+    kotakTanyaAngka = bungkus;
+    inp.focus();
+  }
+
+  function gambarPertanyaan(daftar) {
+    var wadah = $("tanyaan");
+    if (!wadah) return;
+    wadah.innerHTML = "";
+    daftar.forEach(function (q) {
+      if (q.jenis !== "pilihan" || !q.pilihan || !q.pilihan.length) return;
+      jawaban[q.id] = q.bawaan || q.pilihan[0].nilai;
+
+      var kotak = document.createElement("div");
+      var lab = document.createElement("label");
+      lab.className = "fl"; lab.textContent = q.label;
+      kotak.appendChild(lab);
+
+      var seg = document.createElement("div");
+      seg.className = "seg";
+      q.pilihan.forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button"; b.textContent = p.label;
+        if (p.nilai === jawaban[q.id]) { b.classList.add("on"); b.setAttribute("aria-pressed", "true"); }
+        b.addEventListener("click", function () {
+          jawaban[q.id] = p.nilai;
+          Array.prototype.forEach.call(seg.children, function (x) {
+            x.classList.remove("on"); x.setAttribute("aria-pressed", "false");
+          });
+          b.classList.add("on"); b.setAttribute("aria-pressed", "true");
+          if (kotakTanyaAngka && p.nilai !== "sendiri") { kotakTanyaAngka.remove(); kotakTanyaAngka = null; }
+          if (q.id === "alamat" && p.nilai === "sendiri") tampilkanKotakAngka(kotak);
+        });
+        seg.appendChild(b);
+      });
+      kotak.appendChild(seg);
+
+      if (q.bantuan) {
+        var h = document.createElement("div");
+        h.className = "bantuan"; h.textContent = q.bantuan;
+        kotak.appendChild(h);
+      }
+      wadah.appendChild(kotak);
+    });
+  }
+
+  fetch("/api/kemampuan").then(function (r) { return r.json(); }).then(function (k) {
+    var p = (k.perintah || [])[0];
+    if (p) gambarPertanyaan(p.pertanyaan || []);
+  }).catch(function () {});
 
   /* ---------- riwayat (browser ini saja) ---------- */
   function riwayat() {
@@ -564,13 +646,16 @@
       $("waktu-jalan").textContent = m + ":" + s;
     }, 1000);
   }
-  function langkahDariLog(b) {
-    if (/Kerangka aplikasi & pipeline dibuat/.test(b)) majukan(2);
-    else if (/Repository GitHub disiapkan|Kode dikirim ke GitHub/.test(b)) majukan(2);
-    else if (/build mulai berjalan|Build jalan di Jenkins/.test(b)) majukan(3);
-    else if (/Build masih berjalan/.test(b)) majukan(3);
-    else if (/Menjalankan di server|Deploy by Verified Digest/.test(b)) majukan(4);
-    else if (/Memeriksa aplikasi hidup/.test(b)) majukan(5);
+  // Tahap datang dari CLI sebagai data (lihat crate::progress), jadi halaman ini
+  // tidak lagi menebak dari kalimat. Angka = jumlah langkah yang sudah selesai.
+  var TAHAP_KE_LANGKAH = { kerangka: 1, repo: 1, kirim: 2, jenkins: 2, build: 3, pasang: 3, periksa: 4 };
+  function majukanDariTahap(daftar) {
+    var n = 0;
+    (daftar || []).forEach(function (t) {
+      var v = TAHAP_KE_LANGKAH[t];
+      if (v && v > n) n = v;
+    });
+    if (n) majukan(Math.min(n, tahap.length));
   }
 
   /* ---------- hasil ---------- */
@@ -640,12 +725,14 @@
     namaEl.focus();
   }
 
-  function ikutiLog(saatHasil) {
+  function ikutiLog() {
     sumber = new EventSource("/api/log");
     sumber.onmessage = function (ev) {
       tulis(ev.data);
-      if (saatHasil) langkahDariLog(ev.data);
     };
+    sumber.addEventListener("tahap", function (ev) {
+      try { majukanDariTahap([JSON.parse(ev.data).tahap]); } catch (e) {}
+    });
     sumber.addEventListener("hasil", function (ev) {
       var data = JSON.parse(ev.data);
       hasil(data);
@@ -663,7 +750,8 @@
   function kirim() {
     var v = (namaEl.value || "").trim().toLowerCase();
     if (!v) { galat.textContent = "Nama aplikasi belum diisi."; namaEl.focus(); return; }
-    if (!cekNama(v)) { galat.textContent = "Pakai huruf kecil, angka, atau tanda minus (3–40 karakter)."; namaEl.focus(); return; }
+    if (!cekNama(v)) { galat.textContent = "Pakai huruf kecil, angka, atau tanda minus (maksimal 63 karakter)."; namaEl.focus(); return; }
+    if (jawaban.alamat === "sendiri") { galat.textContent = "Nomor port belum diisi (contoh: 8081)."; return; }
     galat.textContent = "";
     tombol.disabled = true;
     namaEl.disabled = true;
@@ -680,7 +768,9 @@
     fetch("/api/buat", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "nama=" + encodeURIComponent(v)
+      body: "nama=" + encodeURIComponent(v) + Object.keys(jawaban).map(function (k) {
+        return "&" + encodeURIComponent(k) + "=" + encodeURIComponent(jawaban[k]);
+      }).join("")
     }).then(function (r) { return r.json(); }).then(function (res) {
       if (!res.ok) {
         clearInterval(timer);
@@ -690,7 +780,7 @@
         if (/sudah jalan|409|sibuk/i.test(res.pesan || "")) pantauTunggu();
         return;
       }
-      ikutiLog(true);
+      ikutiLog();
     }).catch(function (e) {
       clearInterval(timer);
       tombol.disabled = false; namaEl.disabled = false;
@@ -702,6 +792,14 @@
   tombol.addEventListener("click", kirim);
   namaEl.addEventListener("keydown", function (e) { if (e.key === "Enter") kirim(); });
   namaEl.addEventListener("input", function () { galat.textContent = ""; });
+
+  $("batal").addEventListener("click", function () {
+    // Aksi yang tidak bisa ditarik lagi, jadi dikonfirmasi dulu.
+    if (!window.confirm("Hentikan proses ini? Build yang sudah dikirim ke Jenkins tetap jalan sampai selesai.")) return;
+    fetch("/api/batal", { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+      kabar(res.pesan || "Dibatalkan.");
+    }).catch(function (e) { galat.textContent = "Tidak bisa membatalkan: " + e; });
+  });
 
   $("toggle-log").addEventListener("click", function () {
     var tersembunyi = logEl.classList.contains("hidden");
@@ -730,7 +828,8 @@
         $("judul-jalan").textContent = "Membuat '" + s.nama + "'…";
         chipServer("sedang bekerja: " + s.nama, "busy");
       }
-      ikutiLog(true);
+      majukanDariTahap(s.tahap);
+      ikutiLog();
     }).catch(function () {});
   }
 

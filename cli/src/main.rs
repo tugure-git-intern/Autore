@@ -1,5 +1,6 @@
 mod doctor;
 mod external;
+mod progress;
 mod github;
 mod hooks;
 mod jenkins;
@@ -425,6 +426,7 @@ fn commands_for(index: usize) -> Commands {
             stack: None,
             app_port: None,
             deploy_port: None,
+            kode: "kosong".to_string(),
         },
         1 => Commands::Init {
             app_name: None,
@@ -704,6 +706,10 @@ enum Commands {
         #[arg(long)]
         app_name: Option<String>,
 
+        /// Isi kode contoh kalau folder masih kosong (`contoh`) atau biarkan apa adanya (`kosong`)
+        #[arg(long, default_value = "kosong")]
+        kode: String,
+
         /// Tech stack: python, nodejs, java, go
         #[arg(long)]
         stack: Option<String>,
@@ -735,6 +741,28 @@ enum Commands {
         #[arg(long, short = 'n')]
         no_browser: bool,
     },
+
+    /// Tampilkan kemampuan mesin ini sebagai data (dipakai dashboard web)
+    Kemampuan,
+}
+
+/// Kemampuan mesin ini sebagai data. Dashboard web menyusun pertanyaannya dari
+/// sini, jadi wajah web tidak perlu ditebak-tebak.
+///
+/// ATURAN: tambah pertanyaan HANYA kalau flag pasangannya (`flag`) benar-benar ada
+/// di subcommand dan dihormati. Pertanyaan yang belum bisa dilaksanakan jangan
+/// ditampilkan. Serve (`serve.rs`) memetakan `id` -> `flag`; ubah keduanya bersama.
+fn kemampuan_json() -> String {
+    let pertanyaan = [
+        r#"{"id":"nama","flag":"--app-name","jenis":"teks","label":"Nama aplikasi","wajib":true,"pola":"^[a-z0-9][a-z0-9_-]{0,62}$","contoh":"aplikasi-absensi","bantuan":"Huruf kecil, angka, tanda minus. Dipakai untuk nama repo dan nama aplikasi di server."}"#,
+        r#"{"id":"kode","flag":"--kode","jenis":"pilihan","label":"Isi kode contoh?","bawaan":"contoh","bantuan":"Kalau folder belum ada kodenya, pipeline tetap jalan tapi tahap pemasangan akan ditolak. Contoh kecil dari Autore langsung bisa dibuka.","pilihan":[{"nilai":"contoh","label":"Ya, taruh contoh kecil (langsung bisa dibuka)"},{"nilai":"kosong","label":"Tidak, saya sudah punya kode sendiri"}]}"#,
+        r#"{"id":"alamat","flag":"--deploy-port","jenis":"pilihan","label":"Alamat di server","bawaan":"otomatis","bantuan":"Port di server untuk membuka aplikasinya. Pilih otomatis supaya tidak bentrok dengan aplikasi lain.","pilihan":[{"nilai":"otomatis","label":"Pilih otomatis (paling aman)"},{"nilai":"sendiri","label":"Saya tentukan nomor portnya"}]}"#,
+    ];
+    format!(
+        r#"{{"versi":"{}","perintah":[{{"id":"buat-baru","judul":"Buat aplikasi baru","ringkas":"Autore menyiapkan berkas pipeline, membuat repo GitHub, mendaftarkannya ke Jenkins, lalu memasang aplikasinya di server.","pertanyaan":[{}]}}]}}"#,
+        env!("CARGO_PKG_VERSION"),
+        pertanyaan.join(",")
+    )
 }
 
 #[derive(Subcommand)]
@@ -1323,12 +1351,18 @@ fn execute_command(
             }
         }
 
+        Commands::Kemampuan => {
+            println!("{}", kemampuan_json());
+            0
+        }
+
         Commands::QuickStart {
             path,
             app_name,
             stack,
             app_port,
             deploy_port,
+            kode,
         } => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let base_dir = if path == std::path::Path::new(".") {
@@ -1408,6 +1442,34 @@ fn execute_command(
             println!("  • Port app    : {}", cfg.app_port);
             println!("  • Port deploy : {}\n", cfg.deploy_port);
 
+            let pilihan_kode = kode.trim().to_lowercase();
+            if pilihan_kode != "contoh" && pilihan_kode != "kosong" {
+                eprintln!(
+                    "{} Pilihan kode '{}' tidak dikenal. Pakai: contoh atau kosong",
+                    "ERROR:".red().bold(),
+                    kode
+                );
+                return 1;
+            }
+            // Ditulis lebih dulu supaya tahap pemasangan tidak ditolak karena folder
+            // kosong. `tulis_kode_contoh` tidak pernah menimpa berkas yang sudah ada,
+            // jadi aman dipanggil walau folder sudah berisi aplikasi sendiri.
+            if pilihan_kode == "contoh" {
+                match templates::tulis_kode_contoh(&target_dir, cfg.stack) {
+                    Ok(dibuat) if !dibuat.is_empty() => {
+                        println!("  • Kode contoh : {} ditulis", dibuat.join(", "))
+                    }
+                    Ok(_) => println!(
+                        "  • Kode contoh : sudah ada, tidak ditimpa ({})",
+                        target_dir.display()
+                    ),
+                    Err(e) => {
+                        eprintln!("{} Gagal menulis kode contoh: {e}", "ERROR:".red().bold());
+                        return 1;
+                    }
+                }
+            }
+
             let mut effective_force = false;
             if has_existing_pipeline_files(&target_dir) {
                 if !interactive {
@@ -1436,6 +1498,7 @@ fn execute_command(
                         println!("      • {}", f.display());
                     }
                     peringatkan_folder_kosong(&target_dir);
+                    progress::tahap("kerangka", "selesai", "Kerangka aplikasi & pipeline siap.");
                 }
                 Err(e) => {
                     eprintln!("{} {e}", "ERROR:".red().bold());
@@ -1503,6 +1566,7 @@ fn execute_command(
                     "(sudah ada)"
                 }
             );
+            progress::tahap("repo", "selesai", &format!("Repo GitHub {full_name} siap."));
 
             let git_url = format!("https://github.com/{full_name}.git");
             if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &git_url) {
@@ -1519,6 +1583,7 @@ fn execute_command(
                 return 1;
             }
             println!("      • {} terkirim", git_url);
+            progress::tahap("kirim", "selesai", "Kode terkirim ke GitHub.");
 
             let conf_path = jenkins::default_config_path();
             let jk_cfg = match ensure_jenkins_config(&conf_path, interactive, false) {
@@ -1537,6 +1602,11 @@ fn execute_command(
                     println!("  • Repo GitHub    : {full_name}");
                     println!("  • Job Jenkins    : {job_url}");
                     println!("  • Status build   : berjalan (hasil dikirim ke Telegram)");
+                    progress::tahap(
+                        "jenkins",
+                        "selesai",
+                        "Terdaftar di Jenkins, build mulai berjalan.",
+                    );
                     0
                 }
                 Err(e) => {
@@ -1709,6 +1779,39 @@ mod tests {
     }
 
     #[test]
+    fn kemampuan_cuma_menjanjikan_flag_yang_benar_benar_ada() {
+        use clap::CommandFactory;
+        let json = kemampuan_json();
+        let mut quick = Cli::command()
+            .get_subcommands()
+            .find(|c| c.get_name() == "quick-start")
+            .expect("subcommand quick-start ada")
+            .clone();
+        let bantuan = quick.render_long_help().to_string();
+        for flag in ["--app-name", "--kode", "--deploy-port"] {
+            assert!(json.contains(flag), "{flag} hilang dari kemampuan");
+            assert!(
+                bantuan.contains(flag),
+                "{flag} dijanjikan ke web tapi tidak ada di CLI"
+            );
+        }
+        assert!(json.contains("buat-baru"));
+        assert_eq!(json.matches("\"id\":\"").count(), 4, "3 pertanyaan + 1 perintah");
+    }
+
+    #[test]
+    fn kemampuan_json_utuh() {
+        let json = kemampuan_json();
+        assert!(json.starts_with('{') && json.ends_with('}'));
+        assert_eq!(
+            json.matches('{').count(),
+            json.matches('}').count(),
+            "kurung kurawal tidak seimbang"
+        );
+        assert_eq!(json.matches('[').count(), json.matches(']').count());
+    }
+
+    #[test]
     fn quickstart_interaktif_batal_tidak_menimpa_file_lama() {
         let tmp = TempDir::new().unwrap();
         let qs = |name: Option<&str>, stack: Option<&str>| Commands::QuickStart {
@@ -1717,6 +1820,7 @@ mod tests {
             stack: stack.map(str::to_string),
             app_port: None,
             deploy_port: None,
+            kode: "kosong".to_string(),
         };
         let mut act = None;
         assert_eq!(execute_command(qs(None, None), true, &mut act), 0);

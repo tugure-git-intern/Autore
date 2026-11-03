@@ -278,11 +278,68 @@ pub fn generate_project_files_with(
     Ok(vec![dockerfile_path, jenkinsfile_path, dockerignore_path])
 }
 
+/// Kode contoh minimal yang langsung bisa dibuka (endpoint `/` + `/health`).
+/// Isinya sama dengan yang dipakai sandbox, jadi satu sumber kebenaran.
+pub const CONTOH_APP_PY: &str = include_str!("../../sandbox/dummy-app/app.py");
+pub const CONTOH_TEST_PY: &str = include_str!("../../sandbox/dummy-app/test_app.py");
+
+/// Tulis kode contoh ke folder project supaya tahap deploy tidak ditolak karena
+/// folder kosong. File yang sudah ada TIDAK ditimpa.
+///
+/// ponytail: hanya stack yang punya contoh (python). Tambah cabang kalau ada
+/// template stack lain yang siap dipakai.
+pub fn tulis_kode_contoh(dir: &Path, stack: TechStack) -> std::io::Result<Vec<&'static str>> {
+    let mut dibuat = Vec::new();
+    match stack {
+        TechStack::Python => {
+            for (nama, isi) in [("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)] {
+                let tujuan = dir.join(nama);
+                if !tujuan.exists() {
+                    fs::create_dir_all(dir)?;
+                    fs::write(&tujuan, isi)?;
+                    dibuat.push(nama);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(dibuat)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scanner::scan_directory;
     use tempfile::TempDir;
+
+    #[test]
+    fn kode_contoh_ditulis_sekali_dan_tidak_menimpa() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        let dibuat = tulis_kode_contoh(dir, TechStack::Python).unwrap();
+        assert_eq!(dibuat, vec!["app.py", "test_app.py"]);
+        assert!(fs::read_to_string(dir.join("app.py")).unwrap().contains("8000"));
+
+        fs::write(dir.join("app.py"), "punya saya").unwrap();
+        let lagi = tulis_kode_contoh(dir, TechStack::Python).unwrap();
+        assert!(lagi.is_empty(), "file yang sudah ada tidak boleh ditimpa");
+        assert_eq!(fs::read_to_string(dir.join("app.py")).unwrap(), "punya saya");
+    }
+
+    #[test]
+    fn kode_contoh_membuat_folder_yang_belum_ada() {
+        let tmp = TempDir::new().unwrap();
+        let belum = tmp.path().join("belum-ada");
+        let dibuat = tulis_kode_contoh(&belum, TechStack::Python).unwrap();
+        assert_eq!(dibuat.len(), 2);
+        assert!(belum.join("app.py").exists());
+    }
+
+    #[test]
+    fn kode_contoh_kosong_untuk_stack_tanpa_template() {
+        let tmp = TempDir::new().unwrap();
+        assert!(tulis_kode_contoh(tmp.path(), TechStack::Go).unwrap().is_empty());
+    }
 
     #[test]
     fn all_stack_templates_pass_security_scanner() {

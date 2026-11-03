@@ -82,9 +82,17 @@ def call(Map config = [:]) {
 
             stage('4. Clippy & SonarQube SAST Gate') {
                 steps {
-                    script { env.FAILED_STAGE = '4. Clippy & SonarQube SAST Gate' }
-                    withCredentials([string(credentialsId: sonarCreds, variable: 'SONAR_TOKEN')]) {
-                        sh '/usr/local/lib/autore-ci/ci-sonarqube-gate.sh'
+                    script {
+                        // Gerbang Rust hanya untuk project Rust. Project non-Rust dilewati
+                        // terang-terangan (bukan laporan dummy) supaya pipeline tidak gagal palsu.
+                        if (fileExists('cli/Cargo.toml')) {
+                            env.FAILED_STAGE = '4. Clippy & SonarQube SAST Gate'
+                            withCredentials([string(credentialsId: sonarCreds, variable: 'SONAR_TOKEN')]) {
+                                sh '/usr/local/lib/autore-ci/ci-sonarqube-gate.sh'
+                            }
+                        } else {
+                            echo "Dilewati: cli/Cargo.toml tidak ada — project non-Rust, gerbang clippy/SonarQube Rust tidak berlaku."
+                        }
                     }
                 }
             }

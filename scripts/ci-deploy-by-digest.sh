@@ -89,10 +89,16 @@ log "Memeriksa health check kandidat pada http://127.0.0.1:${CANDIDATE_PORT}${HE
 if ! health_at "${CANDIDATE_PORT}"; then
   echo "ERROR: Container kandidat gagal lolos uji kesehatan. Diuji: ${HEALTH_PATHS[*]} pada port ${CANDIDATE_PORT}." >&2
   echo "Petunjuk: aplikasi harus mendengarkan di 0.0.0.0:${CONTAINER_PORT} dan menjawab HTTP. Kalau folder project masih kosong (belum ada kode aplikasi), tidak ada yang bisa dijalankan." >&2
+  cand_logs=""
+  cand_logs=$(docker logs --tail 20 "${CANDIDATE_CONTAINER}" 2>&1 || true)
+  docker stop "${CANDIDATE_CONTAINER}" 2>/dev/null >/dev/null || true
+  docker rm -f "${CANDIDATE_CONTAINER}" 2>/dev/null >/dev/null || true
   echo "Log terakhir container kandidat:" >&2
-  docker logs --tail 20 "${CANDIDATE_CONTAINER}" 2>&1 | sed 's/^/    | /' >&2 || true
-  docker stop "${CANDIDATE_CONTAINER}" 2>/dev/null || true
-  docker rm -f "${CANDIDATE_CONTAINER}" 2>/dev/null || true
+  if [[ -n "${cand_logs}" ]]; then
+    printf '%s\n' "${cand_logs}" | sed 's/^/    | /' >&2
+  else
+    echo "    | (kosong — aplikasi tidak menulis apa pun, kemungkinan tidak ada entrypoint)" >&2
+  fi
   echo "Container aktif lama dipertahankan tanpa gangguan (rollback aman)." >&2
   exit 1
 fi

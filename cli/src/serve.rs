@@ -459,40 +459,39 @@ impl Server {
 /// Port bebas untuk project: 8000-8099 (app) dengan deploy = app + 3.
 /// Disimpan supaya project lama memakai port yang sama lagi.
 fn alokasi_port(workspace: &std::path::Path, nama: &str) -> (u16, u16) {
+    // Port DI DALAM container selalu 8000: tiap container punya jaringan sendiri,
+    // jadi tidak pernah bentrok. Yang harus unik adalah port di host (deploy).
+    const APP_PORT: u16 = 8000;
     let reg = workspace.join("registry.tsv");
     let mut terpakai: Vec<u16> = Vec::new();
     if let Ok(isi) = std::fs::read_to_string(&reg) {
         for baris in isi.lines() {
             let mut it = baris.split('\t');
             let pemilik = it.next().unwrap_or("");
-            let (a, d) = (it.next(), it.next());
+            let _app = it.next();
+            let deploy = it.next();
             if pemilik == nama {
-                if let (Some(a), Some(d)) = (a, d) {
-                    if let (Ok(a), Ok(d)) = (a.parse::<u16>(), d.parse::<u16>()) {
-                        return (a, d);
-                    }
+                if let Some(d) = deploy.and_then(|d| d.parse::<u16>().ok()) {
+                    return (APP_PORT, d);
                 }
             }
-            for nilai in [a, d].into_iter().flatten() {
-                if let Ok(p) = nilai.parse::<u16>() {
-                    terpakai.push(p);
-                }
+            if let Some(p) = deploy.and_then(|d| d.parse::<u16>().ok()) {
+                terpakai.push(p);
             }
         }
     }
 
-    let mut app = 8000u16;
-    while app < 8100 {
-        let deploy = app + 3;
-        if !terpakai.contains(&app) && !terpakai.contains(&deploy) && port_bebas(app) && port_bebas(deploy) {
+    let mut deploy = 8003u16;
+    while deploy < 8200 {
+        if !terpakai.contains(&deploy) && port_bebas(deploy) {
             let mut isi = std::fs::read_to_string(&reg).unwrap_or_default();
-            isi.push_str(&format!("{nama}\t{app}\t{deploy}\n"));
+            isi.push_str(&format!("{nama}\t{APP_PORT}\t{deploy}\n"));
             let _ = std::fs::write(&reg, isi);
-            return (app, deploy);
+            return (APP_PORT, deploy);
         }
-        app += 10;
+        deploy += 10;
     }
-    (8000, 8003)
+    (APP_PORT, 8003)
 }
 
 fn port_bebas(port: u16) -> bool {
@@ -612,10 +611,11 @@ mod tests {
         let (a1, d1) = alokasi_port(tmp.path(), "proj-a");
         let (a2, d2) = alokasi_port(tmp.path(), "proj-a");
         assert_eq!((a1, d1), (a2, d2));
-        assert!(a1 >= 8000 && a1 < 8100);
-        assert_eq!(d1, a1 + 3);
-        let (a3, _) = alokasi_port(tmp.path(), "proj-b");
-        assert_ne!(a1, a3);
+        assert_eq!(a1, 8000, "port dalam container selalu 8000");
+        assert!(d1 >= 8003);
+        let (a3, d3) = alokasi_port(tmp.path(), "proj-b");
+        assert_eq!(a3, 8000);
+        assert_ne!(d1, d3, "port host harus beda tiap project");
     }
 
     #[test]

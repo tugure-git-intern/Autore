@@ -27,3 +27,6 @@ clippy-report.json
 **/clippy-report.json
 .cargo-cache/
 dist/
+
+# Isolated local worktrees
+.worktrees/

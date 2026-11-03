@@ -217,7 +217,26 @@ pub fn last_build_result(cfg: &JenkinsConfig, job_name: &str) -> Result<Option<S
         &user_cfg,
     )?;
     if code == 404 {
-        return Err("job belum terdaftar di Jenkins".into());
+        // Jenkins membalas 404 untuk `lastBuild` selama build pertama belum mulai.
+        // Bedakan "belum ada build" dari "job tidak ada".
+        let job_url = format!("{base}/job/{job_name}/api/json?tree=name");
+        let (jcode, _) = curl_with_stdin_config(
+            &[
+                "-sS",
+                "--max-time",
+                "15",
+                "-w",
+                "\n__HTTP_CODE__:%{http_code}",
+                "--config",
+                "-",
+                &job_url,
+            ],
+            &user_cfg,
+        )?;
+        if jcode == 404 {
+            return Err("job belum terdaftar di Jenkins".into());
+        }
+        return Ok(None);
     }
     if code >= 400 {
         return Err(format!("Jenkins membalas HTTP {code}"));

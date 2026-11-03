@@ -376,6 +376,12 @@ impl Server {
         if rendah.contains("belum berisi kode aplikasi") {
             return format!("Aplikasi '{nama}' belum punya kode di dalamnya.");
         }
+        if rendah.contains("sudah punya dockerfile") {
+            return format!(
+                "Nama '{}' sudah dipakai di server ini. Pakai nama lain (fitur Perbarui belum ada).",
+                nama
+            );
+        }
         if rendah.contains("gagal push") {
             return format!("Kode '{nama}' tidak bisa dikirim ke GitHub. Hubungi admin.");
         }
@@ -395,10 +401,16 @@ impl Server {
             }
         };
 
-        let batas = std::time::Instant::now() + Duration::from_secs(15 * 60);
+        let mulai = std::time::Instant::now();
+        let batas = mulai + Duration::from_secs(15 * 60);
+        let mut kabar_terakhir = mulai;
         loop {
             if std::time::Instant::now() > batas {
                 return self.selesai_gagal("Build belum selesai setelah 15 menit.");
+            }
+            if kabar_terakhir.elapsed() >= Duration::from_secs(30) {
+                kabar_terakhir = std::time::Instant::now();
+                self.catat("Build masih berjalan di Jenkins, tunggu sebentar...");
             }
             match jenkins::last_build_result(&cfg, nama) {
                 Ok(Some(hasil)) if hasil == "SUCCESS" => {

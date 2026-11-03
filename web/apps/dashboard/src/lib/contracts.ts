@@ -26,11 +26,13 @@ export type DashboardStatus = {
   applications: ApplicationRecord[];
   latest_pipeline: {
     status: StatusValue;
-    failure_reason: string | null;
-    stages: string[] | Array<{ id: string; label: string; status: StatusValue }>;
-    security_summary: string | null;
-    commit_sha: string | null;
-    author: string | null;
+    /** CLI sends "" (never null) when the value is unavailable. */
+    failure_reason: string;
+    /** Started stage ids in execution order. No per-stage pass/fail exists in the contract. */
+    stages: string[];
+    security_summary: string;
+    commit_sha: string;
+    author: string;
     raw_log: string[];
   };
 };

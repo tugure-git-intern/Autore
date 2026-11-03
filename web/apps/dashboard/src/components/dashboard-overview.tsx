@@ -35,7 +35,7 @@ const buildTime = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
 });
 
-function formatBuild(value: string | null): string {
+export function formatBuild(value: string | null): string {
   if (!value || !value.trim()) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : buildTime.format(date);

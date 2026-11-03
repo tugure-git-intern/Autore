@@ -1136,7 +1136,7 @@ mod tests {
 
         let srv_clone = Arc::clone(&srv);
         let t = thread::spawn(move || {
-            for _ in 0..7 {
+            for _ in 0..8 {
                 if let Ok((stream, _)) = listener.accept() {
                     let _ = srv_clone.handle(stream);
                 }
@@ -1183,6 +1183,104 @@ mod tests {
         let resp = kirim_req("GET /tidak-ada HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 404 Not Found"));
 
+        // 8. GET /api/log (saat status selesai)
+        {
+            let mut j = srv.job.lock().unwrap();
+            j.status = Status::Sukses;
+            j.nama = "selesai-app".to_string();
+            j.tautan = "http://selesai".to_string();
+            j.baris.push("log akhir".to_string());
+        }
+        let resp = kirim_req("GET /api/log HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("text/event-stream"));
+        assert!(resp.contains("event: hasil"));
+
         t.join().unwrap();
+    }
+
+    #[test]
+    fn status_as_str_mencakup_semua_keadaan() {
+        assert_eq!(Status::Idle.as_str(), "idle");
+        assert_eq!(Status::Running.as_str(), "running");
+        assert_eq!(Status::Sukses.as_str(), "sukses");
+        assert_eq!(Status::Gagal.as_str(), "gagal");
+    }
+
+    #[test]
+    fn workspace_dir_menghasilkan_path() {
+        let w = workspace_dir();
+        assert!(!w.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn port_bebas_memeriksa_port() {
+        let _ = port_bebas(1024);
+    }
+
+    #[test]
+    fn terjemahkan_id_mencakup_berbagai_tahap() {
+        let tmp = TempDir::new().unwrap();
+        let srv = Server {
+            job: Arc::new(Mutex::new(Job {
+                id: 1,
+                nama: "test".to_string(),
+                status: Status::Running,
+                baris: Vec::new(),
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            })),
+            workspace: tmp.path().to_path_buf(),
+            host_tampil: "127.0.0.1".to_string(),
+        };
+
+        srv.terjemahkan_id(1, "1/4 Inisialisasi");
+        srv.terjemahkan_id(1, "2/4 Repo GitHub");
+        srv.terjemahkan_id(1, "3/4 Push ke Git");
+        srv.terjemahkan_id(1, "siap & build-nya sudah jalan di Jenkins");
+        srv.terjemahkan_id(1, "baris biasa");
+
+        let j = srv.job.lock().unwrap();
+        assert!(j.baris.iter().any(|b| b.contains("Kerangka aplikasi")));
+        assert!(j.baris.iter().any(|b| b.contains("Repository GitHub")));
+        assert!(j.baris.iter().any(|b| b.contains("Kode dikirim")));
+        assert!(j.baris.iter().any(|b| b.contains("Didaftarkan ke Jenkins")));
+    }
+
+    #[test]
+    fn pesan_gagal_terjemahan_lengkap() {
+        let tmp = TempDir::new().unwrap();
+        let buat_srv = |baris: Vec<String>| Server {
+            job: Arc::new(Mutex::new(Job {
+                id: 10,
+                nama: "demo".to_string(),
+                status: Status::Gagal,
+                baris,
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            })),
+            workspace: tmp.path().to_path_buf(),
+            host_tampil: "127.0.0.1".to_string(),
+        };
+
+        let srv = buat_srv(vec!["! ERROR: folder belum berisi kode aplikasi".into()]);
+        assert!(srv.pesan_gagal_terakhir_id(10, "demo").contains("belum punya kode"));
+
+        let srv = buat_srv(vec!["! ERROR: repo sudah punya Dockerfile".into()]);
+        assert!(srv.pesan_gagal_terakhir_id(10, "demo").contains("sudah dipakai"));
+
+        let srv = buat_srv(vec!["! ERROR: gagal push ke git".into()]);
+        assert!(srv.pesan_gagal_terakhir_id(10, "demo").contains("tidak bisa dikirim"));
+
+        let srv = buat_srv(vec!["! ERROR: masalah jaringan tak terduga".into()]);
+        assert!(srv.pesan_gagal_terakhir_id(10, "demo").contains("masalah jaringan"));
+
+        let srv = buat_srv(vec!["tidak ada error".into()]);
+        assert!(srv.pesan_gagal_terakhir_id(10, "demo").contains("Buka detail teknis"));
+
+        let srv = buat_srv(vec![]);
+        assert_eq!(srv.pesan_gagal_terakhir_id(999, "demo"), "Aplikasi 'demo' gagal disiapkan.");
     }
 }

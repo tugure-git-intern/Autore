@@ -25,6 +25,9 @@ node_modules/
 web/apps/dashboard/.next/
 web/apps/dashboard/next-env.d.ts
 web/apps/dashboard/tsconfig.tsbuildinfo
+web/apps/dashboard/e2e/__screenshots__/
+web/apps/dashboard/test-results/
+web/apps/dashboard/playwright-report/
 
 # SonarQube & Scanner artifacts
 .scannerwork/

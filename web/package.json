@@ -11,7 +11,8 @@
     "build:dashboard": "npm run build --workspace @autore/dashboard",
     "start:dashboard": "npm run start --workspace @autore/dashboard",
     "start:api": "npm run start --workspace @autore/api",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "npm run test:e2e --workspace @autore/dashboard"
   },
   "devDependencies": {
     "vitest": "3.2.7"

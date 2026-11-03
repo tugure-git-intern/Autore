@@ -36,7 +36,10 @@ pub struct ScanContext {
 }
 
 #[cfg(unix)]
-pub fn resolve_trusted_binary(candidates: &[PathBuf], expected_owner: u32) -> Result<PathBuf, String> {
+pub fn resolve_trusted_binary(
+    candidates: &[PathBuf],
+    expected_owner: u32,
+) -> Result<PathBuf, String> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let mut reasons = Vec::new();
     for path in candidates {
@@ -54,7 +57,12 @@ pub fn resolve_trusted_binary(candidates: &[PathBuf], expected_owner: u32) -> Re
         } else if mode & 0o022 != 0 {
             reasons.push(format!("{}: writable oleh group/other", path.display()));
         } else if meta.uid() != expected_owner {
-            reasons.push(format!("{}: owner uid {} (harus {})", path.display(), meta.uid(), expected_owner));
+            reasons.push(format!(
+                "{}: owner uid {} (harus {})",
+                path.display(),
+                meta.uid(),
+                expected_owner
+            ));
         } else {
             return Ok(path.clone());
         }
@@ -66,10 +74,13 @@ pub fn resolve_trusted_binary(candidates: &[PathBuf], expected_owner: u32) -> Re
 }
 
 #[cfg(not(unix))]
-pub fn resolve_trusted_binary(_candidates: &[PathBuf], _expected_owner: u32) -> Result<PathBuf, String> {
-    let win_candidates = [
-        PathBuf::from(r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"),
-    ];
+pub fn resolve_trusted_binary(
+    _candidates: &[PathBuf],
+    _expected_owner: u32,
+) -> Result<PathBuf, String> {
+    let win_candidates = [PathBuf::from(
+        r"C:\Program Files\Docker\Docker\resources\bin\docker.exe",
+    )];
     for path in &win_candidates {
         if path.is_file() {
             return Ok(path.clone());
@@ -103,9 +114,22 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
     let mut args = docker_base(ctx);
     args.extend(
         [
-            "--network", "none", GITLEAKS_IMAGE, "detect", "--source=/repo", "--no-git",
-            "--redact", "--no-banner", "--log-level", "error", "--exit-code", "1", "--report-format", "json",
-            "--report-path", "/out/gitleaks.json",
+            "--network",
+            "none",
+            GITLEAKS_IMAGE,
+            "detect",
+            "--source=/repo",
+            "--no-git",
+            "--redact",
+            "--no-banner",
+            "--log-level",
+            "error",
+            "--exit-code",
+            "1",
+            "--report-format",
+            "json",
+            "--report-path",
+            "/out/gitleaks.json",
         ]
         .map(String::from),
     );
@@ -132,9 +156,24 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
     ]);
     args.extend(
         [
-            TRIVY_IMAGE, "fs", "--quiet", "--cache-dir", "/cache", "--scanners", "vuln,misconfig",
-            "--skip-check-update", "--ignore-unfixed", "--severity", severity, "--exit-code", "1",
-            "--format", "json", "--output", "/out/trivy.json", "/repo",
+            TRIVY_IMAGE,
+            "fs",
+            "--quiet",
+            "--cache-dir",
+            "/cache",
+            "--scanners",
+            "vuln,misconfig",
+            "--skip-check-update",
+            "--ignore-unfixed",
+            "--severity",
+            severity,
+            "--exit-code",
+            "1",
+            "--format",
+            "json",
+            "--output",
+            "/out/trivy.json",
+            "/repo",
         ]
         .map(String::from),
     );
@@ -155,7 +194,10 @@ pub fn run_trivy(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Resu
 /// memblokir project bersih; hanya menolak laporan terpotong/asing.)
 fn is_trivy_report(body: &str) -> bool {
     let t = body.trim();
-    t.starts_with('{') && t.ends_with('}') && t.contains("\"SchemaVersion\"") && t.contains("\"Results\"")
+    t.starts_with('{')
+        && t.ends_with('}')
+        && t.contains("\"SchemaVersion\"")
+        && t.contains("\"Results\"")
 }
 
 /// Go template for `trivy convert`: one TSV row per vuln / misconfig.
@@ -164,10 +206,26 @@ const TRIVY_TSV_TEMPLATE: &str = "{{- range . }}{{ $t := .Target }}{{ range .Vul
 /// Turn trivy.json into a human summary via the pinned image (offline).
 fn trivy_details(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> String {
     let args: Vec<String> = [
-        "run", "--rm", "--network", "none", "--user", &format!("{}:{}", ctx.uid, ctx.gid),
-        "-e", "HOME=/tmp", "-v", &format!("{}:/out", ctx.out_dir.display()), TRIVY_IMAGE,
-        "convert", "--quiet", "--format", "template", "--template", TRIVY_TSV_TEMPLATE,
-        "--output", "/out/trivy.tsv", "/out/trivy.json",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--user",
+        &format!("{}:{}", ctx.uid, ctx.gid),
+        "-e",
+        "HOME=/tmp",
+        "-v",
+        &format!("{}:/out", ctx.out_dir.display()),
+        TRIVY_IMAGE,
+        "convert",
+        "--quiet",
+        "--format",
+        "template",
+        "--template",
+        TRIVY_TSV_TEMPLATE,
+        "--output",
+        "/out/trivy.tsv",
+        "/out/trivy.json",
     ]
     .map(String::from)
     .to_vec();
@@ -179,7 +237,10 @@ fn trivy_details(ctx: &ScanContext, runner: &dyn Runner, severity: &str) -> Stri
 }
 
 fn ver_key(v: &str) -> Vec<u64> {
-    v.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).map(|s| s.parse().unwrap_or(0)).collect()
+    v.split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().unwrap_or(0))
+        .collect()
 }
 
 /// Smallest fixed version that clears every CVE, preferring the installed major.
@@ -188,8 +249,16 @@ fn pick_fix(installed: &str, fixed_lists: &[String]) -> String {
     let cur = ver_key(installed);
     let mut best: Option<&str> = None;
     for list in fixed_lists {
-        let cands: Vec<&str> = list.split(',').map(str::trim).filter(|f| ver_key(f) > cur).collect();
-        let same: Vec<&str> = cands.iter().copied().filter(|f| ver_key(f).first() == cur.first()).collect();
+        let cands: Vec<&str> = list
+            .split(',')
+            .map(str::trim)
+            .filter(|f| ver_key(f) > cur)
+            .collect();
+        let same: Vec<&str> = cands
+            .iter()
+            .copied()
+            .filter(|f| ver_key(f).first() == cur.first())
+            .collect();
         let pool = if same.is_empty() { cands } else { same };
         if let Some(m) = pool.into_iter().min_by_key(|f| ver_key(f)) {
             if best.is_none_or(|b| ver_key(m) > ver_key(b)) {
@@ -207,8 +276,19 @@ type PkgVulns = std::collections::BTreeMap<(String, String), (usize, Vec<String>
 pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
     use colored::Colorize;
     use std::collections::BTreeMap;
-    let rank = |s: &str| ["CRITICAL", "HIGH", "MEDIUM", "LOW"].iter().position(|x| *x == s).unwrap_or(4);
-    let paint = |r: usize, s: String| if r == 0 { s.red().bold().to_string() } else { s.yellow().to_string() };
+    let rank = |s: &str| {
+        ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+            .iter()
+            .position(|x| *x == s)
+            .unwrap_or(4)
+    };
+    let paint = |r: usize, s: String| {
+        if r == 0 {
+            s.red().bold().to_string()
+        } else {
+            s.yellow().to_string()
+        }
+    };
     // target -> (pkg, installed) -> (worst rank, fixed lists, cve count)
     let mut vulns: BTreeMap<String, PkgVulns> = BTreeMap::new();
     let mut misconf = Vec::new();
@@ -217,21 +297,39 @@ pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
         match line.split('\t').collect::<Vec<_>>().as_slice() {
             ["VULN", sev, target, pkg, ver, fix, _] => {
                 n_cve += 1;
-                let e = vulns.entry(target.to_string()).or_default()
-                    .entry((pkg.to_string(), ver.to_string())).or_insert((4, vec![], 0));
+                let e = vulns
+                    .entry(target.to_string())
+                    .or_default()
+                    .entry((pkg.to_string(), ver.to_string()))
+                    .or_insert((4, vec![], 0));
                 e.0 = e.0.min(rank(sev));
                 e.1.push(fix.to_string());
                 e.2 += 1;
             }
-            ["MISCONF", sev, target, id, title, res] => misconf.push((rank(sev), format!("{sev:<8}"), format!("{target}  {id}: {title}\n              Saran: {res}"))),
+            ["MISCONF", sev, target, id, title, res] => misconf.push((
+                rank(sev),
+                format!("{sev:<8}"),
+                format!("{target}  {id}: {title}\n              Saran: {res}"),
+            )),
             _ => {}
         }
     }
-    let mut all: Vec<(usize, String)> = vulns.values().flatten().map(|((p, v), e)| (e.0, format!("{p}@{v}"))).collect();
+    let mut all: Vec<(usize, String)> = vulns
+        .values()
+        .flatten()
+        .map(|((p, v), e)| (e.0, format!("{p}@{v}")))
+        .collect();
     all.sort();
     let top: Vec<String> = all.iter().take(5).map(|x| x.1.clone()).collect();
-    let more = if all.len() > 5 { format!(", +{} lainnya", all.len() - 5) } else { String::new() };
-    let mut head = format!("Trivy menemukan {n_cve} celah {severity} di {} paket", all.len());
+    let more = if all.len() > 5 {
+        format!(", +{} lainnya", all.len() - 5)
+    } else {
+        String::new()
+    };
+    let mut head = format!(
+        "Trivy menemukan {n_cve} celah {severity} di {} paket",
+        all.len()
+    );
     if !misconf.is_empty() {
         head += &format!(" + {} misconfiguration", misconf.len());
     }
@@ -247,10 +345,21 @@ pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
         rows.sort_by_key(|((p, _), e)| (e.0, p.clone()));
         for ((p, v), (r, lists, n)) in rows {
             let sev = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"][*r];
-            out.push(format!("      {}  {p:<22} {v:<10} -> {:<10} ({n} CVE)", paint(*r, format!("{sev:<8}")), pick_fix(v, lists)));
+            out.push(format!(
+                "      {}  {p:<22} {v:<10} -> {:<10} ({n} CVE)",
+                paint(*r, format!("{sev:<8}")),
+                pick_fix(v, lists)
+            ));
         }
-        let dir = Path::new(target).parent().map(|d| d.display().to_string()).unwrap_or_default();
-        let cd = if dir.is_empty() { String::new() } else { format!("cd {dir} && ") };
+        let dir = Path::new(target)
+            .parent()
+            .map(|d| d.display().to_string())
+            .unwrap_or_default();
+        let cd = if dir.is_empty() {
+            String::new()
+        } else {
+            format!("cd {dir} && ")
+        };
         fixes.push(if target.ends_with("package-lock.json") {
             format!("{cd}npm audit fix")
         } else {
@@ -274,18 +383,31 @@ pub fn summarize_trivy(tsv: &str, severity: &str) -> String {
 /// Gitleaks report (pretty JSON) -> short reason + file:line list. Secrets stay redacted.
 pub fn summarize_gitleaks(json: &str) -> String {
     let grab = |pat: &str| -> Vec<String> {
-        regex::Regex::new(pat).unwrap().captures_iter(json).map(|c| c[1].to_string()).collect()
+        regex::Regex::new(pat)
+            .unwrap()
+            .captures_iter(json)
+            .map(|c| c[1].to_string())
+            .collect()
     };
     let files = grab(r#""File":\s*"([^"]*)""#);
     let lines = grab(r#""StartLine":\s*(\d+)"#);
     let rules = grab(r#""RuleID":\s*"([^"]*)""#);
-    let mut out = vec![format!("Gitleaks menemukan {} secret bocor", rules.len()), String::new()];
+    let mut out = vec![
+        format!("Gitleaks menemukan {} secret bocor", rules.len()),
+        String::new(),
+    ];
     for ((f, l), r) in files.iter().zip(&lines).zip(&rules) {
-        out.push(format!("      {}:{l}  [{r}]", f.trim_start_matches("/repo/")));
+        out.push(format!(
+            "      {}:{l}  [{r}]",
+            f.trim_start_matches("/repo/")
+        ));
     }
     out.push(String::new());
     out.push("    Cara perbaiki:".into());
-    out.push("      hapus secret dari kode, simpan di environment variable / Jenkins Credentials,".into());
+    out.push(
+        "      hapus secret dari kode, simpan di environment variable / Jenkins Credentials,"
+            .into(),
+    );
     out.push("      lalu ganti (rotate) secret yang terlanjur bocor.".into());
     out.join("\n")
 }
@@ -337,7 +459,8 @@ pub fn run_trivy_image(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or_default();
-    let out_dir = std::env::temp_dir().join(format!("autore-image-scan-{}-{nanos}", std::process::id()));
+    let out_dir =
+        std::env::temp_dir().join(format!("autore-image-scan-{}-{nanos}", std::process::id()));
     std::fs::create_dir_all(&out_dir)
         .map_err(|e| format!("Gagal membuat direktori laporan image: {e}"))?;
     let cache_dir = match std::env::var_os("HOME") {
@@ -417,7 +540,8 @@ pub fn run_trivy_image(
         ];
         let sbom_code = runner.run(docker, &sbom_args)?;
         let sbom_content = std::fs::read_to_string(&sbom_tmp).ok();
-        let sbom_valid = matches!(&sbom_content, Some(b) if b.contains("CycloneDX") || b.contains("bomFormat"));
+        let sbom_valid =
+            matches!(&sbom_content, Some(b) if b.contains("CycloneDX") || b.contains("bomFormat"));
         if sbom_code != 0 || !sbom_valid {
             let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
             let _ = std::fs::remove_dir_all(&out_dir);
@@ -429,7 +553,10 @@ pub fn run_trivy_image(
         if let Err(e) = std::fs::write(sbom_target, sbom_content.unwrap()) {
             let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
             let _ = std::fs::remove_dir_all(&out_dir);
-            return Err(format!("Gagal menyimpan SBOM ke {}: {e}", sbom_target.display()));
+            return Err(format!(
+                "Gagal menyimpan SBOM ke {}: {e}",
+                sbom_target.display()
+            ));
         }
     }
 
@@ -471,7 +598,10 @@ impl Runner for ProcessRunner {
 /// scanners. Any error means the gate must fail.
 pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), String> {
     let docker = resolve_trusted_binary(
-        &TRUSTED_DOCKER_PATHS.iter().map(PathBuf::from).collect::<Vec<_>>(),
+        &TRUSTED_DOCKER_PATHS
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>(),
         0,
     )?;
     let target = target
@@ -505,12 +635,21 @@ pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), Strin
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("Gagal membuat cache Trivy: {e}"))?;
 
     let first_run = !cache_dir.join("db/trivy.db").exists();
-    let ctx = ScanContext { docker, target, out_dir: out_dir.clone(), cache_dir, uid, gid };
+    let ctx = ScanContext {
+        docker,
+        target,
+        out_dir: out_dir.clone(),
+        cache_dir,
+        uid,
+        gid,
+    };
     let result = (|| {
         run_gitleaks(&ctx, &ProcessRunner)?;
         println!("  ✔ [2/3] Gitleaks LULUS (tidak ada secret bocor).");
         if first_run {
-            println!("  • Pertama kali: download database celah keamanan (~130 MB), mohon tunggu...");
+            println!(
+                "  • Pertama kali: download database celah keamanan (~130 MB), mohon tunggu..."
+            );
         }
         run_trivy(&ctx, &ProcessRunner, severity)?;
         println!("  ✔ [3/3] Trivy LULUS (tidak ada celah {severity}).");
@@ -522,11 +661,17 @@ pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), Strin
 
 pub fn run_authoritative_image_scan(opts: &ImageScanOptions) -> Result<(), String> {
     let docker = resolve_trusted_binary(
-        &TRUSTED_DOCKER_PATHS.iter().map(PathBuf::from).collect::<Vec<_>>(),
+        &TRUSTED_DOCKER_PATHS
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>(),
         0,
     )?;
     run_trivy_image(&docker, opts, &ProcessRunner)?;
-    println!("  ✔ Image scan LULUS: runtime user non-root & bebas CVE {}.", opts.severity);
+    println!(
+        "  ✔ Image scan LULUS: runtime user non-root & bebas CVE {}.",
+        opts.severity
+    );
     if opts.sbom_output.is_some() {
         println!("  ✔ SBOM CycloneDX berhasil dibuat.");
     }
@@ -555,15 +700,19 @@ mod tests {
             self.calls.borrow_mut().push(args.to_vec());
             if let Some(body) = self.report {
                 // The report lands in out_dir as named by the scanner args (/out or /reports).
-                let out = args
-                    .iter()
-                    .find_map(|a| a.strip_suffix(":/out").or_else(|| a.strip_suffix(":/reports")).map(PathBuf::from));
+                let out = args.iter().find_map(|a| {
+                    a.strip_suffix(":/out")
+                        .or_else(|| a.strip_suffix(":/reports"))
+                        .map(PathBuf::from)
+                });
                 if let Some(out) = out {
                     let name = if args.iter().any(|a| a.ends_with("trivy.tsv")) {
                         "trivy.tsv"
                     } else if args.iter().any(|a| a.contains("gitleaks")) {
                         "gitleaks.json"
-                    } else if args.iter().any(|a| a == "image") && args.iter().any(|a| a == "cyclonedx") {
+                    } else if args.iter().any(|a| a == "image")
+                        && args.iter().any(|a| a == "cyclonedx")
+                    {
                         "sbom.cdx.json"
                     } else if args.iter().any(|a| a == "image") {
                         "trivy-image.json"
@@ -585,7 +734,10 @@ mod tests {
         fn run_capture(&self, _program: &Path, args: &[String]) -> Result<(i32, String), String> {
             self.calls.borrow_mut().push(args.to_vec());
             if args.iter().any(|a| a == "inspect") {
-                let user = self.inspect_user.clone().unwrap_or_else(|| "appuser".to_string());
+                let user = self
+                    .inspect_user
+                    .clone()
+                    .unwrap_or_else(|| "appuser".to_string());
                 Ok((0, user))
             } else {
                 Ok((self.code, String::new()))
@@ -637,11 +789,20 @@ mod tests {
         let me = fs::metadata(&bin).unwrap().uid();
 
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o777)).unwrap();
-        assert!(resolve_trusted_binary(std::slice::from_ref(&bin), me).is_err(), "world-writable accepted");
+        assert!(
+            resolve_trusted_binary(std::slice::from_ref(&bin), me).is_err(),
+            "world-writable accepted"
+        );
 
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
-        assert!(resolve_trusted_binary(std::slice::from_ref(&bin), me + 1).is_err(), "wrong owner accepted");
-        assert_eq!(resolve_trusted_binary(std::slice::from_ref(&bin), me).unwrap(), bin);
+        assert!(
+            resolve_trusted_binary(std::slice::from_ref(&bin), me + 1).is_err(),
+            "wrong owner accepted"
+        );
+        assert_eq!(
+            resolve_trusted_binary(std::slice::from_ref(&bin), me).unwrap(),
+            bin
+        );
     }
 
     // ---- gitleaks ---------------------------------------------------------
@@ -674,7 +835,10 @@ mod tests {
         run_gitleaks(&c, &r).unwrap();
         let args = r.calls.borrow()[0].join(" ");
         assert!(args.contains(GITLEAKS_IMAGE), "{args}");
-        assert!(args.contains(&format!("{}:/repo:ro", c.target.display())), "{args}");
+        assert!(
+            args.contains(&format!("{}:/repo:ro", c.target.display())),
+            "{args}"
+        );
         assert!(args.contains("--network none"), "{args}");
         assert!(!args.contains("security-check.sh"), "{args}");
     }
@@ -706,11 +870,20 @@ mod tests {
     fn pick_fix_prefers_smallest_fix_in_same_major() {
         assert_eq!(pick_fix("1.2.3", &["1.2.4".to_string()]), "1.2.4");
         // kandidat tidak lebih baru dari versi terpasang -> tidak ada saran
-        assert_eq!(pick_fix("1.2.3", &["1.2.3".to_string(), "1.0.0".to_string()]), "-");
+        assert_eq!(
+            pick_fix("1.2.3", &["1.2.3".to_string(), "1.0.0".to_string()]),
+            "-"
+        );
         // satu daftar berisi banyak kandidat: ambil terkecil di major yang sama
-        assert_eq!(pick_fix("1.2.3", &["1.9.0,1.2.4,2.0.0".to_string()]), "1.2.4");
+        assert_eq!(
+            pick_fix("1.2.3", &["1.9.0,1.2.4,2.0.0".to_string()]),
+            "1.2.4"
+        );
         // dua CVE pada paket sama: harus versi yang menutup keduanya (maksimum dari minimum)
-        assert_eq!(pick_fix("1.0.0", &["1.1.0".to_string(), "1.3.0".to_string()]), "1.3.0");
+        assert_eq!(
+            pick_fix("1.0.0", &["1.1.0".to_string(), "1.3.0".to_string()]),
+            "1.3.0"
+        );
         // tidak ada major yang sama -> pakai kandidat tertinggi
         assert_eq!(pick_fix("1.2.3", &["2.0.0".to_string()]), "2.0.0");
         // perbandingan numerik, bukan leksikografis
@@ -723,23 +896,36 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let tsv = "VULN\tHIGH\tsandbox/dummy-app/requirements.txt\tpillow\t9.0.0\t9.3.0\tCVE-2021-25289\n";
         let out = trivy_details(&ctx(&tmp), &fake(1, Some(tsv)), "HIGH,CRITICAL");
-        assert!(out.starts_with("Trivy menemukan 1 celah HIGH,CRITICAL di 1 paket"), "{out}");
+        assert!(
+            out.starts_with("Trivy menemukan 1 celah HIGH,CRITICAL di 1 paket"),
+            "{out}"
+        );
         assert!(out.contains("pillow@9.0.0"), "{out}");
         assert!(out.contains("9.3.0"), "saran versi perbaikan hilang: {out}");
 
         let empty = TempDir::new().unwrap();
         let out2 = trivy_details(&ctx(&empty), &fake(1, Some("")), "HIGH,CRITICAL");
-        assert_eq!(out2, "Trivy mendeteksi celah keamanan HIGH,CRITICAL / misconfiguration");
+        assert_eq!(
+            out2,
+            "Trivy mendeteksi celah keamanan HIGH,CRITICAL / misconfiguration"
+        );
     }
 
     #[test]
     fn summarize_trivy_first_line_is_short_reason() {
-        let tsv = "VULN\tCRITICAL\tapp/package-lock.json\tlodash\t4.17.11\t4.17.21\tCVE-2019-10744\n\
+        let tsv =
+            "VULN\tCRITICAL\tapp/package-lock.json\tlodash\t4.17.11\t4.17.21\tCVE-2019-10744\n\
                    VULN\tHIGH\tapp/package-lock.json\tlodash\t4.17.11\t4.17.21\tCVE-2020-8203\n";
         let out = summarize_trivy(tsv, "HIGH,CRITICAL");
         let head = out.lines().next().unwrap();
-        assert_eq!(head, "Trivy menemukan 2 celah HIGH,CRITICAL di 1 paket: lodash@4.17.11");
-        assert!(out.contains("npm audit fix"), "langkah perbaikan npm hilang: {out}");
+        assert_eq!(
+            head,
+            "Trivy menemukan 2 celah HIGH,CRITICAL di 1 paket: lodash@4.17.11"
+        );
+        assert!(
+            out.contains("npm audit fix"),
+            "langkah perbaikan npm hilang: {out}"
+        );
     }
 
     #[test]
@@ -752,7 +938,10 @@ mod tests {
             "[]",
         ] {
             let err = run_trivy(&ctx(&tmp), &fake(0, Some(bad)), "HIGH,CRITICAL").unwrap_err();
-            assert!(err.contains("laporan valid"), "report {bad:?} harus ditolak: {err}");
+            assert!(
+                err.contains("laporan valid"),
+                "report {bad:?} harus ditolak: {err}"
+            );
         }
     }
 
@@ -777,7 +966,10 @@ mod tests {
         run_trivy(&c, &r, "HIGH,CRITICAL").unwrap();
         let args = r.calls.borrow()[0].join(" ");
         assert!(args.contains(TRIVY_IMAGE), "{args}");
-        assert!(args.contains(&format!("{}:/repo:ro", c.target.display())), "{args}");
+        assert!(
+            args.contains(&format!("{}:/repo:ro", c.target.display())),
+            "{args}"
+        );
         assert!(args.contains("--severity HIGH,CRITICAL"), "{args}");
     }
 
@@ -791,8 +983,14 @@ mod tests {
         let s = summarize_trivy(tsv, "HIGH,CRITICAL");
         let head = s.lines().next().unwrap();
         assert_eq!(head, "Trivy menemukan 3 celah HIGH,CRITICAL di 2 paket + 1 misconfiguration: form-data@2.3.3, brace-expansion@5.0.4");
-        assert!(s.contains("brace-expansion        5.0.4      -> 5.0.11"), "{s}");
-        assert!(s.contains("form-data              2.3.3      -> 2.5.4"), "{s}");
+        assert!(
+            s.contains("brace-expansion        5.0.4      -> 5.0.11"),
+            "{s}"
+        );
+        assert!(
+            s.contains("form-data              2.3.3      -> 2.5.4"),
+            "{s}"
+        );
         assert!(s.contains("cd server && npm audit fix"), "{s}");
         assert!(s.contains("DS002"), "{s}");
     }
@@ -854,7 +1052,10 @@ mod tests {
         assert!(err.contains("root") || err.contains("UID 0"), "{err}");
         let calls = r.calls.borrow();
         let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
-        assert!(rmi_call.is_some(), "failed image must be removed with docker rmi");
+        assert!(
+            rmi_call.is_some(),
+            "failed image must be removed with docker rmi"
+        );
     }
 
     #[test]
@@ -873,7 +1074,10 @@ mod tests {
         assert!(err.contains("Trivy") || err.contains("keamanan"), "{err}");
         let calls = r.calls.borrow();
         let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
-        assert!(rmi_call.is_some(), "failed image must be removed with docker rmi on CVE detection");
+        assert!(
+            rmi_call.is_some(),
+            "failed image must be removed with docker rmi on CVE detection"
+        );
     }
 
     #[test]
@@ -893,7 +1097,13 @@ mod tests {
         run_trivy_image(&docker, &opts, &r).unwrap();
         let calls = r.calls.borrow();
         let rmi_call = calls.iter().find(|args| args.contains(&"rmi".to_string()));
-        assert!(rmi_call.is_none(), "passing image must NOT be removed from local docker");
-        assert!(sbom_path.exists(), "sbom file must be created at requested path");
+        assert!(
+            rmi_call.is_none(),
+            "passing image must NOT be removed from local docker"
+        );
+        assert!(
+            sbom_path.exists(),
+            "sbom file must be created at requested path"
+        );
     }
 }

@@ -98,7 +98,15 @@ fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
     if opts.skip_build_dirs {
         return matches!(
             name,
-            "target" | "node_modules" | "__pycache__" | ".superpowers" | ".venv" | "venv" | "dist" | ".cargo-cache" | ".scannerwork"
+            "target"
+                | "node_modules"
+                | "__pycache__"
+                | ".superpowers"
+                | ".venv"
+                | "venv"
+                | "dist"
+                | ".cargo-cache"
+                | ".scannerwork"
         );
     }
     false
@@ -375,8 +383,8 @@ fn check_dockerfile(path: &Path, report: &mut ScanReport) -> Result<(), String> 
                     file: path.to_path_buf(),
                     line: last_from_line,
                     rule: "dockerfile-non-root-user".to_string(),
-                    message:
-                        "Dockerfile wajib menggunakan non-root USER pada stage akhir".to_string(),
+                    message: "Dockerfile wajib menggunakan non-root USER pada stage akhir"
+                        .to_string(),
                 });
             }
         }
@@ -405,7 +413,11 @@ mod tests {
         .unwrap();
 
         let report = scan_directory(tmp.path()).unwrap();
-        assert!(report.is_clean(), "Expected clean report, got {:?}", report.violations);
+        assert!(
+            report.is_clean(),
+            "Expected clean report, got {:?}",
+            report.violations
+        );
         assert_eq!(report.scanned_files, 2);
     }
 
@@ -417,7 +429,9 @@ mod tests {
         let report = scan_directory(tmp.path()).unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.violations.len(), 1);
-        assert!(report.violations[0].rule.contains(concat!("os.sys", "tem()")));
+        assert!(report.violations[0]
+            .rule
+            .contains(concat!("os.sys", "tem()")));
         assert_eq!(report.violations[0].line, 2);
     }
 
@@ -474,7 +488,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         fs::write(
             tmp.path().join("app.rs"),
-            concat!("fn main() { std::process::Command::new(\"s", "h\").arg(\"-c\"); }\n"),
+            concat!(
+                "fn main() { std::process::Command::new(\"s",
+                "h\").arg(\"-c\"); }\n"
+            ),
         )
         .unwrap();
         let report = scan_directory(tmp.path()).unwrap();
@@ -495,16 +512,26 @@ mod tests {
     fn test_files_are_scanned() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("test_app.py"), OS_SYSTEM).unwrap();
-        assert!(!scan_directory(tmp.path()).unwrap().is_clean(), "test_* skipped");
+        assert!(
+            !scan_directory(tmp.path()).unwrap().is_clean(),
+            "test_* skipped"
+        );
     }
 
     #[test]
     fn config_files_without_code_extension_are_scanned_for_secrets() {
         for name in [".env", "settings.toml", "config.json", "app.properties"] {
             let tmp = TempDir::new().unwrap();
-            fs::write(tmp.path().join(name), concat!("API_K", "EY = \"abcdef123456\"\n")).unwrap();
+            fs::write(
+                tmp.path().join(name),
+                concat!("API_K", "EY = \"abcdef123456\"\n"),
+            )
+            .unwrap();
             let report = scan_directory(tmp.path()).unwrap();
-            assert!(rules(&report).contains(&"hardcoded-secret".to_string()), "{name} not scanned");
+            assert!(
+                rules(&report).contains(&"hardcoded-secret".to_string()),
+                "{name} not scanned"
+            );
         }
     }
 
@@ -513,7 +540,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join("node_modules/pkg")).unwrap();
         fs::write(tmp.path().join("node_modules/pkg/index.py"), OS_SYSTEM).unwrap();
-        assert!(!scan_directory(tmp.path()).unwrap().is_clean(), "node_modules skipped");
+        assert!(
+            !scan_directory(tmp.path()).unwrap().is_clean(),
+            "node_modules skipped"
+        );
     }
 
     #[test]
@@ -522,7 +552,10 @@ mod tests {
         fs::write(tmp.path().join("bad.py"), OS_SYSTEM).unwrap();
         std::os::unix::fs::symlink(tmp.path(), tmp.path().join("loop")).unwrap();
         let report = scan_directory(tmp.path()).unwrap();
-        let hits = rules(&report).iter().filter(|r| r.contains("os.system")).count();
+        let hits = rules(&report)
+            .iter()
+            .filter(|r| r.contains("os.system"))
+            .count();
         assert_eq!(hits, 1, "symlink followed: {:?}", report.violations);
     }
 
@@ -531,10 +564,14 @@ mod tests {
         let outside = TempDir::new().unwrap();
         fs::write(outside.path().join("secret.py"), OS_SYSTEM).unwrap();
         let tmp = TempDir::new().unwrap();
-        std::os::unix::fs::symlink(outside.path().join("secret.py"), tmp.path().join("link.py")).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("secret.py"), tmp.path().join("link.py"))
+            .unwrap();
         let report = scan_directory(tmp.path()).unwrap();
         let r = rules(&report);
-        assert!(!r.iter().any(|x| x.contains("os.system")), "followed symlink outside root");
+        assert!(
+            !r.iter().any(|x| x.contains("os.system")),
+            "followed symlink outside root"
+        );
         assert!(r.contains(&"symlink-escape".to_string()), "{r:?}");
     }
 
@@ -551,7 +588,11 @@ mod tests {
         }
         let report = scan_directory(tmp.path()).unwrap();
         fs::set_permissions(&f, fs::Permissions::from_mode(0o644)).unwrap();
-        assert!(rules(&report).contains(&"unreadable-file".to_string()), "{:?}", report.violations);
+        assert!(
+            rules(&report).contains(&"unreadable-file".to_string()),
+            "{:?}",
+            report.violations
+        );
     }
 
     #[test]
@@ -566,7 +607,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join("target")).unwrap();
         fs::write(tmp.path().join("target/x.py"), OS_SYSTEM).unwrap();
-        let opts = ScanOptions { skip_build_dirs: true };
+        let opts = ScanOptions {
+            skip_build_dirs: true,
+        };
         assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
     }
 

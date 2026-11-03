@@ -46,8 +46,8 @@ pub fn parse_semver(raw: &str) -> Option<(u64, u64, u64)> {
 }
 
 pub fn is_newer_version(current: &str, remote: &str) -> Result<bool, String> {
-    let cur = parse_semver(current)
-        .ok_or_else(|| format!("Versi lokal tidak valid: '{current}'"))?;
+    let cur =
+        parse_semver(current).ok_or_else(|| format!("Versi lokal tidak valid: '{current}'"))?;
     let rem = parse_semver(remote)
         .ok_or_else(|| format!("Versi rilis GitHub tidak valid: '{remote}'"))?;
     Ok(rem > cur)
@@ -58,12 +58,11 @@ pub fn parse_expected_sha256(sums_text: &str, asset_name: &str) -> Result<String
     for line in sums_text.lines() {
         let mut cols = line.split_whitespace();
         let Some(hash) = cols.next() else { continue };
-        let Some(name_raw) = cols.next() else { continue };
+        let Some(name_raw) = cols.next() else {
+            continue;
+        };
         let name = name_raw.trim_start_matches('*');
-        if name == asset_name
-            && hash.len() == 64
-            && hash.chars().all(|c| c.is_ascii_hexdigit())
-        {
+        if name == asset_name && hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
             return Ok(hash.to_ascii_lowercase());
         }
     }
@@ -82,7 +81,11 @@ pub fn extract_tag_from_release_json(json: &str) -> Option<String> {
     let stripped = after.strip_prefix('"')?;
     let end = stripped.find('"')?;
     let tag = stripped[..end].trim();
-    if tag.is_empty() { None } else { Some(tag.to_string()) }
+    if tag.is_empty() {
+        None
+    } else {
+        Some(tag.to_string())
+    }
 }
 
 /// Bersihkan sisa `.old` dari update sebelumnya (Windows tidak mengizinkan hapus saat proses hidup).
@@ -183,7 +186,9 @@ fn fetch_latest_tag(repo: &str, api_base: &str) -> Result<String, String> {
 }
 
 fn download_to(url: &str, dest: &Path) -> Result<(), String> {
-    let dest_str = dest.to_str().ok_or("Path tujuan unduhan bukan UTF-8 valid")?;
+    let dest_str = dest
+        .to_str()
+        .ok_or("Path tujuan unduhan bukan UTF-8 valid")?;
     let out = Command::new("curl")
         .args(["-fsSL", url, "-o", dest_str])
         .output()
@@ -202,7 +207,10 @@ fn compute_file_sha256(path: &Path) -> Result<String, String> {
     // Linux/macOS: sha256sum; Windows: certutil -hashfile <file> SHA256
     if let Ok(out) = Command::new("sha256sum").arg(path_str).output() {
         if out.status.success() {
-            if let Some(h) = String::from_utf8_lossy(&out.stdout).split_whitespace().next() {
+            if let Some(h) = String::from_utf8_lossy(&out.stdout)
+                .split_whitespace()
+                .next()
+            {
                 if h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Ok(h.to_ascii_lowercase());
                 }
@@ -247,8 +255,8 @@ pub fn run_self_update() -> Result<Option<PathBuf>, String> {
     let was_deleted_in_ram = raw_exe.to_string_lossy().ends_with(" (deleted)");
     let exe_path = clean_exe_path(raw_exe);
     let repo = std::env::var("AUTORE_GITHUB_REPO").unwrap_or_else(|_| DEFAULT_REPO.to_string());
-    let api_base = std::env::var("AUTORE_GITHUB_API")
-        .unwrap_or_else(|_| "https://api.github.com".to_string());
+    let api_base =
+        std::env::var("AUTORE_GITHUB_API").unwrap_or_else(|_| "https://api.github.com".to_string());
     let dl_base = std::env::var("AUTORE_RELEASE_BASE")
         .unwrap_or_else(|_| format!("https://github.com/{repo}/releases/download"));
     let updated = run_self_update_with(
@@ -289,7 +297,10 @@ pub fn run_self_update_with(
     println!("  • Lokasi binary : {}", exe_path.display());
     println!("  • Versi terpasang: v{current_version}");
 
-    println!("{} Mengecek rilis stabil terbaru di GitHub ({repo})...", "==>".cyan().bold());
+    println!(
+        "{} Mengecek rilis stabil terbaru di GitHub ({repo})...",
+        "==>".cyan().bold()
+    );
     let latest_tag = fetch_latest_tag(repo, api_base)?;
     let latest_clean = latest_tag.trim_start_matches('v');
     let current_clean = current_version.trim_start_matches('v');
@@ -304,8 +315,7 @@ pub fn run_self_update_with(
     }
 
     let tmp_dir = std::env::temp_dir().join(format!("autore-update-{}", std::process::id()));
-    fs::create_dir_all(&tmp_dir)
-        .map_err(|e| format!("Gagal membuat folder sementara: {e}"))?;
+    fs::create_dir_all(&tmp_dir).map_err(|e| format!("Gagal membuat folder sementara: {e}"))?;
 
     let result = (|| -> Result<bool, String> {
         let bin_url = format!("{dl_base}/{latest_tag}/{}", platform.asset_name);
@@ -314,8 +324,8 @@ pub fn run_self_update_with(
         let tmp_sums = tmp_dir.join("SHA256SUMS");
 
         download_to(&sums_url, &tmp_sums)?;
-        let sums_text = fs::read_to_string(&tmp_sums)
-            .map_err(|e| format!("Gagal membaca SHA256SUMS: {e}"))?;
+        let sums_text =
+            fs::read_to_string(&tmp_sums).map_err(|e| format!("Gagal membaca SHA256SUMS: {e}"))?;
         let expected = parse_expected_sha256(&sums_text, platform.asset_name)?;
 
         if !version_is_newer {
@@ -404,7 +414,10 @@ mod tests {
     #[test]
     fn extracts_tag_and_sha256_entry() {
         let json = r#"{"url":"x","tag_name": "v0.2.0","name":"Autore v0.2.0"}"#;
-        assert_eq!(extract_tag_from_release_json(json).as_deref(), Some("v0.2.0"));
+        assert_eq!(
+            extract_tag_from_release_json(json).as_deref(),
+            Some("v0.2.0")
+        );
 
         let sums = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  autore-linux-x86_64-musl\n\
                     bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb *autore-windows-x86_64.exe\n";

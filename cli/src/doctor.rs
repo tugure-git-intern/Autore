@@ -20,14 +20,25 @@ fn run_cmd(program: &str, args: &[&str]) -> Option<String> {
 
 fn check_cmd(name: &'static str, prog: &str, args: &[&str], missing_msg: &str) -> CheckResult {
     match run_cmd(prog, args) {
-        Some(v) => CheckResult { name, ok: true, detail: v },
-        None => CheckResult { name, ok: false, detail: missing_msg.to_string() },
+        Some(v) => CheckResult {
+            name,
+            ok: true,
+            detail: v,
+        },
+        None => CheckResult {
+            name,
+            ok: false,
+            detail: missing_msg.to_string(),
+        },
     }
 }
 
 fn check_container(name: &'static str, container: &str) -> CheckResult {
     let filter = format!("name={container}");
-    match run_cmd("docker", &["ps", "--filter", &filter, "--format", "{{.Status}}"]) {
+    match run_cmd(
+        "docker",
+        &["ps", "--filter", &filter, "--format", "{{.Status}}"],
+    ) {
         Some(v) if !v.is_empty() => CheckResult {
             name,
             ok: true,
@@ -43,10 +54,30 @@ fn check_container(name: &'static str, container: &str) -> CheckResult {
 
 pub fn collect_checks() -> Vec<CheckResult> {
     let mut results = vec![
-        check_cmd("Git SCM", "git", &["--version"], "git tidak ditemukan di PATH"),
-        check_cmd("Java Runtime (Agent)", "java", &["-version"], "java tidak ditemukan (jalankan runner/setup-agent.sh)"),
-        check_cmd("Docker Engine", "docker", &["--version"], "docker tidak ditemukan"),
-        check_cmd("Docker Compose", "docker", &["compose", "version"], "docker compose v2 tidak ditemukan"),
+        check_cmd(
+            "Git SCM",
+            "git",
+            &["--version"],
+            "git tidak ditemukan di PATH",
+        ),
+        check_cmd(
+            "Java Runtime (Agent)",
+            "java",
+            &["-version"],
+            "java tidak ditemukan (jalankan runner/setup-agent.sh)",
+        ),
+        check_cmd(
+            "Docker Engine",
+            "docker",
+            &["--version"],
+            "docker tidak ditemukan",
+        ),
+        check_cmd(
+            "Docker Compose",
+            "docker",
+            &["compose", "version"],
+            "docker compose v2 tidak ditemukan",
+        ),
     ];
 
     let agent_active = run_cmd("systemctl", &["is-active", "jenkins-agent"])
@@ -121,16 +152,28 @@ pub fn print_doctor_report() -> bool {
     let all_ok = checks.iter().all(|c| c.ok);
 
     for item in &checks {
-        let icon = if item.ok { "✔".green().bold() } else { "✘".red().bold() };
-        let detail = if item.ok { item.detail.dimmed() } else { item.detail.yellow() };
+        let icon = if item.ok {
+            "✔".green().bold()
+        } else {
+            "✘".red().bold()
+        };
+        let detail = if item.ok {
+            item.detail.dimmed()
+        } else {
+            item.detail.yellow()
+        };
         println!("  {icon} {:<30} {detail}", item.name.bold());
     }
 
     println!();
     let summary = if all_ok {
-        "Status Sistem: SEHAT 100% — Runner & Pipeline siap digunakan!".green().bold()
+        "Status Sistem: SEHAT 100% — Runner & Pipeline siap digunakan!"
+            .green()
+            .bold()
     } else {
-        "Status Sistem: Beberapa komponen belum aktif (lihat tanda ✘ di atas).".yellow().bold()
+        "Status Sistem: Beberapa komponen belum aktif (lihat tanda ✘ di atas)."
+            .yellow()
+            .bold()
     };
     println!("{summary}");
     all_ok

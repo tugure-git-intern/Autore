@@ -31,7 +31,11 @@ struct Cli {
 }
 
 fn claude_render_config() -> RenderConfig<'static> {
-    let orange = Color::Rgb { r: 217, g: 119, b: 87 };
+    let orange = Color::Rgb {
+        r: 217,
+        g: 119,
+        b: 87,
+    };
     RenderConfig::default_colored()
         .with_prompt_prefix(Styled::new("●").with_fg(orange))
         .with_highlighted_option_prefix(Styled::new("◉").with_fg(orange))
@@ -58,9 +62,7 @@ fn print_ascii_banner() {
 }
 
 pub fn is_autore_project_dir(dir: &std::path::Path) -> bool {
-    dir.join(".git").exists()
-        || dir.join("Dockerfile").exists()
-        || dir.join("Jenkinsfile").exists()
+    dir.join(".git").exists() || dir.join("Dockerfile").exists() || dir.join("Jenkinsfile").exists()
 }
 
 pub fn has_existing_pipeline_files(dir: &std::path::Path) -> bool {
@@ -181,7 +183,9 @@ pub fn delete_project_safely(
     let mut moved_to = None;
     if let Ok(cwd) = std::env::current_dir() {
         let canon_cwd = cwd.canonicalize().unwrap_or(cwd);
-        let canon_target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+        let canon_target = target
+            .canonicalize()
+            .unwrap_or_else(|_| target.to_path_buf());
         if canon_cwd.starts_with(&canon_target) {
             if let Some(parent) = canon_target.parent() {
                 let _ = std::env::set_current_dir(parent);
@@ -191,7 +195,9 @@ pub fn delete_project_safely(
     }
     if let Some(act) = active_project {
         let canon_act = act.canonicalize().unwrap_or_else(|_| act.clone());
-        let canon_target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+        let canon_target = target
+            .canonicalize()
+            .unwrap_or_else(|_| target.to_path_buf());
         if canon_act == canon_target {
             *active_project = None;
         }
@@ -219,10 +225,7 @@ fn pick_interactive_target_project(
     let mut labels: Vec<String> = candidates
         .iter()
         .map(|p| {
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("project");
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("project");
             format!("{name}  ({})", p.display())
         })
         .collect();
@@ -446,11 +449,19 @@ fn note_for(index: usize, code: i32) -> String {
     if code == 0 {
         format!("✔ terakhir: {}", MENU[index].label)
     } else {
-        format!("✘ terakhir: {} (keluar dengan kode {code})", MENU[index].label)
+        format!(
+            "✘ terakhir: {} (keluar dengan kode {code})",
+            MENU[index].label
+        )
     }
 }
 
 /// Label folder project aktif untuk segmen kiri baris status.
+/// Project aktif saat program dibuka: folder saat ini kalau memang folder project.
+fn project_aktif_awal(cwd: &std::path::Path) -> Option<PathBuf> {
+    is_autore_project_dir(cwd).then(|| cwd.to_path_buf())
+}
+
 fn project_label(active: Option<&std::path::Path>) -> Option<String> {
     active.map(|p| p.display().to_string())
 }
@@ -720,7 +731,11 @@ fn main() {
         return;
     }
 
-    let mut active_project: Option<PathBuf> = None;
+    // Sudah berdiri di dalam folder project (.git/Dockerfile/Jenkinsfile)? Pakai sebagai project aktif,
+    // jadi status bar tidak lagi bilang "(belum ada project)".
+    let mut active_project: Option<PathBuf> = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| project_aktif_awal(&cwd));
     let mut last_note: Option<String> = None;
 
     // Terminal interaktif -> satu sesi TUI untuk seluruh alur: menu, log proses, dan
@@ -878,9 +893,7 @@ fn execute_command(
                         *active_project = Some(project_dir.clone());
                         println!(
                             "\n{}",
-                            "✔ Project baru berhasil disiapkan otomatis:"
-                                .green()
-                                .bold()
+                            "✔ Project baru berhasil disiapkan otomatis:".green().bold()
                         );
                         println!("  • Folder project : {}", project_dir.display());
                         if git_created {
@@ -921,7 +934,13 @@ fn execute_command(
             }
         }
 
-        Commands::Scan { path, severity, no_docker, include_build_dirs, docker: _ } => {
+        Commands::Scan {
+            path,
+            severity,
+            no_docker,
+            include_build_dirs,
+            docker: _,
+        } => {
             let target_path = if interactive {
                 match pick_interactive_target_project(
                     path,
@@ -943,17 +962,14 @@ fn execute_command(
 
             let scan_res = scanner::scan_directory_with(
                 &target_path,
-                &scanner::ScanOptions { skip_build_dirs: !include_build_dirs },
+                &scanner::ScanOptions {
+                    skip_build_dirs: !include_build_dirs,
+                },
             );
             match scan_res {
                 Ok(report) => {
                     if !report.is_clean() {
-                        eprintln!(
-                            "\n{}",
-                            "🚫 [AUTORE SECURITY GATE — DIBLOKIR]"
-                                .red()
-                                .bold()
-                        );
+                        eprintln!("\n{}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold());
                         let mut reasons = Vec::new();
                         for v in &report.violations {
                             eprintln!(
@@ -1008,14 +1024,16 @@ fn execute_command(
                 return 1;
             }
 
-            println!(
-                "{}",
-                "✔ SEMUA PEMERIKSAAN KEAMANAN LULUS!".green().bold()
-            );
+            println!("{}", "✔ SEMUA PEMERIKSAAN KEAMANAN LULUS!".green().bold());
             0
         }
 
-        Commands::ScanImage { image, severity, sbom_output, no_docker } => {
+        Commands::ScanImage {
+            image,
+            severity,
+            sbom_output,
+            no_docker,
+        } => {
             clear_gate_reason();
             println!(
                 "{} Memeriksa keamanan Docker image '{}' (severity: {})...",
@@ -1024,7 +1042,10 @@ fn execute_command(
                 severity
             );
             if image == "latest" || image.ends_with(":latest") {
-                eprintln!("\n{} Tag :latest dilarang. Gunakan immutable commit tag.", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold());
+                eprintln!(
+                    "\n{} Tag :latest dilarang. Gunakan immutable commit tag.",
+                    "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold()
+                );
                 write_gate_reason("Tag :latest dilarang. Gunakan immutable commit tag.");
                 return 1;
             }
@@ -1042,15 +1063,16 @@ fn execute_command(
                     sbom_output: sbom_output.as_deref(),
                 };
                 if let Err(e) = external::run_authoritative_image_scan(&opts) {
-                    eprintln!("\n{} {}", "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(), e);
+                    eprintln!(
+                        "\n{} {}",
+                        "🚫 [AUTORE SECURITY GATE — DIBLOKIR]".red().bold(),
+                        e
+                    );
                     write_gate_reason(e.lines().next().unwrap_or(&e));
                     return 1;
                 }
             }
-            println!(
-                "{}",
-                "✔ PEMERIKSAAN DOCKER IMAGE LULUS!".green().bold()
-            );
+            println!("{}", "✔ PEMERIKSAAN DOCKER IMAGE LULUS!".green().bold());
             0
         }
 
@@ -1200,7 +1222,8 @@ fn execute_command(
                 (Some(u), _) => u,
                 (None, Some(u)) => u,
                 (None, None) if interactive => {
-                    let default_repo = format!("https://github.com/tugure-git-intern/{job_name}.git");
+                    let default_repo =
+                        format!("https://github.com/tugure-git-intern/{job_name}.git");
                     match ui_ask_text("URL repositori GitHub", &default_repo) {
                         Some(u) => u.trim().to_string(),
                         None => return 0,
@@ -1221,14 +1244,19 @@ fn execute_command(
                 job_name,
                 jk_cfg.url
             );
-            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url) {
+            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url)
+            {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
             }
             let _ = git_push_main(&target_dir);
 
-            match jenkins::register_and_trigger_jenkins(&jk_cfg, &job_name, &resolved_git_url, "main")
-            {
+            match jenkins::register_and_trigger_jenkins(
+                &jk_cfg,
+                &job_name,
+                &resolved_git_url,
+                "main",
+            ) {
                 Ok(job_url) => {
                     println!(
                         "\n{} Project '{}' berhasil disambungkan & di-build di Jenkins!",
@@ -1428,7 +1456,11 @@ fn execute_command(
                 "  {} Repo GitHub {} {}",
                 "2/4".green().bold(),
                 full_name,
-                if created { "(baru dibuat)" } else { "(sudah ada)" }
+                if created {
+                    "(baru dibuat)"
+                } else {
+                    "(sudah ada)"
+                }
             );
 
             let git_url = format!("https://github.com/{full_name}.git");
@@ -1493,10 +1525,7 @@ fn execute_command(
             let labels: Vec<String> = candidates
                 .iter()
                 .map(|p| {
-                    let name = p
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("project");
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("project");
                     if active_project.as_deref() == Some(p.as_path()) || p == &cwd {
                         format!("{name}  ({}, aktif)", p.display())
                     } else {
@@ -1547,11 +1576,31 @@ fn execute_command(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn project_aktif_awal_mengikuti_folder_saat_ini() {
+        let tmp = TempDir::new().unwrap();
+        assert_eq!(
+            project_aktif_awal(tmp.path()),
+            None,
+            "folder kosong bukan project"
+        );
+        std::fs::create_dir(tmp.path().join(".git")).unwrap();
+        assert_eq!(
+            project_aktif_awal(tmp.path()),
+            Some(tmp.path().to_path_buf())
+        );
+        let lain = TempDir::new().unwrap();
+        std::fs::write(lain.path().join("Jenkinsfile"), "pipeline {}").unwrap();
+        assert_eq!(
+            project_aktif_awal(lain.path()),
+            Some(lain.path().to_path_buf())
+        );
+    }
 
     #[test]
     fn stack_kotak_pilih_cocok_dengan_techstack() {
@@ -1601,8 +1650,14 @@ mod tests {
         };
         assert_eq!(execute_command(tanpa_nama, true, &mut act), 1);
         assert_eq!(execute_command(init_cmd(None, None), true, &mut act), 1);
-        assert_eq!(execute_command(init_cmd(Some("python"), None), true, &mut act), 1);
-        assert_eq!(execute_command(init_cmd(Some("python"), Some(8000)), true, &mut act), 1);
+        assert_eq!(
+            execute_command(init_cmd(Some("python"), None), true, &mut act),
+            1
+        );
+        assert_eq!(
+            execute_command(init_cmd(Some("python"), Some(8000)), true, &mut act),
+            1
+        );
         assert!(act.is_none());
     }
 
@@ -1618,7 +1673,10 @@ mod tests {
         };
         let mut act = None;
         assert_eq!(execute_command(qs(None, None), true, &mut act), 0);
-        assert_eq!(execute_command(qs(Some("demo-app"), None), true, &mut act), 0);
+        assert_eq!(
+            execute_command(qs(Some("demo-app"), None), true, &mut act),
+            0
+        );
 
         let dir = tmp.path().join("demo-app");
         std::fs::create_dir_all(&dir).unwrap();
@@ -1663,10 +1721,7 @@ mod tests {
 
         let same = base.join("klaim-api");
         std::fs::create_dir_all(&same).unwrap();
-        assert_eq!(
-            resolve_interactive_project_dir(&same, "klaim-api"),
-            same
-        );
+        assert_eq!(resolve_interactive_project_dir(&same, "klaim-api"), same);
     }
 
     #[test]
@@ -1713,7 +1768,10 @@ mod tests {
         assert!(hooks::is_hook_installed(&project_dir));
 
         let head = std::fs::read_to_string(project_dir.join(".git/HEAD")).unwrap();
-        assert!(head.contains("refs/heads/main"), "expected branch main, got {head}");
+        assert!(
+            head.contains("refs/heads/main"),
+            "expected branch main, got {head}"
+        );
     }
 
     #[test]

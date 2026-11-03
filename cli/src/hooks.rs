@@ -12,8 +12,8 @@ fn resolve_git_dir(repo_root: &Path) -> Result<PathBuf, String> {
         return Ok(dot_git);
     }
     if dot_git.is_file() {
-        let raw = fs::read_to_string(&dot_git)
-            .map_err(|e| format!("Gagal membaca file .git: {}", e))?;
+        let raw =
+            fs::read_to_string(&dot_git).map_err(|e| format!("Gagal membaca file .git: {}", e))?;
         if let Some(rest) = raw.lines().next().and_then(|l| l.strip_prefix("gitdir:")) {
             let target = PathBuf::from(rest.trim());
             let resolved = if target.is_absolute() {
@@ -67,8 +67,7 @@ pub fn ensure_git_repo_main(repo_root: &Path) -> Result<bool, String> {
 pub fn install_pre_commit_hook(repo_root: &Path) -> Result<PathBuf, String> {
     let git_dir = resolve_git_dir(repo_root)?;
     let hooks_dir = git_dir.join("hooks");
-    fs::create_dir_all(&hooks_dir)
-        .map_err(|e| format!("Gagal membuat folder hooks: {}", e))?;
+    fs::create_dir_all(&hooks_dir).map_err(|e| format!("Gagal membuat folder hooks: {}", e))?;
 
     let hook_path = hooks_dir.join("pre-commit");
     let backup_path = hooks_dir.join(USER_BACKUP_NAME);
@@ -213,10 +212,16 @@ mod tests {
 
         install_pre_commit_hook(tmp.path()).unwrap();
         let backup = hooks.join("pre-commit.user-backup");
-        assert!(backup.exists(), "existing pre-commit hook was not backed up");
+        assert!(
+            backup.exists(),
+            "existing pre-commit hook was not backed up"
+        );
         assert_eq!(fs::read_to_string(&backup).unwrap(), user_hook);
         let installed = fs::read_to_string(&hook_path).unwrap();
-        assert!(installed.contains("pre-commit.user-backup"), "did not chain user hook");
+        assert!(
+            installed.contains("pre-commit.user-backup"),
+            "did not chain user hook"
+        );
 
         uninstall_pre_commit_hook(tmp.path()).unwrap();
         assert!(!backup.exists(), "backup should be moved back on uninstall");
@@ -230,11 +235,7 @@ mod tests {
         let wt = tmp.path().join("worktree");
         fs::create_dir_all(&real_git).unwrap();
         fs::create_dir_all(&wt).unwrap();
-        fs::write(
-            wt.join(".git"),
-            format!("gitdir: {}\n", real_git.display()),
-        )
-        .unwrap();
+        fs::write(wt.join(".git"), format!("gitdir: {}\n", real_git.display())).unwrap();
 
         let path = install_pre_commit_hook(&wt).unwrap();
         assert!(path.starts_with(&real_git));
@@ -251,6 +252,9 @@ mod tests {
         assert!(is_hook_installed(tmp.path()));
 
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
-        assert!(!is_hook_installed(tmp.path()), "non-executable hook reported as active");
+        assert!(
+            !is_hook_installed(tmp.path()),
+            "non-executable hook reported as active"
+        );
     }
 }

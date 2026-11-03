@@ -225,9 +225,7 @@ pub fn validate_app_name(name: &str) -> Result<(), String> {
     let mut chars = name.chars();
     let first = chars.next().unwrap();
     if !first.is_ascii_lowercase() && !first.is_ascii_digit() {
-        return Err(
-            "Nama aplikasi harus diawali huruf kecil (a-z) atau angka (0-9)".into(),
-        );
+        return Err("Nama aplikasi harus diawali huruf kecil (a-z) atau angka (0-9)".into());
     }
     if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
         return Err(
@@ -386,7 +384,10 @@ mod tests {
         generate_project_files(&cfg, tmp.path()).unwrap();
         let ignore = fs::read_to_string(tmp.path().join(".dockerignore")).unwrap();
         for pattern in [".git", ".env", "*.secret", "*.key", "Jenkinsfile"] {
-            assert!(ignore.contains(pattern), "missing {pattern} in .dockerignore");
+            assert!(
+                ignore.contains(pattern),
+                "missing {pattern} in .dockerignore"
+            );
         }
     }
 
@@ -403,7 +404,10 @@ mod tests {
             df.contains("COPY --from=test /usr/local /usr/local"),
             "runtime stage loses pip-installed dependencies:\n{df}"
         );
-        assert!(df.contains("main.py") && df.contains("manage.py"), "missing Python entrypoint auto-detect:\n{df}");
+        assert!(
+            df.contains("main.py") && df.contains("manage.py"),
+            "missing Python entrypoint auto-detect:\n{df}"
+        );
     }
 
     #[test]
@@ -414,7 +418,11 @@ mod tests {
             app_port: 3000,
             deploy_port: 8081,
         });
-        assert!(node_df.contains("npm start") && node_df.contains("server.js") && node_df.contains("dist/main.js"));
+        assert!(
+            node_df.contains("npm start")
+                && node_df.contains("server.js")
+                && node_df.contains("dist/main.js")
+        );
 
         let java_df = render_dockerfile(&InitConfig {
             app_name: "java-svc".to_string(),
@@ -455,8 +463,17 @@ mod tests {
         // C-2 & H-1: Repo Jenkinsfile delegates to @Library('autore') _ and never
         // executes repo-controlled scripts or --no-docker flags.
         assert!(content.contains("@Library('autore') _"));
-        assert!(!content.contains("command -v autore"), "PATH lookup is repo-controllable");
-        assert!(!content.contains("security-check.sh"), "repo script must not be the gate");
-        assert!(!content.contains("--no-docker"), "CI must run Gitleaks + Trivy");
+        assert!(
+            !content.contains("command -v autore"),
+            "PATH lookup is repo-controllable"
+        );
+        assert!(
+            !content.contains("security-check.sh"),
+            "repo script must not be the gate"
+        );
+        assert!(
+            !content.contains("--no-docker"),
+            "CI must run Gitleaks + Trivy"
+        );
     }
 }

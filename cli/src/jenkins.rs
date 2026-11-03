@@ -41,8 +41,12 @@ pub fn save_config_to(path: &Path, cfg: &JenkinsConfig) -> Result<(), String> {
         cfg.user.trim(),
         cfg.token.trim()
     );
-    fs::write(path, body)
-        .map_err(|e| format!("Gagal menyimpan konfigurasi Jenkins ke {}: {e}", path.display()))?;
+    fs::write(path, body).map_err(|e| {
+        format!(
+            "Gagal menyimpan konfigurasi Jenkins ke {}: {e}",
+            path.display()
+        )
+    })?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -211,10 +215,7 @@ pub fn read_git_remote_origin(project_dir: &Path) -> Option<String> {
     }
 }
 
-pub fn ensure_git_committed_and_remote(
-    project_dir: &Path,
-    remote_url: &str,
-) -> Result<(), String> {
+pub fn ensure_git_committed_and_remote(project_dir: &Path, remote_url: &str) -> Result<(), String> {
     if !project_dir.join(".git").exists() {
         let st = Command::new("git")
             .args(["init", "-q", "-b", "main"])
@@ -351,7 +352,8 @@ pub fn register_and_trigger_jenkins(
         )?;
         if crumb_code == 401 || crumb_code == 403 {
             return Err(
-                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password.".to_string(),
+                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password."
+                    .to_string(),
             );
         }
         let crumb_header = if crumb_code == 200 {
@@ -402,7 +404,13 @@ pub fn register_and_trigger_jenkins(
             post_args.push("-H");
             post_args.push(h);
         }
-        post_args.extend_from_slice(&["-w", "\n__HTTP_CODE__:%{http_code}", "--config", "-", &post_url]);
+        post_args.extend_from_slice(&[
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            &post_url,
+        ]);
 
         let (save_code, save_body) = curl_with_stdin_config(&post_args, &user_cfg)?;
         if save_code >= 400 {
@@ -414,15 +422,7 @@ pub fn register_and_trigger_jenkins(
 
         // 3. Trigger Build Now
         let build_url = format!("{base}/job/{job_name}/build");
-        let mut build_args = vec![
-            "-sS",
-            "--max-time",
-            "15",
-            "-b",
-            &jar_str,
-            "-X",
-            "POST",
-        ];
+        let mut build_args = vec!["-sS", "--max-time", "15", "-b", &jar_str, "-X", "POST"];
         if let Some(ref h) = crumb_header {
             build_args.push("-H");
             build_args.push(h);

@@ -18,7 +18,10 @@ fn home_dir() -> PathBuf {
 
 /// Lokasi penyimpanan token GitHub (dibuat otomatis saat pertama dipakai).
 pub fn default_token_path() -> PathBuf {
-    home_dir().join(".config").join("autore").join("github.token")
+    home_dir()
+        .join(".config")
+        .join("autore")
+        .join("github.token")
 }
 
 /// Ambil token dari isi `~/.git-credentials` (format `https://user:TOKEN@github.com`).
@@ -156,7 +159,9 @@ pub fn whoami(token: &str) -> Result<String, String> {
     match code {
         200 => extract_json_string(&body, "login")
             .ok_or_else(|| "Respons GitHub tidak memuat nama akun.".to_string()),
-        401 => Err("Token GitHub ditolak (HTTP 401). Buat token baru di GitHub lalu ulangi.".into()),
+        401 => {
+            Err("Token GitHub ditolak (HTTP 401). Buat token baru di GitHub lalu ulangi.".into())
+        }
         _ => Err(format!("Gagal membaca akun GitHub (HTTP {code}).")),
     }
 }

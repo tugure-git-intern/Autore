@@ -371,7 +371,7 @@
               <div class="banner ok" id="banner-hasil">
                 <div class="big" id="ikon-hasil">✓</div>
                 <div style="min-width:0">
-                  <h2 id="judul-hasil"></h2>
+                  <h2 id="judul-hasil">Hasil Pembuatan</h2>
                   <p id="pesan-hasil"></p>
                   <div class="btns" id="hasil-aksi"></div>
                 </div>
@@ -721,7 +721,7 @@
     barisLog.push(teks);
     var d = document.createElement("div");
     if (teks.indexOf("! ") === 0) { d.className = "l-err"; d.textContent = teks.slice(2); }
-    else if (/^✔|siap|hidup/i.test(teks)) { d.className = "l-ok"; d.textContent = teks; }
+    else if (/^(?:✔|siap|hidup)/i.test(teks)) { d.className = "l-ok"; d.textContent = teks; }
     else { d.textContent = teks; }
     (ke || logEl).appendChild(d);
     (ke || logEl).scrollTop = (ke || logEl).scrollHeight;

@@ -27,7 +27,7 @@ use crate::templates::validate_app_name;
 
 const HALAMAN: &str = include_str!("web/index.html");
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Status {
     Idle,
     Running,
@@ -1053,5 +1053,136 @@ mod tests {
         let (kode, pesan) = srv.mulai_job("Nama Salah", "contoh", "otomatis");
         assert_eq!(kode, 400);
         assert!(pesan.contains("huruf kecil"));
+    }
+
+    #[test]
+    fn json_escape_mengubah_karakter_khusus() {
+        assert_eq!(json_escape("baris 1\nbaris 2\r\n\"kutip\"\\garis"), "baris 1 baris 2  \\\"kutip\\\"\\\\garis");
+    }
+
+    #[test]
+    fn display_host_memilih_alamat_yang_tepat() {
+        assert_eq!(display_host("127.0.0.1"), "127.0.0.1");
+        assert_eq!(display_host("192.168.1.5"), "192.168.1.5");
+        let all = display_host("0.0.0.0");
+        assert!(!all.is_empty());
+    }
+
+    #[test]
+    fn catat_id_dan_tahap_id_hanya_merekam_run_id_yang_cocok() {
+        let tmp = TempDir::new().unwrap();
+        let srv = Server {
+            job: Arc::new(Mutex::new(Job {
+                id: 42,
+                nama: "test".to_string(),
+                status: Status::Running,
+                baris: Vec::new(),
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            })),
+            workspace: tmp.path().to_path_buf(),
+            host_tampil: "127.0.0.1".to_string(),
+        };
+
+        // salah run_id -> diabaikan
+        srv.catat_id(999, "log liar");
+        srv.catat_tahap_id(999, "tahap-liar");
+        {
+            let j = srv.job.lock().unwrap();
+            assert!(j.baris.is_empty());
+            assert!(j.tahap_urut.is_empty());
+        }
+
+        // benar run_id -> masuk
+        srv.catat_id(42, "log valid");
+        srv.catat_tahap_id(42, "tahap-valid");
+        srv.catat_tahap_id(42, "tahap-valid"); // dedup consecutive
+        {
+            let j = srv.job.lock().unwrap();
+            assert_eq!(j.baris.len(), 1);
+            assert_eq!(j.tahap_urut.len(), 1);
+        }
+
+        srv.selesai_sukses_id(42, "http://app", "sukses");
+        {
+            let j = srv.job.lock().unwrap();
+            assert_eq!(j.status, Status::Sukses);
+            assert_eq!(j.tautan, "http://app");
+        }
+
+        srv.selesai_gagal_id(42, "gagal");
+        {
+            let j = srv.job.lock().unwrap();
+            assert_eq!(j.status, Status::Gagal);
+            assert_eq!(j.pesan, "gagal");
+        }
+    }
+
+    #[test]
+    fn server_handle_rute_http() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let tmp = TempDir::new().unwrap();
+        let srv = Arc::new(Server {
+            job: Arc::new(Mutex::new(Job::default())),
+            workspace: tmp.path().to_path_buf(),
+            host_tampil: "127.0.0.1".to_string(),
+        });
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let srv_clone = Arc::clone(&srv);
+        let t = thread::spawn(move || {
+            for _ in 0..7 {
+                if let Ok((stream, _)) = listener.accept() {
+                    let _ = srv_clone.handle(stream);
+                }
+            }
+        });
+
+        let kirim_req = |req: &str| -> String {
+            let mut c = TcpStream::connect(addr).unwrap();
+            c.write_all(req.as_bytes()).unwrap();
+            let mut buf = Vec::new();
+            c.read_to_end(&mut buf).unwrap();
+            String::from_utf8_lossy(&buf).to_string()
+        };
+
+        // 1. GET /
+        let resp = kirim_req("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.to_ascii_lowercase().contains("<!doctype html>"));
+
+        // 2. GET /api/status
+        let resp = kirim_req("GET /api/status HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("\"status\":\"idle\""));
+
+        // 3. GET /api/daftar
+        let resp = kirim_req("GET /api/daftar HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+
+        // 4. GET /api/kemampuan
+        let resp = kirim_req("GET /api/kemampuan HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("\"versi\":"));
+        assert!(resp.contains("\"buat-baru\""));
+
+        // 5. POST /api/batal
+        let resp = kirim_req("POST /api/batal HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+
+        // 6. POST /api/buat dengan payload > 64KB -> 413
+        let resp = kirim_req("POST /api/buat HTTP/1.1\r\nHost: localhost\r\nContent-Length: 70000\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 413 Payload Too Large"));
+
+        // 7. GET /tidak-ada -> 404
+        let resp = kirim_req("GET /tidak-ada HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 404 Not Found"));
+
+        t.join().unwrap();
     }
 }

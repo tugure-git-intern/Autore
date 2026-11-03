@@ -24,6 +24,8 @@ const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const CYAN: &str = "\x1b[36m";
 const DIM: &str = "\x1b[2m";
+/// Subjudul di bawah banner: abu hangat yang lebih gelap dari teks biasa (agak redup).
+const SUBTITLE: &str = "\x1b[38;2;122;104;96m";
 const REV: &str = "\x1b[7m";
 const ORANGE: &str = "\x1b[38;2;217;119;87m";
 /// fd keluaran standar (lihat `unistd.h`).
@@ -748,10 +750,7 @@ fn render(v: &View, cols: u16, rows: u16) -> String {
             lines.push(center(&format!("\x1b[38;2;{r};{g};{b}m{row}{RESET}"), cols));
         }
         lines.push(center(
-            &format!(
-                "{DIM}DevSecOps & CI/CD Platform  •  v{}{RESET}",
-                env!("CARGO_PKG_VERSION")
-            ),
+            &format!("{SUBTITLE}Powered by Tugu Reasuransi Indonesia{RESET}"),
             cols,
         ));
         lines.push(blank_row(cols));
@@ -903,27 +902,62 @@ fn center(text: &str, cols: usize) -> String {
 }
 
 /// Baris status 3 segmen: lokasi project (biru), aksi terakhir (hijau/merah), versi.
-fn status_bar(cols: usize, project: Option<&str>, last: Option<&str>) -> String {
-    let w1 = cols / 3;
-    let w2 = cols / 3;
-    let w3 = cols - w1 - w2;
-    let left = format!(
-        "\x1b[44m\x1b[97m{}",
-        pad_plain(project.unwrap_or("(belum ada project)"), w1)
+fn status_bar(cols: usize, project: Option<&str>, status: Option<&str>) -> String {
+    let status = status.unwrap_or("siap");
+    // Blok warna hanya selebar teksnya; sisanya spasi biasa (tanpa background).
+    let kanan = ringkas(
+        &format!("autore v{}", env!("CARGO_PKG_VERSION")),
+        cols.saturating_sub(2).max(1),
     );
-    let (bg, fg) = match last {
-        Some(l) if l.starts_with('✘') => ("\x1b[41m", "\x1b[97m"),
-        _ => ("\x1b[42m", "\x1b[30m"),
+    let w_kanan = visible_len(&kanan);
+    let kiri = ringkas(
+        project.unwrap_or("(belum ada project)"),
+        cols.saturating_sub(w_kanan + 2).max(1),
+    );
+    let w_kiri = visible_len(&kiri);
+    let mulai_kanan = cols.saturating_sub(w_kanan);
+    // Batas lebar teks tengah supaya tetap bisa duduk di tengah tanpa menimpa blok tepi.
+    let batas = cols
+        .saturating_sub(2 * (w_kiri + 1))
+        .min(cols.saturating_sub(2 * (w_kanan + 1)))
+        .min(cols.saturating_sub(w_kiri + w_kanan + 2));
+    let tengah = ringkas(status, batas.max(3));
+    let w_tengah = visible_len(&tengah);
+    let mulai_tengah = (cols.saturating_sub(w_tengah)) / 2;
+    let (bg_t, fg_t) = if status.starts_with('✘') {
+        ("\x1b[41m", "\x1b[97m")
+    } else {
+        ("\x1b[42m", "\x1b[30m")
     };
-    let mid = format!(
-        "{bg}{fg}{}",
-        pad_plain(&ringkas(last.unwrap_or("siap"), w2), w2)
-    );
-    let right = format!(
-        "\x1b[47m\x1b[30m{}",
-        pad_plain(&format!("autore v{}", env!("CARGO_PKG_VERSION")), w3)
-    );
-    format!("{left}\x1b[0m{mid}\x1b[0m{right}\x1b[0m")
+
+    let mut out = String::new();
+    // `kolom` = posisi kursor (kolom) yang sudah ditulis; dipakai untuk menyisipkan spasi.
+    let mut kolom = w_kiri;
+    let geser = |out: &mut String, kolom: &mut usize, target: usize| {
+        if target > *kolom {
+            out.push_str(&" ".repeat(target - *kolom));
+            *kolom = target;
+        }
+    };
+
+    // Kiri: nempel tepi kiri, teks rata kiri.
+    out.push_str(&format!("\x1b[44m\x1b[97m{kiri}\x1b[0m"));
+
+    // Tengah: di tengah layar — hanya kalau masih ada ruang tanpa menimpa blok tepi.
+    if mulai_tengah >= kolom && mulai_tengah + w_tengah <= mulai_kanan {
+        geser(&mut out, &mut kolom, mulai_tengah);
+        out.push_str(&format!("{bg_t}{fg_t}{tengah}\x1b[0m"));
+        kolom = mulai_tengah + w_tengah;
+    }
+
+    // Kanan: nempel tepi kanan, teks rata kanan — hanya kalau belum tertimpa.
+    if mulai_kanan >= kolom {
+        geser(&mut out, &mut kolom, mulai_kanan);
+        out.push_str(&format!("\x1b[47m\x1b[30m{kanan}\x1b[0m"));
+        kolom = cols;
+    }
+    geser(&mut out, &mut kolom, cols);
+    out
 }
 
 fn detail_lines(item: &Item, width: usize) -> Vec<String> {
@@ -1225,7 +1259,7 @@ mod tests {
             );
             assert_eq!(visible_len(row), 100);
         }
-        assert!(rows[6].contains("DevSecOps & CI/CD Platform"));
+        assert!(rows[6].contains("Powered by Tugu Reasuransi Indonesia"));
         // Layar tinggi tapi sempit: banner lebih lebar dari layar, tetap satu baris penuh.
         let narrow = draw(&sample(), 0, None, None, 30, 22);
         for row in narrow.split("\r\n") {
@@ -1764,5 +1798,70 @@ mod tests {
         sesi.log.push("halo".to_string());
         sesi.tick();
         assert!(ukuran(&sesi) > sekali, "perubahan log tetap digambar");
+    }
+
+    /// Baris status: biru nempel kiri, hijau di tengah layar, putih nempel kanan —
+    /// tiap blok warna hanya selebar teksnya (tidak menuh-menuhin layar).
+    #[test]
+    fn status_blok_warna_selebar_teksnya() {
+        let layar = draw(&sample(), 0, Some("qlinic"), Some("siap"), 100, 20);
+        let baris = layar.split("\r\n").last().unwrap();
+        assert_eq!(visible_len(baris), 100);
+        assert!(
+            baris.starts_with("\x1b[44m\x1b[97mqlinic\x1b[0m"),
+            "biru rata kiri: {baris}"
+        );
+        // Hijau di tengah layar: mulai kolom (100 - 4) / 2 = 48.
+        let kolom = |teks: &str| visible_len(&baris[..baris.find(teks).expect(teks)]);
+        assert_eq!(kolom("siap"), 48);
+        assert_eq!(
+            kolom("autore v"),
+            100 - visible_len(&format!("autore v{}", env!("CARGO_PKG_VERSION")))
+        );
+        // Tidak ada blok yang memakai background sampai ujung kanan selain blok versi.
+        assert_eq!(baris.matches("\x1b[44m").count(), 1);
+        assert_eq!(baris.matches("\x1b[42m").count(), 1);
+        assert_eq!(baris.matches("\x1b[47m").count(), 1);
+
+        // Status panjang tetap tampil di tengah (dipendekkan), tidak hilang.
+        let panjang = "✘ terakhir: Cek Kesehatan Sistem (Doctor) (keluar dengan kode 1)";
+        let layar = draw(
+            &sample(),
+            0,
+            Some("/home/mectov/Autore"),
+            Some(panjang),
+            100,
+            20,
+        );
+        let baris = layar.split("\r\n").last().unwrap();
+        assert_eq!(visible_len(baris), 100);
+        assert!(baris.contains("\x1b[41m"), "blok tengah tetap ada: {baris}");
+        let mulai = visible_len(&baris[..baris.find("\x1b[41m").unwrap()]);
+        // Pusat blok tengah harus dekat pusat layar (kolom 50).
+        let isi = &baris[baris.find("\x1b[41m").unwrap() + "\x1b[41m".len()..];
+        let lebar_blok = visible_len(&isi[..isi.find("\x1b[0m").unwrap()]);
+        let tengah_blok = mulai + lebar_blok / 2;
+        assert!(
+            (tengah_blok as i32 - 50).abs() <= 2,
+            "blok tengah duduk di tengah layar (tengah {tengah_blok})"
+        );
+        assert!(
+            visible_len(baris) - visible_len(&format!("autore v{}", env!("CARGO_PKG_VERSION")))
+                > 40
+        );
+
+        // Terminal sempit: blok tengah/kanan yang tidak muat dilewati, baris tetap pas lebar.
+        for cols in [20usize, 27, 33, 42] {
+            let layar = draw(
+                &sample(),
+                0,
+                Some("project-panjang"),
+                Some("jalan: Deploy"),
+                cols as u16,
+                20,
+            );
+            let baris = layar.split("\r\n").last().unwrap();
+            assert_eq!(visible_len(baris), cols, "lebar {cols}");
+        }
     }
 }

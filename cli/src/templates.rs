@@ -290,18 +290,15 @@ pub const CONTOH_TEST_PY: &str = include_str!("../../sandbox/dummy-app/test_app.
 /// template stack lain yang siap dipakai.
 pub fn tulis_kode_contoh(dir: &Path, stack: TechStack) -> std::io::Result<Vec<&'static str>> {
     let mut dibuat = Vec::new();
-    match stack {
-        TechStack::Python => {
-            for (nama, isi) in [("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)] {
-                let tujuan = dir.join(nama);
-                if !tujuan.exists() {
-                    fs::create_dir_all(dir)?;
-                    fs::write(&tujuan, isi)?;
-                    dibuat.push(nama);
-                }
+    if stack == TechStack::Python {
+        for (nama, isi) in [("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)] {
+            let tujuan = dir.join(nama);
+            if !tujuan.exists() {
+                fs::create_dir_all(dir)?;
+                fs::write(&tujuan, isi)?;
+                dibuat.push(nama);
             }
         }
-        _ => {}
     }
     Ok(dibuat)
 }

@@ -841,8 +841,7 @@ fn url_decode(teks: &str) -> String {
 fn json_escape(teks: &str) -> String {
     teks.replace('\\', "\\\\")
         .replace('"', "\\\"")
-        .replace('\n', " ")
-        .replace('\r', " ")
+        .replace(['\n', '\r'], " ")
 }
 
 fn status_reason(kode: u16) -> &'static str {

@@ -26,6 +26,7 @@ use crate::jenkins;
 use crate::templates::validate_app_name;
 
 const HALAMAN: &str = include_str!("web/index.html");
+const HALAMAN_V2: &str = include_str!("web2/index.html");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Status {
@@ -173,6 +174,9 @@ impl Server {
         match (method.as_str(), path.split('?').next().unwrap_or("/")) {
             ("GET", "/") | ("GET", "/index.html") => {
                 kirim(&mut stream, 200, "text/html; charset=utf-8", HALAMAN)
+            }
+            ("GET", "/v2") | ("GET", "/v2/") | ("GET", "/v2/index.html") => {
+                kirim(&mut stream, 200, "text/html; charset=utf-8", HALAMAN_V2)
             }
             ("GET", "/api/status") => {
                 let (status, tautan, pesan, nama, tahap) = {
@@ -1136,7 +1140,7 @@ mod tests {
 
         let srv_clone = Arc::clone(&srv);
         let t = thread::spawn(move || {
-            for _ in 0..10 {
+            for _ in 0..11 {
                 if let Ok((stream, _)) = listener.accept() {
                     let _ = srv_clone.handle(stream);
                 }
@@ -1155,6 +1159,11 @@ mod tests {
         let resp = kirim_req("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.to_ascii_lowercase().contains("<!doctype html>"));
+
+        // 1b. GET /v2
+        let resp_v2 = kirim_req("GET /v2 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp_v2.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp_v2.contains("dag-container"));
 
         // 2. GET /api/status
         let resp = kirim_req("GET /api/status HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -1177,9 +1186,15 @@ mod tests {
         assert!(resp.contains("\"versi\":"));
         assert!(resp.contains("\"buat-baru\""));
 
-        // 5. POST /api/batal
+        // 5. POST /api/batal (saat sedang running)
+        {
+            let mut j = srv.job.lock().unwrap();
+            j.status = Status::Running;
+            j.id = 123;
+        }
         let resp = kirim_req("POST /api/batal HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("\"ok\":true"));
 
         // 6. POST /api/buat dengan payload > 64KB -> 413
         let resp = kirim_req("POST /api/buat HTTP/1.1\r\nHost: localhost\r\nContent-Length: 70000\r\n\r\n");
@@ -1201,6 +1216,7 @@ mod tests {
             j.status = Status::Sukses;
             j.nama = "selesai-app".to_string();
             j.tautan = "http://selesai".to_string();
+            j.tahap_urut.push("tahap-uji".to_string());
             j.baris.push("log akhir".to_string());
         }
         let resp = kirim_req("GET /api/log HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -1237,6 +1253,11 @@ mod tests {
     fn workspace_dir_menghasilkan_path() {
         let w = workspace_dir();
         assert!(!w.as_os_str().is_empty());
+
+        std::env::set_var("AUTORE_WORKSPACE", "/tmp/autore-custom-ws");
+        let w2 = workspace_dir();
+        assert_eq!(w2, PathBuf::from("/tmp/autore-custom-ws"));
+        std::env::remove_var("AUTORE_WORKSPACE");
     }
 
     #[test]
@@ -1308,5 +1329,13 @@ mod tests {
 
         let srv = buat_srv(vec![]);
         assert_eq!(srv.pesan_gagal_terakhir_id(999, "demo"), "Aplikasi 'demo' gagal disiapkan.");
+    }
+
+    #[test]
+    fn halaman_v2_berisi_komponen_dashboard_baru() {
+        assert!(HALAMAN_V2.contains("Autore"));
+        assert!(HALAMAN_V2.contains("v2"));
+        assert!(HALAMAN_V2.contains("dag-container"));
+        assert!(HALAMAN_V2.contains("/api/daftar"));
     }
 }

@@ -336,7 +336,7 @@
                 <span class="auto">port: <b>otomatis</b></span>
                 <span class="auto">pipeline: <b>standar kantor</b></span>
                 <span class="auto">scan keamanan: <b>aktif</b></span>
-                <span class="auto">alamat: <b>otomatis</b></span>
+                <span class="auto">alamat: <b id="badge-alamat">otomatis</b></span>
               </div>
             </div>
           </div>
@@ -517,7 +517,11 @@
           });
           b.classList.add("on"); b.setAttribute("aria-pressed", "true");
           if (kotakTanyaAngka && p.nilai !== "sendiri") { kotakTanyaAngka.remove(); kotakTanyaAngka = null; }
-          if (q.id === "alamat" && p.nilai === "sendiri") tampilkanKotakAngka(kotak);
+          if (q.id === "alamat") {
+            var badge = $("badge-alamat");
+            if (badge) badge.textContent = p.nilai === "sendiri" ? "pilih sendiri" : "otomatis";
+            if (p.nilai === "sendiri") tampilkanKotakAngka(kotak);
+          }
         });
         seg.appendChild(b);
       });

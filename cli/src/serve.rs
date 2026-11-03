@@ -1136,7 +1136,7 @@ mod tests {
 
         let srv_clone = Arc::clone(&srv);
         let t = thread::spawn(move || {
-            for _ in 0..8 {
+            for _ in 0..10 {
                 if let Ok((stream, _)) = listener.accept() {
                     let _ = srv_clone.handle(stream);
                 }
@@ -1161,9 +1161,15 @@ mod tests {
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("\"status\":\"idle\""));
 
-        // 3. GET /api/daftar
+        // 3. GET /api/daftar dengan proyek di registry
+        std::fs::write(
+            tmp.path().join("registry.tsv"),
+            "proyek-satu\t8000\t8010\n",
+        )
+        .unwrap();
         let resp = kirim_req("GET /api/daftar HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("proyek-satu"));
 
         // 4. GET /api/kemampuan
         let resp = kirim_req("GET /api/kemampuan HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -1179,11 +1185,17 @@ mod tests {
         let resp = kirim_req("POST /api/buat HTTP/1.1\r\nHost: localhost\r\nContent-Length: 70000\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 413 Payload Too Large"));
 
-        // 7. GET /tidak-ada -> 404
+        // 7. POST /api/buat dengan nama salah -> 400
+        let b = "nama=Salah!&kode=contoh&alamat=otomatis";
+        let req = format!("POST /api/buat HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n\r\n{}", b.len(), b);
+        let resp = kirim_req(&req);
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"));
+
+        // 8. GET /tidak-ada -> 404
         let resp = kirim_req("GET /tidak-ada HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(resp.starts_with("HTTP/1.1 404 Not Found"));
 
-        // 8. GET /api/log (saat status selesai)
+        // 9. GET /api/log (saat status selesai sukses)
         {
             let mut j = srv.job.lock().unwrap();
             j.status = Status::Sukses;
@@ -1196,7 +1208,21 @@ mod tests {
         assert!(resp.contains("text/event-stream"));
         assert!(resp.contains("event: hasil"));
 
+        // 10. GET /api/log (saat status gagal)
+        {
+            let mut j = srv.job.lock().unwrap();
+            j.status = Status::Gagal;
+            j.pesan = "gagal total".to_string();
+        }
+        let resp = kirim_req("GET /api/log HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("\"status\":\"gagal\""));
+
         t.join().unwrap();
+
+        let srv2 = srv.clone_ringan();
+        assert_eq!(srv2.workspace, srv.workspace);
+        assert!(srv2.pesan_gagal_terakhir("selesai-app").contains("Buka detail teknis"));
     }
 
     #[test]

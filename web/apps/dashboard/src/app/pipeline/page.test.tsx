@@ -3,11 +3,20 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DashboardStatus } from "@/lib/contracts";
+import { StatusProvider } from "@/components/app-shell";
 
 const nav = vi.hoisted(() => ({ params: new URLSearchParams() }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => nav.params }));
 
 import PipelinePage from "./page";
+
+/** The pipeline route reads status from the shared shell provider. */
+const renderPage = () =>
+  render(
+    <StatusProvider>
+      <PipelinePage />
+    </StatusProvider>,
+  );
 
 const app = {
   id: "app-portal-klaim",
@@ -54,7 +63,7 @@ describe("PipelinePage", () => {
     nav.params = new URLSearchParams("app=app-portal-klaim");
     mockStatus(base);
 
-    render(<PipelinePage />);
+    renderPage();
 
     const alert = await screen.findByText("Gitleaks menemukan rahasia.");
     expect(alert).toHaveAttribute("role", "alert");
@@ -69,7 +78,7 @@ describe("PipelinePage", () => {
     nav.params = new URLSearchParams("app=app-portal-klaim");
     mockStatus(base);
 
-    render(<PipelinePage />);
+    renderPage();
 
     const rows = await screen.findAllByRole("listitem");
     const byLabel = (label: string) => rows.find((row) => row.textContent?.startsWith(label));
@@ -87,7 +96,7 @@ describe("PipelinePage", () => {
       latest_pipeline: { ...base.latest_pipeline, status: "running", stages: ["checkout", "lint"] },
     });
 
-    render(<PipelinePage />);
+    renderPage();
 
     const rows = await screen.findAllByRole("listitem");
     expect(rows.at(-1)?.textContent).toContain("lint");
@@ -108,7 +117,7 @@ describe("PipelinePage", () => {
       },
     });
 
-    render(<PipelinePage />);
+    renderPage();
 
     expect(await screen.findByText("Tidak ada data pipeline untuk ditampilkan.")).toBeVisible();
   });
@@ -120,7 +129,7 @@ describe("PipelinePage", () => {
       latest_pipeline: { ...base.latest_pipeline, security_summary: "" },
     });
 
-    render(<PipelinePage />);
+    renderPage();
 
     expect(await screen.findByText("Belum ada hasil scan")).toBeVisible();
   });
@@ -129,7 +138,7 @@ describe("PipelinePage", () => {
     nav.params = new URLSearchParams("app=app-portal-klaim");
     mockStatus(base);
 
-    render(<PipelinePage />);
+    renderPage();
 
     const trigger = await screen.findByRole("button", { name: "Lihat Log Lengkap" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -152,7 +161,7 @@ describe("PipelinePage", () => {
     nav.params = new URLSearchParams("app=tidak-ada");
     mockStatus(base);
 
-    render(<PipelinePage />);
+    renderPage();
 
     expect(await screen.findByText(/tidak ditemukan/i)).toBeVisible();
     expect(screen.queryByRole("list", { name: "Tahapan pipeline" })).toBeNull();

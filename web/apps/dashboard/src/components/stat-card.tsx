@@ -23,7 +23,7 @@ export function StatCard({ label, value, icon: Icon, tone = "blue", hint }: Stat
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted">{label}</p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">{value}</p>
+          <p className="mt-2 whitespace-nowrap text-xl font-semibold tabular-nums text-ink">{value}</p>
           {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
         </div>
         <span

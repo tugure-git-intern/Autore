@@ -1,10 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RefreshCw, ScrollText } from "lucide-react";
+import { Suspense, useState } from "react";
+import { AlertTriangle, ScrollText } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import type { ApiStatusResponse } from "@/lib/contracts";
-import { fetchDashboardStatus } from "@/lib/status-client";
+import { useStatus } from "@/components/app-shell";
 import { LogModal } from "@/components/pipeline/log-modal";
 import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
 import { StageTimeline } from "@/components/pipeline/stage-timeline";
@@ -24,39 +23,8 @@ export default function PipelinePage() {
 
 function PipelineDetail() {
   const appId = useSearchParams().get("app") ?? "";
-  const [state, setState] = useState<ApiStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const { state, loading, failed, reload } = useStatus();
   const [open, setOpen] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-
-  const load = useCallback(async (background: boolean) => {
-    controller.current?.abort();
-    const next = new AbortController();
-    controller.current = next;
-    if (background) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const result = await fetchDashboardStatus(next.signal);
-      if (!next.signal.aborted) {
-        setState(result);
-        setFailed(false);
-      }
-    } catch (error) {
-      if (!next.signal.aborted && (error as Error)?.name !== "AbortError") setFailed(true);
-    } finally {
-      if (!next.signal.aborted) {
-        if (background) setRefreshing(false);
-        else setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(false);
-    return () => controller.current?.abort();
-  }, [load]);
 
   if (loading && !state) return <LoadingSkeleton />;
 
@@ -69,7 +37,7 @@ function PipelineDetail() {
             Server tidak mengembalikan data. Coba lagi setelah pipeline berjalan.
           </p>
         </div>
-        <Button className="mt-4" onClick={() => void load(false)}>
+        <Button className="mt-4" onClick={reload}>
           Coba lagi
         </Button>
       </Card>
@@ -111,15 +79,9 @@ function PipelineDetail() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Pipeline</h1>
-          <p className="mt-1 text-sm text-muted">{app.name}</p>
-        </div>
-        <Button onClick={() => void load(true)} disabled={refreshing}>
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Sync
-        </Button>
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Pipeline</h1>
+        <p className="mt-1 text-sm text-muted">{app.name}</p>
       </div>
 
       <div className="mt-4 space-y-4">

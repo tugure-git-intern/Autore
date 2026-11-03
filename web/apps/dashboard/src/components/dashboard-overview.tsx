@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Boxes, Container, RefreshCw, ServerCog, Workflow } from "lucide-react";
-import type { ApiStatusResponse, StatusValue } from "@/lib/contracts";
+import { AlertTriangle, Boxes, Container, ServerCog, Workflow } from "lucide-react";
+import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
-import { fetchDashboardStatus } from "@/lib/status-client";
+import { useStatus } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
 import { StatCard } from "./stat-card";
 import { StatusBadge, type AppStatus } from "./status-badge";
@@ -42,38 +41,8 @@ export function formatBuild(value: string | null): string {
 }
 
 export function DashboardOverview() {
-  const [state, setState] = useState<ApiStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-
-  const load = useCallback(async (background: boolean) => {
-    controller.current?.abort();
-    const next = new AbortController();
-    controller.current = next;
-    if (background) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const result = await fetchDashboardStatus(next.signal);
-      if (!next.signal.aborted) {
-        setState(result);
-        setFailed(false);
-      }
-    } catch (error) {
-      if (!next.signal.aborted && (error as Error)?.name !== "AbortError") setFailed(true);
-    } finally {
-      if (!next.signal.aborted) {
-        if (background) setRefreshing(false);
-        else setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(false);
-    return () => controller.current?.abort();
-  }, [load]);
+  // Status and the Sync action live in the shared shell navbar.
+  const { state, loading, failed, reload } = useStatus();
 
   if (loading && !state) return <LoadingSkeleton />;
 
@@ -86,7 +55,7 @@ export function DashboardOverview() {
             Server tidak mengembalikan data. Coba lagi setelah pipeline berjalan.
           </p>
         </div>
-        <Button className="mt-4" onClick={() => void load(false)}>
+        <Button className="mt-4" onClick={reload}>
           Coba lagi
         </Button>
       </Card>
@@ -110,16 +79,9 @@ export function DashboardOverview() {
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end">
-        <Button onClick={() => void load(true)} disabled={refreshing}>
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Sync
-        </Button>
-      </div>
-
       <section
         aria-label="Statistik"
-        className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"
       >
         <StatCard label="Total Terdaftar" value={data.stats.total_apps} icon={Boxes} tone="blue" />
         <StatCard

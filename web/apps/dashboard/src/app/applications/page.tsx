@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
-import type { ApiStatusResponse, StatusValue } from "@/lib/contracts";
+import { AlertTriangle } from "lucide-react";
+import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
-import { fetchDashboardStatus } from "@/lib/status-client";
+import { useStatus } from "@/components/app-shell";
 import { formatBuild } from "@/components/dashboard-overview";
 import { EmptyApplications } from "@/components/empty-applications";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
@@ -20,32 +19,7 @@ function toBadge(status: StatusValue): AppStatus {
 }
 
 export default function ApplicationsPage() {
-  const [state, setState] = useState<ApiStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-
-  const load = useCallback(async () => {
-    controller.current?.abort();
-    const next = new AbortController();
-    controller.current = next;
-    try {
-      const result = await fetchDashboardStatus(next.signal);
-      if (!next.signal.aborted) {
-        setState(result);
-        setFailed(false);
-      }
-    } catch (error) {
-      if (!next.signal.aborted && (error as Error)?.name !== "AbortError") setFailed(true);
-    } finally {
-      if (!next.signal.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    return () => controller.current?.abort();
-  }, [load]);
+  const { state, loading, failed, reload } = useStatus();
 
   if (loading && !state) {
     return (
@@ -62,7 +36,7 @@ export default function ApplicationsPage() {
         <p role="alert" className="font-medium text-red-700">
           Status Autore belum tersedia.
         </p>
-        <Button className="mt-4" onClick={() => void load()}>
+        <Button className="mt-4" onClick={reload}>
           Coba lagi
         </Button>
       </Card>
@@ -84,17 +58,11 @@ export default function ApplicationsPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
-          <p className="mt-1 text-sm text-muted">
-            {applications.length} aplikasi terdaftar lewat <code className="font-mono text-xs">autore</code>.
-          </p>
-        </div>
-        <Button onClick={() => void load()}>
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Sync
-        </Button>
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
+        <p className="mt-1 text-sm text-muted">
+          {applications.length} aplikasi terdaftar lewat <code className="font-mono text-xs">autore</code>.
+        </p>
       </div>
 
       <div className="mt-4">

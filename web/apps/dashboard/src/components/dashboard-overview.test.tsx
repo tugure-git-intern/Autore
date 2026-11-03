@@ -1,7 +1,16 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 import type { ApiStatusResponse, DashboardStatus } from "@/lib/contracts";
+import { StatusProvider } from "./app-shell";
 import { DashboardOverview } from "./dashboard-overview";
+
+/** The overview reads status from the shared shell provider. */
+const renderOverview = () =>
+  render(
+    <StatusProvider>
+      <DashboardOverview />
+    </StatusProvider>,
+  );
 
 const base: DashboardStatus = {
   system_status: "idle",
@@ -46,7 +55,7 @@ describe("DashboardOverview", () => {
   it("shows skeletons instead of a blank screen while loading", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     expect(screen.getByRole("region", { name: "Memuat status" })).toBeInTheDocument();
     expect(screen.queryByText("Belum ada aplikasi yang didaftarkan.")).toBeNull();
@@ -58,7 +67,7 @@ describe("DashboardOverview", () => {
       stale: false,
     });
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     expect(await screen.findByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -67,7 +76,7 @@ describe("DashboardOverview", () => {
   it("renders fresh status: stat cards, exact columns, mono SHA and detail link", async () => {
     mockStatus({ data: base, stale: false });
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     expect(await screen.findByText("Portal Klaim")).toBeVisible();
     for (const column of ["Nama Aplikasi", "Status Keamanan", "Terakhir Diperbarui", "Aksi"]) {
@@ -89,7 +98,7 @@ describe("DashboardOverview", () => {
   it("shows the exact stale alert while keeping the last data visible", async () => {
     mockStatus({ data: base, stale: true });
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     const banner = await screen.findByRole("alert");
     expect(banner).toHaveTextContent("Gagal terhubung ke Jenkins. Menampilkan data terakhir.");
@@ -114,7 +123,7 @@ describe("DashboardOverview", () => {
       stale: false,
     });
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     const row = (await screen.findByText("Portal Klaim")).closest("tr");
     expect(row).not.toBeNull();
@@ -124,23 +133,10 @@ describe("DashboardOverview", () => {
     expect(tools.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("refetches only /api/status when Sync is pressed", async () => {
-    const fetchMock = mockStatus({ data: base, stale: false });
-
-    render(<DashboardOverview />);
-    await screen.findByText("Portal Klaim");
-
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/status");
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
-  });
-
   it("reports a hard failure when the API returns 503", async () => {
     mockStatus({ error: "Autore status unavailable" }, false);
 
-    render(<DashboardOverview />);
+    renderOverview();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Status Autore belum tersedia.");
   });

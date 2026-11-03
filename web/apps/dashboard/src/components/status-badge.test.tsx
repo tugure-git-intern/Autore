@@ -1,5 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import { Folder } from "lucide-react";
+
+// The sidebar reads the App Router pathname; pin it to "/" for the unit run.
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+
 import { EmptyApplications } from "./empty-applications";
 import { Sidebar } from "./sidebar";
 import { StatCard } from "./stat-card";
@@ -30,13 +35,23 @@ describe("StatCard", () => {
     expect(card?.className).not.toMatch(/shadow/);
     expect(screen.getByText("12")).toBeInTheDocument();
   });
+
+  it("keeps the value on a single line so the four cards stay even", () => {
+    render(<StatCard label="Infrastruktur CI/CD" value="Jenkins & Nexus" icon={Folder} tone="violet" />);
+    expect(screen.getByText("Jenkins & Nexus")).toHaveClass("whitespace-nowrap");
+  });
 });
 
 describe("Sidebar", () => {
-  it("links only to real routes and offers no create-app entry", () => {
+  it("labels the three PRD routes and highlights the active one", () => {
     render(<Sidebar />);
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(["/", "/applications", "/pipeline"]);
+
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("bg-green-50", "text-green-700");
+    expect(screen.getByRole("link", { name: "Daftar Aplikasi" })).not.toHaveClass("bg-green-50");
+    expect(screen.getByRole("link", { name: "Pipeline & Log" })).not.toHaveClass("bg-green-50");
+
     expect(screen.queryByText(/buat aplikasi|tambah aplikasi|aplikasi baru/i)).toBeNull();
   });
 });
@@ -45,5 +60,10 @@ describe("EmptyApplications", () => {
   it("states the registry is empty without inventing data", () => {
     render(<EmptyApplications />);
     expect(screen.getByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
+  });
+
+  it("adds no second border box inside the already-bordered panel", () => {
+    const { container } = render(<EmptyApplications />);
+    expect(container.querySelector(".border")).toBeNull();
   });
 });

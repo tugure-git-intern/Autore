@@ -3,224 +3,740 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Autore Dashboard</title>
+<meta name="color-scheme" content="light dark">
+<title>Autore Console</title>
 <style>
-  :root { --brand: #f59e0b; }
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --ink: #1f2328;
+    --ink-soft: #444b52;
+    --muted: #5f6368;
+    --line: #dadce0;
+    --line-soft: #e8eaed;
+    --accent: #f59e0b;
+    --accent-ink: #1a1206;
+    --accent-soft: #fef7e0;
+    --good: #188038;
+    --good-soft: #e6f4ea;
+    --bad: #d93025;
+    --bad-soft: #fce8e6;
+    --shadow: 0 1px 2px rgba(60, 64, 67, .08);
+    --shadow-lg: 0 1px 3px rgba(60, 64, 67, .16), 0 4px 12px rgba(60, 64, 67, .08);
+    --r: 8px;
+    --r-lg: 12px;
+    --ui: "Google Sans Text", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --rail: 236px;
+    --top: 56px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1c1f24;
+      --surface-2: #22262c;
+      --ink: #e8eaed;
+      --ink-soft: #c4c9ce;
+      --muted: #9aa0a6;
+      --line: #33383e;
+      --line-soft: #2a2f35;
+      --accent-soft: #3a2f10;
+      --good: #6dd58c;
+      --good-soft: #16301f;
+      --bad: #f28b82;
+      --bad-soft: #35191a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+      --shadow-lg: 0 1px 3px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .35);
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 22px; font-family: inherit; color: var(--foreground); }
-  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-  .brand-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-  .word { font-size: 22px; font-weight: 700; letter-spacing: 6px; }
-  .sub { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted-foreground); opacity: .85; }
-  .chip { font-size: 10.5px; color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
-  .card { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 16px; }
-  h1 { font-size: 19px; margin: 0 0 4px; }
-  .muted { color: var(--muted-foreground); font-size: 12px; }
-  .row { display: flex; gap: 8px; margin-top: 12px; }
-  input { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; color: var(--foreground); font: inherit; font-size: 13.5px; }
-  input:focus { outline: 1px solid var(--brand); border-color: var(--brand); }
-  button { border: 0; border-radius: 8px; padding: 11px 20px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--brand); color: #1a1206; }
-  button[disabled] { opacity: .55; cursor: default; }
-  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--foreground); font-weight: 500; padding: 7px 12px; font-size: 12px; }
-  .auto-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-  .auto { font-size: 10.5px; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 999px; padding: 2px 9px; }
-  ol.steps { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-  ol.steps li { display: flex; gap: 9px; align-items: baseline; }
-  ol.steps li .ic { width: 14px; text-align: center; }
-  li.done { }
-  li.done .ic { color: #22c55e; }
-  li.now .ic { color: var(--brand); }
-  li.todo { color: var(--muted-foreground); opacity: .6; }
-  .logbox { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; line-height: 1.6; background: #00000033; border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 240px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
-  .logbox .err { color: #ef4444; }
-  .toggle { margin-top: 10px; font-size: 11.5px; color: var(--muted-foreground); cursor: pointer; user-select: none; }
-  .link-pill { display: inline-block; font-family: ui-monospace, monospace; font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-top: 10px; color: var(--foreground); text-decoration: none; }
-  .ok { border-left: 3px solid #22c55e; }
-  .bad { border-left: 3px solid #ef4444; }
-  .bad .pesan { color: #ef4444; }
-  .hidden { display: none; }
-  .foot { font-size: 10.5px; color: var(--muted-foreground); text-align: center; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    min-width: 1040px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--ui);
+    font-size: 13.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    height: var(--top);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .mark {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 14px; letter-spacing: .3px;
+  }
+  .title { font-size: 15px; font-weight: 500; letter-spacing: .2px; }
+  .title b { font-weight: 700; }
+  .sep { width: 1px; height: 22px; background: var(--line); }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 3px 10px; background: var(--surface);
+    white-space: nowrap;
+  }
+  .chip.dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .chip.live::before { background: var(--good); }
+  .chip.busy::before { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  /* ---------- shell ---------- */
+  .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); align-items: start; }
+  .rail {
+    position: sticky; top: var(--top);
+    height: calc(100vh - var(--top));
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    padding: 14px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .rail .group { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); padding: 6px 12px 6px; }
+  .navitem {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 0 999px 999px 0;
+    font-size: 13px; color: var(--ink-soft);
+    background: none; border: 0; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+    min-height: 40px;
+  }
+  .navitem svg { width: 18px; height: 18px; flex: none; opacity: .8; }
+  .navitem:hover { background: var(--line-soft); }
+  .navitem[aria-current="page"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .navitem[aria-current="page"] svg { opacity: 1; }
+  .navitem .count { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .rail .foot { margin-top: auto; padding: 10px 12px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line-soft); }
+
+  /* ---------- page ---------- */
+  main { padding: 22px 26px 40px; }
+  .top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .top .crumb-now { color: var(--ink); font-weight: 600; font-size: 15px; }
+  h1 { font-size: 21px; font-weight: 500; margin: 10px 0 4px; letter-spacing: -.1px; }
+  h1 b { font-weight: 700; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; max-width: 62ch; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .95fr); gap: 18px; align-items: start; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+  .card .head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line-soft); }
+  .card .head h2 { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
+  .card .head p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .card .body { padding: 18px; }
+  .card.plain { box-shadow: none; }
+
+  label.fl { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
+  .field { display: flex; gap: 10px; }
+  input[type=text] {
+    flex: 1; min-width: 0;
+    padding: 11px 13px; font: inherit; font-size: 14px;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--r);
+  }
+  input[type=text]::placeholder { color: var(--muted); opacity: .75; }
+  input[type=text]:focus { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 7px; }
+  .err { font-size: 12.5px; color: var(--bad); margin-top: 8px; min-height: 0; }
+
+  button.btn {
+    font: inherit; font-size: 13px; font-weight: 600;
+    padding: 11px 18px; border-radius: var(--r); border: 1px solid transparent;
+    background: var(--accent); color: var(--accent-ink); cursor: pointer; min-height: 42px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  button.btn:hover:not(:disabled) { filter: brightness(.96); }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  button.ghost {
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+    font-weight: 500; font-size: 12.5px; padding: 8px 13px; min-height: 36px;
+  }
+  button.ghost:hover { background: var(--line-soft); }
+  button.linklike { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+  .autos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+  .auto { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .auto b { font-weight: 600; color: var(--ink-soft); }
+
+  /* ---------- summary side ---------- */
+  .facts { display: flex; flex-direction: column; }
+  .fact { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+  .fact:last-child { border-bottom: 0; }
+  .fact .k { color: var(--muted); }
+  .fact .v { font-weight: 600; text-align: right; }
+  .note { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r); padding: 11px 12px; margin-top: 14px; }
+
+  /* ---------- stepper ---------- */
+  ol.steps { list-style: none; margin: 0; padding: 0; }
+  ol.steps li { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; padding-bottom: 16px; }
+  ol.steps li:last-child { padding-bottom: 0; }
+  ol.steps li::before {
+    content: ""; position: absolute; left: 12px; top: 24px; bottom: 0; width: 2px;
+    background: var(--line); border-radius: 2px;
+  }
+  ol.steps li:last-child::before { display: none; }
+  ol.steps li.done::before { background: var(--good); }
+  ol.steps .ic {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--line); background: var(--surface);
+    display: grid; place-items: center; font-size: 12px; color: var(--muted);
+  }
+  ol.steps li.done .ic { border-color: var(--good); background: var(--good-soft); color: var(--good); }
+  ol.steps li.now .ic { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); animation: spin 1.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ol.steps .t { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  ol.steps .tag {
+    margin-left: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .3px;
+    text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft);
+    border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; vertical-align: 1px;
+  }
+  ol.steps li.todo .t { color: var(--muted); font-weight: 500; }
+  ol.steps .d { font-size: 11.5px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { ol.steps li.now .ic, .chip.busy::before { animation: none; } }
+
+  /* ---------- log ---------- */
+  .logwrap { margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+  .logbar { display: flex; align-items: center; gap: 10px; }
+  .logbar .sp { margin-left: auto; display: flex; gap: 8px; }
+  .logbox {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r);
+    padding: 11px 12px; max-height: 260px; overflow: auto; margin-top: 10px;
+    white-space: pre-wrap; word-break: break-word; color: var(--ink-soft);
+  }
+  .logbox .l-err { color: var(--bad); }
+  .logbox .l-dim { color: var(--muted); }
+  .logbox .l-ok { color: var(--good); }
+
+  /* ---------- result ---------- */
+  .banner { display: flex; gap: 13px; align-items: flex-start; padding: 18px; border-radius: var(--r-lg); border: 1px solid var(--line); }
+  .banner .big { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 17px; }
+  .banner.ok { background: var(--good-soft); border-color: transparent; }
+  .banner.ok .big { background: var(--good); color: #fff; }
+  .banner.bad { background: var(--bad-soft); border-color: transparent; }
+  .banner.bad .big { background: var(--bad); color: #fff; }
+  .banner h2 { margin: 2px 0 4px; font-size: 15.5px; font-weight: 600; }
+  .banner p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+  .live-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-family: var(--mono); font-size: 12.5px; color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: var(--r); padding: 8px 11px; background: var(--surface); }
+  .live-link:hover { background: var(--line-soft); }
+
+  /* ---------- history table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  th { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.nm { font-weight: 600; }
+  td .chip { padding: 2px 9px; }
+  .chip.g { color: var(--good); border-color: var(--good); }
+  .chip.b { color: var(--bad); border-color: var(--bad); }
+  .empty { padding: 34px 18px; text-align: center; color: var(--muted); font-size: 13px; }
+  .empty .btn { margin-top: 12px; }
+  .hidden { display: none !important; }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 10px 16px;
+    border-radius: 999px; box-shadow: var(--shadow-lg); z-index: 40; opacity: 0; transition: opacity .18s ease;
+  }
+  .toast.on { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="brand-row">
-    <div>
-      <div class="word">AUTORE</div>
-      <div class="sub">Powered by Tugu Reasuransi Indonesia</div>
+
+<header class="topbar">
+  <div class="mark">A</div>
+  <div class="title"><b>Autore</b> Console</div>
+  <div class="sep"></div>
+  <div class="chip dot live" id="chip-server">server siap</div>
+  <div class="right">
+    <span class="chip" id="chip-identitas">1 pengguna · jaringan kantor</span>
+    <span class="chip">versi <span id="versi">0.5.5</span></span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Navigasi utama">
+    <div class="group">Kerja</div>
+    <button class="navitem" id="nav-buat" data-view="buat" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Buat aplikasi
+    </button>
+    <button class="navitem" id="nav-aktivitas" data-view="aktivitas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.6V12l3.2 1.9"/></svg>
+      Aktivitas
+      <span class="count" id="count-riwayat"></span>
+    </button>
+    <div class="foot">
+      Tiap aplikasi jadi: repo GitHub, pipeline, dan container di server.<br>
+      Port &amp; pipeline diatur otomatis.
     </div>
-    <span class="chip">versi 1 user</span>
-  </div>
+  </nav>
 
-  <div class="card" id="kartu-buat">
-    <h1>Mau bikin aplikasi apa?</h1>
-    <div class="muted">Tulis namanya saja. Sisanya diatur otomatis.</div>
-    <div class="row">
-      <input id="nama" placeholder="contoh: absensi-karyawan" autocomplete="off" spellcheck="false">
-      <button id="tombol-buat">Buat</button>
-    </div>
-    <div class="auto-row">
-      <span class="auto">stack: python</span>
-      <span class="auto">port: otomatis</span>
-      <span class="auto">pipeline standar kantor</span>
-      <span class="auto">scan keamanan: aktif</span>
-    </div>
-    <div class="muted" id="galat" style="margin-top:10px; color:#ef4444"></div>
-  </div>
+  <main>
+    <!-- ============ VIEW: BUAT ============ -->
+    <section id="view-buat">
+      <div class="top"><span id="crumb">Autore</span><span>/</span><span class="crumb-now">Buat aplikasi</span></div>
+      <h1 id="judul-halaman">Mau bikin <b>aplikasi</b> apa?</h1>
+      <p class="sub" id="sub-halaman">Tulis namanya saja. Autore yang menyiapkan kerangka aplikasi, pipeline keamanan, sampai menjalankannya di server.</p>
 
-  <div class="card hidden" id="kartu-jalan">
-    <h1 id="judul-jalan">Sedang menyiapkan...</h1>
-    <div class="muted" id="sub-jalan">mohon tunggu, jangan tutup halaman ini</div>
-    <ol class="steps" id="tahap">
-      <li class="todo"><span class="ic">○</span>Menyiapkan kerangka aplikasi</li>
-      <li class="todo"><span class="ic">○</span>Menyiapkan pipeline otomatis</li>
-      <li class="todo"><span class="ic">○</span>Membangun &amp; mengirim ke server</li>
-      <li class="todo"><span class="ic">○</span>Menjalankan di server</li>
-      <li class="todo"><span class="ic">○</span>Memeriksa aplikasi hidup</li>
-    </ol>
-    <div class="toggle" id="toggle-log">▸ Lihat detail teknis</div>
-    <div class="hidden" id="log"></div>
-  </div>
+      <div class="grid">
+        <div>
+          <div class="card" id="kartu-buat">
+            <div class="head">
+              <h2>Aplikasi baru</h2>
+              <p>Nama ini dipakai untuk repo, pipeline, dan alamat aplikasinya.</p>
+            </div>
+            <div class="body">
+              <label class="fl" for="nama">Nama aplikasi</label>
+              <div class="field">
+                <input id="nama" type="text" placeholder="contoh: absensi-karyawan" autocomplete="off" spellcheck="false" aria-describedby="hint-nama">
+                <button class="btn" id="tombol-buat">Buat aplikasi</button>
+              </div>
+              <div class="hint" id="hint-nama">Huruf kecil, angka, dan tanda minus. Tekan Enter untuk mulai.</div>
+              <div class="err" id="galat" role="alert"></div>
+              <div class="autos">
+                <span class="auto">stack: <b>python</b></span>
+                <span class="auto">port: <b>otomatis</b></span>
+                <span class="auto">pipeline: <b>standar kantor</b></span>
+                <span class="auto">scan keamanan: <b>aktif</b></span>
+                <span class="auto">alamat: <b>otomatis</b></span>
+              </div>
+            </div>
+          </div>
 
-  <div class="card hidden" id="kartu-hasil">
-    <h1 id="judul-hasil"></h1>
-    <div class="muted pesan" id="pesan-hasil"></div>
-    <div id="hasil-aksi"></div>
-  </div>
+          <div class="card hidden" id="kartu-jalan">
+            <div class="head">
+              <h2 id="judul-jalan">Menyiapkan…</h2>
+              <p id="sub-jalan">Jangan tutup halaman ini. Kamu bisa melihat prosesnya di bawah.</p>
+            </div>
+            <div class="body">
+              <ol class="steps" id="tahap">
+                <li class="now"><span class="ic">◐</span><div><div class="t">Menyiapkan kerangka aplikasi</div><div class="d">Dockerfile, pipeline, dan penanda keamanan</div></div></li>
+                <li class="todo"><span class="ic">○</span><div><div class="t">Membuat repo &amp; mengirim kode</div><div class="d">GitHub kantor, otomatis</div></div></li>
+                <li class="todo"><span class="ic">○</span><div><div class="t">Build &amp; periksa keamanan</div><div class="d">Dijalankan oleh Jenkins</div></div></li>
+                <li class="todo"><span class="ic">○</span><div><div class="t">Menjalankan di server</div><div class="d">Container baru, versi lama tetap aman</div></div></li>
+                <li class="todo"><span class="ic">○</span><div><div class="t">Memeriksa aplikasi hidup</div><div class="d">Uji kesehatan sebelum dinyatakan jadi</div></div></li>
+              </ol>
+              <div class="logwrap">
+                <div class="logbar">
+                  <button class="linklike" id="toggle-log" aria-expanded="false" aria-controls="log">Lihat detail teknis</button>
+                  <span class="chip" id="waktu-jalan">00:00</span>
+                  <span class="sp"></span>
+                  <button class="ghost btn" id="salin-log">Salin log</button>
+                </div>
+                <div class="logbox hidden" id="log"></div>
+              </div>
+            </div>
+          </div>
 
-  <div class="foot">Dashboard ini hanya untuk jaringan kantor / Tailscale · autore <span id="versi">0.5.5</span></div>
+          <div class="card hidden" id="kartu-hasil">
+            <div class="body" style="padding:0">
+              <div class="banner ok" id="banner-hasil">
+                <div class="big" id="ikon-hasil">✓</div>
+                <div style="min-width:0">
+                  <h2 id="judul-hasil"></h2>
+                  <p id="pesan-hasil"></p>
+                  <div class="btns" id="hasil-aksi"></div>
+                </div>
+              </div>
+            </div>
+            <div class="body hidden" id="log-hasil-wrap" style="border-top:1px solid var(--line-soft)">
+              <div class="logbar">
+                <button class="linklike" id="toggle-log-hasil" aria-expanded="false">Lihat detail teknis</button>
+                <span class="sp"></span>
+                <button class="ghost btn" id="salin-log-hasil">Salin log</button>
+              </div>
+              <div class="logbox hidden" id="log-hasil"></div>
+            </div>
+          </div>
+        </div>
+
+        <aside>
+          <div class="card">
+            <div class="head"><h2>Ringkasan</h2><p>Yang kamu dapat tanpa mengatur apa pun.</p></div>
+            <div class="body">
+              <div class="facts">
+                <div class="fact"><span class="k">Kerangka aplikasi</span><span class="v">otomatis</span></div>
+                <div class="fact"><span class="k">Repo GitHub</span><span class="v">otomatis</span></div>
+                <div class="fact"><span class="k">Pipeline &amp; build</span><span class="v">Jenkins</span></div>
+                <div class="fact"><span class="k">Scan keamanan</span><span class="v">wajib lulus</span></div>
+                <div class="fact"><span class="k">Penyimpanan image</span><span class="v">registry kantor</span></div>
+                <div class="fact"><span class="k">Alamat aplikasi</span><span class="v">port bebas</span></div>
+              </div>
+              <div class="note">
+                Butuh aplikasi kedua? Ulangi saja langkahnya — tiap aplikasi berdiri sendiri, punya alamat dan container sendiri.
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ VIEW: AKTIVITAS ============ -->
+    <section id="view-aktivitas" class="hidden">
+      <div class="top"><span>Autore</span><span>/</span><span class="crumb-now">Aktivitas</span></div>
+      <h1>Aplikasi dari <b>browser ini</b></h1>
+      <p class="sub">Catatan di browser ini saja — supaya kamu bisa membuka lagi alamat aplikasi yang pernah dibuat.</p>
+      <div class="card">
+        <div class="head" style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <h2>Terakhir dibuat</h2>
+            <p id="aktivitas-sub">—</p>
+          </div>
+          <button class="ghost btn" id="bersihkan">Bersihkan daftar</button>
+        </div>
+        <div id="aktivitas-isi"></div>
+      </div>
+    </section>
+  </main>
 </div>
+
+<div class="toast hidden" id="toast" role="status"></div>
 
 <script>
 (function () {
-  var nama = document.getElementById('nama');
-  var tombol = document.getElementById('tombol-buat');
-  var galat = document.getElementById('galat');
-  var kartuJalan = document.getElementById('kartu-jalan');
-  var kartuHasil = document.getElementById('kartu-hasil');
-  var judulJalan = document.getElementById('judul-jalan');
-  var subJalan = document.getElementById('sub-jalan');
-  var log = document.getElementById('log');
-  var tahap = Array.prototype.slice.call(document.querySelectorAll('#tahap li'));
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  // innerHTML di file ini hanya untuk markup TETAP (kerangka tabel, teks kosong).
+  // Semua data dari server (nama aplikasi, pesan, alamat) masuk lewat textContent.
+  var KUNCI_RIWAYAT = "autore.riwayat.v1";
 
-  document.getElementById('toggle-log').addEventListener('click', function () {
-    var tersembunyi = log.classList.contains('hidden');
-    log.classList.toggle('hidden');
-    this.textContent = (tersembunyi ? '▾' : '▸') + ' Lihat detail teknis';
+  var namaEl = $("nama"), tombol = $("tombol-buat"), galat = $("galat");
+  var kartuBuat = $("kartu-buat"), kartuJalan = $("kartu-jalan"), kartuHasil = $("kartu-hasil");
+  var tahap = Array.prototype.slice.call(document.querySelectorAll("#tahap li"));
+  var logEl = $("log"), logHasil = $("log-hasil");
+  var sumber = null, detik = 0, timer = null, sudahSelesai = false, namaAktif = "";
+  var barisLog = [];
+
+  /* ---------- util ---------- */
+  function tampil(el, ya) { el.classList.toggle("hidden", !ya); }
+  function kabar(teks) {
+    var t = $("toast");
+    t.textContent = teks; t.classList.remove("hidden");
+    requestAnimationFrame(function () { t.classList.add("on"); });
+    setTimeout(function () { t.classList.remove("on"); setTimeout(function () { tampil(t, false); }, 220); }, 1900);
+  }
+  function salin(teks) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(teks).then(function () { kabar("Disalin ke clipboard"); }, function () { kabar("Tidak bisa menyalin"); });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = teks; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); kabar("Disalin ke clipboard"); } catch (e) { kabar("Tidak bisa menyalin"); }
+      document.body.removeChild(ta);
+    }
+  }
+  function jam(d) {
+    try { return new Date(d).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
+  }
+  function cekNama(v) { return /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(v); }
+
+  /* ---------- riwayat (browser ini saja) ---------- */
+  function riwayat() {
+    try { return JSON.parse(localStorage.getItem(KUNCI_RIWAYAT) || "[]"); } catch (e) { return []; }
+  }
+  function simpanRiwayat(entri) {
+    var r = riwayat();
+    r = r.filter(function (x) { return x.nama !== entri.nama; });
+    r.unshift(entri);
+    try { localStorage.setItem(KUNCI_RIWAYAT, JSON.stringify(r.slice(0, 20))); } catch (e) {}
+    gambarRiwayat();
+  }
+  function gambarRiwayat() {
+    var r = riwayat(), isi = $("aktivitas-isi");
+    $("count-riwayat").textContent = r.length ? String(r.length) : "";
+    $("aktivitas-sub").textContent = r.length ? r.length + " aplikasi tercatat" : "belum ada catatan";
+    if (!r.length) {
+      isi.innerHTML = "";
+      var box = document.createElement("div");
+      box.className = "empty";
+      box.innerHTML = "Belum ada aplikasi yang kamu buat dari browser ini.";
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = "Buat aplikasi pertama";
+      b.addEventListener("click", function () { pindah("buat"); });
+      box.appendChild(b); isi.appendChild(box);
+      return;
+    }
+    var tbl = document.createElement("table");
+    tbl.innerHTML = "<thead><tr><th>Nama</th><th>Hasil</th><th>Waktu</th><th>Alamat</th><th></th></tr></thead>";
+    var tb = document.createElement("tbody");
+    r.forEach(function (x) {
+      var tr = document.createElement("tr");
+      var tdNama = document.createElement("td"); tdNama.className = "nm"; tdNama.textContent = x.nama;
+      var tdHasil = document.createElement("td");
+      var chip = document.createElement("span");
+      chip.className = "chip " + (x.status === "sukses" ? "g" : "b");
+      chip.textContent = x.status === "sukses" ? "hidup" : "gagal";
+      tdHasil.appendChild(chip);
+      var tdWaktu = document.createElement("td"); tdWaktu.textContent = jam(x.saat);
+      var tdLink = document.createElement("td");
+      if (x.tautan) {
+        var a = document.createElement("a"); a.href = x.tautan; a.target = "_blank"; a.rel = "noreferrer";
+        a.textContent = x.tautan; a.style.fontFamily = "var(--mono)"; a.style.fontSize = "12px";
+        tdLink.appendChild(a);
+      } else { tdLink.textContent = "—"; }
+      var tdAksi = document.createElement("td");
+      var bs = document.createElement("button");
+      bs.className = "ghost btn"; bs.textContent = "Salin alamat";
+      bs.disabled = !x.tautan;
+      bs.addEventListener("click", function () { salin(x.tautan); });
+      tdAksi.appendChild(bs);
+      [tdNama, tdHasil, tdWaktu, tdLink, tdAksi].forEach(function (td) { tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    isi.innerHTML = ""; isi.appendChild(tbl);
+  }
+
+  /* ---------- navigasi ---------- */
+  function pindah(view) {
+    var buat = view !== "aktivitas";
+    tampil($("view-buat"), buat);
+    tampil($("view-aktivitas"), !buat);
+    $("nav-buat").setAttribute("aria-current", buat ? "page" : "false");
+    $("nav-aktivitas").setAttribute("aria-current", buat ? "false" : "page");
+    if (location.hash !== "#" + view) history.replaceState(null, "", "#" + view);
+  }
+  $("nav-buat").addEventListener("click", function () { pindah("buat"); });
+  $("nav-aktivitas").addEventListener("click", function () { pindah("aktivitas"); });
+  $("bersihkan").addEventListener("click", function () {
+    try { localStorage.removeItem(KUNCI_RIWAYAT); } catch (e) {}
+    gambarRiwayat(); kabar("Daftar di browser ini dibersihkan");
   });
 
+  /* ---------- stepper + log ---------- */
   function majukan(ke) {
     tahap.forEach(function (li, i) {
-      li.className = i < ke ? 'done' : (i === ke ? 'now' : 'todo');
-      li.querySelector('.ic').textContent = i < ke ? '✓' : (i === ke ? '◐' : '○');
+      li.className = i < ke ? "done" : (i === ke ? "now" : "todo");
+      li.querySelector(".ic").textContent = i < ke ? "✓" : (i === ke ? "◐" : "○");
+      var t = li.querySelector(".t");
+      var tag = t.querySelector(".tag");
+      if (i === ke) {
+        li.setAttribute("aria-current", "step");
+        if (!tag) { tag = document.createElement("span"); tag.className = "tag"; t.appendChild(tag); }
+        tag.textContent = "berjalan";
+      } else {
+        li.removeAttribute("aria-current");
+        if (tag) tag.remove();
+      }
     });
   }
-
-  function tulis(teks, kelas) {
-    var d = document.createElement('div');
-    if (kelas) d.className = kelas;
-    d.textContent = teks;
-    log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
+  function tulis(teks, ke) {
+    barisLog.push(teks);
+    var d = document.createElement("div");
+    if (teks.indexOf("! ") === 0) { d.className = "l-err"; d.textContent = teks.slice(2); }
+    else if (/^✔|siap|hidup/i.test(teks)) { d.className = "l-ok"; d.textContent = teks; }
+    else { d.textContent = teks; }
+    (ke || logEl).appendChild(d);
+    (ke || logEl).scrollTop = (ke || logEl).scrollHeight;
+  }
+  function mulaiTimer() {
+    detik = 0; $("waktu-jalan").textContent = "00:00";
+    clearInterval(timer);
+    timer = setInterval(function () {
+      detik++;
+      var m = String(Math.floor(detik / 60)).padStart(2, "0");
+      var s = String(detik % 60).padStart(2, "0");
+      $("waktu-jalan").textContent = m + ":" + s;
+    }, 1000);
+  }
+  function langkahDariLog(b) {
+    if (/Kerangka aplikasi & pipeline dibuat/.test(b)) majukan(2);
+    else if (/Repository GitHub disiapkan|Kode dikirim ke GitHub/.test(b)) majukan(2);
+    else if (/build mulai berjalan|Build jalan di Jenkins/.test(b)) majukan(3);
+    else if (/Build masih berjalan/.test(b)) majukan(3);
+    else if (/Menjalankan di server|Deploy by Verified Digest/.test(b)) majukan(4);
+    else if (/Memeriksa aplikasi hidup/.test(b)) majukan(5);
   }
 
-  function selesai(data) {
-    kartuJalan.classList.add('hidden');
-    kartuHasil.classList.remove('hidden');
-    var judul = document.getElementById('judul-hasil');
-    var pesan = document.getElementById('pesan-hasil');
-    var aksi = document.getElementById('hasil-aksi');
-    if (data.status === 'sukses') {
-      kartuHasil.classList.add('ok');
-      judul.textContent = 'Aplikasi kamu hidup';
-      pesan.textContent = data.pesan || '';
-      var tautan = document.createElement('a');
-      tautan.className = 'link-pill';
-      tautan.href = data.tautan;
-      tautan.target = '_blank';
-      tautan.rel = 'noreferrer';
-      tautan.textContent = '🔗 ' + data.tautan;
-      aksi.appendChild(tautan);
-      aksi.appendChild(tombolLagi('Buat lagi'));
-    } else {
-      kartuHasil.classList.add('bad');
-      judul.textContent = 'Belum berhasil';
-      pesan.textContent = data.pesan || 'Ada yang gagal. Buka detail teknis di atas.';
-      aksi.appendChild(tombolLagi('Coba lagi'));
+  /* ---------- hasil ---------- */
+  function hasil(data) {
+    sudahSelesai = true;
+    clearInterval(timer);
+    if (sumber) { try { sumber.close(); } catch (e) {} sumber = null; }
+
+    var nm = data.nama || namaAktif || "aplikasi";
+    namaAktif = nm;
+    chipServer("server siap", "live");
+    var sukses = data.status === "sukses";
+    kartuJalan.classList.add("hidden");
+    kartuHasil.classList.remove("hidden");
+    kartuBuat.classList.add("hidden");
+    $("judul-halaman").innerHTML = sukses ? "Aplikasi <b>jadi</b>" : "Belum <b>berhasil</b>";
+    $("sub-halaman").textContent = sukses
+      ? "Sudah jalan di server. Simpan alamatnya, atau buat aplikasi berikutnya."
+      : "Tidak apa-apa — aplikasi lama di server tidak terpengaruh. Lihat detail teknis untuk sebabnya.";
+
+    var banner = $("banner-hasil");
+    banner.className = "banner " + (sukses ? "ok" : "bad");
+    $("ikon-hasil").textContent = sukses ? "✓" : "!";
+    $("judul-hasil").textContent = sukses ? "Aplikasi '" + nm + "' hidup" : "Aplikasi '" + nm + "' gagal dijalankan";
+    $("pesan-hasil").textContent = data.pesan || (sukses ? "Sudah bisa dibuka." : "Buka detail teknis untuk melihat sebabnya.");
+
+    var aksi = $("hasil-aksi");
+    aksi.innerHTML = "";
+    if (sukses && data.tautan) {
+      var a = document.createElement("a");
+      a.className = "live-link"; a.href = data.tautan; a.target = "_blank"; a.rel = "noreferrer";
+      a.textContent = "Buka aplikasi · " + data.tautan;
+      aksi.appendChild(a);
+      var bc = document.createElement("button");
+      bc.className = "ghost btn"; bc.textContent = "Salin alamat";
+      bc.addEventListener("click", function () { salin(data.tautan); });
+      aksi.appendChild(bc);
     }
+    var bl = document.createElement("button");
+    bl.className = sukses ? "ghost btn" : "btn";
+    bl.textContent = sukses ? "Buat aplikasi lagi" : "Coba lagi";
+    bl.addEventListener("click", function () { location.reload(); });
+    aksi.appendChild(bl);
+
+    var semua = barisLog.join("\n");
+    logHasil.textContent = "";
+    logHasil.appendChild(document.createTextNode(semua));
+    tampil($("log-hasil-wrap"), barisLog.length > 0);
+    if (!sukses) {
+      tampil(logHasil, true);
+      $("toggle-log-hasil").textContent = "Sembunyikan detail teknis";
+    }
+    simpanRiwayat({ nama: nm, status: data.status, tautan: data.tautan || "", pesan: data.pesan || "", saat: Date.now() });
   }
 
-  function tombolLagi(label) {
-    var bungkus = document.createElement('div');
-    bungkus.style.marginTop = '12px';
-    var b = document.createElement('button');
-    b.textContent = label;
-    b.addEventListener('click', function () { location.reload(); });
-    bungkus.appendChild(b);
-    return bungkus;
+  function ikutiLog(saatHasil) {
+    sumber = new EventSource("/api/log");
+    sumber.onmessage = function (ev) {
+      tulis(ev.data);
+      if (saatHasil) langkahDariLog(ev.data);
+    };
+    sumber.addEventListener("hasil", function (ev) {
+      var data = JSON.parse(ev.data);
+      hasil(data);
+    });
+    sumber.onerror = function () {
+      if (sudahSelesai) return;
+      // Sambungan SSE tertutup: periksa status langsung supaya halaman tidak menggantung.
+      fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+        if (s.status === "sukses" || s.status === "gagal") hasil(s);
+      }).catch(function () {});
+    };
   }
 
+  /* ---------- aksi utama ---------- */
   function kirim() {
-    var nilai = (nama.value || '').trim().toLowerCase();
-    if (!nilai) { galat.textContent = 'Nama aplikasi belum diisi.'; return; }
-    galat.textContent = '';
+    var v = (namaEl.value || "").trim().toLowerCase();
+    if (!v) { galat.textContent = "Nama aplikasi belum diisi."; namaEl.focus(); return; }
+    if (!cekNama(v)) { galat.textContent = "Pakai huruf kecil, angka, atau tanda minus (3–40 karakter)."; namaEl.focus(); return; }
+    galat.textContent = "";
     tombol.disabled = true;
-    judulJalan.textContent = nilai;
-    kartuJalan.classList.remove('hidden');
+    namaEl.disabled = true;
+    namaAktif = v;
+    chipServer("sedang bekerja: " + v, "busy");
+    sudahSelesai = false; barisLog = []; logEl.textContent = "";
+    tampil(kartuBuat, false);
+    tampil(kartuHasil, false);
+    tampil(kartuJalan, true);
+    $("judul-jalan").textContent = "Membuat '" + v + "'…";
     majukan(0);
+    mulaiTimer();
 
-    fetch('/api/buat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'nama=' + encodeURIComponent(nilai)
+    fetch("/api/buat", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "nama=" + encodeURIComponent(v)
     }).then(function (r) { return r.json(); }).then(function (res) {
       if (!res.ok) {
-        tombol.disabled = false;
-        galat.textContent = res.pesan || 'Tidak bisa memulai.';
-        kartuJalan.classList.add('hidden');
+        clearInterval(timer);
+        tombol.disabled = false; namaEl.disabled = false;
+        tampil(kartuJalan, false); tampil(kartuBuat, true);
+        galat.textContent = res.pesan || "Tidak bisa memulai pekerjaan.";
+        if (/sudah jalan|409|sibuk/i.test(res.pesan || "")) pantauTunggu();
         return;
       }
-      var sumber = new EventSource('/api/log');
-      sumber.onmessage = function (ev) {
-        var baris = ev.data;
-        tulis(baris);
-        if (baris.indexOf('! ') === 0) tulis(baris, 'err');
-        if (/Kerangka aplikasi/.test(baris)) majukan(1);
-        else if (/Repository GitHub/.test(baris)) majukan(2);
-        else if (/build mulai berjalan/.test(baris)) majukan(3);
-        else if (/menunggu hasilnya/.test(baris)) majukan(3);
-        else if (/Memeriksa aplikasi hidup/.test(baris)) majukan(4);
-      };
-      sumber.addEventListener('hasil', function (ev) {
-        sumber.close();
-        selesai(JSON.parse(ev.data));
-      });
-      sumber.onerror = function () {
-        // Server menutup koneksi setelah hasil terkirim — biarkan selesai() yang menangani.
-      };
+      ikutiLog(true);
     }).catch(function (e) {
-      tombol.disabled = false;
-      galat.textContent = 'Tidak bisa menghubungi server: ' + e;
+      clearInterval(timer);
+      tombol.disabled = false; namaEl.disabled = false;
+      tampil(kartuJalan, false); tampil(kartuBuat, true);
+      galat.textContent = "Tidak bisa menghubungi server: " + e;
     });
   }
 
-  tombol.addEventListener('click', kirim);
-  nama.addEventListener('keydown', function (e) { if (e.key === 'Enter') kirim(); });
+  tombol.addEventListener("click", kirim);
+  namaEl.addEventListener("keydown", function (e) { if (e.key === "Enter") kirim(); });
+  namaEl.addEventListener("input", function () { galat.textContent = ""; });
 
-  // Kalau halaman dibuka saat ada pekerjaan jalan, tunggu hasilnya (bukan mulai baru).
-  fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
-    if (s.status === 'running') {
-      tombol.disabled = true;
-      judulJalan.textContent = s.nama;
-      kartuJalan.classList.remove('hidden');
-      majukan(1);
-      var sumber = new EventSource('/api/log');
-      sumber.onmessage = function (ev) { tulis(ev.data); };
-      sumber.addEventListener('hasil', function (ev) { sumber.close(); selesai(JSON.parse(ev.data)); });
-    } else if (s.status === 'sukses' || s.status === 'gagal') {
-      selesai(s);
-    }
-  }).catch(function () {});
+  $("toggle-log").addEventListener("click", function () {
+    var tersembunyi = logEl.classList.contains("hidden");
+    tampil(logEl, tersembunyi);
+    this.setAttribute("aria-expanded", String(tersembunyi));
+    this.textContent = (tersembunyi ? "Sembunyikan" : "Lihat") + " detail teknis";
+  });
+  $("toggle-log-hasil").addEventListener("click", function () {
+    var tersembunyi = logHasil.classList.contains("hidden");
+    tampil(logHasil, tersembunyi);
+    this.setAttribute("aria-expanded", String(tersembunyi));
+    this.textContent = (tersembunyi ? "Sembunyikan" : "Lihat") + " detail teknis";
+  });
+  $("salin-log").addEventListener("click", function () { salin(barisLog.join("\n")); });
+  $("salin-log-hasil").addEventListener("click", function () { salin(barisLog.join("\n")); });
+
+  /* ---------- sambung ulang ke pekerjaan yang sedang jalan ---------- */
+  function pantauTunggu() {
+    tampil(kartuBuat, false);
+    tampil(kartuJalan, true);
+    majukan(0);
+    if (!timer) mulaiTimer();
+    fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+      if (s.nama) {
+        namaAktif = s.nama;
+        $("judul-jalan").textContent = "Membuat '" + s.nama + "'…";
+        chipServer("sedang bekerja: " + s.nama, "busy");
+      }
+      ikutiLog(true);
+    }).catch(function () {});
+  }
+
+  function chipServer(teks, kelas) {
+    var c = $("chip-server");
+    c.className = "chip dot " + (kelas || "");
+    c.textContent = teks;
+  }
+
+  function sambung() {
+    fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+      if (sudahSelesai) return;
+      if (s.status === "running") { chipServer("sedang bekerja" + (s.nama ? ": " + s.nama : ""), "busy"); pantauTunggu(); }
+      else if (s.status === "sukses" || s.status === "gagal") { chipServer("server siap", "live"); hasil(s); }
+      else {
+        chipServer("server siap", "live");
+        tombol.disabled = false; namaEl.disabled = false;
+      }
+    }).catch(function () { chipServer("server tidak terjangkau", ""); });
+  }
+
+  /* ---------- awal ---------- */
+  gambarRiwayat();
+  pindah((location.hash || "#buat").replace("#", "") === "aktivitas" ? "aktivitas" : "buat");
+  sambung();
+  setInterval(function () { if (!sumber && !sudahSelesai) sambung(); }, 5000);
 })();
 </script>
 </body>

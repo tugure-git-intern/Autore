@@ -203,14 +203,15 @@ impl Server {
 
         let mut pos = 0usize;
         loop {
-            let (potongan, status, tautan, pesan) = {
+            let (potongan, status, tautan, pesan, nama) = {
                 let j = self.job.lock().unwrap();
                 let baru: Vec<String> = j.baris.iter().skip(pos).cloned().collect();
                 pos = j.baris.len();
+                let nama = j.nama.clone();
                 match j.status {
-                    Status::Sukses => (baru, "sukses", j.tautan.clone(), j.pesan.clone()),
-                    Status::Gagal => (baru, "gagal", j.tautan.clone(), j.pesan.clone()),
-                    _ => (baru, "jalan", String::new(), String::new()),
+                    Status::Sukses => (baru, "sukses", j.tautan.clone(), j.pesan.clone(), nama),
+                    Status::Gagal => (baru, "gagal", j.tautan.clone(), j.pesan.clone(), nama),
+                    _ => (baru, "jalan", String::new(), String::new(), nama),
                 }
             };
 
@@ -221,7 +222,8 @@ impl Server {
 
             if status != "jalan" {
                 let akhir = format!(
-                    "event: hasil\ndata: {{\"status\":\"{status}\",\"tautan\":\"{}\",\"pesan\":\"{}\"}}\n\n",
+                    "event: hasil\ndata: {{\"status\":\"{status}\",\"nama\":\"{}\",\"tautan\":\"{}\",\"pesan\":\"{}\"}}\n\n",
+                    json_escape(&nama),
                     json_escape(&tautan),
                     json_escape(&pesan)
                 );

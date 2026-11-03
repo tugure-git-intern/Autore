@@ -461,7 +461,7 @@
   }
   function simpanRiwayat(entri) {
     var r = riwayat();
-    r = r.filter(function (x) { return x.nama !== entri.nama; });
+    r = r.filter(function (x) { return x && x.nama !== entri.nama; });
     r.unshift(entri);
     try { localStorage.setItem(KUNCI_RIWAYAT, JSON.stringify(r.slice(0, 20))); } catch (e) {}
     gambarRiwayat();
@@ -486,7 +486,7 @@
     var tb = document.createElement("tbody");
     r.forEach(function (x) {
       var tr = document.createElement("tr");
-      var tdNama = document.createElement("td"); tdNama.className = "nm"; tdNama.textContent = x.nama;
+      var tdNama = document.createElement("td"); tdNama.className = "nm"; tdNama.textContent = x.nama || "(tanpa nama)";
       var tdHasil = document.createElement("td");
       var chip = document.createElement("span");
       chip.className = "chip " + (x.status === "sukses" ? "g" : "b");

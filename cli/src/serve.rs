@@ -10,17 +10,17 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 /// PID proses pipeline yang sedang jalan (0 = tidak ada). Dipakai tombol "Batalkan".
-/// ponytail: satu pekerjaan per proses (lihat catatan di atas) — kalau nanti ada
-/// antrean, pindahkan ke dalam Job.
 static ANAK: AtomicU32 = AtomicU32::new(0);
-/// Tombol "Batalkan" sudah ditekan: pekerjaan berhenti di langkah berikutnya.
-static DIBATALKAN: AtomicBool = AtomicBool::new(false);
+static ANAK_RUN_ID: AtomicU64 = AtomicU64::new(0);
+/// ID pekerjaan yang sedang dibatalkan (0 = tidak ada yang dibatalkan).
+static DIBATALKAN_RUN_ID: AtomicU64 = AtomicU64::new(0);
+static RUN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 use crate::jenkins;
 use crate::templates::validate_app_name;
@@ -47,6 +47,7 @@ impl Status {
 }
 
 struct Job {
+    id: u64,
     nama: String,
     status: Status,
     baris: Vec<String>,
@@ -61,6 +62,7 @@ struct Job {
 impl Default for Job {
     fn default() -> Self {
         Job {
+            id: 0,
             nama: String::new(),
             status: Status::Idle,
             baris: Vec::new(),
@@ -112,6 +114,7 @@ pub fn run(port: u16, host: String, buka_browser: bool) -> i32 {
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
+                let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
                 let srv = Arc::clone(&server);
                 thread::spawn(move || {
                     let _ = srv.handle(s);
@@ -238,22 +241,13 @@ impl Server {
                 kirim(&mut stream, 200, "application/json", &format!("{{\"proyek\":[{isi}]}}"))
             }
             ("GET", "/api/kemampuan") => {
-                // Sumber kebenaran tetap CLI: web cuma menampilkan apa yang diumumkan biner ini.
-                let exe = std::env::current_exe().unwrap_or_default();
-                match Command::new(exe).env("AUTORE_PROGRESS", "json").arg("kemampuan").output() {
-                    Ok(o) if o.status.success() => {
-                        let body = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                        kirim(&mut stream, 200, "application/json", &body)
-                    }
-                    _ => kirim(
-                        &mut stream,
-                        500,
-                        "application/json",
-                        "{\"perintah\":[],\"galat\":\"autore kemampuan tidak bisa dijalankan\"}",
-                    ),
-                }
+                // Sumber kebenaran tetap CLI: fungsi kemampuan_json dipanggil langsung.
+                kirim(&mut stream, 200, "application/json", &crate::kemampuan_json())
             }
             ("POST", "/api/buat") => {
+                if content_length > 64 * 1024 {
+                    return kirim(&mut stream, 413, "text/plain", "Payload too large");
+                }
                 let mut body = vec![0u8; content_length];
                 if content_length > 0 {
                     reader.read_exact(&mut body)?;
@@ -290,7 +284,9 @@ impl Server {
                 baru
             };
             for t in tahap_baru {
-                let _ = write!(stream, "event: tahap\ndata: {{\"tahap\":\"{}\"}}\n\n", json_escape(&t));
+                if write!(stream, "event: tahap\ndata: {{\"tahap\":\"{}\"}}\n\n", json_escape(&t)).is_err() {
+                    return Ok(());
+                }
             }
             let (potongan, status, tautan, pesan, nama) = {
                 let j = self.job.lock().unwrap();
@@ -305,9 +301,13 @@ impl Server {
             };
 
             for baris in potongan {
-                let _ = write!(stream, "data: {}\n\n", baris.replace('\n', " "));
+                if write!(stream, "data: {}\n\n", baris.replace('\n', " ")).is_err() {
+                    return Ok(());
+                }
             }
-            let _ = stream.flush();
+            if stream.flush().is_err() {
+                return Ok(());
+            }
 
             if status != "jalan" {
                 let akhir = format!(
@@ -341,10 +341,16 @@ impl Server {
         let deploy_port = match alamat.trim() {
             "" | "otomatis" => None,
             angka => match angka.parse::<u16>() {
-                Ok(p) if p >= 1024 => Some(p),
+                Ok(p) => {
+                    if let Err(e) = crate::templates::validate_deploy_port(p) {
+                        return (400, e);
+                    }
+                    Some(p)
+                }
                 _ => return (400, "Nomor port harus angka 1024 atau lebih.".to_string()),
             },
         };
+        let run_id = RUN_COUNTER.fetch_add(1, Ordering::SeqCst);
         {
             let mut j = self.job.lock().unwrap();
             if j.status == Status::Running {
@@ -352,6 +358,7 @@ impl Server {
                 return (409, format!("Masih ada pekerjaan berjalan: {pelaku}"));
             }
             *j = Job {
+                id: run_id,
                 nama: nama.to_string(),
                 status: Status::Running,
                 baris: Vec::new(),
@@ -361,21 +368,28 @@ impl Server {
             };
         }
 
-        DIBATALKAN.store(false, Ordering::SeqCst);
-        ANAK.store(0, Ordering::SeqCst);
         let srv = Server {
             job: Arc::clone(&self.job),
             workspace: self.workspace.clone(),
             host_tampil: self.host_tampil.clone(),
         };
         let target_name = nama.to_string();
-        thread::spawn(move || srv.jalankan_quickstart(&target_name, &kode, deploy_port));
+        thread::spawn(move || srv.jalankan_quickstart(run_id, &target_name, &kode, deploy_port));
         (200, String::new())
     }
 
-    fn catat(&self, teks: impl Into<String>) {
+    fn catat_id(&self, run_id: u64, teks: impl Into<String>) {
         let mut j = self.job.lock().unwrap();
-        j.baris.push(teks.into());
+        if j.id == run_id {
+            j.baris.push(teks.into());
+        }
+    }
+
+    fn catat_tahap_id(&self, run_id: u64, id: &str) {
+        let mut j = self.job.lock().unwrap();
+        if j.id == run_id && j.tahap_urut.last().map(|t| t.as_str()) != Some(id) {
+            j.tahap_urut.push(id.to_string());
+        }
     }
 
     /// Hentikan pekerjaan yang sedang jalan di mesin ini.
@@ -383,36 +397,40 @@ impl Server {
     /// Build yang sudah dikirim ke Jenkins TIDAK ikut berhenti — itu di luar
     /// kendali dashboard, dan pengguna diberi tahu apa adanya.
     fn batalkan(&self) -> bool {
-        if self.job.lock().unwrap().status != Status::Running {
-            return false;
+        let run_id = {
+            let j = self.job.lock().unwrap();
+            if j.status != Status::Running {
+                return false;
+            }
+            j.id
+        };
+        DIBATALKAN_RUN_ID.store(run_id, Ordering::SeqCst);
+        if ANAK_RUN_ID.load(Ordering::SeqCst) == run_id {
+            let pid = ANAK.swap(0, Ordering::SeqCst);
+            if pid != 0 && cfg!(unix) {
+                let _ = Command::new("kill").arg(pid.to_string()).status();
+            }
         }
-        DIBATALKAN.store(true, Ordering::SeqCst);
-        let pid = ANAK.swap(0, Ordering::SeqCst);
-        if pid != 0 && cfg!(unix) {
-            let _ = Command::new("kill").arg(pid.to_string()).status();
-        }
-        self.selesai_gagal(
+        self.selesai_gagal_id(
+            run_id,
             "Dibatalkan. Build yang sudah dikirim ke Jenkins tetap jalan sampai selesai.",
         );
         true
     }
 
-    /// Satu tahap selesai. Dipakai CLI (lewat baris data) dan oleh server sendiri.
-    fn catat_tahap(&self, id: &str) {
-        let mut j = self.job.lock().unwrap();
-        if j.tahap_urut.last().map(|t| t.as_str()) != Some(id) {
-            j.tahap_urut.push(id.to_string());
-        }
-    }
-
-    fn jalankan_quickstart(&self, nama: &str, kode: &str, deploy_port_pilihan: Option<u16>) {
-        let (app_port, deploy_port) = alokasi_port(&self.workspace, nama);
-        let deploy_port = deploy_port_pilihan.unwrap_or(deploy_port);
-        self.catat("Menyiapkan kerangka aplikasi...");
+    fn jalankan_quickstart(
+        &self,
+        run_id: u64,
+        nama: &str,
+        kode: &str,
+        deploy_port_pilihan: Option<u16>,
+    ) {
+        let (app_port, deploy_port) = alokasi_port(&self.workspace, nama, deploy_port_pilihan);
+        self.catat_id(run_id, "Menyiapkan kerangka aplikasi...");
 
         let exe = match std::env::current_exe() {
             Ok(e) => e,
-            Err(e) => return self.selesai_gagal(&format!("tidak bisa menemukan biner autore: {e}")),
+            Err(e) => return self.selesai_gagal_id(run_id, &format!("tidak bisa menemukan biner autore: {e}")),
         };
 
         let mut child = match Command::new(&exe)
@@ -435,23 +453,24 @@ impl Server {
             .spawn()
         {
             Ok(c) => c,
-            Err(e) => return self.selesai_gagal(&format!("gagal menjalankan pipeline: {e}")),
+            Err(e) => return self.selesai_gagal_id(run_id, &format!("gagal menjalankan pipeline: {e}")),
         };
 
         ANAK.store(child.id(), Ordering::SeqCst);
+        ANAK_RUN_ID.store(run_id, Ordering::SeqCst);
         if let Some(out) = child.stdout.take() {
             let srv = self.clone_ringan();
             thread::spawn(move || {
                 for baris in BufReader::new(out).lines().map_while(Result::ok) {
                     if let Some(tahap) = progress::ambil(&baris, "tahap") {
-                        srv.catat_tahap(&tahap);
+                        srv.catat_tahap_id(run_id, &tahap);
                         continue;
                     }
                     let bersih = bersihkan(&baris);
                     if bersih.is_empty() {
                         continue;
                     }
-                    srv.terjemahkan(&bersih);
+                    srv.terjemahkan_id(run_id, &bersih);
                 }
             });
         }
@@ -461,7 +480,7 @@ impl Server {
                 for baris in BufReader::new(err).lines().map_while(Result::ok) {
                     let bersih = bersihkan(&baris);
                     if !bersih.is_empty() {
-                        srv.catat(format!("! {bersih}"));
+                        srv.catat_id(run_id, format!("! {bersih}"));
                     }
                 }
             });
@@ -469,40 +488,44 @@ impl Server {
 
         let status = match child.wait() {
             Ok(s) => s,
-            Err(e) => return self.selesai_gagal(&format!("pipeline tidak bisa diselesaikan: {e}")),
+            Err(e) => return self.selesai_gagal_id(run_id, &format!("pipeline tidak bisa diselesaikan: {e}")),
         };
 
-        ANAK.store(0, Ordering::SeqCst);
-        if DIBATALKAN.load(Ordering::SeqCst) {
-            // Tombol Batalkan sudah menandai pekerjaan ini; jangan ditimpa pesan lain.
+        if ANAK_RUN_ID.load(Ordering::SeqCst) == run_id {
+            let _ = ANAK.compare_exchange(child.id(), 0, Ordering::SeqCst, Ordering::SeqCst);
+        }
+        if DIBATALKAN_RUN_ID.load(Ordering::SeqCst) == run_id {
             return;
         }
         if !status.success() {
-            let pesan = self.pesan_gagal_terakhir(nama);
-            return self.selesai_gagal(&pesan);
+            let pesan = self.pesan_gagal_terakhir_id(run_id, nama);
+            return self.selesai_gagal_id(run_id, &pesan);
         }
 
-        self.catat("Build jalan di Jenkins, menunggu hasilnya...");
-        self.catat_tahap("build");
-        self.tunggu_hasil_jenkins(nama, deploy_port);
+        self.catat_id(run_id, "Build jalan di Jenkins, menunggu hasilnya...");
+        self.catat_tahap_id(run_id, "build");
+        self.tunggu_hasil_jenkins(run_id, nama, deploy_port);
     }
 
     /// Terjemahkan baris keluaran CLI jadi tahapan bahasa manusia (log mentah tetap dikirim).
-    fn terjemahkan(&self, baris: &str) {
+    fn terjemahkan_id(&self, run_id: u64, baris: &str) {
         if baris.contains("1/4") {
-            self.catat("Kerangka aplikasi & pipeline dibuat.");
+            self.catat_id(run_id, "Kerangka aplikasi & pipeline dibuat.");
         } else if baris.contains("2/4") || baris.contains("Repo GitHub") {
-            self.catat("Repository GitHub disiapkan.");
+            self.catat_id(run_id, "Repository GitHub disiapkan.");
         } else if baris.contains("3/4") || baris.contains("Push ke Git") {
-            self.catat("Kode dikirim ke GitHub.");
+            self.catat_id(run_id, "Kode dikirim ke GitHub.");
         } else if baris.contains("siap & build-nya sudah jalan") {
-            self.catat("Didaftarkan ke Jenkins, build mulai berjalan.");
+            self.catat_id(run_id, "Didaftarkan ke Jenkins, build mulai berjalan.");
         }
-        self.catat(format!("  {baris}"));
+        self.catat_id(run_id, format!("  {baris}"));
     }
 
-    fn pesan_gagal_terakhir(&self, nama: &str) -> String {
+    fn pesan_gagal_terakhir_id(&self, run_id: u64, nama: &str) -> String {
         let j = self.job.lock().unwrap();
+        if j.id != run_id {
+            return format!("Aplikasi '{nama}' gagal disiapkan.");
+        }
         let mut sebab = String::new();
         for b in j.baris.iter().rev() {
             if let Some(sisa) = b.strip_prefix("! ") {
@@ -545,68 +568,87 @@ impl Server {
         format!("Aplikasi '{nama}' gagal disiapkan: {sebab}")
     }
 
-    fn tunggu_hasil_jenkins(&self, nama: &str, deploy_port: u16) {
+    #[cfg(test)]
+    fn pesan_gagal_terakhir(&self, nama: &str) -> String {
+        let id = self.job.lock().unwrap().id;
+        self.pesan_gagal_terakhir_id(id, nama)
+    }
+
+    fn tunggu_hasil_jenkins(&self, run_id: u64, nama: &str, deploy_port: u16) {
         let cfg = match jenkins::load_config_from(&jenkins::default_config_path()) {
             Some(c) => c,
             None => {
-                return self.selesai_gagal("Kredensial Jenkins belum diatur di server ini.");
+                return self.selesai_gagal_id(run_id, "Kredensial Jenkins belum diatur di server ini.");
             }
         };
 
         let mulai = std::time::Instant::now();
         let batas = mulai + Duration::from_secs(15 * 60);
         let mut kabar_terakhir = mulai;
+        let mut err_count = 0u32;
         loop {
-            if DIBATALKAN.load(Ordering::SeqCst) {
+            if DIBATALKAN_RUN_ID.load(Ordering::SeqCst) == run_id {
                 // Pengguna sudah menekan Batalkan; hasil build tidak lagi ditunggu.
                 return;
             }
             if std::time::Instant::now() > batas {
-                return self.selesai_gagal("Build belum selesai setelah 15 menit.");
+                return self.selesai_gagal_id(run_id, "Build belum selesai setelah 15 menit.");
             }
             if kabar_terakhir.elapsed() >= Duration::from_secs(30) {
                 kabar_terakhir = std::time::Instant::now();
-                self.catat("Build masih berjalan di Jenkins, tunggu sebentar...");
+                self.catat_id(run_id, "Build masih berjalan di Jenkins, tunggu sebentar...");
             }
             match jenkins::last_build_result(&cfg, nama) {
                 Ok(Some(hasil)) if hasil == "SUCCESS" => {
                     // Build selesai = Jenkins juga sudah memasang container (deploy by digest).
-                    self.catat_tahap("pasang");
-                    self.catat("Memeriksa aplikasi hidup...");
-                    self.catat_tahap("periksa");
+                    self.catat_tahap_id(run_id, "pasang");
+                    self.catat_id(run_id, "Memeriksa aplikasi hidup...");
+                    self.catat_tahap_id(run_id, "periksa");
                     let tautan = format!("http://{}:{}", self.host_tampil, deploy_port);
-                    self.selesai_sukses(&tautan, &format!("Aplikasi '{nama}' hidup dan bisa dibuka."));
+                    self.selesai_sukses_id(run_id, &tautan, &format!("Aplikasi '{nama}' hidup dan bisa dibuka."));
                     return;
                 }
                 Ok(Some(hasil)) => {
-                    return self.selesai_gagal(&format!(
+                    return self.selesai_gagal_id(run_id, &format!(
                         "Build di Jenkins gagal ({hasil}). Buka detail teknis untuk melihat sebabnya."
                     ));
                 }
-                Ok(None) => thread::sleep(Duration::from_secs(5)),
+                Ok(None) => {
+                    err_count = 0;
+                    thread::sleep(Duration::from_secs(5));
+                }
                 Err(e) => {
-                    return self.selesai_gagal(&format!("Tidak bisa membaca status Jenkins: {e}"));
+                    err_count += 1;
+                    if err_count >= 3 {
+                        return self.selesai_gagal_id(run_id, &format!("Tidak bisa membaca status Jenkins: {e}"));
+                    }
+                    self.catat_id(run_id, format!("! Peringatan koneksi Jenkins ({err_count}/3): {e}"));
+                    thread::sleep(Duration::from_secs(5));
                 }
             }
         }
     }
 
-    fn selesai_sukses(&self, tautan: &str, pesan: &str) {
-        if DIBATALKAN.load(Ordering::SeqCst) {
+    fn selesai_sukses_id(&self, run_id: u64, tautan: &str, pesan: &str) {
+        if DIBATALKAN_RUN_ID.load(Ordering::SeqCst) == run_id {
             return;
         }
         let mut j = self.job.lock().unwrap();
-        j.status = Status::Sukses;
-        j.tautan = tautan.to_string();
-        j.pesan = pesan.to_string();
-        j.baris.push(pesan.to_string());
+        if j.id == run_id {
+            j.status = Status::Sukses;
+            j.tautan = tautan.to_string();
+            j.pesan = pesan.to_string();
+            j.baris.push(pesan.to_string());
+        }
     }
 
-    fn selesai_gagal(&self, pesan: &str) {
+    fn selesai_gagal_id(&self, run_id: u64, pesan: &str) {
         let mut j = self.job.lock().unwrap();
-        j.status = Status::Gagal;
-        j.pesan = pesan.to_string();
-        j.baris.push(pesan.to_string());
+        if j.id == run_id {
+            j.status = Status::Gagal;
+            j.pesan = pesan.to_string();
+            j.baris.push(pesan.to_string());
+        }
     }
 
     fn clone_ringan(&self) -> Server {
@@ -670,40 +712,65 @@ fn container_jalan() -> Option<Vec<String>> {
 
 /// Port bebas untuk project: 8000-8099 (app) dengan deploy = app + 3.
 /// Disimpan supaya project lama memakai port yang sama lagi.
-fn alokasi_port(workspace: &std::path::Path, nama: &str) -> (u16, u16) {
+fn alokasi_port(workspace: &std::path::Path, nama: &str, pilihan: Option<u16>) -> (u16, u16) {
     // Port DI DALAM container selalu 8000: tiap container punya jaringan sendiri,
     // jadi tidak pernah bentrok. Yang harus unik adalah port di host (deploy).
     const APP_PORT: u16 = 8000;
     let reg = workspace.join("registry.tsv");
     let mut terpakai: Vec<u16> = Vec::new();
+    let mut entri: Vec<(String, u16, u16)> = Vec::new();
+    let mut ditemukan = false;
+
     if let Ok(isi) = std::fs::read_to_string(&reg) {
         for baris in isi.lines() {
             let mut it = baris.split('\t');
             let pemilik = it.next().unwrap_or("");
-            let _app = it.next();
-            let deploy = it.next();
-            if pemilik == nama {
-                if let Some(d) = deploy.and_then(|d| d.parse::<u16>().ok()) {
-                    return (APP_PORT, d);
+            let app = it.next().and_then(|a| a.parse::<u16>().ok()).unwrap_or(APP_PORT);
+            let deploy = it.next().and_then(|d| d.parse::<u16>().ok());
+            if let Some(d) = deploy {
+                if pemilik == nama {
+                    ditemukan = true;
+                    let target_deploy = pilihan.unwrap_or(d);
+                    entri.push((pemilik.to_string(), app, target_deploy));
+                    terpakai.push(target_deploy);
+                } else {
+                    entri.push((pemilik.to_string(), app, d));
+                    terpakai.push(d);
                 }
-            }
-            if let Some(p) = deploy.and_then(|d| d.parse::<u16>().ok()) {
-                terpakai.push(p);
             }
         }
     }
 
-    let mut deploy = 8003u16;
-    while deploy < 8200 {
-        if !terpakai.contains(&deploy) && port_bebas(deploy) {
-            let mut isi = std::fs::read_to_string(&reg).unwrap_or_default();
-            isi.push_str(&format!("{nama}\t{APP_PORT}\t{deploy}\n"));
-            let _ = std::fs::write(&reg, isi);
-            return (APP_PORT, deploy);
+    let final_deploy = if let Some(p) = pilihan {
+        p
+    } else if ditemukan {
+        entri
+            .iter()
+            .find(|(n, _, _)| n == nama)
+            .map(|(_, _, d)| *d)
+            .unwrap_or(8003)
+    } else {
+        let mut deploy = 8003u16;
+        while deploy < 8200 {
+            if !terpakai.contains(&deploy) && port_bebas(deploy) {
+                break;
+            }
+            deploy += 10;
         }
-        deploy += 10;
+        deploy
+    };
+
+    if !ditemukan {
+        entri.push((nama.to_string(), APP_PORT, final_deploy));
     }
-    (APP_PORT, 8003)
+
+    let mut isi_baru = String::new();
+    for (n, a, d) in entri {
+        isi_baru.push_str(&format!("{n}\t{a}\t{d}\n"));
+    }
+    let _ = std::fs::write(&reg, isi_baru);
+
+    (APP_PORT, final_deploy)
 }
 
 fn port_bebas(port: u16) -> bool {
@@ -744,31 +811,31 @@ fn ambil_field(body: &str, key: &str) -> String {
 
 fn url_decode(teks: &str) -> String {
     let bytes = teks.as_bytes();
-    let mut hasil = String::new();
+    let mut hasil_bytes: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
             b'%' if i + 2 < bytes.len() => {
                 let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
                 if let Ok(v) = u8::from_str_radix(hex, 16) {
-                    hasil.push(v as char);
+                    hasil_bytes.push(v);
                     i += 3;
                     continue;
                 }
-                hasil.push('%');
+                hasil_bytes.push(b'%');
                 i += 1;
             }
             b'+' => {
-                hasil.push(' ');
+                hasil_bytes.push(b' ');
                 i += 1;
             }
             b => {
-                hasil.push(b as char);
+                hasil_bytes.push(b);
                 i += 1;
             }
         }
     }
-    hasil.trim().to_string()
+    String::from_utf8_lossy(&hasil_bytes).trim().to_string()
 }
 
 fn json_escape(teks: &str) -> String {
@@ -778,9 +845,23 @@ fn json_escape(teks: &str) -> String {
         .replace('\r', " ")
 }
 
+fn status_reason(kode: u16) -> &'static str {
+    match kode {
+        200 => "OK",
+        400 => "Bad Request",
+        403 => "Forbidden",
+        404 => "Not Found",
+        409 => "Conflict",
+        413 => "Payload Too Large",
+        500 => "Internal Server Error",
+        _ => "OK",
+    }
+}
+
 fn kirim(stream: &mut TcpStream, kode: u16, tipe: &str, body: &str) -> std::io::Result<()> {
+    let reason = status_reason(kode);
     let head = format!(
-        "HTTP/1.1 {kode} OK\r\nContent-Type: {tipe}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {kode} {reason}\r\nContent-Type: {tipe}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(head.as_bytes())?;
@@ -820,14 +901,26 @@ mod tests {
     #[test]
     fn alokasi_port_memakai_ulang_port_project_lama() {
         let tmp = TempDir::new().unwrap();
-        let (a1, d1) = alokasi_port(tmp.path(), "proj-a");
-        let (a2, d2) = alokasi_port(tmp.path(), "proj-a");
+        let (a1, d1) = alokasi_port(tmp.path(), "proj-a", None);
+        let (a2, d2) = alokasi_port(tmp.path(), "proj-a", None);
         assert_eq!((a1, d1), (a2, d2));
         assert_eq!(a1, 8000, "port dalam container selalu 8000");
         assert!(d1 >= 8003);
-        let (a3, d3) = alokasi_port(tmp.path(), "proj-b");
+        let (a3, d3) = alokasi_port(tmp.path(), "proj-b", None);
         assert_eq!(a3, 8000);
         assert_ne!(d1, d3, "port host harus beda tiap project");
+    }
+
+    #[test]
+    fn alokasi_port_menyimpan_port_pilihan_pengguna() {
+        let tmp = TempDir::new().unwrap();
+        let (a1, d1) = alokasi_port(tmp.path(), "proj-custom", Some(8085));
+        assert_eq!(d1, 8085);
+        assert_eq!(a1, 8000);
+        let daftar = baca_registry(tmp.path());
+        assert_eq!(daftar.len(), 1);
+        assert_eq!(daftar[0].nama, "proj-custom");
+        assert_eq!(daftar[0].deploy_port, 8085);
     }
 
     #[test]
@@ -835,6 +928,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let srv = Server {
             job: Arc::new(Mutex::new(Job {
+                id: 0,
                 nama: "demo".to_string(),
                 status: Status::Running,
                 baris: vec![
@@ -904,8 +998,28 @@ mod tests {
         assert_eq!(kode, 400, "port di bawah 1024 ditolak");
         assert!(pesan.contains("1024"));
 
+        let (kode, pesan) = srv.mulai_job("demo-app", "contoh", "8080");
+        assert_eq!(kode, 400, "port infra 8080 ditolak");
+        assert!(pesan.contains("8080"));
+
         let (kode, _) = srv.mulai_job("Demo App", "contoh", "otomatis");
         assert_eq!(kode, 400, "nama tidak valid ditolak");
+    }
+
+    #[test]
+    fn url_decode_mendukung_utf8() {
+        assert_eq!(url_decode("halo+dunia"), "halo dunia");
+        assert_eq!(url_decode("%E2%9C%94+ok"), "✔ ok");
+    }
+
+    #[test]
+    fn status_reason_sesuai_rfc() {
+        assert_eq!(status_reason(200), "OK");
+        assert_eq!(status_reason(400), "Bad Request");
+        assert_eq!(status_reason(404), "Not Found");
+        assert_eq!(status_reason(409), "Conflict");
+        assert_eq!(status_reason(413), "Payload Too Large");
+        assert_eq!(status_reason(500), "Internal Server Error");
     }
 
     #[test]
@@ -913,6 +1027,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let srv = Server {
             job: Arc::new(Mutex::new(Job {
+                id: 0,
                 nama: "sedang-jalan".to_string(),
                 status: Status::Running,
                 baris: Vec::new(),

@@ -752,7 +752,7 @@ enum Commands {
 /// ATURAN: tambah pertanyaan HANYA kalau flag pasangannya (`flag`) benar-benar ada
 /// di subcommand dan dihormati. Pertanyaan yang belum bisa dilaksanakan jangan
 /// ditampilkan. Serve (`serve.rs`) memetakan `id` -> `flag`; ubah keduanya bersama.
-fn kemampuan_json() -> String {
+pub(crate) fn kemampuan_json() -> String {
     let pertanyaan = [
         r#"{"id":"nama","flag":"--app-name","jenis":"teks","label":"Nama aplikasi","wajib":true,"pola":"^[a-z0-9][a-z0-9_-]{0,62}$","contoh":"aplikasi-absensi","bantuan":"Huruf kecil, angka, tanda minus. Dipakai untuk nama repo dan nama aplikasi di server."}"#,
         r#"{"id":"kode","flag":"--kode","jenis":"pilihan","label":"Isi kode contoh?","bawaan":"contoh","bantuan":"Kalau folder belum ada kodenya, pipeline tetap jalan tapi tahap pemasangan akan ditolak. Contoh kecil dari Autore langsung bisa dibuka.","pilihan":[{"nilai":"contoh","label":"Ya, taruh contoh kecil (langsung bisa dibuka)"},{"nilai":"kosong","label":"Tidak, saya sudah punya kode sendiri"}]}"#,

@@ -11,7 +11,7 @@ export function Navbar({ title, children }: { title: string; children?: ReactNod
   return (
     <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
       <div className="flex h-14 items-center justify-between gap-4 px-4 lg:px-6">
-        <h1 className="text-sm font-semibold tracking-tight text-ink">{title}</h1>
+        <p className="text-sm font-semibold tracking-tight text-ink">{title}</p>
         {children ? <div className="flex items-center gap-2">{children}</div> : null}
       </div>
       {/* Below lg the sidebar is hidden, so navigation collapses into this row. */}

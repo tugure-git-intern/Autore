@@ -208,6 +208,35 @@ impl Server {
                 );
                 kirim(&mut stream, 200, "application/json", &body)
             }
+            ("GET", "/api/daftar") => {
+                // Sumbernya `registry.tsv` di workspace — bukan riwayat browser,
+                // jadi daftar ini tetap benar walau dibuka dari komputer lain.
+                let proyek = baca_registry(&self.workspace);
+                let jalan = container_jalan();
+                let isi = proyek
+                    .iter()
+                    .map(|p| {
+                        let hidup = match &jalan {
+                            Some(j) => {
+                                if j.iter().any(|n| n == &p.nama) {
+                                    "true"
+                                } else {
+                                    "false"
+                                }
+                            }
+                            None => "null",
+                        };
+                        format!(
+                            "{{\"nama\":\"{}\",\"tautan\":\"http://{}:{}\",\"hidup\":{hidup}}}",
+                            json_escape(&p.nama),
+                            self.host_tampil,
+                            p.deploy_port
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                kirim(&mut stream, 200, "application/json", &format!("{{\"proyek\":[{isi}]}}"))
+            }
             ("GET", "/api/kemampuan") => {
                 // Sumber kebenaran tetap CLI: web cuma menampilkan apa yang diumumkan biner ini.
                 let exe = std::env::current_exe().unwrap_or_default();
@@ -589,6 +618,56 @@ impl Server {
     }
 }
 
+/// Satu project yang tercatat di `registry.tsv`.
+struct Proyek {
+    nama: String,
+    deploy_port: u16,
+}
+
+/// Baca catatan project di workspace (dibuat saat pertama kali deploy).
+/// Baris rusak dilewati, bukan bikin seluruh daftar hilang.
+fn baca_registry(workspace: &std::path::Path) -> Vec<Proyek> {
+    let mut out = Vec::new();
+    let Ok(isi) = std::fs::read_to_string(workspace.join("registry.tsv")) else {
+        return out;
+    };
+    for baris in isi.lines() {
+        let mut it = baris.split('\t');
+        let nama = it.next().unwrap_or("").trim();
+        let _app = it.next();
+        let deploy = it.next().and_then(|d| d.trim().parse::<u16>().ok());
+        if nama.is_empty() {
+            continue;
+        }
+        if let Some(deploy_port) = deploy {
+            out.push(Proyek {
+                nama: nama.to_string(),
+                deploy_port,
+            });
+        }
+    }
+    out
+}
+
+/// Nama container yang sedang jalan. `None` = docker tidak bisa ditanya, supaya
+/// halaman bisa bilang "tidak diketahui" alih-alih menuduh aplikasi mati.
+fn container_jalan() -> Option<Vec<String>> {
+    let out = Command::new("docker")
+        .args(["ps", "--format", "{{.Names}}"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|b| b.trim().to_string())
+            .filter(|b| !b.is_empty())
+            .collect(),
+    )
+}
+
 /// Port bebas untuk project: 8000-8099 (app) dengan deploy = app + 3.
 /// Disimpan supaya project lama memakai port yang sama lagi.
 fn alokasi_port(workspace: &std::path::Path, nama: &str) -> (u16, u16) {
@@ -774,6 +853,27 @@ mod tests {
             srv.pesan_gagal_terakhir("demo"),
             "Server belum diatur lengkap (token GitHub/Jenkins belum ada). Hubungi admin."
         );
+    }
+
+    #[test]
+    fn baca_registry_melewati_baris_rusak() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("registry.tsv"),
+            "web-a\t8000\t8003\n\nrusak-tanpa-port\nweb-b\t8000\t8013\n",
+        )
+        .unwrap();
+        let daftar = baca_registry(tmp.path());
+        assert_eq!(daftar.len(), 2, "baris rusak tidak masuk");
+        assert_eq!(daftar[0].nama, "web-a");
+        assert_eq!(daftar[0].deploy_port, 8003);
+        assert_eq!(daftar[1].nama, "web-b");
+    }
+
+    #[test]
+    fn baca_registry_kosong_kalau_belum_ada_catatan() {
+        let tmp = TempDir::new().unwrap();
+        assert!(baca_registry(tmp.path()).is_empty());
     }
 
     #[test]

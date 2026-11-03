@@ -412,12 +412,23 @@
     <!-- ============ VIEW: AKTIVITAS ============ -->
     <section id="view-aktivitas" class="hidden">
       <div class="top"><span>Autore</span><span>/</span><span class="crumb-now">Aktivitas</span></div>
-      <h1>Aplikasi dari <b>browser ini</b></h1>
-      <p class="sub">Catatan di browser ini saja — supaya kamu bisa membuka lagi alamat aplikasi yang pernah dibuat.</p>
+      <h1>Aplikasi <b>kamu</b> di server</h1>
+      <p class="sub">Catatan di server ini: semua aplikasi yang pernah dibuat, tetap ada walau kamu buka dari komputer lain.</p>
       <div class="card">
         <div class="head" style="display:flex;align-items:center;gap:12px">
           <div style="flex:1">
-            <h2>Terakhir dibuat</h2>
+            <h2>Aplikasi di server</h2>
+            <p id="server-sub">memuat…</p>
+            <p class="hint" id="server-note" style="margin-top:6px">Alamat di bawah hidup <b>di server</b>. Dari komputermu, buka lewat tunnel SSH dengan nomor port yang sama (contoh: <code>ssh -N -L 8093:127.0.0.1:8093 &lt;user&gt;@&lt;vps&gt;</code>).</p>
+          </div>
+          <button class="ghost btn" id="muat-server">Muat ulang</button>
+        </div>
+        <div id="server-isi"></div>
+      </div>
+      <div class="card">
+        <div class="head" style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <h2>Riwayat di browser ini</h2>
             <p id="aktivitas-sub">—</p>
           </div>
           <button class="ghost btn" id="bersihkan">Bersihkan daftar</button>
@@ -599,12 +610,87 @@
   }
 
   /* ---------- navigasi ---------- */
+  /* ---------- aplikasi di server (dari registry.tsv) ---------- */
+  function isiTabel(isi, kolom, baris) {
+    isi.innerHTML = "";
+    var tbl = document.createElement("table");
+    tbl.innerHTML = "<thead><tr>" + kolom.map(function (k) { return "<th>" + k + "</th>"; }).join("") + "</tr></thead>";
+    var tb = document.createElement("tbody");
+    baris.forEach(function (sel) { tb.appendChild(sel()); });
+    tbl.appendChild(tb);
+    isi.appendChild(tbl);
+    return tbl;
+  }
+
+  function selAlamat(tautan) {
+    var td = document.createElement("td");
+    var a = document.createElement("a");
+    a.href = tautan; a.target = "_blank"; a.rel = "noreferrer"; a.textContent = tautan;
+    a.style.fontFamily = "var(--mono)"; a.style.fontSize = "12px";
+    td.appendChild(a);
+    var b = document.createElement("button");
+    b.className = "linklike"; b.textContent = "Salin"; b.style.marginLeft = "10px";
+    b.addEventListener("click", function () { salin(tautan); });
+    td.appendChild(b);
+    return td;
+  }
+
+  // hidup: true / false / null (null = docker tidak bisa ditanya)
+  function selStatus(hidup) {
+    var td = document.createElement("td");
+    var chip = document.createElement("span");
+    if (hidup === true) { chip.className = "chip g"; chip.textContent = "hidup"; }
+    else if (hidup === false) { chip.className = "chip b"; chip.textContent = "mati"; }
+    else { chip.className = "chip"; chip.textContent = "tidak diketahui"; }
+    td.appendChild(chip);
+    return td;
+  }
+
+  function gambarServer(daftar) {
+    var isi = $("server-isi"), sub = $("server-sub");
+    if (!daftar.length) {
+      isi.innerHTML = "";
+      sub.textContent = "belum ada aplikasi di server ini";
+      var box = document.createElement("div");
+      box.className = "empty";
+      box.innerHTML = "Belum ada aplikasi yang dibuat di server ini.";
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = "Buat aplikasi pertama";
+      b.addEventListener("click", function () { pindah("buat"); });
+      box.appendChild(b); isi.appendChild(box);
+      return;
+    }
+    var jumlahHidup = daftar.filter(function (x) { return x.hidup === true; }).length;
+    sub.textContent = daftar.length + " aplikasi tercatat · " + jumlahHidup + " sedang hidup";
+    isiTabel(isi, ["Nama", "Status", "Alamat"], daftar.map(function (x) {
+      return function () {
+        var tr = document.createElement("tr");
+        var tdNama = document.createElement("td"); tdNama.className = "nm"; tdNama.textContent = x.nama;
+        tr.appendChild(tdNama);
+        tr.appendChild(selStatus(x.hidup));
+        tr.appendChild(selAlamat(x.tautan));
+        return tr;
+      };
+    }));
+  }
+
+  function muatServer() {
+    $("server-sub").textContent = "memuat...";
+    fetch("/api/daftar").then(function (r) { return r.json(); }).then(function (d) {
+      gambarServer(((d && d.proyek) || []).slice().reverse());  // terbaru di atas
+    }).catch(function () {
+      $("server-sub").textContent = "tidak bisa membaca daftar dari server";
+    });
+  }
+  $("muat-server").addEventListener("click", muatServer);
+
   function pindah(view) {
     var buat = view !== "aktivitas";
     tampil($("view-buat"), buat);
     tampil($("view-aktivitas"), !buat);
     $("nav-buat").setAttribute("aria-current", buat ? "page" : "false");
     $("nav-aktivitas").setAttribute("aria-current", buat ? "false" : "page");
+    if (!buat) muatServer();
     if (location.hash !== "#" + view) history.replaceState(null, "", "#" + view);
   }
   $("nav-buat").addEventListener("click", function () { pindah("buat"); });
@@ -713,6 +799,7 @@
       $("toggle-log-hasil").textContent = "Sembunyikan detail teknis";
     }
     simpanRiwayat({ nama: nm, status: data.status, tautan: data.tautan || "", pesan: data.pesan || "", saat: Date.now() });
+    muatServer(); // daftar di server berubah begitu pekerjaan ini selesai
   }
 
   function ulangi() {
@@ -858,6 +945,7 @@
   /* ---------- awal ---------- */
   gambarRiwayat();
   pindah((location.hash || "#buat").replace("#", "") === "aktivitas" ? "aktivitas" : "buat");
+  muatServer();
   sambung();
   setInterval(function () { if (!sumber && !sudahSelesai) sambung(); }, 5000);
 })();

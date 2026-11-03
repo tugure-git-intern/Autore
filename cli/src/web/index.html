@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autore Dashboard</title>
+<style>
+  :root { --brand: #f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px; font-family: inherit; color: var(--foreground); }
+  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .brand-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .word { font-size: 22px; font-weight: 700; letter-spacing: 6px; }
+  .sub { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted-foreground); opacity: .85; }
+  .chip { font-size: 10.5px; color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+  .card { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 16px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .muted { color: var(--muted-foreground); font-size: 12px; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  input { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; color: var(--foreground); font: inherit; font-size: 13.5px; }
+  input:focus { outline: 1px solid var(--brand); border-color: var(--brand); }
+  button { border: 0; border-radius: 8px; padding: 11px 20px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--brand); color: #1a1206; }
+  button[disabled] { opacity: .55; cursor: default; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--foreground); font-weight: 500; padding: 7px 12px; font-size: 12px; }
+  .auto-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .auto { font-size: 10.5px; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 999px; padding: 2px 9px; }
+  ol.steps { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  ol.steps li { display: flex; gap: 9px; align-items: baseline; }
+  ol.steps li .ic { width: 14px; text-align: center; }
+  li.done { }
+  li.done .ic { color: #22c55e; }
+  li.now .ic { color: var(--brand); }
+  li.todo { color: var(--muted-foreground); opacity: .6; }
+  .logbox { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; line-height: 1.6; background: #00000033; border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 240px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
+  .logbox .err { color: #ef4444; }
+  .toggle { margin-top: 10px; font-size: 11.5px; color: var(--muted-foreground); cursor: pointer; user-select: none; }
+  .link-pill { display: inline-block; font-family: ui-monospace, monospace; font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-top: 10px; color: var(--foreground); text-decoration: none; }
+  .ok { border-left: 3px solid #22c55e; }
+  .bad { border-left: 3px solid #ef4444; }
+  .bad .pesan { color: #ef4444; }
+  .hidden { display: none; }
+  .foot { font-size: 10.5px; color: var(--muted-foreground); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand-row">
+    <div>
+      <div class="word">AUTORE</div>
+      <div class="sub">Powered by Tugu Reasuransi Indonesia</div>
+    </div>
+    <span class="chip">versi 1 user</span>
+  </div>
+
+  <div class="card" id="kartu-buat">
+    <h1>Mau bikin aplikasi apa?</h1>
+    <div class="muted">Tulis namanya saja. Sisanya diatur otomatis.</div>
+    <div class="row">
+      <input id="nama" placeholder="contoh: absensi-karyawan" autocomplete="off" spellcheck="false">
+      <button id="tombol-buat">Buat</button>
+    </div>
+    <div class="auto-row">
+      <span class="auto">stack: python</span>
+      <span class="auto">port: otomatis</span>
+      <span class="auto">pipeline standar kantor</span>
+      <span class="auto">scan keamanan: aktif</span>
+    </div>
+    <div class="muted" id="galat" style="margin-top:10px; color:#ef4444"></div>
+  </div>
+
+  <div class="card hidden" id="kartu-jalan">
+    <h1 id="judul-jalan">Sedang menyiapkan...</h1>
+    <div class="muted" id="sub-jalan">mohon tunggu, jangan tutup halaman ini</div>
+    <ol class="steps" id="tahap">
+      <li class="todo"><span class="ic">○</span>Menyiapkan kerangka aplikasi</li>
+      <li class="todo"><span class="ic">○</span>Menyiapkan pipeline otomatis</li>
+      <li class="todo"><span class="ic">○</span>Membangun &amp; mengirim ke server</li>
+      <li class="todo"><span class="ic">○</span>Menjalankan di server</li>
+      <li class="todo"><span class="ic">○</span>Memeriksa aplikasi hidup</li>
+    </ol>
+    <div class="toggle" id="toggle-log">▸ Lihat detail teknis</div>
+    <div class="hidden" id="log"></div>
+  </div>
+
+  <div class="card hidden" id="kartu-hasil">
+    <h1 id="judul-hasil"></h1>
+    <div class="muted pesan" id="pesan-hasil"></div>
+    <div id="hasil-aksi"></div>
+  </div>
+
+  <div class="foot">Dashboard ini hanya untuk jaringan kantor / Tailscale · autore <span id="versi">0.5.5</span></div>
+</div>
+
+<script>
+(function () {
+  var nama = document.getElementById('nama');
+  var tombol = document.getElementById('tombol-buat');
+  var galat = document.getElementById('galat');
+  var kartuJalan = document.getElementById('kartu-jalan');
+  var kartuHasil = document.getElementById('kartu-hasil');
+  var judulJalan = document.getElementById('judul-jalan');
+  var subJalan = document.getElementById('sub-jalan');
+  var log = document.getElementById('log');
+  var tahap = Array.prototype.slice.call(document.querySelectorAll('#tahap li'));
+
+  document.getElementById('toggle-log').addEventListener('click', function () {
+    var tersembunyi = log.classList.contains('hidden');
+    log.classList.toggle('hidden');
+    this.textContent = (tersembunyi ? '▾' : '▸') + ' Lihat detail teknis';
+  });
+
+  function majukan(ke) {
+    tahap.forEach(function (li, i) {
+      li.className = i < ke ? 'done' : (i === ke ? 'now' : 'todo');
+      li.querySelector('.ic').textContent = i < ke ? '✓' : (i === ke ? '◐' : '○');
+    });
+  }
+
+  function tulis(teks, kelas) {
+    var d = document.createElement('div');
+    if (kelas) d.className = kelas;
+    d.textContent = teks;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function selesai(data) {
+    kartuJalan.classList.add('hidden');
+    kartuHasil.classList.remove('hidden');
+    var judul = document.getElementById('judul-hasil');
+    var pesan = document.getElementById('pesan-hasil');
+    var aksi = document.getElementById('hasil-aksi');
+    if (data.status === 'sukses') {
+      kartuHasil.classList.add('ok');
+      judul.textContent = 'Aplikasi kamu hidup';
+      pesan.textContent = data.pesan || '';
+      var tautan = document.createElement('a');
+      tautan.className = 'link-pill';
+      tautan.href = data.tautan;
+      tautan.target = '_blank';
+      tautan.rel = 'noreferrer';
+      tautan.textContent = '🔗 ' + data.tautan;
+      aksi.appendChild(tautan);
+      aksi.appendChild(tombolLagi('Buat lagi'));
+    } else {
+      kartuHasil.classList.add('bad');
+      judul.textContent = 'Belum berhasil';
+      pesan.textContent = data.pesan || 'Ada yang gagal. Buka detail teknis di atas.';
+      aksi.appendChild(tombolLagi('Coba lagi'));
+    }
+  }
+
+  function tombolLagi(label) {
+    var bungkus = document.createElement('div');
+    bungkus.style.marginTop = '12px';
+    var b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', function () { location.reload(); });
+    bungkus.appendChild(b);
+    return bungkus;
+  }
+
+  function kirim() {
+    var nilai = (nama.value || '').trim().toLowerCase();
+    if (!nilai) { galat.textContent = 'Nama aplikasi belum diisi.'; return; }
+    galat.textContent = '';
+    tombol.disabled = true;
+    judulJalan.textContent = nilai;
+    kartuJalan.classList.remove('hidden');
+    majukan(0);
+
+    fetch('/api/buat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'nama=' + encodeURIComponent(nilai)
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (!res.ok) {
+        tombol.disabled = false;
+        galat.textContent = res.pesan || 'Tidak bisa memulai.';
+        kartuJalan.classList.add('hidden');
+        return;
+      }
+      var sumber = new EventSource('/api/log');
+      sumber.onmessage = function (ev) {
+        var baris = ev.data;
+        tulis(baris);
+        if (baris.indexOf('! ') === 0) tulis(baris, 'err');
+        if (/Kerangka aplikasi/.test(baris)) majukan(1);
+        else if (/Repository GitHub/.test(baris)) majukan(2);
+        else if (/build mulai berjalan/.test(baris)) majukan(3);
+        else if (/menunggu hasilnya/.test(baris)) majukan(3);
+        else if (/Memeriksa aplikasi hidup/.test(baris)) majukan(4);
+      };
+      sumber.addEventListener('hasil', function (ev) {
+        sumber.close();
+        selesai(JSON.parse(ev.data));
+      });
+      sumber.onerror = function () {
+        // Server menutup koneksi setelah hasil terkirim — biarkan selesai() yang menangani.
+      };
+    }).catch(function (e) {
+      tombol.disabled = false;
+      galat.textContent = 'Tidak bisa menghubungi server: ' + e;
+    });
+  }
+
+  tombol.addEventListener('click', kirim);
+  nama.addEventListener('keydown', function (e) { if (e.key === 'Enter') kirim(); });
+
+  // Kalau halaman dibuka saat ada pekerjaan jalan, tunggu hasilnya (bukan mulai baru).
+  fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
+    if (s.status === 'running') {
+      tombol.disabled = true;
+      judulJalan.textContent = s.nama;
+      kartuJalan.classList.remove('hidden');
+      majukan(1);
+      var sumber = new EventSource('/api/log');
+      sumber.onmessage = function (ev) { tulis(ev.data); };
+      sumber.addEventListener('hasil', function (ev) { sumber.close(); selesai(JSON.parse(ev.data)); });
+    } else if (s.status === 'sukses' || s.status === 'gagal') {
+      selesai(s);
+    }
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>

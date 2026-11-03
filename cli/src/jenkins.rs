@@ -198,6 +198,38 @@ fn extract_json_string_field(json: &str, key: &str) -> Option<String> {
     Some(stripped[..end].to_string())
 }
 
+/// Hasil build terakhir sebuah job. `Ok(None)` = masih berjalan / belum ada build.
+pub fn last_build_result(cfg: &JenkinsConfig, job_name: &str) -> Result<Option<String>, String> {
+    let base = normalize_jenkins_url(&cfg.url)?;
+    let url = format!("{base}/job/{job_name}/lastBuild/api/json?tree=number,result,building");
+    let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+    let (code, body) = curl_with_stdin_config(
+        &[
+            "-sS",
+            "--max-time",
+            "15",
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            &url,
+        ],
+        &user_cfg,
+    )?;
+    if code == 404 {
+        return Err("job belum terdaftar di Jenkins".into());
+    }
+    if code >= 400 {
+        return Err(format!("Jenkins membalas HTTP {code}"));
+    }
+    if body.contains("\"building\":true") || body.contains("\"number\":0") {
+        return Ok(None);
+    }
+    Ok(Some(
+        extract_json_string_field(&body, "result").unwrap_or_else(|| "UNKNOWN".to_string()),
+    ))
+}
+
 pub fn read_git_remote_origin(project_dir: &Path) -> Option<String> {
     let out = Command::new("git")
         .args(["remote", "get-url", "origin"])

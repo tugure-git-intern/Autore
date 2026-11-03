@@ -4,6 +4,7 @@ mod github;
 mod hooks;
 mod jenkins;
 mod scanner;
+mod serve;
 mod templates;
 mod tui;
 mod updater;
@@ -719,6 +720,21 @@ enum Commands {
     /// Hapus folder project Autore secara interaktif
     #[command(hide = true)]
     DeleteProject,
+
+    /// Jalankan dashboard web: satu kotak "Buat" yang menjalankan alur 1-klik
+    Serve {
+        /// Port dashboard
+        #[arg(long, short, default_value_t = 9119)]
+        port: u16,
+
+        /// Alamat yang di-bind (127.0.0.1 = hanya mesin ini, 0.0.0.0 = seluruh jaringan)
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Jangan buka browser otomatis
+        #[arg(long, short = 'n')]
+        no_browser: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1536,6 +1552,12 @@ fn execute_command(
                 }
             }
         }
+
+        Commands::Serve {
+            port,
+            host,
+            no_browser,
+        } => serve::run(port, host, !no_browser),
 
         Commands::DeleteProject => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

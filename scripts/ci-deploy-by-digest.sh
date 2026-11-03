@@ -87,7 +87,10 @@ docker run -d --name "${CANDIDATE_CONTAINER}" \
 log "Memeriksa health check kandidat pada http://127.0.0.1:${CANDIDATE_PORT}${HEALTH_PATHS[*]} (maks 10 detik)..."
 
 if ! health_at "${CANDIDATE_PORT}"; then
-  echo "ERROR: Container kandidat gagal lolos uji kesehatan (health check). Menghentikan kandidat..." >&2
+  echo "ERROR: Container kandidat gagal lolos uji kesehatan. Diuji: ${HEALTH_PATHS[*]} pada port ${CANDIDATE_PORT}." >&2
+  echo "Petunjuk: aplikasi harus mendengarkan di 0.0.0.0:${CONTAINER_PORT} dan menjawab HTTP. Kalau folder project masih kosong (belum ada kode aplikasi), tidak ada yang bisa dijalankan." >&2
+  echo "Log terakhir container kandidat:" >&2
+  docker logs --tail 20 "${CANDIDATE_CONTAINER}" 2>&1 | sed 's/^/    | /' >&2 || true
   docker stop "${CANDIDATE_CONTAINER}" 2>/dev/null || true
   docker rm -f "${CANDIDATE_CONTAINER}" 2>/dev/null || true
   echo "Container aktif lama dipertahankan tanpa gangguan (rollback aman)." >&2

@@ -71,6 +71,29 @@ pub fn has_existing_pipeline_files(dir: &std::path::Path) -> bool {
         || dir.join(".dockerignore").exists()
 }
 
+/// Folder belum punya kode aplikasi sama sekali (isinya cuma file pipeline yang kita buat).
+/// Dipakai untuk memperingatkan lebih awal: tanpa kode, tahap deploy akan ditolak.
+pub fn tanpa_kode_aplikasi(dir: &std::path::Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    !entries.filter_map(Result::ok).any(|e| {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        !matches!(name.as_ref(), "Dockerfile" | "Jenkinsfile" | ".dockerignore" | ".git")
+    })
+}
+
+/// Cetak peringatan kalau folder tujuan belum berisi kode aplikasi.
+pub fn peringatkan_folder_kosong(dir: &std::path::Path) {
+    if tanpa_kode_aplikasi(dir) {
+        println!(
+            "  {} Folder ini belum berisi kode aplikasi. Pipeline tetap jalan sampai image dibuat, tapi tahap deploy akan ditolak sampai ada aplikasi yang bisa dijalankan.",
+            "i".yellow().bold()
+        );
+    }
+}
+
 /// Tentukan folder target untuk `Buat Project Baru` dari menu interaktif:
 /// 1) Jika folder saat ini bernama sama dengan `app_name`, pakai langsung (`cwd`).
 /// 2) Jika sedang berada di dalam project lain (ada `.git`/`Dockerfile`/`Jenkinsfile`),
@@ -924,6 +947,7 @@ fn execute_command(
                         for f in files {
                             println!("  • {}", f.display());
                         }
+                        peringatkan_folder_kosong(&output_dir);
                         0
                     }
                     Err(e) => {
@@ -1395,6 +1419,7 @@ fn execute_command(
                     for f in files {
                         println!("      • {}", f.display());
                     }
+                    peringatkan_folder_kosong(&target_dir);
                 }
                 Err(e) => {
                     eprintln!("{} {e}", "ERROR:".red().bold());
@@ -1744,6 +1769,23 @@ mod tests {
         let dir_a_again = resolve_interactive_project_dir(&dir_a, "project-a");
         assert_eq!(dir_a_again, tmp.path().join("project-a"));
         assert!(has_existing_pipeline_files(&dir_a_again));
+    }
+
+    #[test]
+    fn deteksi_folder_tanpa_kode_aplikasi() {
+        let tmp = TempDir::new().unwrap();
+        // Folder baru: belum ada kode sama sekali.
+        assert!(tanpa_kode_aplikasi(tmp.path()));
+
+        // Cuma file pipeline yang kita generate -> masih dianggap kosong.
+        std::fs::write(tmp.path().join("Dockerfile"), "FROM python:3.12-slim\n").unwrap();
+        std::fs::write(tmp.path().join("Jenkinsfile"), "// pipeline\n").unwrap();
+        std::fs::create_dir(tmp.path().join(".git")).unwrap();
+        assert!(tanpa_kode_aplikasi(tmp.path()));
+
+        // Begitu ada kode aplikasi -> tidak kosong lagi.
+        std::fs::write(tmp.path().join("app.py"), "print('halo')\n").unwrap();
+        assert!(!tanpa_kode_aplikasi(tmp.path()));
     }
 
     #[test]

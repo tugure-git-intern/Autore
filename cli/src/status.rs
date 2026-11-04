@@ -127,31 +127,26 @@ fn capped(mut snap: Snapshot) -> Snapshot {
 }
 
 /// Tulis simpanan secara atomik (tmp + rename) sambil memangkas log mentah.
-/// Kegagalan tulis hanya memperingatkan — tidak boleh mengubah hasil pipeline.
-pub fn save(workspace: &Path, snapshot: &Snapshot) {
-    let isi = match serde_json::to_string(&capped(snapshot.clone())) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("WARNING: status dashboard tidak bisa disusun: {e}");
-            return;
-        }
-    };
+/// Pemanggil yang memutuskan arti kegagalan: `serve` memperingatkan, `pipeline
+/// record` keluar non-nol supaya pipeline tahu dashboard tidak terbarui.
+pub fn save(workspace: &Path, snapshot: &Snapshot) -> Result<(), String> {
+    let isi = serde_json::to_string(&capped(snapshot.clone()))
+        .map_err(|e| format!("status dashboard tidak bisa disusun: {e}"))?;
     let target = file(workspace);
     let sementara = workspace.join(format!("{SNAPSHOT_FILE}.tmp"));
-    if let Err(e) = std::fs::write(&sementara, &isi) {
-        eprintln!(
-            "WARNING: status dashboard tidak tersimpan ({}): {e}",
+    std::fs::write(&sementara, &isi).map_err(|e| {
+        format!(
+            "status dashboard tidak tersimpan ({}): {e}",
             sementara.display()
-        );
-        return;
-    }
-    if let Err(e) = std::fs::rename(&sementara, &target) {
-        eprintln!(
-            "WARNING: status dashboard tidak tersimpan ({}): {e}",
-            target.display()
-        );
+        )
+    })?;
+    std::fs::rename(&sementara, &target).map_err(|e| {
         let _ = std::fs::remove_file(&sementara);
-    }
+        format!(
+            "status dashboard tidak tersimpan ({}): {e}",
+            target.display()
+        )
+    })
 }
 
 /// Susun dokumen kontrak dari simpanan + `registry.tsv` + docker.
@@ -328,7 +323,7 @@ mod tests {
         });
         snap.latest_pipeline.status = "passed".to_string();
         snap.system_status = "passed".to_string();
-        save(tmp.path(), &snap);
+        save(tmp.path(), &snap).unwrap();
 
         let gabung = build(tmp.path());
         assert_eq!(
@@ -364,7 +359,7 @@ mod tests {
             },
             ..Default::default()
         };
-        save(tmp.path(), &snap);
+        save(tmp.path(), &snap).unwrap();
 
         assert!(file(tmp.path()).exists());
         let sisa: Vec<String> = std::fs::read_dir(tmp.path())
@@ -393,7 +388,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let mut snap = Snapshot::default();
         snap.latest_pipeline.raw_log = (0..900).map(|i| format!("baris-{i}")).collect();
-        save(tmp.path(), &snap);
+        save(tmp.path(), &snap).unwrap();
 
         let isi = load(tmp.path());
         assert_eq!(isi.latest_pipeline.raw_log.len(), MAX_LOG_LINES);
@@ -407,7 +402,7 @@ mod tests {
         snap.latest_pipeline.raw_log = (0..900)
             .map(|i| format!("{i}-{}", "x".repeat(200)))
             .collect();
-        save(tmp.path(), &snap);
+        save(tmp.path(), &snap).unwrap();
 
         let ukuran = std::fs::metadata(file(tmp.path())).unwrap().len();
         assert!(ukuran <= MAX_SNAPSHOT_BYTES as u64, "berkas {ukuran} byte");
@@ -419,12 +414,15 @@ mod tests {
     }
 
     #[test]
-    fn gagal_menulis_hanya_memperingatkan() {
+    fn gagal_menulis_mengembalikan_error_dan_tidak_merusak_workspace() {
         let tmp = TempDir::new().unwrap();
         // Workspace berupa berkas biasa: tulis simpanan pasti gagal.
         let bukan_dir = tmp.path().join("bukan-folder");
         std::fs::write(&bukan_dir, "x").unwrap();
-        save(&bukan_dir, &Snapshot::default());
+        assert!(
+            save(&bukan_dir, &Snapshot::default()).is_err(),
+            "kegagalan tulis harus terlihat oleh pemanggil"
+        );
         assert!(bukan_dir.is_file(), "workspace tidak boleh dirusak");
     }
 

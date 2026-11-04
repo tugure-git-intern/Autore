@@ -753,6 +753,18 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Catat kemajuan pipeline ke simpanan status (dipakai pipeline Jenkins)
+    Pipeline {
+        #[command(subcommand)]
+        aksi: PipelineAksi,
+    },
+}
+
+#[derive(Subcommand)]
+enum PipelineAksi {
+    /// Rekam satu peristiwa (tahap/status/log) ke dashboard-status.json
+    Record(pipeline_record::Rekaman),
 }
 
 /// Kemampuan mesin ini sebagai data. Dashboard web menyusun pertanyaannya dari
@@ -1406,6 +1418,10 @@ fn execute_command(
             }
             0
         }
+
+        Commands::Pipeline {
+            aksi: PipelineAksi::Record(rekaman),
+        } => pipeline_record::jalankan(&rekaman),
 
         Commands::QuickStart {
             path,

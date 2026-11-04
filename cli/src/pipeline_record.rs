@@ -89,6 +89,49 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
         .extend(rekaman.log.iter().cloned());
 }
 
+/// Jalankan `autore pipeline record`; balik exit code proses.
+///
+/// Baca-tulis lewat berkas (bukan objek di memori) supaya kegagalan permission
+/// atau disk terlihat, bukan jadi sukses palsu.
+pub fn jalankan(rekaman: &Rekaman) -> i32 {
+    let workspace = crate::serve::workspace_dir();
+    let mut snap = crate::status::load(&workspace);
+    terapkan(&mut snap, rekaman);
+
+    if let Err(e) = crate::status::save(&workspace, &snap) {
+        eprintln!("WARNING: {e}");
+        return 1;
+    }
+
+    let balik = crate::status::load(&workspace);
+    if let Some(status) = &rekaman.status {
+        if &balik.latest_pipeline.status != status {
+            eprintln!("WARNING: status '{status}' tidak terbaca kembali dari simpanan");
+            return 1;
+        }
+    }
+    for tahap in &rekaman.stage {
+        if !balik.latest_pipeline.stages.contains(tahap) {
+            eprintln!("WARNING: tahap '{tahap}' tidak terbaca kembali dari simpanan");
+            return 1;
+        }
+    }
+
+    if rekaman.json {
+        println!(
+            "{}",
+            crate::status::canonical(&crate::status::build(&workspace))
+        );
+    } else {
+        println!(
+            "pipeline direkam: {}, {} tahap",
+            balik.latest_pipeline.status,
+            balik.latest_pipeline.stages.len()
+        );
+    }
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

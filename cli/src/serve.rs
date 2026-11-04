@@ -462,7 +462,9 @@ impl Server {
             }
         }
 
-        crate::status::save(&self.workspace, &snap);
+        if let Err(e) = crate::status::save(&self.workspace, &snap) {
+            eprintln!("WARNING: {e}");
+        }
     }
 
     /// Hentikan pekerjaan yang sedang jalan di mesin ini.

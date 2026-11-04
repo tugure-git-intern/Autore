@@ -8,6 +8,7 @@ mod scanner;
 mod serve;
 mod status;
 mod pipeline_record;
+mod runs;
 mod templates;
 mod tui;
 mod updater;
@@ -747,6 +748,21 @@ enum Commands {
     /// Tampilkan kemampuan mesin ini sebagai data (dipakai dashboard web)
     Kemampuan,
 
+    /// Histori build dari Jenkins (7 hari terakhir) untuk grafik dashboard
+    Runs {
+        /// Cetak satu objek JSON sesuai kontrak `/api/runs`
+        #[arg(long)]
+        json: bool,
+
+        /// Jendela hari ke belakang
+        #[arg(long, default_value_t = 7)]
+        days: u32,
+
+        /// Jumlah run terbaru yang dikirim
+        #[arg(long, default_value_t = 5)]
+        limit: usize,
+    },
+
     /// Status sistem & pipeline terakhir dari simpanan pipeline (dipakai dashboard web)
     Status {
         /// Cetak satu objek JSON kanonik sesuai kontrak dashboard
@@ -1389,6 +1405,8 @@ fn execute_command(
             println!("{}", kemampuan_json());
             0
         }
+
+        Commands::Runs { json, days, limit } => runs::jalankan(days, limit, json),
 
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.

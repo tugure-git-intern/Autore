@@ -334,7 +334,12 @@ pub fn ensure_git_committed_and_remote(project_dir: &Path, remote_url: &str) -> 
     Ok(())
 }
 
-fn curl_with_stdin_config(args: &[&str], config_stdin: &str) -> Result<(u16, String), String> {
+/// GET/POST ke Jenkins lewat curl dengan kredensial dari stdin (tidak pernah di
+/// argv, jadi tidak muncul di `ps`). Dipakai juga oleh `runs` untuk daftar build.
+pub(crate) fn curl_with_stdin_config(
+    args: &[&str],
+    config_stdin: &str,
+) -> Result<(u16, String), String> {
     let mut child = Command::new("curl")
         .args(args)
         .stdin(Stdio::piped())

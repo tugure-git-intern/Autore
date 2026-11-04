@@ -271,3 +271,130 @@ fn author_ber_spasi_dan_apostrof_tersimpan_utuh() {
         "pesan berisi 'kutip' dan <sudut>"
     );
 }
+
+/// Jalankan `pipeline record`; panik kalau exit code bukan 0.
+fn rekam(ws: &Path, args: &[&str]) {
+    let out = autore(ws)
+        .args(["pipeline", "record"])
+        .args(args)
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "record gagal: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn mencatat_waktu_tiap_tahap_dan_jumlah_gerbang() {
+    let tmp = TempDir::new().unwrap();
+    rekam(
+        tmp.path(),
+        &["--reset", "--status", "running", "--stage", "checkout"],
+    );
+    rekam(tmp.path(), &["--status", "running", "--stage", "scan"]);
+    rekam(tmp.path(), &["--status", "running", "--stage", "build"]);
+    rekam(
+        tmp.path(),
+        &[
+            "--status",
+            "passed",
+            "--summary",
+            "9/9 gerbang lolos · digest sha256:abc",
+        ],
+    );
+
+    let lp = pipeline(tmp.path());
+    let wt = lp["stage_times"]
+        .as_array()
+        .expect("stage_times harus array");
+    assert_eq!(wt.len(), 3, "satu entri per tahap: {wt:?}");
+    assert_eq!(wt[0]["id"], "checkout");
+    assert_eq!(wt[2]["id"], "build");
+
+    let at: Vec<String> = wt
+        .iter()
+        .map(|v| v["at"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        at.iter().all(|s| s.len() == 20 && s.ends_with('Z')),
+        "at harus ISO-8601 UTC: {at:?}"
+    );
+    assert!(
+        at.windows(2).all(|w| w[0] <= w[1]),
+        "waktu tahap tidak boleh menurun: {at:?}"
+    );
+
+    assert_eq!(lp["gates_passed"], 9);
+    assert_eq!(lp["gates_total"], 9);
+    assert_eq!(
+        lp["finished_at"].as_str().unwrap().len(),
+        20,
+        "finished_at harus terisi saat pipeline selesai"
+    );
+    assert_eq!(lp["stages"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn build_baru_mengosongkan_waktu_tahap_dan_gerbang() {
+    let tmp = TempDir::new().unwrap();
+    rekam(
+        tmp.path(),
+        &["--reset", "--status", "running", "--stage", "checkout"],
+    );
+    rekam(
+        tmp.path(),
+        &["--status", "passed", "--summary", "9/9 gerbang lolos"],
+    );
+    assert_eq!(
+        pipeline(tmp.path())["stage_times"].as_array().unwrap().len(),
+        1
+    );
+
+    rekam(
+        tmp.path(),
+        &["--reset", "--status", "running", "--stage", "checkout"],
+    );
+    let lp = pipeline(tmp.path());
+    assert_eq!(
+        lp["stage_times"].as_array().unwrap().len(),
+        1,
+        "entri build lama harus hilang"
+    );
+    assert_eq!(lp["gates_total"], 0, "gerbang build lama tidak boleh nyangkut");
+    assert_eq!(lp["finished_at"], "", "build baru belum selesai");
+}
+
+#[test]
+fn simpanan_lama_tanpa_field_baru_tetap_dimuat() {
+    let tmp = TempDir::new().unwrap();
+    // Bentuk simpanan sebelum Phase 3: tanpa stage_times/finished_at/gates_*.
+    let lama = r#"{"system_status":"passed","infra":{"jenkins":"active","nexus":"active"},"stats":{"total_apps":1,"running_containers":2},"applications":[],"latest_pipeline":{"status":"passed","failure_reason":"","stages":["checkout","scan"],"security_summary":"9/9 gerbang lolos","commit_sha":"2dfd6ef","author":"a <b@c>","raw_log":["x"]}}"#;
+    fs::write(tmp.path().join(SNAPSHOT), lama).unwrap();
+
+    let out = autore(tmp.path())
+        .args(["status", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // Dibaca dari keluaran `status --json` (bukan berkas): yang diuji kontrak
+    // yang dilihat web, dan berkas lama tidak ditulis ulang oleh perintah baca.
+    let cetak: Value = serde_json::from_slice(&out.stdout).expect("stdout status --json harus JSON");
+    let lp = cetak["latest_pipeline"].clone();
+    assert_eq!(lp["stage_times"].as_array().unwrap().len(), 0);
+    assert_eq!(lp["finished_at"], "");
+    assert_eq!(lp["gates_total"], 0);
+    assert_eq!(
+        lp["stages"].as_array().unwrap().len(),
+        2,
+        "data lama tetap utuh"
+    );
+}

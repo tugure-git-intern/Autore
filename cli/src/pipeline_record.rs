@@ -4,7 +4,7 @@
 //! kontrak tetap satu tempat: modul ini cuma *merge* peristiwa, `status::save`
 //! yang menyimpan (atomik: tulis `*.tmp` lalu rename).
 
-use crate::status::Snapshot;
+use crate::status::{Snapshot, StageTime};
 use clap::Args;
 
 /// Satu peristiwa pipeline. Field `Option`/`Vec` kosong = "jangan sentuh".
@@ -47,10 +47,35 @@ pub struct Rekaman {
     pub json: bool,
 }
 
+/// Baca jumlah gerbang keamanan dari ringkasan pipeline: `"9/9 gerbang lolos ·
+/// digest sha256:..."` → `(9, 9)`. Ringkasan tanpa pola itu (atau total nol) →
+/// `(0, 0)`, supaya dashboard menampilkan "tanpa data" alih-alih skor palsu.
+pub fn parse_gates(summary: &str) -> (u32, u32) {
+    let Some(pos) = summary.find("gerbang lolos") else {
+        return (0, 0);
+    };
+    let angka = summary[..pos]
+        .trim_end()
+        .rsplit(|c: char| !c.is_ascii_digit() && c != '/')
+        .next()
+        .unwrap_or("");
+    let Some((lulus, total)) = angka.split_once('/') else {
+        return (0, 0);
+    };
+    match (lulus.parse::<u32>(), total.parse::<u32>()) {
+        (Ok(l), Ok(t)) if t > 0 => (l, t),
+        _ => (0, 0),
+    }
+}
+
 /// Merge satu peristiwa ke simpanan. Tidak menyentuh filesystem.
 pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
     if rekaman.reset {
         snap.latest_pipeline.stages.clear();
+        snap.latest_pipeline.stage_times.clear();
+        snap.latest_pipeline.finished_at.clear();
+        snap.latest_pipeline.gates_passed = 0;
+        snap.latest_pipeline.gates_total = 0;
         snap.latest_pipeline.raw_log.clear();
         snap.latest_pipeline.failure_reason.clear();
         snap.latest_pipeline.security_summary.clear();
@@ -63,6 +88,11 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
         if status != "failed" {
             snap.latest_pipeline.failure_reason.clear();
         }
+        // Tahap terakhir selesai = pipeline selesai. Waktu ini yang dipakai web
+        // menghitung durasi tahap terakhir.
+        if status == "passed" || status == "failed" {
+            snap.latest_pipeline.finished_at = crate::status::now_iso8601();
+        }
     }
 
     if let Some(pesan) = &rekaman.message {
@@ -72,6 +102,10 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
     for tahap in &rekaman.stage {
         if !snap.latest_pipeline.stages.contains(tahap) {
             snap.latest_pipeline.stages.push(tahap.clone());
+            snap.latest_pipeline.stage_times.push(StageTime {
+                id: tahap.clone(),
+                at: crate::status::now_iso8601(),
+            });
         }
     }
 
@@ -83,6 +117,9 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
     }
     if let Some(v) = &rekaman.summary {
         snap.latest_pipeline.security_summary = v.clone();
+        let (lulus, total) = parse_gates(v);
+        snap.latest_pipeline.gates_passed = lulus;
+        snap.latest_pipeline.gates_total = total;
     }
     snap.latest_pipeline
         .raw_log
@@ -272,5 +309,110 @@ mod tests {
             },
         );
         assert_eq!(snap.latest_pipeline.stages, vec!["checkout"]);
+    }
+
+    #[test]
+    fn jumlah_gerbang_dibaca_dari_ringkasan() {
+        assert_eq!(parse_gates("9/9 gerbang lolos · digest sha256:abc"), (9, 9));
+        assert_eq!(parse_gates("12/12 gerbang lolos"), (12, 12));
+        assert_eq!(parse_gates("1/9 gerbang lolos"), (1, 9));
+        // Tidak ada pola, atau total nol: "tanpa data", bukan skor 0%.
+        assert_eq!(parse_gates(""), (0, 0));
+        assert_eq!(parse_gates("gerbang lolos"), (0, 0));
+        assert_eq!(parse_gates("0/0 gerbang lolos"), (0, 0));
+        assert_eq!(parse_gates("gagal di tahap 2"), (0, 0));
+    }
+
+    #[test]
+    fn tahap_mencatat_waktu_urut_dan_reset_membersihkannya() {
+        let mut snap = Snapshot::default();
+        for tahap in ["checkout", "scan", "build"] {
+            terapkan(
+                &mut snap,
+                &Rekaman {
+                    status: Some("running".to_string()),
+                    stage: vec![tahap.to_string()],
+                    ..rekaman()
+                },
+            );
+        }
+        let waktu: Vec<String> = snap
+            .latest_pipeline
+            .stage_times
+            .iter()
+            .map(|t| t.at.clone())
+            .collect();
+        assert_eq!(snap.latest_pipeline.stage_times.len(), 3);
+        assert_eq!(snap.latest_pipeline.stage_times[0].id, "checkout");
+        assert!(waktu.iter().all(|w| w.len() == 20 && w.ends_with('Z')));
+        assert!(waktu.windows(2).all(|w| w[0] <= w[1]));
+
+        // Tahap ganda tidak menambah entri waktu kedua.
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                stage: vec!["build".to_string()],
+                ..rekaman()
+            },
+        );
+        assert_eq!(snap.latest_pipeline.stage_times.len(), 3);
+
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                reset: true,
+                ..rekaman()
+            },
+        );
+        assert!(snap.latest_pipeline.stage_times.is_empty());
+    }
+
+    #[test]
+    fn finished_at_hanya_terisi_saat_pipeline_selesai() {
+        let mut snap = Snapshot::default();
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                status: Some("running".to_string()),
+                ..rekaman()
+            },
+        );
+        assert!(snap.latest_pipeline.finished_at.is_empty());
+
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                status: Some("failed".to_string()),
+                message: Some("Gagal di tahap: 3. Trivy".to_string()),
+                ..rekaman()
+            },
+        );
+        assert_eq!(snap.latest_pipeline.finished_at.len(), 20);
+    }
+
+    #[test]
+    fn ringkasan_ringkas_menyetel_gerbang_dan_build_baru_mereset() {
+        let mut snap = Snapshot::default();
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                status: Some("passed".to_string()),
+                summary: Some("9/9 gerbang lolos · digest sha256:abc".to_string()),
+                ..rekaman()
+            },
+        );
+        assert_eq!(snap.latest_pipeline.gates_passed, 9);
+        assert_eq!(snap.latest_pipeline.gates_total, 9);
+
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                reset: true,
+                status: Some("running".to_string()),
+                ..rekaman()
+            },
+        );
+        assert_eq!(snap.latest_pipeline.gates_total, 0);
+        assert!(snap.latest_pipeline.finished_at.is_empty());
     }
 }

@@ -45,6 +45,15 @@ pub struct Application {
     pub security_issues: u32,
 }
 
+/// Waktu satu tahap selesai (pipeline memanggil `record` di akhir tiap tahap).
+/// Dipakai web untuk menghitung durasi per tahap; bukan fakta baru, cuma jam.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct StageTime {
+    pub id: String,
+    /// ISO-8601 UTC, sama format dengan `now_iso8601`.
+    pub at: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Pipeline {
     /// `idle` / `running` / `passed` / `failed`.
@@ -55,6 +64,18 @@ pub struct Pipeline {
     pub commit_sha: String,
     pub author: String,
     pub raw_log: Vec<String>,
+    /// Satu entri per tahap di `stages`, urut. Simpanan lama tidak punya field
+    /// ini: `default` wajib supaya `dashboard-status.json` versi lama tetap dimuat.
+    #[serde(default)]
+    pub stage_times: Vec<StageTime>,
+    /// Waktu pipeline selesai (`passed`/`failed`); kosong selama masih jalan.
+    #[serde(default)]
+    pub finished_at: String,
+    /// Gerbang keamanan yang lolos dan totalnya, dibaca dari `security_summary`.
+    #[serde(default)]
+    pub gates_passed: u32,
+    #[serde(default)]
+    pub gates_total: u32,
 }
 
 /// Dokumen kontrak: persis yang dicetak `autore status --json`.
@@ -88,6 +109,10 @@ impl Default for Snapshot {
                 commit_sha: String::new(),
                 author: String::new(),
                 raw_log: Vec::new(),
+                stage_times: Vec::new(),
+                finished_at: String::new(),
+                gates_passed: 0,
+                gates_total: 0,
             },
         }
     }

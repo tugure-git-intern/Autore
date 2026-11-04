@@ -72,10 +72,10 @@ describe("StatCard", () => {
 });
 
 describe("Sidebar", () => {
-  it("labels the three PRD routes and highlights the active one in PRD green", () => {
+  it("labels the PRD routes and highlights the active one in PRD green", () => {
     render(<Sidebar />);
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual(["/", "/applications", "/pipeline"]);
+    expect(hrefs).toEqual(["/", "/applications", "/pipeline", "/security"]);
 
     // PRD: menu aktif memakai bg-green-50 text-green-700.
     const active = screen.getByRole("link", { name: "Dashboard" });

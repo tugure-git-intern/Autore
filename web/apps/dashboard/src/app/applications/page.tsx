@@ -18,6 +18,16 @@ function toBadge(status: StatusValue): AppStatus {
   return status === "passed" || status === "running" || status === "failed" ? status : "unknown";
 }
 
+/**
+ * A finding count is only a fact once a scan produced a verdict. Without one
+ * (registry-only app, or a scan still running) the cell stays a dash instead of
+ * claiming "0 temuan".
+ */
+function findings(status: AppStatus, securityIssues: number): string {
+  if (status !== "passed" && status !== "failed") return "—";
+  return `${securityIssues} temuan`;
+}
+
 export default function ApplicationsPage() {
   const { state, loading, failed, reload } = useStatus();
 
@@ -60,9 +70,7 @@ export default function ApplicationsPage() {
 
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
-        <p className="mt-1 text-sm text-muted">
-          {applications.length} aplikasi terdaftar lewat <code className="font-mono text-xs">autore</code>.
-        </p>
+        <p className="mt-1 text-sm text-muted">{applications.length} aplikasi terdaftar.</p>
       </div>
 
       <div className="mt-4">
@@ -75,16 +83,13 @@ export default function ApplicationsPage() {
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
                   <tr>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Nama Aplikasi
+                      Nama
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Status
+                      Status Keamanan
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Temuan Keamanan
-                    </th>
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      Terakhir Diperbarui
+                      Terakhir Update
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
                       Aksi
@@ -92,27 +97,32 @@ export default function ApplicationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {applications.map((app) => (
-                    <tr key={app.id}>
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-ink">{dash(app.name)}</p>
-                        <p className="font-mono text-xs text-muted">{app.id}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge status={toBadge(app.status)} />
-                      </td>
-                      <td className="px-5 py-4 text-muted">{app.security_issues}</td>
-                      <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
-                      <td className="px-5 py-4">
-                        <a
-                          href={`/pipeline?app=${encodeURIComponent(app.id)}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Detail
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
+                  {applications.map((app) => {
+                    const badge = toBadge(app.status);
+                    return (
+                      <tr key={app.id}>
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-ink">{dash(app.name)}</p>
+                          <p className="font-mono text-xs text-muted">{app.id}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <StatusBadge status={badge} />
+                          <p className="mt-1 text-xs text-muted">
+                            {findings(badge, app.security_issues)}
+                          </p>
+                        </td>
+                        <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
+                        <td className="px-5 py-4">
+                          <a
+                            href={`/pipeline?app=${encodeURIComponent(app.id)}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Detail
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

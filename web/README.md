@@ -146,6 +146,52 @@ Installing units, restarting production (`systemctl --user restart
 autore-web-api.service autore-web-dashboard.service`) and deploying are
 deliberate manual steps — never part of a check.
 
+## Who writes `dashboard-status.json`
+
+One file, two writers, one contract (`cli/src/status.rs`):
+
+| Writer | Runs as | When |
+| --- | --- | --- |
+| `autore serve` (the 1-click web flow) | `tugure` | after each deploy step in the UI |
+| `autore pipeline record` | `jenkins` (Jenkins agent) | every pipeline stage + the final `post` |
+
+`autore pipeline record` is the only command the Jenkins library
+(`vars/autorePipeline.groovy`) calls:
+
+```bash
+# Writes the same file the dashboard reads: expect /pipeline to show `running`
+# until the next build finishes.
+AUTORE_WORKSPACE="$HOME/autore-workspace" /usr/local/bin/autore pipeline record \
+  --reset --status running --stage checkout \
+  --commit 0770f21 --author "uji manual" --log "[checkout] uji manual"
+AUTORE_WORKSPACE="$HOME/autore-workspace" /usr/local/bin/autore status --json | python3 -m json.tool
+```
+
+Both writers go through `status::save`: serialise, write
+`dashboard-status.json.tmp`, then rename — a reader never sees a half file, and
+the last writer wins. `--reset` clears the previous build's stages and log, so
+the first call of every build passes it; other flags leave untouched fields
+alone.
+
+**Permission prerequisite.** The agent runs as the `jenkins` user, which is not
+in `tugure`'s group, and `$HOME` is `0750` — so the workspace is unreachable
+until it is opened:
+
+```bash
+sudo usermod -aG tugure jenkins        # the workspace dir itself is 0775 tugure:tugure
+sudo systemctl restart jenkins-agent   # the agent only picks up the new group on restart
+```
+
+Without it the build still succeeds — recording is best-effort on purpose, so a
+dashboard hiccup cannot fail a security pipeline — but the dashboard stays
+`idle` and the console shows `WARNING: dashboard record gagal (exit 1)`. A stale
+`/usr/local/bin/autore` without the subcommand fails earlier and harder, in
+stage 1, with the `sudo install` command in the message.
+
+Stage ids the dashboard understands — `checkout`, `scan`, `build`, `pasang`,
+`periksa` — are mapped in
+`web/apps/dashboard/src/components/pipeline/stage-timeline.tsx`.
+
 Logs, status and restart:
 
 ```bash

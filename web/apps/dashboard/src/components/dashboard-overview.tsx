@@ -5,6 +5,7 @@ import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
 import { useStatus } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
+import { OverviewAnalytics } from "./overview-analytics";
 import { StatCard } from "./stat-card";
 import { StatusBadge, type AppStatus } from "./status-badge";
 import { Button } from "./ui/button";
@@ -103,6 +104,8 @@ export function DashboardOverview() {
           tone="amber"
         />
       </section>
+
+      <OverviewAnalytics />
 
       <Card className="mt-6 overflow-hidden">
         <div className="border-b border-gray-200 px-5 py-4">

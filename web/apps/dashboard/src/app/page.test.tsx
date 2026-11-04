@@ -63,6 +63,87 @@ const STATUS = {
   },
 };
 
+const RUNS = {
+  generated_at: "2026-11-04T10:10:00Z",
+  window_days: 7,
+  runs: [
+    {
+      app: "tes-web",
+      number: 9,
+      status: "passed",
+      duration_ms: 45_555,
+      started_at: "2026-11-04T10:06:06Z",
+      commit_sha: "2dfd6ef3b42a965dd03c392095a116faf1c8a8c2",
+      author: "Autore CLI <autore@tugu-re.com>",
+      url: "http://100.80.3.14:8080/job/tes-web/9",
+    },
+  ],
+  daily: [
+    { date: "2026-11-03", passed: 0, failed: 0 },
+    { date: "2026-11-04", passed: 4, failed: 1 },
+  ],
+  totals: { passed: 4, failed: 1, running: 0 },
+};
+
+const ok = (body: unknown) =>
+  ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+
+function stubApi(runs: () => Promise<Response>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/status") return ok({ data: STATUS, stale: false });
+      if (url === "/api/runs") return runs();
+      throw new Error(`permintaan tidak terduga: ${url}`);
+    }),
+  );
+}
+
+test("Overview menampilkan tren, distribusi, dan recent runs", async () => {
+  stubApi(async () => ok({ data: RUNS, stale: false }));
+
+  render(
+    <StatusProvider>
+      <DashboardPage />
+    </StatusProvider>,
+  );
+
+  expect(await screen.findByText("Tren 7 Hari")).toBeInTheDocument();
+  expect(screen.getByText("Distribusi")).toBeInTheDocument();
+  expect(screen.getByText("Recent Runs")).toBeInTheDocument();
+  expect(await screen.findByText("tes-web #9")).toBeInTheDocument();
+});
+
+test("Overview tetap tampil saat /api/runs gagal", async () => {
+  stubApi(async () => {
+    throw new Error("runs tidak tersedia");
+  });
+
+  render(
+    <StatusProvider>
+      <DashboardPage />
+    </StatusProvider>,
+  );
+
+  expect(await screen.findByText("Belum ada build dalam 7 hari terakhir")).toBeInTheDocument();
+  expect(screen.getByText("Belum ada run")).toBeInTheDocument();
+  expect(screen.getByText("Aplikasi")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+});
+
+test("menandai data terakhir saat /api/runs menjawab stale", async () => {
+  stubApi(async () => ok({ data: RUNS, stale: true }));
+
+  render(
+    <StatusProvider>
+      <DashboardPage />
+    </StatusProvider>,
+  );
+
+  expect(await screen.findByText("data terakhir")).toBeInTheDocument();
+});
+
 test("menaruh tombol Deploy Sekarang di pojok kanan atas dengan peringatan commit dan push", async () => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const body =

@@ -5,7 +5,7 @@ import { Inbox } from "lucide-react";
 // callers already state the count, and the tile stays neutral (one accent max).
 export function EmptyApplications() {
   return (
-    <div className="flex min-h-[180px] flex-col items-center justify-center gap-2.5 px-6 py-8 text-center text-muted">
+    <div className="flex min-h-[160px] flex-col items-center justify-center gap-2.5 px-6 py-6 text-center text-muted">
       <span
         aria-hidden="true"
         className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 text-gray-600"

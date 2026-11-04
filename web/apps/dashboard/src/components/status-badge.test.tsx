@@ -72,14 +72,17 @@ describe("StatCard", () => {
 });
 
 describe("Sidebar", () => {
-  it("labels the three PRD routes and highlights the active one neutrally", () => {
+  it("labels the three PRD routes and highlights the active one in PRD green", () => {
     render(<Sidebar />);
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(["/", "/applications", "/pipeline"]);
 
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("bg-gray-100", "text-ink");
-    expect(screen.getByRole("link", { name: "Daftar Aplikasi" })).not.toHaveClass("bg-gray-100");
-    expect(screen.getByRole("link", { name: "Pipeline & Log" })).not.toHaveClass("bg-gray-100");
+    // PRD: menu aktif memakai bg-green-50 text-green-700.
+    const active = screen.getByRole("link", { name: "Dashboard" });
+    expect(active).toHaveClass("bg-green-50", "text-green-700");
+    expect(active).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Daftar Aplikasi" })).not.toHaveClass("bg-green-50");
+    expect(screen.getByRole("link", { name: "Pipeline & Log" })).not.toHaveClass("bg-green-50");
 
     expect(screen.queryByText(/buat aplikasi|tambah aplikasi|aplikasi baru/i)).toBeNull();
   });
@@ -112,11 +115,11 @@ describe("EmptyApplications", () => {
     expect(container.querySelector(".border")).toBeNull();
   });
 
-  it("hugs 180px, keeps a neutral tile and only the heading copy", () => {
+  it("hugs 160px, keeps a neutral tile and only the heading copy", () => {
     const { container } = render(<EmptyApplications />);
     const root = container.firstElementChild as HTMLElement;
 
-    expect(root).toHaveClass("min-h-[180px]", "text-muted");
+    expect(root).toHaveClass("min-h-[160px]", "text-muted");
     expect(root.className).not.toMatch(/py-(1[6-9]|2[0-9])/);
     expect(root.textContent).toBe("Belum ada aplikasi yang didaftarkan.");
 

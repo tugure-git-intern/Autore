@@ -25,7 +25,9 @@ export function Sidebar() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
-                active ? "bg-gray-100 font-medium text-ink" : "text-muted hover:bg-gray-50 hover:text-ink"
+                active
+                  ? "bg-green-50 font-medium text-green-700"
+                  : "text-muted hover:bg-gray-50 hover:text-ink"
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />

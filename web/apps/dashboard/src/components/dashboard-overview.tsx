@@ -109,9 +109,7 @@ export function DashboardOverview() {
           <h2 className="text-sm font-semibold text-ink">Aplikasi</h2>
         </div>
         {applications.length === 0 ? (
-          <div className="p-5">
-            <EmptyApplications />
-          </div>
+          <EmptyApplications />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

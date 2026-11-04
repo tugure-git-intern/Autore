@@ -1,8 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
-// AppShell renders the sidebar, which reads the App Router pathname.
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+// AppShell renders the sidebar, which reads the App Router pathname. Mutable so
+// each test can stand on a different route.
+const nav = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
 import type { ApiStatusResponse } from "@/lib/contracts";
 import { AppShell } from "./app-shell";
@@ -30,7 +32,40 @@ function status(jenkins: "active" | "inactive" | "unknown", stale = false): ApiS
 }
 
 afterEach(() => {
+  nav.pathname = "/";
   vi.unstubAllGlobals();
+});
+
+describe("topbar route context", () => {
+  function renderShell(pathname: string) {
+    nav.pathname = pathname;
+    // Hang the shared status fetch: the shell is all we assert here.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    return render(
+      <AppShell>
+        <div />
+      </AppShell>,
+    );
+  }
+
+  it.each([
+    ["/", "Autore"],
+    ["/applications", "Daftar Aplikasi"],
+    ["/pipeline", "Pipeline & Log"],
+  ])("titles the 64px topbar from the route (%s)", (pathname, expected) => {
+    renderShell(pathname);
+
+    const banner = within(screen.getByRole("banner"));
+    expect(banner.getByText(expected, { selector: "p" })).toBeVisible();
+  });
+
+  it("never repeats the dashboard heading in the topbar", () => {
+    renderShell("/");
+
+    const banner = within(screen.getByRole("banner"));
+    expect(banner.getByText("Autore", { selector: "p" })).toBeVisible();
+    expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
+  });
 });
 
 describe("connectionStatus", () => {

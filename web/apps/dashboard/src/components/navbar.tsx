@@ -59,9 +59,10 @@ export function Navbar({
 }) {
   const pathname = usePathname() ?? "/";
 
+  // lg:h-16 matches the sidebar brand block: 64px each, dividers on one line.
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
-      <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-6">
+    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white lg:h-16">
+      <div className="flex h-16 items-center justify-between gap-4 px-4 lg:h-full lg:px-6">
         <p className="text-sm font-semibold tracking-tight text-ink">{title}</p>
         <div className="flex items-center gap-3">
           <span role="status" className="flex items-center gap-2">
@@ -95,7 +96,7 @@ export function Navbar({
               href={href}
               aria-current={active ? "page" : undefined}
               className={`flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm ${
-                active ? "bg-green-50 text-green-700" : "text-muted hover:bg-gray-50 hover:text-ink"
+                active ? "bg-gray-100 font-medium text-ink" : "text-muted hover:bg-gray-50 hover:text-ink"
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />

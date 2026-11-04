@@ -9,9 +9,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import { fetchDashboardStatus } from "@/lib/status-client";
 import { connectionStatus, Navbar } from "./navbar";
+import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
 
 export type StatusState = {
@@ -83,13 +85,15 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
 function Shell({ children }: { children: ReactNode }) {
   const status = useStatus();
+  // Same pathname source as the sidebar active rule: one title per route.
+  const pathname = usePathname() ?? "/";
 
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Navbar
-          title="Dashboard"
+          title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}
           onSync={status.refresh}
           refreshing={status.refreshing}

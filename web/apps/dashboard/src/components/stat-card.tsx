@@ -19,20 +19,21 @@ export type StatCardProps = {
 
 export function StatCard({ label, value, icon: Icon, tone = "blue", hint }: StatCardProps) {
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted">{label}</p>
-          <p className="mt-2 whitespace-nowrap text-xl font-semibold tabular-nums text-ink">{value}</p>
-          {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-        </div>
+    <section className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-5">
+      {/* Tile rides the label row; the value keeps one fixed place below it. */}
+      <div className="flex items-center gap-2.5">
         <span
           aria-hidden="true"
-          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tones[tone]}`}
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tones[tone]}`}
         >
           <Icon className="h-4 w-4" />
         </span>
+        <p className="text-sm text-muted">{label}</p>
       </div>
+      <p className="mt-3 whitespace-nowrap text-xl font-semibold tabular-nums tracking-tight text-ink">
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
     </section>
   );
 }

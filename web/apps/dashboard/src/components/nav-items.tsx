@@ -11,3 +11,12 @@ export const navItems = [
 export function isActiveHref(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
+
+/**
+ * Topbar context, from the same table as the sidebar active rule. The root has
+ * no section of its own, so it shows the product instead of repeating the H1.
+ */
+export function routeTitle(pathname: string): string {
+  const section = navItems.find(({ href }) => href !== "/" && isActiveHref(pathname, href));
+  return section?.label ?? "Autore";
+}

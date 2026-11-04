@@ -54,20 +54,19 @@ export function StageTimeline({ stages, status }: { stages: string[]; status: St
   }
 
   return (
-    <ol aria-label="Tahapan pipeline" className="space-y-2">
+    <ol aria-label="Tahapan pipeline" className="ml-2 space-y-3 border-l border-gray-200">
       {buildStageRows(stages, status).map((row) => {
         const { label, tone, Icon } = states[row.state];
         return (
-          <li
-            key={row.id}
-            className="flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2"
-          >
-            <span className="text-sm font-medium text-ink">{row.label}</span>
-            <Badge tone={tone} role={row.state === "gagal" ? "alert" : undefined}>
+          <li key={row.id} className="relative ml-5 flex items-center justify-between gap-3">
+            <span className="absolute -left-[1.85rem] flex h-4 w-4 items-center justify-center rounded-full border border-gray-200 bg-white text-muted">
               <Icon
-                className={`h-3.5 w-3.5 ${row.state === "berjalan" ? "animate-spin" : ""}`}
+                className={`h-3 w-3 ${row.state === "berjalan" ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
+            </span>
+            <span className="text-sm font-medium text-ink">{row.label}</span>
+            <Badge tone={tone} role={row.state === "gagal" ? "alert" : undefined}>
               {label}
             </Badge>
           </li>

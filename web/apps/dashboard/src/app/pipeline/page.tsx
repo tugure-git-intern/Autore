@@ -1,10 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { AlertTriangle, ScrollText } from "lucide-react";
+import { Suspense } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
-import { LogModal } from "@/components/pipeline/log-modal";
 import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
 import { StageTimeline } from "@/components/pipeline/stage-timeline";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,6 @@ export default function PipelinePage() {
 function PipelineDetail() {
   const appId = useSearchParams().get("app") ?? "";
   const { state, loading, failed, reload } = useStatus();
-  const [open, setOpen] = useState(false);
 
   if (loading && !state) return <LoadingSkeleton />;
 
@@ -80,8 +78,9 @@ function PipelineDetail() {
       ) : null}
 
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Pipeline</h1>
-        <p className="mt-1 text-sm text-muted">{app.name}</p>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Detail Pipeline</h1>
+        {/* `latest_pipeline` is one global record, so the app name is context only. */}
+        <p className="mt-1 text-sm text-muted">{app.name} · data pipeline terakhir workspace</p>
       </div>
 
       <div className="mt-4 space-y-4">
@@ -96,20 +95,35 @@ function PipelineDetail() {
           </p>
         ) : null}
 
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
-          <div className="mt-4">
-            <StageTimeline stages={pipeline.stages} status={pipeline.status} />
-          </div>
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
+            <div className="mt-4">
+              <StageTimeline stages={pipeline.stages} status={pipeline.status} />
+            </div>
+          </Card>
 
-        <Button onClick={() => setOpen(true)}>
-          <ScrollText className="h-4 w-4" aria-hidden="true" />
-          Lihat Log Lengkap
-        </Button>
+          <Card className="min-w-0 p-5">
+            <h2 id="pipeline-log-title" className="text-sm font-semibold text-ink">
+              Detail Log
+            </h2>
+            <section
+              aria-labelledby="pipeline-log-title"
+              className="mt-4 rounded-md border border-gray-200 bg-gray-50"
+            >
+              <pre className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink">
+                {pipeline.raw_log.length === 0
+                  ? "Belum ada log."
+                  : pipeline.raw_log.map((line, index) => (
+                      <span key={index} className="block whitespace-pre-wrap">
+                        {line}
+                      </span>
+                    ))}
+              </pre>
+            </section>
+          </Card>
+        </div>
       </div>
-
-      <LogModal lines={pipeline.raw_log} open={open} onOpenChange={setOpen} />
     </>
   );
 }

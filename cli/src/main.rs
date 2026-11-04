@@ -1341,7 +1341,17 @@ fn execute_command(
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
             }
-            let _ = git_push_main(&target_dir);
+            // Push gagal = deploy gagal. Jalur satu-perintah inilah yang dipakai dashboard,
+            // jadi klaim sukses di sini berarti "Deploy terkirim" untuk kode yang tidak
+            // pernah sampai ke remote.
+            if !git_push_main(&target_dir) {
+                eprintln!(
+                    "{} Gagal push ke {}. Pastikan remote bisa ditulis (misalnya token GitHub punya izin tulis ke repo itu).",
+                    "ERROR:".red().bold(),
+                    resolved_git_url
+                );
+                return 1;
+            }
 
             match jenkins::register_and_trigger_jenkins(
                 &jk_cfg,

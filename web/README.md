@@ -97,9 +97,24 @@ services keep running.
 AUTORE_WORKSPACE="$HOME/autore-workspace" \
   "$HOME/Autore/cli/target/release/autore" status --json | python3 -m json.tool
 curl -fsS http://127.0.0.1:9121/api/status | python3 -m json.tool
-curl -fsS http://127.0.0.1:9120/applications | grep -q "Daftar Aplikasi" && echo applications-ok
-curl -fsS "http://127.0.0.1:9120/pipeline?app=tes-web" | grep -q "Detail Pipeline" && echo pipeline-ok
+
+# Both pages render their rows in the browser from /api/status, so the payload is
+# the assertion; the HTML only proves the route answers.
+curl -fsS http://127.0.0.1:9120/api/status | python3 -c '
+import json,sys
+payload=json.load(sys.stdin)
+assert payload["stale"] is False
+assert payload["data"]["applications"], "registry kosong: cek AUTORE_WORKSPACE"
+print(len(payload["data"]["applications"]), "aplikasi terdaftar")
+'
+curl -fsS -o /dev/null -w "applications %{http_code}\n" http://127.0.0.1:9120/applications
+curl -fsS -o /dev/null -w "pipeline %{http_code}\n" "http://127.0.0.1:9120/pipeline?app=tes-web"
 ```
+
+Expected: the CLI and API dumps match, `<n> aplikasi terdaftar`, then
+`applications 200` and `pipeline 200`. Grepping the HTML for row text does not
+work: the dashboard fetches in the browser, so SSR emits only the loading
+skeleton.
 
 `AUTORE_WORKSPACE` must point at `$HOME/autore-workspace` — the directory the
 Jenkins pipeline fills with `registry.tsv` and one build dir per app. Pointing

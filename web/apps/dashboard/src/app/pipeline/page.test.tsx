@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ params: new URLSearchParams("app=portal-klaim") }));
@@ -51,10 +51,12 @@ const failing = {
 };
 
 function mockFetch(data: unknown, stale = false) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data, stale }) } as unknown as Response),
-  );
+  const mock = vi.fn(async (input: RequestInfo | URL) => {
+    const body = String(input) === "/api/status" ? { data, stale } : { ok: true, action: "deploy", target: "tes-web" };
+    return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
 }
 
 const renderPage = () =>
@@ -163,4 +165,23 @@ test("asks for an application when none is selected", async () => {
   renderPage();
 
   expect(await screen.findByText("Tidak ada aplikasi yang dipilih.")).toBeVisible();
+});
+
+test("menyediakan Jalankan Ulang yang memperingatkan commit dan push sebelum memicu Jenkins", async () => {
+  const fetchMock = mockFetch(status);
+
+  renderPage();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Jalankan Ulang" }));
+
+  expect(
+    screen.getByText(/akan melakukan commit dan push kode lokal Anda ke repository/),
+  ).toBeInTheDocument();
+  expect(fetchMock.mock.calls.map(([input]) => String(input))).not.toContain("/api/actions/deploy");
+
+  fireEvent.click(screen.getByRole("button", { name: "Ya, jalankan ulang" }));
+
+  await waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/deploy"),
+  );
 });

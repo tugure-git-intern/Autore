@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
 import { useStatus } from "@/components/app-shell";
+import { ActionButton } from "@/components/actions/action-button";
 import { formatBuild } from "@/components/dashboard-overview";
 import { EmptyApplications } from "@/components/empty-applications";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
@@ -113,12 +114,20 @@ export default function ApplicationsPage() {
                         </td>
                         <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
                         <td className="px-5 py-4">
-                          <a
-                            href={`/pipeline?app=${encodeURIComponent(app.id)}`}
-                            className="text-blue-600 hover:underline"
-                          >
-                            Detail
-                          </a>
+                          <div className="flex items-center gap-3">
+                            <a
+                              href={`/pipeline?app=${encodeURIComponent(app.id)}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Detail
+                            </a>
+                            <ActionButton
+                              label="Scan Keamanan"
+                              action="scan"
+                              app={app.id}
+                              onDone={reload}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

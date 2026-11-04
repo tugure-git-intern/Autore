@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -62,10 +62,12 @@ const TWO_APPS = {
 };
 
 function mockFetch(payload: unknown) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => payload } as unknown as Response),
-  );
+  const mock = vi.fn(async (input: RequestInfo | URL) => {
+    const body = String(input) === "/api/status" ? payload : { ok: true, action: "scan", target: "x" };
+    return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
 }
 
 const renderPage = () =>
@@ -152,4 +154,26 @@ test("links each row to its pipeline route with the app id encoded", async () =>
     "/pipeline?app=api-pegawai",
     "/pipeline?app=app%20satu%2Fdua%23tiga",
   ]);
+});
+
+test("memberi tombol Scan Keamanan per baris dan mengirim id baris itu saja", async () => {
+  const fetchMock = mockFetch(TWO_APPS);
+
+  renderPage();
+
+  const rows = await screen.findAllByRole("row");
+  expect(rows).toHaveLength(3);
+  expect(screen.getAllByRole("button", { name: "Scan Keamanan" })).toHaveLength(2);
+
+  const apiRow = rows.find((row) => row.textContent?.includes("API Pegawai"))!;
+  fireEvent.click(within(apiRow).getByRole("button", { name: "Scan Keamanan" }));
+
+  await waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/scan"),
+  );
+  const call = fetchMock.mock.calls.find(([input]) => String(input) === "/api/actions/scan") as unknown as [
+    string,
+    RequestInit,
+  ];
+  expect(JSON.parse(String(call[1].body))).toEqual({ app: "api-pegawai" });
 });

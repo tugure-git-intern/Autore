@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
+import { ActionButton } from "@/components/actions/action-button";
 import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
 import { StageTimeline } from "@/components/pipeline/stage-timeline";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,14 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
+
+// "Jalankan Ulang" memakai jalur deploy: commit + push lokal lalu trigger Jenkins.
+const RERUN_CONFIRM = {
+  title: "Jalankan ulang pipeline?",
+  warning:
+    "Tindakan ini akan melakukan commit dan push kode lokal Anda ke repository, lalu memicu build Jenkins.",
+  confirmLabel: "Ya, jalankan ulang",
+};
 
 export default function PipelinePage() {
   return (
@@ -77,10 +86,18 @@ function PipelineDetail() {
         </div>
       ) : null}
 
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Detail Pipeline</h1>
-        {/* `latest_pipeline` is one global record, so the app name is context only. */}
-        <p className="mt-1 text-sm text-muted">{app.name} · data pipeline terakhir workspace</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Detail Pipeline</h1>
+          {/* `latest_pipeline` is one global record, so the app name is context only. */}
+          <p className="mt-1 text-sm text-muted">{app.name} · data pipeline terakhir workspace</p>
+        </div>
+        <ActionButton
+          label="Jalankan Ulang"
+          action="deploy"
+          confirm={RERUN_CONFIRM}
+          onDone={reload}
+        />
       </div>
 
       <div className="mt-4 space-y-4">

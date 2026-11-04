@@ -422,17 +422,15 @@ mod tests {
 
     #[test]
     fn infra_unknown_kalau_docker_tidak_bisa_ditanya() {
-        let tmp = TempDir::new().unwrap();
-        let kosong = tmp.path().join("path-kosong");
-        std::fs::create_dir_all(&kosong).unwrap();
-        let asli = std::env::var_os("PATH");
-        std::env::set_var("PATH", &kosong);
-        let snap = build(tmp.path());
-        match asli {
-            Some(p) => std::env::set_var("PATH", p),
-            None => std::env::remove_var("PATH"),
-        }
-        assert_eq!(snap.infra.jenkins, UNKNOWN);
-        assert_eq!(snap.infra.nexus, UNKNOWN);
+        // `container_jalan()` -> None dipetakan ke UNKNOWN. Diuji langsung pada
+        // pemetaannya: mengubah PATH global akan berlomba dengan test lain yang
+        // menjalankan proses (mis. `git`) secara paralel.
+        assert_eq!(infra_status(&None, "autore-jenkins"), UNKNOWN);
+        assert_eq!(infra_status(&None, "autore-nexus"), UNKNOWN);
+        assert_eq!(
+            infra_status(&Some(vec!["autore-jenkins".to_string()]), "autore-jenkins"),
+            "active"
+        );
+        assert_eq!(infra_status(&Some(vec![]), "autore-nexus"), "inactive");
     }
 }

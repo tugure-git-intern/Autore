@@ -107,6 +107,10 @@ fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
                 | "dist"
                 | ".cargo-cache"
                 | ".scannerwork"
+                // Build output and local scratch checkouts: bundles inside these
+                // contain `exec(` strings that are artifacts, not source.
+                | ".next"
+                | ".worktrees"
         );
     }
     false
@@ -220,6 +224,12 @@ fn visit_dir(
         }
 
         if !lmeta.is_file() {
+            continue;
+        }
+
+        // The gate's own failure note quotes the offending match (e.g. `exec(`),
+        // so re-scanning it would fail every commit after the first failure.
+        if name_str == ".security-gate-reason" {
             continue;
         }
 
@@ -611,6 +621,26 @@ mod tests {
             skip_build_dirs: true,
         };
         assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
+    }
+
+    #[test]
+    fn skip_build_dirs_covers_next_and_worktrees() {
+        let tmp = TempDir::new().unwrap();
+        for dir in [".next/cache", ".worktrees/app"] {
+            fs::create_dir_all(tmp.path().join(dir)).unwrap();
+            fs::write(tmp.path().join(dir).join("bundle.js"), OS_SYSTEM).unwrap();
+        }
+        let opts = ScanOptions {
+            skip_build_dirs: true,
+        };
+        assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
+    }
+
+    #[test]
+    fn gate_reason_file_does_not_poison_later_scans() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join(".security-gate-reason"), OS_SYSTEM).unwrap();
+        assert!(scan_directory(tmp.path()).unwrap().is_clean());
     }
 
     // ---- H-3 regressions --------------------------------------------------

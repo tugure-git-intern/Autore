@@ -7,6 +7,7 @@ mod jenkins;
 mod scanner;
 mod serve;
 mod status;
+mod pipeline_record;
 mod templates;
 mod tui;
 mod updater;

@@ -12,6 +12,30 @@ def call(Map config = [:]) {
     def telegramCreds = config.telegramCredentialsId ?: 'telegram-bot-token'
     def telegramChatId = config.telegramChatId ?: '5868902139'
     def nexusRegistry = config.nexusRegistry ?: '127.0.0.1:5000'
+    def workspace = config.workspace ?: '/home/tugure/autore-workspace'
+    def autoreBin = config.autoreBin ?: '/usr/local/bin/autore'
+
+    // Kutip satu argumen shell dengan aman: author/pesan commit bisa berisi spasi, <, >, dan apostrof.
+    def q = { String v -> "'" + (v ?: '').replace("'", "'\\''") + "'" }
+
+    // Lapor kemajuan ke dashboard lewat CLI (satu-satunya penulis kontrak status).
+    // Best-effort: gangguan tulis dashboard tidak boleh menggagalkan pipeline keamanan.
+    // Hanya preflight di stage 1 yang mem-fail-kan build (binary belum dipasang).
+    def record = { Map m ->
+        def parts = ["AUTORE_WORKSPACE=${q(workspace)}", autoreBin, 'pipeline', 'record', '--status', m.status]
+        if (m.reset) { parts << '--reset' }
+        (m.stages ?: []).each { s -> parts += ['--stage', s] }
+        if (m.commit) { parts += ['--commit', q(m.commit)] }
+        if (m.author) { parts += ['--author', q(m.author)] }
+        if (m.summary) { parts += ['--summary', q(m.summary)] }
+        if (m.message) { parts += ['--message', q(m.message)] }
+        (m.logs ?: []).each { l -> parts += ['--log', q(l)] }
+        def cmd = parts.join(' ')
+        def code = sh(script: cmd, returnStatus: true)
+        if (code != 0) {
+            echo "WARNING: dashboard record gagal (exit ${code}): ${cmd}"
+        }
+    }
 
     pipeline {
         agent { label 'vps-runner-1' }
@@ -50,6 +74,14 @@ def call(Map config = [:]) {
                         }
                     }
                     script {
+                        // Binary lama = kegagalan konfigurasi, bukan gangguan dashboard: hentikan di sini
+                        // dengan pesan perintah pasangnya, jangan jalan tanpa melaporkan status.
+                        def okRecord = sh(script: "${autoreBin} pipeline record --help >/dev/null 2>&1", returnStatus: true)
+                        if (okRecord != 0) {
+                            error("${autoreBin} belum punya 'pipeline record'. Pasang binary baru: sudo install -m 0755 ~/Autore/cli/target/release/autore ${autoreBin}")
+                        }
+                    }
+                    script {
                         def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                         if (!(commit ==~ /^[0-9a-f]{40}$/)) {
                             error("GIT_COMMIT wajib berupa full 40-hex SHA (dilarang SHORT_SHA atau latest): '${commit}'")
@@ -63,6 +95,11 @@ def call(Map config = [:]) {
                         env.IMMUTABLE_IMAGE_TAG = "${NEXUS_DOCKER_REGISTRY}/${APP_NAME}:build-${BUILD_NUMBER}-commit-${commit}"
                         echo "Target Image Tag: ${env.IMMUTABLE_IMAGE_TAG}"
                     }
+                    script {
+                        record(status: 'running', reset: true, stages: ['checkout'],
+                               commit: env.FULL_GIT_COMMIT, author: env.AUDIT_AUTHOR,
+                               logs: ["[checkout] commit ${env.SHORT_SHA} ${env.AUDIT_MESSAGE}".toString()])
+                    }
                 }
             }
 
@@ -70,6 +107,10 @@ def call(Map config = [:]) {
                 steps {
                     script { env.FAILED_STAGE = '2. Autore Static Guard & Gitleaks' }
                     sh '/usr/local/bin/autore scan --path .'
+                    script {
+                        record(status: 'running', stages: ['scan'],
+                               logs: ['[scan] static guard + Gitleaks lulus'.toString()])
+                    }
                 }
             }
 
@@ -113,6 +154,10 @@ def call(Map config = [:]) {
                           mkdir -p dist
                         fi
                     """
+                    script {
+                        record(status: 'running', stages: ['build'],
+                               logs: ["[build] image ${env.IMMUTABLE_IMAGE_TAG}".toString()])
+                    }
                 }
             }
 
@@ -152,6 +197,10 @@ def call(Map config = [:]) {
                             /usr/local/lib/autore-ci/ci-nexus-publish.sh
                         """
                     }
+                    script {
+                        record(status: 'running', stages: ['pasang'],
+                               logs: ["[push] Nexus ${env.IMMUTABLE_IMAGE_TAG}".toString()])
+                    }
                 }
             }
 
@@ -167,12 +216,30 @@ def call(Map config = [:]) {
                         export CANDIDATE_CONTAINER_NAME="${APP_NAME}-candidate"
                         "${deploy_cmd}" "${verified_digest}"
                     '''
+                    script {
+                        def verified = sh(script: 'cat .verified-image-digest', returnStdout: true).trim()
+                        record(status: 'running', stages: ['periksa'],
+                               logs: ["[deploy] digest ${verified}".toString()])
+                    }
                 }
             }
         }
 
         post {
             always {
+                script {
+                    // Hasil akhir: `passed` atau `failed` + sebabnya. Tahap gagal dicatat sejak stage 1.
+                    def verified = sh(script: 'cat .verified-image-digest 2>/dev/null || true', returnStdout: true).trim()
+                    if (currentBuild.currentResult == 'SUCCESS') {
+                        record(status: 'passed',
+                               summary: "9/9 gerbang lolos · digest ${verified}".toString(),
+                               logs: ["[done] build #${BUILD_NUMBER} SUCCESS".toString()])
+                    } else {
+                        record(status: 'failed',
+                               message: "Gagal di tahap: ${env.FAILED_STAGE ?: 'tidak diketahui'}".toString(),
+                               logs: ["[done] build #${BUILD_NUMBER} ${currentBuild.currentResult}".toString()])
+                    }
+                }
                 withCredentials([string(credentialsId: telegramCreds, variable: 'TELEGRAM_BOT_TOKEN')]) {
                     sh """
                         export TELEGRAM_CHAT_ID="${telegramChatId}"

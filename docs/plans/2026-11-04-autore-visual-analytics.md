@@ -793,7 +793,7 @@ curl -s http://127.0.0.1:9120/security -o /dev/null -w "security %{http_code}\n"
 
 Semua harus 200 dan berisi data nyata (bukan `[]`) kecuali aplikasi tanpa job Jenkins.
 
-- [ ] **Step 5: Trigger build baru** — `POST /api/actions/deploy` (nomor build baru = path artefak baru, hindari 409 ALLOW_ONCE), tunggu SUCCESS, lalu ulangi Step 4 dan pastikan `stage_times` bertambah serta Recent Runs bertambah satu baris.
+- [x] **Step 5: Trigger build baru** — `POST /api/actions/deploy` (nomor build baru = path artefak baru, hindari 409 ALLOW_ONCE), tunggu SUCCESS, lalu ulangi Step 4 dan pastikan `stage_times` bertambah serta Recent Runs bertambah satu baris.
 
 - [x] **Step 6: Commit**
 

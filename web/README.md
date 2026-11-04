@@ -236,7 +236,10 @@ Both writers go through `status::save`: serialise, write
 `dashboard-status.json.tmp`, then rename — a reader never sees a half file, and
 the last writer wins. `--reset` clears the previous build's stages and log, so
 the first call of every build passes it; other flags leave untouched fields
-alone.
+alone. Karena itu **jangan menjalankan dua build bersamaan**: build yang saling
+tumpang tindih bisa saling menghapus tahap, jadi matriks di `/pipeline` tampil
+tanpa satu tahap (mis. `build`) dengan urutan waktu yang aneh. Satu build dulu,
+build berikutnya setelah yang sebelumnya SUCCESS.
 
 **Permission prerequisite.** The agent runs as the `jenkins` user, which is not
 in `tugure`'s group, and `$HOME` is `0750` — so the workspace is unreachable

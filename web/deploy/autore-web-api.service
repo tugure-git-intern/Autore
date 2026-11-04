@@ -1,0 +1,22 @@
+[Unit]
+Description=Autore web API (Hono status shim + action endpoints, loopback 127.0.0.1:9121)
+Documentation=file:///home/tugure/Autore/web/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/tugure/Autore/web
+Environment=NODE_ENV=production
+# Aksi (deploy/scan) memakai tiga variabel ini; tanpa workspace dan target deploy
+# endpoint-nya menolak dengan 503, bukan menebak direktori.
+Environment=AUTORE_BIN=/home/tugure/Autore/cli/target/release/autore
+Environment=AUTORE_WORKSPACE=/home/tugure/autore-workspace
+Environment=AUTORE_DEPLOY_APP=tes-web
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env npm run start:api
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

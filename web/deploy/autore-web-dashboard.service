@@ -1,0 +1,18 @@
+[Unit]
+Description=Autore dashboard (Next.js production server, 0.0.0.0:9120)
+Documentation=file:///home/tugure/Autore/web/README.md
+Requires=autore-web-api.service
+After=network-online.target autore-web-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/tugure/Autore/web
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env npm run start:dashboard
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

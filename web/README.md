@@ -87,6 +87,56 @@ curl -fsS http://127.0.0.1:9121/api/status   # CLI status snapshot JSON
 curl -fsS http://127.0.0.1:9120/ | grep -q Dashboard && echo dashboard ok
 ```
 
+## Aksi dari dashboard (deploy & scan)
+
+Dashboard tidak lagi read-only. Tiga tombol memanggil dua endpoint:
+
+| Tombol | Halaman | Endpoint | Perintah yang dijalankan |
+| --- | --- | --- | --- |
+| Deploy Sekarang | `/` (pojok kanan header) | `POST /api/actions/deploy` | `autore deploy --path <workspace>/<AUTORE_DEPLOY_APP>` |
+| Jalankan Ulang | `/pipeline?app=<id>` | `POST /api/actions/deploy` | sama dengan di atas |
+| Scan Keamanan | `/applications` (tiap baris) | `POST /api/actions/scan` | `autore scan --no-docker --path <workspace>/<id>` |
+
+Deploy bukan sekadar "build": CLI menjalankan `git add`/`git commit` di
+direktori aplikasi, push ke remote, lalu memicu build Jenkins. Karena itu tombol
+deploy dan jalankan-ulang selalu lewat modal konfirmasi yang menyebut
+commit+push.
+
+`POST /api/actions/scan` menerima tepat satu kunci `{"app":"<id>"}`. Id harus
+terdaftar di `registry.tsv`; bentuknya dibatasi `^[A-Za-z0-9._-]{1,64}$` dan
+path hasil gabungan wajib satu tingkat di bawah workspace. `deploy` tidak
+membaca body sama sekali: targetnya milik unit, bukan milik pemanggil.
+
+Konfigurasi unit API — bukan body request:
+
+| Variabel | Wajib | Arti | Kalau kosong |
+| --- | --- | --- | --- |
+| `AUTORE_WORKSPACE` | ya | akar direktori aplikasi | semua aksi 503 |
+| `AUTORE_DEPLOY_APP` | untuk deploy | aplikasi target tombol Deploy | deploy 503 |
+| `AUTORE_BIN` | tidak | path binary `autore` | pakai `autore` dari `PATH` |
+
+Balasan: `200` sukses · `400` body/id tidak sah · `404` id tidak terdaftar atau
+direktori hilang · `409` aksi lain masih berjalan (satu lock global) · `422` CLI
+keluar non-nol (potongan output CLI ikut di field `output`) · `503` konfigurasi
+kurang atau CLI gagal dijalankan · `504` lewat batas waktu (scan 60 s, deploy
+180 s). Body sukses dan gagal berbentuk sama: `{ok, status, ...}`.
+
+Probe yang tidak mengubah apa pun:
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST http://127.0.0.1:9121/api/actions/scan \
+  -H 'content-type: application/json' -d '{"app":"tidak-ada"}'          # 404
+curl -s -w "\n%{http_code}\n" -X POST http://127.0.0.1:9121/api/actions/scan \
+  -H 'content-type: application/json' -d '{"app":"tes-web","x":1}'      # 400: kunci ekstra
+```
+
+**Jaringan tepercaya saja.** Tidak ada autentikasi: siapa pun yang bisa
+menjangkau `9120` (yang meneruskan ke `9121`) bisa memicu commit+push dan build
+Jenkins. Jangan pernah expose port ini ke internet; biarkan hanya di
+tailnet/jaringan internal. Perintah tidak pernah disusun dari string kiriman
+browser (`execFile` + `shell: false`, argv tetap), jadi ini bukan jalur eksekusi
+perintah sembarang — tapi tetap jalur yang mengubah repo dan memicu build.
+
 ## Live status contract check
 
 Proves the chain CLI → Hono (`9121`) → Next (`9120`) while the deployed

@@ -68,7 +68,7 @@ export function createApp(run: RunAutore = runAutore, actions: Actions = configu
   app.post("/api/actions/scan", async (c) => {
     const body = await readScanBody(c.req.raw);
     c.header("Cache-Control", "no-store");
-    if (!body.ok) return c.json({ ok: false, error: body.error }, 400);
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     return reply(c, await actions.run("scan", body.app));
   });
 

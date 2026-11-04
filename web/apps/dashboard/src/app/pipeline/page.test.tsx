@@ -66,15 +66,16 @@ const renderPage = () =>
     </StatusProvider>,
   );
 
-test("shows the live pipeline as a vertical timeline beside the detail log panel", async () => {
+test("shows the live pipeline as a card matrix beside the detail log panel", async () => {
   mockFetch(status);
 
   renderPage();
 
   expect(await screen.findByRole("heading", { name: "Detail Pipeline" })).toBeVisible();
 
-  const timeline = screen.getByRole("list", { name: "Tahapan pipeline" });
-  expect(within(timeline).getAllByRole("listitem").map((row) => row.textContent)).toEqual(
+  const matriks = screen.getByRole("list", { name: "Tahapan pipeline" });
+  expect(within(matriks).getAllByTestId("stage-card")).toHaveLength(5);
+  expect(within(matriks).getAllByRole("listitem").map((row) => row.textContent)).toEqual(
     expect.arrayContaining([
       expect.stringContaining("Checkout"),
       expect.stringContaining("Security Scan"),
@@ -130,10 +131,34 @@ test("keeps unrun stages neutral and appends unknown stage ids without guessing"
 
   renderPage();
 
-  const rows = await screen.findAllByRole("listitem");
-  expect(rows.at(-1)?.textContent).toContain("lint");
-  expect(rows.at(-1)?.textContent).toContain("berjalan");
-  expect(rows).toHaveLength(6);
+  const kartu = await screen.findAllByTestId("stage-card");
+  expect(kartu).toHaveLength(2);
+  expect(kartu.at(-1)?.textContent).toContain("lint");
+  expect(kartu.at(-1)?.textContent).toContain("Berjalan");
+  expect(kartu[0].textContent).toContain("Lulus");
+});
+
+test("memakai durasi nyata dari stage_times, bukan angka karangan", async () => {
+  mockFetch({
+    ...status,
+    latest_pipeline: {
+      ...status.latest_pipeline,
+      stage_times: [
+        { id: "checkout", at: "2026-11-04T10:00:00Z" },
+        { id: "scan", at: "2026-11-04T10:00:30Z" },
+        { id: "build", at: "2026-11-04T10:01:30Z" },
+      ],
+      finished_at: "2026-11-04T10:02:00Z",
+    },
+  });
+
+  renderPage();
+
+  const kartu = await screen.findAllByTestId("stage-card");
+  expect(kartu).toHaveLength(3);
+  expect(kartu[0].textContent).toContain("30.0s");
+  expect(kartu[1].textContent).toContain("1m 0s");
+  expect(kartu[2].textContent).toContain("30.0s");
 });
 
 test("shows the exact empty-pipeline copy when nothing ran", async () => {

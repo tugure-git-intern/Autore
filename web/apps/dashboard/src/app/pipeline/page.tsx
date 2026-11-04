@@ -6,10 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
 import { ActionButton } from "@/components/actions/action-button";
 import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
-import { StageTimeline } from "@/components/pipeline/stage-timeline";
+import { StageMatrix } from "@/components/pipeline/stage-matrix";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { stageRows } from "@/lib/stages";
 
 const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
 
@@ -112,34 +113,37 @@ function PipelineDetail() {
           </p>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
-            <div className="mt-4">
-              <StageTimeline stages={pipeline.stages} status={pipeline.status} />
-            </div>
-          </Card>
+        {/* Matriks selebar halaman: 5 kartu + panah tidak muat di kolom sempit. */}
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
+          <div className="mt-4">
+            <StageMatrix
+              rows={stageRows(pipeline.stage_times, pipeline.finished_at, pipeline.status)}
+              stages={pipeline.stages}
+              pipelineStatus={pipeline.status}
+            />
+          </div>
+        </Card>
 
-          <Card className="min-w-0 p-5">
-            <h2 id="pipeline-log-title" className="text-sm font-semibold text-ink">
-              Detail Log
-            </h2>
-            <section
-              aria-labelledby="pipeline-log-title"
-              className="mt-4 rounded-md border border-gray-200 bg-gray-50"
-            >
-              <pre className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink">
-                {pipeline.raw_log.length === 0
-                  ? "Belum ada log."
-                  : pipeline.raw_log.map((line, index) => (
-                      <span key={index} className="block whitespace-pre-wrap">
-                        {line}
-                      </span>
-                    ))}
-              </pre>
-            </section>
-          </Card>
-        </div>
+        <Card className="min-w-0 p-5">
+          <h2 id="pipeline-log-title" className="text-sm font-semibold text-ink">
+            Detail Log
+          </h2>
+          <section
+            aria-labelledby="pipeline-log-title"
+            className="mt-4 rounded-md border border-gray-200 bg-gray-50"
+          >
+            <pre className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink">
+              {pipeline.raw_log.length === 0
+                ? "Belum ada log."
+                : pipeline.raw_log.map((line, index) => (
+                    <span key={index} className="block whitespace-pre-wrap">
+                      {line}
+                    </span>
+                  ))}
+            </pre>
+          </section>
+        </Card>
       </div>
     </>
   );

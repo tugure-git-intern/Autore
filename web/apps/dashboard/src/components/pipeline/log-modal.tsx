@@ -34,19 +34,20 @@ export function LogModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onOpenChange(false);
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Tutup log"
+        className="absolute inset-0 bg-black/40"
+        onClick={() => onOpenChange(false)}
+      />
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="log-modal-title"
         tabIndex={-1}
-        className="w-full max-w-3xl rounded-lg border border-gray-200 bg-white"
+        className="relative w-full max-w-3xl rounded-lg border border-gray-200 bg-white"
       >
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <h2 id="log-modal-title" className="text-sm font-semibold text-ink">

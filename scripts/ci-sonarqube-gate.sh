@@ -119,6 +119,10 @@ fi
 export SONAR_TOKEN
 # Coverage: sandbox/ = app contoh latihan pipeline, cli/tests/ = kode test,
 # cli/src/main.rs = wiring argumen (dites lewat pemakaian, bukan unit test).
+# web/** = dashboard Next.js dengan suite vitest + Playwright sendiri; lcov-nya
+# belum dikirim ke Sonar, jadi setiap baris baru di sana terhitung uncovered dan
+# menekan new_coverage. Upgrade: kirim web lcov lewat
+# sonar.javascript.lcov.reportPaths lalu cabut web/** dari daftar ini.
 # ponytail: kalau main.rs mulai berisi logika, cabut dari daftar exclusion.
 docker run --rm \
   --network host \
@@ -135,8 +139,8 @@ docker run --rm \
   -Dsonar.working.directory=/usr/src/.scannerwork \
   -Dsonar.rust.clippy.enabled=false \
   -Dsonar.rust.clippyReport.reportPaths=clippy-report.json \
-  -Dsonar.exclusions="cli/vendor/**" \
-  -Dsonar.coverage.exclusions="sandbox/**,cli/tests/**,cli/src/main.rs,cli/vendor/**" \
+  -Dsonar.exclusions="cli/vendor/**,web/**,.worktrees/**,dist/**" \
+  -Dsonar.coverage.exclusions="sandbox/**,cli/tests/**,cli/src/main.rs,cli/vendor/**,web/**" \
   -Dsonar.rust.lcov.reportPaths=lcov.info
 
 # ---------------------------------------------------------------------------

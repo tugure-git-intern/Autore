@@ -1302,7 +1302,10 @@ fn execute_command(
             let conf_path = jenkins::default_config_path();
             let jk_cfg = match ensure_jenkins_config(&conf_path, interactive, reconfigure) {
                 Some(c) => c,
-                None => return 0,
+                // Menu interaktif: batal memilih = keluar tenang. Jalur satu-perintah
+                // (dipakai dashboard lewat API) tidak boleh mengaku sukses saat tidak ada
+                // yang dikerjakan — pemanggil butuh membedakan gagal dan berhasil.
+                None => return if interactive { 0 } else { 1 },
             };
 
             let job_name = jenkins::infer_project_job_name(&target_dir);

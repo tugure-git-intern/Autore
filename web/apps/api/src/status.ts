@@ -41,6 +41,11 @@ export interface DashboardStatus {
     failure_reason: string;
     /** Started stage ids in execution order; the CLI never sends objects here. */
     stages: string[];
+    /** When each stage started. Absent in snapshots written before the CLI learned it. */
+    stage_times?: Array<{ id: string; at: string }>;
+    finished_at?: string;
+    gates_passed?: number;
+    gates_total?: number;
     security_summary: string;
     commit_sha: string;
     author: string;
@@ -88,7 +93,7 @@ function parseDashboardStatus(stdout: string): DashboardStatus {
 }
 
 function isDashboardStatus(value: unknown): value is DashboardStatus {
-  if (!hasExactKeys(value, ["system_status", "infra", "stats", "applications", "latest_pipeline"])) {
+  if (!hasKeys(value, ["system_status", "infra", "stats", "applications", "latest_pipeline"])) {
     return false;
   }
 
@@ -104,7 +109,7 @@ function isDashboardStatus(value: unknown): value is DashboardStatus {
 
 function isInfra(value: unknown): value is DashboardStatus["infra"] {
   return (
-    hasExactKeys(value, ["jenkins", "nexus"]) &&
+    hasKeys(value, ["jenkins", "nexus"]) &&
     isInfraStatus(value.jenkins) &&
     isInfraStatus(value.nexus)
   );
@@ -112,7 +117,7 @@ function isInfra(value: unknown): value is DashboardStatus["infra"] {
 
 function isStats(value: unknown): value is DashboardStatus["stats"] {
   return (
-    hasExactKeys(value, ["total_apps", "running_containers"]) &&
+    hasKeys(value, ["total_apps", "running_containers"]) &&
     isCount(value.total_apps) &&
     isCount(value.running_containers)
   );
@@ -120,7 +125,7 @@ function isStats(value: unknown): value is DashboardStatus["stats"] {
 
 function isApplication(value: unknown): value is DashboardStatus["applications"][number] {
   return (
-    hasExactKeys(value, [
+    hasKeys(value, [
       "id",
       "name",
       "status",
@@ -137,20 +142,30 @@ function isApplication(value: unknown): value is DashboardStatus["applications"]
   );
 }
 
+const PIPELINE_OPSIONAL = ["stage_times", "finished_at", "gates_passed", "gates_total"];
+
 function isPipeline(value: unknown): value is DashboardStatus["latest_pipeline"] {
   return (
-    hasExactKeys(value, [
-      "status",
-      "failure_reason",
-      "stages",
-      "security_summary",
-      "commit_sha",
-      "author",
-      "raw_log",
-    ]) &&
+    hasKeys(
+      value,
+      [
+        "status",
+        "failure_reason",
+        "stages",
+        "security_summary",
+        "commit_sha",
+        "author",
+        "raw_log",
+      ],
+      PIPELINE_OPSIONAL,
+    ) &&
     isStatus(value.status) &&
     isString(value.failure_reason) &&
     isStages(value.stages) &&
+    isStageTimes(value.stage_times) &&
+    isAbsentOr<string>(value.finished_at, isString) &&
+    isAbsentOr<number>(value.gates_passed, isCount) &&
+    isAbsentOr<number>(value.gates_total, isCount) &&
     isString(value.security_summary) &&
     isString(value.commit_sha) &&
     isString(value.author) &&
@@ -159,15 +174,36 @@ function isPipeline(value: unknown): value is DashboardStatus["latest_pipeline"]
   );
 }
 
+/** Snapshot lama belum membawa field ini; yang ada harus tetap berbentuk benar. */
+function isAbsentOr<T>(value: unknown, sah: (value: unknown) => value is T): boolean {
+  return value === undefined || sah(value);
+}
+
+function isStageTimes(value: unknown): value is Array<{ id: string; at: string }> | undefined {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        (waktu) => hasKeys(waktu, ["id", "at"]) && isString(waktu.id) && isString(waktu.at),
+      ))
+  );
+}
+
 function isStages(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((stage) => typeof stage === "string");
 }
 
-function hasExactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+/** Kunci wajib harus ada, kunci di luar daftar (wajib + opsional) ditolak. */
+function hasKeys(
+  value: unknown,
+  wajib: string[],
+  opsional: string[] = [],
+): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const kunci = Object.keys(value);
   return (
-    isRecord(value) &&
-    Object.keys(value).length === keys.length &&
-    keys.every((key) => Object.hasOwn(value, key))
+    wajib.every((key) => Object.hasOwn(value, key)) &&
+    kunci.every((key) => wajib.includes(key) || opsional.includes(key))
   );
 }
 

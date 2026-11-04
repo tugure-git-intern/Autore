@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
+import { emptyRuns, type RunsPayload } from "./runs";
 
 const STATUS = JSON.stringify({
   system_status: "idle",
@@ -36,24 +37,66 @@ async function freshApp() {
   return import("./index");
 }
 
+/** Snapshot bentuk baru: `autore status --json` setelah Task 1 (waktu tahap + gerbang). */
+const STATUS_DENGAN_TAHAP = JSON.stringify({
+  ...JSON.parse(STATUS),
+  latest_pipeline: {
+    ...JSON.parse(STATUS).latest_pipeline,
+    stages: ["checkout", "scan"],
+    stage_times: [
+      { id: "checkout", at: "2026-11-04T10:01:06Z" },
+      { id: "scan", at: "2026-11-04T10:01:12Z" },
+    ],
+    finished_at: "2026-11-04T10:01:51Z",
+    gates_passed: 9,
+    gates_total: 9,
+  },
+});
+
+const RUNS = {
+  generated_at: "2026-11-04T10:00:00Z",
+  window_days: 7,
+  runs: [
+    {
+      app: "tes-web",
+      number: 8,
+      status: "passed",
+      duration_ms: 46892,
+      started_at: "2026-11-04T10:01:06Z",
+      commit_sha: "2dfd6ef3b42a965dd03c392095a116faf1c8a8c2",
+      author: "Autore CLI <autore@tugu-re.com>",
+      url: "http://100.80.3.14:8080/job/tes-web/8",
+    },
+  ],
+  daily: [{ date: "2026-11-04", passed: 3, failed: 2 }],
+  totals: { passed: 3, failed: 2, running: 0 },
+} satisfies RunsPayload;
+
+/** Aplikasi uji dengan spawn palsu: tidak ada proses nyata yang dijalankan. */
+async function testApp(
+  spawn: SpawnAction = vi.fn(async () => ok()),
+  runs: () => Promise<{ data: RunsPayload; stale: boolean }> = async () => ({
+    data: RUNS,
+    stale: false,
+  }),
+  status: string = STATUS,
+) {
+  const { createApp } = await freshApp();
+  const { hatchActions } = await import("./actions");
+  const dir = await workspace();
+  return createApp(async () => status, hatchActions({
+    workspace: dir,
+    run: async () => status,
+    spawn,
+    deployApp: "tes-web",
+    bin: "autore",
+  }), runs);
+}
+
 async function workspace() {
   const dir = await mkdtemp(join(tmpdir(), "autore-api-"));
   await mkdir(join(dir, "tes-web"), { recursive: true });
   return dir;
-}
-
-/** Aplikasi uji dengan spawn palsu: tidak ada proses nyata yang dijalankan. */
-async function testApp(spawn: SpawnAction = vi.fn(async () => ok())) {
-  const { createApp } = await freshApp();
-  const { hatchActions } = await import("./actions");
-  const dir = await workspace();
-  return createApp(async () => STATUS, hatchActions({
-    workspace: dir,
-    run: async () => STATUS,
-    spawn,
-    deployApp: "tes-web",
-    bin: "autore",
-  }));
 }
 
 const post = (app: { request: (input: string, init?: RequestInit) => Promise<Response> }, path: string, body?: unknown, raw?: string) =>
@@ -62,6 +105,58 @@ const post = (app: { request: (input: string, init?: RequestInit) => Promise<Res
     headers: { "content-type": "application/json" },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
+
+describe("GET /api/runs", () => {
+  it("mengembalikan payload runs beserta penanda stale", async () => {
+    const app = await testApp();
+
+    const response = await app.request("http://localhost/api/runs");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(body).toMatchObject({ stale: false, data: { window_days: 7 } });
+    expect(body.data.runs[0]).toMatchObject({ app: "tes-web", number: 8, status: "passed" });
+  });
+
+  it("tetap 200 dengan jendela kosong saat CLI gagal", async () => {
+    const app = await testApp(undefined, async () => ({
+      data: emptyRuns(Date.parse("2026-11-04T10:00:00Z")),
+      stale: true,
+    }));
+
+    const response = await app.request("http://localhost/api/runs");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.stale).toBe(true);
+    expect(body.data.runs).toEqual([]);
+    expect(body.data.daily).toHaveLength(7);
+  });
+});
+
+describe("GET /api/status dengan data tahap", () => {
+  it("menerima snapshot yang membawa waktu tahap dan jumlah gerbang", async () => {
+    const app = await testApp(undefined, undefined, STATUS_DENGAN_TAHAP);
+
+    const response = await app.request("http://localhost/api/status");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.latest_pipeline.stage_times).toHaveLength(2);
+    expect(body.data.latest_pipeline.finished_at).toBe("2026-11-04T10:01:51Z");
+    expect(body.data.latest_pipeline.gates_passed).toBe(9);
+    expect(body.data.latest_pipeline.gates_total).toBe(9);
+  });
+
+  it("tetap menerima snapshot lama yang belum punya field tahap", async () => {
+    const app = await testApp();
+
+    const response = await app.request("http://localhost/api/status");
+
+    expect(response.status).toBe(200);
+  });
+});
 
 describe("POST /api/actions/scan", () => {
   it("menjalankan scan untuk aplikasi yang diminta", async () => {

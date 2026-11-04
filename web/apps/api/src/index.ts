@@ -3,6 +3,9 @@ import { Hono, type Context } from "hono";
 import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
+import { getRuns, type RunsPayload } from "./runs";
+
+export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 
 /**
  * Aksi (deploy/scan) membaca konfigurasi unit. Tanpa `AUTORE_WORKSPACE` aksi
@@ -47,10 +50,21 @@ function reply(c: Context, result: ActionResult) {
   return c.json(result, result.status);
 }
 
-export function createApp(run: RunAutore = runAutore, actions: Actions = configuredActions(run)) {
+export function createApp(
+  run: RunAutore = runAutore,
+  actions: Actions = configuredActions(run),
+  runs: RunsLoader = () => getRuns(),
+) {
   const app = new Hono();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
+  app.get("/api/runs", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await runs());
+  });
+
   app.get("/api/status", async (c) => {
     try {
       const status = await loadDashboardStatus(run);

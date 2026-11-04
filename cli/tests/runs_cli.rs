@@ -8,14 +8,19 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 
 const APP: &str = "tes-web";
 
-/// Jenkins palsu: membalas daftar build untuk job apa pun yang diminta.
-fn fake_jenkins(body: String) -> (u16, std::thread::JoinHandle<()>) {
+/// Jenkins palsu: membalas daftar build untuk job apa pun yang diminta, dan
+/// mencatat header permintaan pertama (untuk memastikan kredensial benar-benar
+/// dikirim — tanpa itu Jenkins asli membalas 403 dan daftar run jadi kosong).
+fn fake_jenkins(body: String) -> (u16, std::thread::JoinHandle<()>, Arc<Mutex<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
+    let dicatat = Arc::new(Mutex::new(String::new()));
+    let catatan = Arc::clone(&dicatat);
     let handle = std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = match stream {
@@ -31,6 +36,9 @@ fn fake_jenkins(body: String) -> (u16, std::thread::JoinHandle<()>) {
                     Ok(n) => head.extend_from_slice(&buf[..n]),
                 }
             }
+            if catatan.lock().unwrap().is_empty() {
+                *catatan.lock().unwrap() = String::from_utf8_lossy(&head).to_lowercase();
+            }
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
@@ -39,7 +47,7 @@ fn fake_jenkins(body: String) -> (u16, std::thread::JoinHandle<()>) {
             let _ = stream.flush();
         }
     });
-    (port, handle)
+    (port, handle, dicatat)
 }
 
 fn fake_jenkins_config(home: &Path, port: u16) {
@@ -133,7 +141,7 @@ fn runs_json_memuat_histori_jenkins() {
     let tmp = TempDir::new().unwrap();
     let ws = workspace(tmp.path());
     let sha = repo_dengan_commit(&ws.join(APP));
-    let (port, server) = fake_jenkins(fixture(&sha));
+    let (port, server, dicatat) = fake_jenkins(fixture(&sha));
     fake_jenkins_config(tmp.path(), port);
 
     let out = jalankan(&tmp, &ws, &["--json"]);
@@ -168,6 +176,16 @@ fn runs_json_memuat_histori_jenkins() {
     assert_eq!(laporan["totals"]["passed"], 1);
     assert_eq!(laporan["totals"]["failed"], 1);
     assert_eq!(laporan["totals"]["running"], 0);
+
+    let permintaan = dicatat.lock().unwrap().clone();
+    assert!(
+        permintaan.contains("authorization: basic"),
+        "kredensial Jenkins wajib ikut terkirim, jenkins asli membalas 403 tanpa ini: {permintaan}"
+    );
+    assert!(
+        permintaan.contains("get /job/tes-web/api/json"),
+        "job harus diminta lewat API JSON: {permintaan}"
+    );
 
     drop(server);
 }
@@ -216,7 +234,7 @@ fn runs_hanya_mengirim_limit_terbaru() {
     let tmp = TempDir::new().unwrap();
     let ws = workspace(tmp.path());
     let sha = repo_dengan_commit(&ws.join(APP));
-    let (port, _server) = fake_jenkins(fixture(&sha));
+    let (port, _server, _catatan) = fake_jenkins(fixture(&sha));
     fake_jenkins_config(tmp.path(), port);
 
     let out = jalankan(&tmp, &ws, &["--json", "--limit", "1"]);

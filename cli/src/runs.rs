@@ -260,6 +260,8 @@ fn ambil_build(
             "15",
             "-w",
             "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
             &url,
         ],
         &kredensial,

@@ -45,7 +45,7 @@ pub struct Application {
     pub security_issues: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Pipeline {
     /// `idle` / `running` / `passed` / `failed`.
     pub status: String,
@@ -343,10 +343,15 @@ mod tests {
     #[test]
     fn save_lalu_load_bolak_balik_dan_tak_tinggalkan_file_sementara() {
         let tmp = TempDir::new().unwrap();
-        let mut snap = Snapshot::default();
-        snap.system_status = "running".to_string();
-        snap.latest_pipeline.status = "running".to_string();
-        snap.latest_pipeline.stages = vec!["kerangka".to_string(), "repo".to_string()];
+        let snap = Snapshot {
+            system_status: "running".to_string(),
+            latest_pipeline: Pipeline {
+                status: "running".to_string(),
+                stages: vec!["kerangka".to_string(), "repo".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         save(tmp.path(), &snap);
 
         assert!(file(tmp.path()).exists());

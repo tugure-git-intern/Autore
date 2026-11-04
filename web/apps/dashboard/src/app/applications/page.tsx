@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
+import { filterApps, type StatusFilter } from "@/lib/filter-apps";
 import { useStatus } from "@/components/app-shell";
 import { ActionButton } from "@/components/actions/action-button";
+import { ApplicationsFilter } from "@/components/applications-filter";
 import { formatBuild } from "@/components/dashboard-overview";
 import { EmptyApplications } from "@/components/empty-applications";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
@@ -31,6 +34,8 @@ function findings(status: AppStatus, securityIssues: number): string {
 
 export default function ApplicationsPage() {
   const { state, loading, failed, reload } = useStatus();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   if (loading && !state) {
     return (
@@ -56,6 +61,7 @@ export default function ApplicationsPage() {
 
   const { data, stale } = state;
   const applications = data.applications;
+  const tersaring = filterApps(applications, query, status);
 
   return (
     <>
@@ -74,9 +80,22 @@ export default function ApplicationsPage() {
         <p className="mt-1 text-sm text-muted">{applications.length} aplikasi terdaftar.</p>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 space-y-3">
+        {applications.length === 0 ? null : (
+          <ApplicationsFilter
+            query={query}
+            onQueryChange={setQuery}
+            status={status}
+            onStatusChange={setStatus}
+            total={applications.length}
+            shown={tersaring.length}
+          />
+        )}
+
         {applications.length === 0 ? (
           <EmptyApplications />
+        ) : tersaring.length === 0 ? (
+          <p className="text-sm text-gray-500">Tidak ada aplikasi yang cocok</p>
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
@@ -98,7 +117,7 @@ export default function ApplicationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {applications.map((app) => {
+                  {tersaring.map((app) => {
                     const badge = toBadge(app.status);
                     return (
                       <tr key={app.id}>

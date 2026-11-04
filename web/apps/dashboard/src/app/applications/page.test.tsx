@@ -177,3 +177,72 @@ test("memberi tombol Scan Keamanan per baris dan mengirim id baris itu saja", as
   ];
   expect(JSON.parse(String(call[1].body))).toEqual({ app: "api-pegawai" });
 });
+
+const TIGA_APPS = {
+  data: {
+    ...EMPTY.data,
+    stats: { total_apps: 3, running_containers: 1 },
+    applications: [
+      app(),
+      app({
+        id: "api-pegawai",
+        name: "API Pegawai",
+        status: "failed",
+        last_build: "",
+        commit_sha: "",
+        security_issues: 2,
+      }),
+      app({ id: "ui-demo-lama", name: "Demo Lama", status: "unknown", last_build: "", commit_sha: "" }),
+    ],
+  },
+  stale: false,
+};
+
+const isiFilter = (nama: string, nilai: string) =>
+  fireEvent.change(screen.getByRole(nama === "Cari aplikasi" ? "searchbox" : "combobox", { name: nama }), {
+    target: { value: nilai },
+  });
+
+test("mengetik di pencarian menyaring tabel dan menghitung hasilnya", async () => {
+  mockFetch(TIGA_APPS);
+
+  renderPage();
+
+  expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+  isiFilter("Cari aplikasi", "demo");
+
+  expect(screen.queryByText("Portal Klaim")).toBeNull();
+  expect(screen.getByText("Demo Lama")).toBeVisible();
+  expect(screen.getByText("1 dari 3 aplikasi")).toBeVisible();
+});
+
+test("dropdown status menyaring, dan Unknown tetap tampil untuk aplikasi registry-only", async () => {
+  mockFetch(TIGA_APPS);
+
+  renderPage();
+
+  expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+  isiFilter("Status", "failed");
+  expect(screen.queryByText("Portal Klaim")).toBeNull();
+  expect(screen.getByText("API Pegawai")).toBeVisible();
+
+  isiFilter("Status", "unknown");
+  expect(screen.getByText("Demo Lama")).toBeVisible();
+  expect(screen.getByText("1 dari 3 aplikasi")).toBeVisible();
+});
+
+test("empty state saat pencarian tidak menemukan apa pun", async () => {
+  mockFetch(TIGA_APPS);
+
+  renderPage();
+
+  expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+  isiFilter("Cari aplikasi", "zzz");
+
+  expect(screen.getByText("Tidak ada aplikasi yang cocok")).toBeVisible();
+  expect(screen.getByText("0 dari 3 aplikasi")).toBeVisible();
+  expect(screen.queryByRole("table")).toBeNull();
+});

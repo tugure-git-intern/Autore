@@ -19,6 +19,8 @@ export type ApplicationRecord = {
   security_issues: number;
 };
 
+export type StageTime = { id: string; at: string };
+
 export type DashboardStatus = {
   system_status: StatusValue;
   infra: { jenkins: InfraStatus; nexus: InfraStatus };
@@ -30,6 +32,11 @@ export type DashboardStatus = {
     failure_reason: string;
     /** Started stage ids in execution order. No per-stage pass/fail exists in the contract. */
     stages: string[];
+    /** Waktu mulai tiap tahap. Belum ada pada snapshot yang ditulis CLI lama. */
+    stage_times?: StageTime[];
+    finished_at?: string;
+    gates_passed?: number;
+    gates_total?: number;
     security_summary: string;
     commit_sha: string;
     author: string;
@@ -37,7 +44,35 @@ export type DashboardStatus = {
   };
 };
 
+export type RunStatus = "passed" | "failed" | "running";
+
+export type RunRecord = {
+  app: string;
+  number: number;
+  status: RunStatus;
+  duration_ms: number;
+  started_at: string;
+  commit_sha: string;
+  author: string;
+  url: string;
+};
+
+export type DailyPoint = { date: string; passed: number; failed: number };
+
+export type RunTotals = { passed: number; failed: number; running: number };
+
+/** Mirrors `autore runs --json` (diteruskan apa adanya oleh Hono). */
+export type RunsPayload = {
+  generated_at: string;
+  window_days: number;
+  runs: RunRecord[];
+  daily: DailyPoint[];
+  totals: RunTotals;
+};
+
 export type ApiStatusResponse = { data: DashboardStatus; stale: boolean };
+
+export type ApiRunsResponse = { data: RunsPayload; stale: boolean };
 
 /** CLI sends "" (never null) for unavailable text. Empty must render as a dash, not as a fake value. */
 export function dash(value: string | null | undefined): string {

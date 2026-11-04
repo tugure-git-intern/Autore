@@ -42,7 +42,17 @@ function respond(body: unknown, ok = true) {
 }
 
 function mockStatus(body: unknown, ok = true) {
-  const fetchMock = vi.fn().mockResolvedValue(respond(body, ok));
+  const RUNS_KOSONG = {
+    generated_at: "",
+    window_days: 7,
+    runs: [],
+    daily: [],
+    totals: { passed: 0, failed: 0, running: 0 },
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input) === "/api/runs") return respond({ data: RUNS_KOSONG, stale: false });
+    return respond(body, ok);
+  });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -87,7 +97,8 @@ describe("DashboardOverview", () => {
     expect(screen.getByText("Jenkins & Nexus")).toBeVisible();
     expect(screen.getByText("Status Pipeline")).toBeVisible();
     expect(screen.getByText("a1b2c3d4e5f6")).toHaveClass("font-mono");
-    expect(screen.getByText("Lulus")).toBeVisible();
+    const baris = screen.getByText("Portal Klaim").closest("tr") as HTMLElement;
+    expect(within(baris).getByText("Lulus")).toBeVisible();
     expect(screen.queryByText("Gagal terhubung ke Jenkins. Menampilkan data terakhir.")).toBeNull();
     expect(screen.getByRole("link", { name: "Detail" })).toHaveAttribute(
       "href",

@@ -161,8 +161,20 @@ pub fn save(workspace: &Path, snapshot: &Snapshot) {
 pub fn build(workspace: &Path) -> Snapshot {
     let mut snap = load(workspace);
 
+    // Baris ganda di registry (nama sama muncul dua kali) bukan dua aplikasi:
+    // web memakai `id` sebagai key baris tabel dan tujuan link, jadi daftarnya
+    // harus unik walau berkasnya berisi baris kembar. Ambil yang pertama.
+    let mut terlihat: Vec<String> = Vec::new();
     snap.applications = crate::serve::baca_registry(workspace)
         .into_iter()
+        .filter(|p| {
+            if terlihat.contains(&p.nama) {
+                false
+            } else {
+                terlihat.push(p.nama.clone());
+                true
+            }
+        })
         .map(|p| {
             snap.applications
                 .iter()
@@ -437,5 +449,48 @@ mod tests {
             "active"
         );
         assert_eq!(infra_status(&Some(vec![]), "autore-nexus"), "inactive");
+    }
+
+    #[test]
+    fn baris_registry_ganda_hanya_jadi_satu_aplikasi() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("registry.tsv"),
+            "app-dua\t8000\t8033\napp-dua\t8000\t8043\napp-satu\t8000\t8053\n",
+        )
+        .unwrap();
+
+        let snap = build(tmp.path());
+
+        let nama: Vec<&str> = snap.applications.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(nama, vec!["app-dua", "app-satu"], "{nama:?}");
+        assert_eq!(snap.stats.total_apps, 2);
+        let mut id: Vec<&str> = snap.applications.iter().map(|a| a.id.as_str()).collect();
+        id.sort_unstable();
+        id.dedup();
+        assert_eq!(
+            id.len(),
+            snap.applications.len(),
+            "id aplikasi harus unik: dipakai sebagai key baris dan tujuan link"
+        );
+    }
+
+    // Dua test berikut mengunci kontrak yang sudah benar (bukan hasil perbaikan):
+    // konsumen web menolak `null`, jadi teks yang tidak tersedia wajib `""`.
+    #[test]
+    fn load_default_menghasilkan_kontrak_json_dengan_teks_kosong() {
+        let tmp = TempDir::new().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&canonical(&build(tmp.path()))).unwrap();
+        assert_eq!(value["latest_pipeline"]["failure_reason"], "");
+        assert_eq!(value["latest_pipeline"]["security_summary"], "");
+        assert_eq!(value["latest_pipeline"]["commit_sha"], "");
+        assert_eq!(value["latest_pipeline"]["author"], "");
+        assert_eq!(value["latest_pipeline"]["stages"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn canonical_tidak_mengubah_teks_kosong_menjadi_null() {
+        let json = canonical(&Snapshot::default());
+        assert!(!json.contains(":null"), "{json}");
     }
 }

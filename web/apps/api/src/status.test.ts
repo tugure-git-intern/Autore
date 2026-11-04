@@ -11,11 +11,11 @@ const fixture: DashboardStatus = {
   applications: [],
   latest_pipeline: {
     status: "idle",
-    failure_reason: null,
+    failure_reason: "",
     stages: [],
-    security_summary: null,
-    commit_sha: null,
-    author: null,
+    security_summary: "",
+    commit_sha: "",
+    author: "",
     raw_log: [],
   },
 };
@@ -31,6 +31,50 @@ async function freshApp() {
 }
 
 describe("loadDashboardStatus", () => {
+  it("accepts Rust empty-string fields and string stage ids", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+
+    await expect(loadDashboardStatus(async () => JSON.stringify(fixture))).resolves.toEqual({
+      data: fixture,
+      stale: false,
+    });
+  });
+
+  it("rejects nullable fields, stage objects, and extra fields", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+
+    await expect(
+      loadDashboardStatus(async () =>
+        JSON.stringify({
+          ...fixture,
+          latest_pipeline: { ...fixture.latest_pipeline, failure_reason: null },
+        }),
+      ),
+    ).rejects.toThrow("invalid Autore status JSON");
+    await expect(
+      loadDashboardStatus(async () =>
+        JSON.stringify({
+          ...fixture,
+          latest_pipeline: { ...fixture.latest_pipeline, stages: [{ id: "build" }] },
+        }),
+      ),
+    ).rejects.toThrow("invalid Autore status JSON");
+    await expect(
+      loadDashboardStatus(async () =>
+        JSON.stringify({
+          ...fixture,
+          latest_pipeline: {
+            ...fixture.latest_pipeline,
+            stages: [{ id: "build", label: "Build", status: "passed" }],
+          },
+        }),
+      ),
+    ).rejects.toThrow("invalid Autore status JSON");
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify({ ...fixture, unexpected: true })),
+    ).rejects.toThrow("invalid Autore status JSON");
+  });
+
   it("rejects malformed CLI JSON without a cache write", async () => {
     const { loadDashboardStatus } = await freshStatus();
 

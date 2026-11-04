@@ -23,6 +23,7 @@ export type StatusValue =
   | "pending"
   | "skipped";
 
+/** Mirrors `autore status --json`. Text that is unavailable is "" — never null. */
 export interface DashboardStatus {
   system_status: StatusValue;
   infra: { jenkins: "active" | "inactive" | "unknown"; nexus: "active" | "inactive" | "unknown" };
@@ -31,17 +32,18 @@ export interface DashboardStatus {
     id: string;
     name: string;
     status: StatusValue;
-    last_build: string | null;
-    commit_sha: string | null;
+    last_build: string;
+    commit_sha: string;
     security_issues: number;
   }>;
   latest_pipeline: {
     status: StatusValue;
-    failure_reason: string | null;
-    stages: string[] | Array<{ id: string; label: string; status: StatusValue }>;
-    security_summary: string | null;
-    commit_sha: string | null;
-    author: string | null;
+    failure_reason: string;
+    /** Started stage ids in execution order; the CLI never sends objects here. */
+    stages: string[];
+    security_summary: string;
+    commit_sha: string;
+    author: string;
     raw_log: string[];
   };
 }
@@ -129,8 +131,8 @@ function isApplication(value: unknown): value is DashboardStatus["applications"]
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     isStatus(value.status) &&
-    isNullableString(value.last_build) &&
-    isNullableString(value.commit_sha) &&
+    isString(value.last_build) &&
+    isString(value.commit_sha) &&
     isCount(value.security_issues)
   );
 }
@@ -147,28 +149,18 @@ function isPipeline(value: unknown): value is DashboardStatus["latest_pipeline"]
       "raw_log",
     ]) &&
     isStatus(value.status) &&
-    isNullableString(value.failure_reason) &&
+    isString(value.failure_reason) &&
     isStages(value.stages) &&
-    isNullableString(value.security_summary) &&
-    isNullableString(value.commit_sha) &&
-    isNullableString(value.author) &&
+    isString(value.security_summary) &&
+    isString(value.commit_sha) &&
+    isString(value.author) &&
     Array.isArray(value.raw_log) &&
     value.raw_log.every((line) => typeof line === "string")
   );
 }
 
-function isStages(value: unknown): value is DashboardStatus["latest_pipeline"]["stages"] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (stage) =>
-        typeof stage === "string" ||
-        (hasExactKeys(stage, ["id", "label", "status"]) &&
-          typeof stage.id === "string" &&
-          typeof stage.label === "string" &&
-          isStatus(stage.status)),
-    )
-  );
+function isStages(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((stage) => typeof stage === "string");
 }
 
 function hasExactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
@@ -195,6 +187,6 @@ function isCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }

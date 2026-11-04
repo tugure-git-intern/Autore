@@ -44,7 +44,7 @@
 **Interfaces:**
 - Produces: `Pipeline.stage_times: Vec<StageTime>` (`{ id: String, at: String }`), `Pipeline.finished_at: String`, `Pipeline.gates_passed: u32`, `Pipeline.gates_total: u32`; `pipeline_record::parse_gates(&str) -> (u32, u32)`.
 
-- [ ] **Step 1: Tulis tes yang gagal** — tambahkan ke `cli/tests/pipeline_record_cli.rs`
+- [x] **Step 1: Tulis tes yang gagal** — tambahkan ke `cli/tests/pipeline_record_cli.rs`
 
 ```rust
 #[test]
@@ -59,9 +59,9 @@ fn mencatat_waktu_tiap_tahap_dan_gerbang() {
 }
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k mencatat_waktu_tiap_tahap` → gagal `missing field stage_times` / key tidak ada di JSON.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k mencatat_waktu_tiap_tahap` → gagal `missing field stage_times` / key tidak ada di JSON.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Tambahkan ke `struct Pipeline` (semua dengan `#[serde(default)]`):
 
@@ -74,9 +74,9 @@ pub struct StageTime { pub id: String, pub at: String }
 
 Logika merge di `pipeline_record::gabung`: untuk tiap `tahap` baru, `push` `StageTime { id, at: status::now_iso8601() }` (hanya bila `id` belum ada); saat `status` terminal (`passed`/`failed`) → `finished_at = now_iso8601()` dan `gates_*` dari `parse_gates(summary)`.
 
-- [ ] **Step 4: Tes hijau** — `scripts/run_tests.sh -k mencatat_waktu_tiap_tahap` → PASS, dan `scripts/run_tests.sh` penuh tetap hijau.
+- [x] **Step 4: Tes hijau** — `scripts/run_tests.sh -k mencatat_waktu_tiap_tahap` → PASS, dan `scripts/run_tests.sh` penuh tetap hijau.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/status.rs cli/src/pipeline_record.rs cli/tests/pipeline_record_cli.rs
@@ -107,7 +107,7 @@ pub fn parse_builds(json: &str) -> Result<Vec<BuildRingkas>, String>;
 pub fn susun_laporan(sumber: Vec<(String, Vec<BuildRingkas>)>, penulis: &std::collections::HashMap<String, String>, days: u32, limit: usize, sekarang_ms: u64) -> LaporanRuns;
 ```
 
-- [ ] **Step 1: Tulis tes yang gagal** — `#[cfg(test)] mod tes` di `cli/src/runs.rs`
+- [x] **Step 1: Tulis tes yang gagal** — `#[cfg(test)] mod tes` di `cli/src/runs.rs`
 
 ```rust
 #[test]
@@ -141,17 +141,17 @@ fn author_hilang_jadi_string_kosong() {
 }
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k runs::tes` → gagal kompilasi `cannot find module runs` / `not found`.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k runs::tes` → gagal kompilasi `cannot find module runs` / `not found`.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 `parse_builds` memakai `serde_json::Value`: ambil `["builds"]`, untuk tiap build ambil `number`, `result` (`null` → `None`), `duration` (default 0), `timestamp`, lalu **iterasi `actions` dan ambil `lastBuiltRevision.SHA1` TERAKHIR yang `branch[].name` dimulai `refs/remotes/origin/`**; kalau tidak ada yang cocok, pakai SHA1 terakhir apa pun; tidak ada → `""`.
 
 `susun_laporan`: buang build dengan `timestamp_ms < sekarang_ms - days*86_400_000`; `status` dari `status_dari_result`; `started_at = status::iso8601_from_unix(timestamp_ms / 1000)`; urut `timestamp_ms` menurun; potong `limit`; `totals` dihitung dari **seluruh jendela** (bukan hasil potong); `daily` tepat `days` entri UTC naik (hari terakhir = hari `sekarang_ms`), `passed`/`failed` saja.
 
-- [ ] **Step 4: Tes hijau** — `scripts/run_tests.sh -k runs::tes` → PASS.
+- [x] **Step 4: Tes hijau** — `scripts/run_tests.sh -k runs::tes` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/runs.rs cli/src/main.rs
@@ -174,7 +174,7 @@ git commit -m "feat(cli): modul runs — bentuk payload histori build dan bucket
   - `pub fn cari_penulis(dir_app: &Path, sha: &str) -> String` → `git -C <dir> log -1 --format=%an <%ae> <sha>`; gagal/sha kosong → `""`.
   - `pub fn kumpulkan(workspace: &Path, cfg: &JenkinsConfig, days: u32, limit: usize) -> Result<LaporanRuns, String>`.
 
-- [ ] **Step 1: Tulis tes yang gagal** — `cli/tests/runs_cli.rs`
+- [x] **Step 1: Tulis tes yang gagal** — `cli/tests/runs_cli.rs`
 
 Pola sama seperti `deploy_cli.rs`: `fake_jenkins_server()` (`TcpListener::bind("127.0.0.1:0")`, baca 1 request, balas fixture JSON, `Arc<AtomicUsize>`), `TempDir`, `HOME` sementara, workspace berisi `registry.tsv` (`tes-web\t8000\t8003`) + repo `tes-web` hasil `git init` + satu commit, `~/.config/autore/jenkins.conf` menunjuk server palsu.
 
@@ -200,17 +200,17 @@ fn runs_jenkins_mati_masih_exit_0_dengan_histori_kosong() {
 }
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k runs_cli` → gagal `unrecognized subcommand 'runs'` (exit 2).
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `scripts/run_tests.sh -k runs_cli` → gagal `unrecognized subcommand 'runs'` (exit 2).
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 `kumpulkan`: `Workspace` → daftar app dari `registry.tsv` kolom pertama (unik, urut); tiap app `GET {url}/job/{app}/api/json` dengan query hardcoded `tree=builds[number,result,duration,timestamp,actions[lastBuiltRevision[SHA1,branch[name]]]]{0,<limit>}` (Basic auth dari `cfg`), respons non-200 → lewati app itu (bukan error); `parse_builds`; `cari_penulis` per SHA unik (cache `HashMap`); serahkan ke `susun_laporan`; gagal ambil kredensial → `Err`.
 
 `main.rs`: tambahkan `Commands::Runs { json: bool, days: u32, limit: usize }` (default `7`/`5` via `default_value_t`), `--json` cetak `serde_json::to_string_pretty`, tanpa `--json` cetak tabel teks (`app  build  status  durasi  author`).
 
-- [ ] **Step 4: Tes hijau** — `scripts/run_tests.sh -k runs_cli` → PASS; `cargo clippy -- -D warnings` exit 0.
+- [x] **Step 4: Tes hijau** — `scripts/run_tests.sh -k runs_cli` → PASS; `cargo clippy -- -D warnings` exit 0.
 
-- [ ] **Step 5: Pull request kecil (opsional) / Commit**
+- [x] **Step 5: Pull request kecil (opsional) / Commit**
 
 ```bash
 git add cli/src/runs.rs cli/src/main.rs cli/tests/runs_cli.rs
@@ -242,7 +242,7 @@ export function validateRuns(raw: unknown): RunsPayload;    // throw Error bila 
 export async function getRuns(): Promise<{ data: RunsPayload; stale: boolean }>;
 ```
 
-- [ ] **Step 1: Tulis tes yang gagal** — `web/apps/api/src/runs.test.ts`
+- [x] **Step 1: Tulis tes yang gagal** — `web/apps/api/src/runs.test.ts`
 
 ```ts
 it("memanggil argv tetap tanpa shell", async () => { /* inject runner: expect ["runs","--json","--days","7","--limit","5"] */ });
@@ -252,15 +252,15 @@ it("jatuh ke stale + lastGood saat CLI gagal", async () => { /* panggil sukses l
 it("tanpa lastGood mengembalikan EMPTY_RUNS stale", async () => { /* runner throw sejak awal → runs [] dan stale true, bukan throw */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `cd web && npx vitest run apps/api/src/runs.test.ts` → gagal `Failed to resolve import "./runs"`.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `cd web && npx vitest run apps/api/src/runs.test.ts` → gagal `Failed to resolve import "./runs"`.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 `execFileAsync(process.env.AUTORE_BIN || "autore", ["runs","--json","--days","7","--limit","5"], { encoding: "utf8", env: process.env, shell: false, timeout: 15_000, maxBuffer: 1024 * 1024 })`. `validateRuns` memakai allow-list key persis (`runs`/`daily`/`totals`/`generated_at`/`window_days`), `status` ∈ {passed, failed, running}, angka wajib `Number.isFinite`. Cache: `lastGood` + `stale`, TTL 60_000 ms lewat `Date.now()` yang bisa di-inject (param opsional `now = Date.now`).
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run apps/api/src/runs.test.ts` → PASS.
+- [x] **Step 4: Tes hijau** — `npx vitest run apps/api/src/runs.test.ts` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/runs.ts web/apps/api/src/runs.test.ts
@@ -280,7 +280,7 @@ git commit -m "feat(api): klien runs dengan cache dan penanda stale"
 - Consumes: `getRuns`, `EMPTY_RUNS`, `validateRuns` (Task 4); `DashboardStatus` (Task 1 menambah field).
 - Produces: `GET /api/runs` → `200 { data: RunsPayload, stale: boolean }`; `/api/status` tetap 200 dan tidak lagi menolak empat field baru.
 
-- [ ] **Step 1: Tulis tes yang gagal** — tambahkan ke `web/apps/api/src/index.test.ts`
+- [x] **Step 1: Tulis tes yang gagal** — tambahkan ke `web/apps/api/src/index.test.ts`
 
 ```ts
 it("GET /api/runs mengembalikan payload runs", async () => { /* 200, body.data.window_days === 7 */ });
@@ -288,15 +288,15 @@ it("GET /api/runs tetap 200 saat CLI gagal", async () => { /* 200, stale true, d
 it("status menerima field tahap dan gerbang baru", async () => { /* fixture CLI dengan stage_times/finished_at/gates_* → 200 */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/api/src/index.test.ts` → 404 pada `/api/runs`, atau `status tidak sah` untuk fixture baru.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/api/src/index.test.ts` → 404 pada `/api/runs`, atau `status tidak sah` untuk fixture baru.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Di `index.ts`: `app.get("/api/runs", async (c) => c.json(await getRuns()));` (pakai pola `reply` yang ada bila ada). Di `status.ts` tambahkan validasi: `stage_times` array objek `{id: string, at: string}`, `finished_at: string`, `gates_passed`/`gates_total` integer ≥ 0. **Tidak** boleh menolak field yang hilang (gapura lama belum mengirim) — pakai default `[]`/`""`/`0`.
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run` (semua) → 100+ passed; `npx tsc --noEmit` exit 0.
+- [x] **Step 4: Tes hijau** — `npx vitest run` (semua) → 100+ passed; `npx tsc --noEmit` exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/index.ts web/apps/api/src/index.test.ts web/apps/api/src/status.ts
@@ -320,7 +320,7 @@ export function formatDuration(ms: number): string;                // 850→"850
 export function shortSha(sha: string): string;                     // 7 karakter pertama, ""→"—"
 ```
 
-- [ ] **Step 1: Tulis tes yang gagal** — `lib/format.test.ts`
+- [x] **Step 1: Tulis tes yang gagal** — `lib/format.test.ts`
 
 ```ts
 it("waktu relatif bahasa Indonesia", () => {
@@ -336,13 +336,13 @@ it("durasi", () => { expect(formatDuration(850)).toBe("850ms"); expect(formatDur
 it("sha pendek", () => { expect(shortSha("2dfd6ef3b42a965dd03c392095a116faf1c8a8c2")).toBe("2dfd6ef"); expect(shortSha("")).toBe("—"); });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/lib/format.test.ts` → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/lib/format.test.ts` → import gagal.
 
-- [ ] **Step 3: Implementasi** — ambang: `<60s` → "baru saja"; `<3600s` → `${m} menit lalu`; `<86400s` → `${h} jam lalu`; selain itu `${d} hari lalu`; nilai negatif di-clamp ke "baru saja".
+- [x] **Step 3: Implementasi** — ambang: `<60s` → "baru saja"; `<3600s` → `${m} menit lalu`; `<86400s` → `${h} jam lalu`; selain itu `${d} hari lalu`; nilai negatif di-clamp ke "baru saja".
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/lib/format.test.ts` → PASS.
+- [x] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/lib/format.test.ts` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/format.ts web/apps/dashboard/src/lib/format.test.ts
@@ -366,7 +366,7 @@ export type StageRow = { id: string; durationMs: number | null; result: "passed"
 export function stageRows(stageTimes: Array<{ id: string; at: string }>, finishedAt: string, pipelineStatus: string): StageRow[];
 ```
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```ts
 it("durasi = selisih timestamp tahap berikutnya", () => {
@@ -382,13 +382,13 @@ it("tahap terakhir mewarisi status pipeline", () => {
 it("tanpa finished_at, tahap terakhir durationMs null", () => {});
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — import `./stages` gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — import `./stages` gagal.
 
-- [ ] **Step 3: Implementasi** — urutkan mengikuti `stage_times` apa adanya (jangan sort), `durationMs` = `Date.parse(at[i+1]) - Date.parse(at[i])` (tahap terakhir: `Date.parse(finishedAt) - Date.parse(at[i])` bila `finishedAt` sah); semua hasil harus `> 0` selain `null` (nilai 0/negatif → `null`). `result` tahap terakhir mengikuti `pipelineStatus`, sisanya `passed`.
+- [x] **Step 3: Implementasi** — urutkan mengikuti `stage_times` apa adanya (jangan sort), `durationMs` = `Date.parse(at[i+1]) - Date.parse(at[i])` (tahap terakhir: `Date.parse(finishedAt) - Date.parse(at[i])` bila `finishedAt` sah); semua hasil harus `> 0` selain `null` (nilai 0/negatif → `null`). `result` tahap terakhir mengikuti `pipelineStatus`, sisanya `passed`.
 
-- [ ] **Step 4: Tes hijau** → PASS. `npx tsc --noEmit` exit 0.
+- [x] **Step 4: Tes hijau** → PASS. `npx tsc --noEmit` exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/stages.ts web/apps/dashboard/src/lib/stages.test.ts web/apps/dashboard/src/lib/contracts.ts
@@ -406,7 +406,7 @@ git commit -m "feat(dashboard): hitung durasi per tahap dari timestamp snapshot"
 **Interfaces:**
 - Produces: `export type StatusFilter = "all" | "passed" | "failed" | "unknown"; export function filterApps(apps: ApplicationRecord[], query: string, status: StatusFilter): ApplicationRecord[];`
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```ts
 it("mencari tanpa peduli huruf besar/kecil dan spasi tepi", () => {
@@ -420,13 +420,13 @@ it("query kosong + all mengembalikan semua", () => {});
 it("tidak ada hasil jadi array kosong", () => {});
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi** — `q = query.trim().toLowerCase()`; cocok bila `id.toLowerCase().includes(q) || name.toLowerCase().includes(q)`; lalu saring `status === "all" || app.status === status`.
+- [x] **Step 3: Implementasi** — `q = query.trim().toLowerCase()`; cocok bila `id.toLowerCase().includes(q) || name.toLowerCase().includes(q)`; lalu saring `status === "all" || app.status === status`.
 
-- [ ] **Step 4: Tes hijau** → PASS.
+- [x] **Step 4: Tes hijau** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/filter-apps.ts web/apps/dashboard/src/lib/filter-apps.test.ts
@@ -451,7 +451,7 @@ export function toSlices(totals: { passed: number; failed: number; running: numb
 export function toRadar(score: { security: number | null; reliability: number | null; speed: number | null; freshness: number | null; coverage: number | null }): Array<{ axis: string; value: number }>;
 ```
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```ts
 it("label tren dari tanggal UTC", () => { expect(toTrend([{ date: "2026-11-04", passed: 2, failed: 1 }])[0].label).toBe("04/11"); });
@@ -463,13 +463,13 @@ it("radar membuang sumbu tanpa data", () => {
 it("radar membatasi 0..100", () => { /* 140 → 100; -5 → 0 */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi** — nama irisan: `Lulus`, `Gagal`, `Berjalan`; nama sumbu radar: `Keamanan`, `Keandalan`, `Kecepatan`, `Kesegaran`, `Cakupan`; pembulatan `Math.round`, clamp 0..100.
+- [x] **Step 3: Implementasi** — nama irisan: `Lulus`, `Gagal`, `Berjalan`; nama sumbu radar: `Keamanan`, `Keandalan`, `Kecepatan`, `Kesegaran`, `Cakupan`; pembulatan `Math.round`, clamp 0..100.
 
-- [ ] **Step 4: Tes hijau** → PASS.
+- [x] **Step 4: Tes hijau** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/charts.ts web/apps/dashboard/src/lib/charts.test.ts
@@ -483,18 +483,18 @@ git commit -m "feat(dashboard): seri data untuk tren, donut, dan radar"
 **Files:**
 - Modify: `web/apps/dashboard/package.json`, `web/package-lock.json`
 
-- [ ] **Step 1: Ukur kondisi awal** — `cd web && npx vitest run` (catat jumlah passed) dan `npx tsc --noEmit` (exit 0).
+- [x] **Step 1: Ukur kondisi awal** — `cd web && npx vitest run` (catat jumlah passed) dan `npx tsc --noEmit` (exit 0).
 
-- [ ] **Step 2: Pasang**
+- [x] **Step 2: Pasang**
 
 ```bash
 cd web && npm install --save-exact --workspace apps/dashboard recharts@3.10.1 react-is@19.1.1
 npm ls recharts react-is
 ```
 
-- [ ] **Step 3: Verifikasi tidak ada regresi** — `npx vitest run` (jumlah passed sama seperti Step 1), `npx tsc --noEmit` exit 0, `npm run build:dashboard` sukses.
+- [x] **Step 3: Verifikasi tidak ada regresi** — `npx vitest run` (jumlah passed sama seperti Step 1), `npx tsc --noEmit` exit 0, `npm run build:dashboard` sukses.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add web/apps/dashboard/package.json web/package-lock.json
@@ -515,7 +515,7 @@ git commit -m "chore(dashboard): pasang recharts 3.10.1 dan react-is untuk grafi
 - Consumes: `toTrend`, `toSlices`, `CHART_COLORS` (Task 9).
 - Produces: `<RunTrends daily={DailyPoint[]} />`, `<RunDistribution totals={Totals} />`, `<ChartCard title subtitle>{children}</ChartCard>`.
 
-- [ ] **Step 1: Tulis tes yang gagal** — `charts.test.tsx` dengan `vi.mock("recharts", ...)` yang mengganti tiap primitif jadi elemen yang mencetak props-nya (`data-chart-props`), karena jsdom tidak punya layout.
+- [x] **Step 1: Tulis tes yang gagal** — `charts.test.tsx` dengan `vi.mock("recharts", ...)` yang mengganti tiap primitif jadi elemen yang mencetak props-nya (`data-chart-props`), karena jsdom tidak punya layout.
 
 ```tsx
 it("RunTrends mengirim 7 titik dan dua seri", () => {
@@ -531,17 +531,17 @@ it("RunDistribution menampilkan tiga irisan dan total di tengah", () => {
 it("RunDistribution total nol tidak menampilkan NaN", () => { /* totals 0 → teks "0", tidak ada "NaN" di container */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/components/charts` → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/components/charts` → import gagal.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Kedua file diawali `"use client"`. `RunTrends`: `ResponsiveContainer height={220}` → `AreaChart` dengan `defs` dua `linearGradient` (opacity 0.25 → 0), `<CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />`, `<XAxis dataKey="label" tick={{ fontSize: 12, fill: "#64748b" }} />`, `<YAxis allowDecimals={false} width={28} />`, `<Tooltip />`, `<Area type="monotone" dataKey="passed" stroke="#16a34a" fill="url(#gradPassed)" strokeWidth={2} />`, sama untuk `failed`. Empty state = div `text-sm text-gray-500` (chart tidak dirender).
 
 `RunDistribution`: `PieChart` + `<Pie innerRadius={54} outerRadius={78} dataKey="value" paddingAngle={2}>` dengan `<Cell fill={slice.fill} />`, label total di tengah lewat elemen absolut (`text-2xl font-semibold`), legenda baris `key value` di bawah. `ChartCard`: `rounded-lg border border-gray-200 bg-white p-5` + judul `text-sm font-medium text-gray-900` + subjudul `text-xs text-gray-500`.
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/components/charts` → PASS; `npx tsc --noEmit` exit 0.
+- [x] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/components/charts` → PASS; `npx tsc --noEmit` exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/components/charts web/apps/dashboard/src/components/ui/chart-card.tsx
@@ -561,7 +561,7 @@ git commit -m "feat(dashboard): kartu grafik tren build dan distribusi hasil"
 - Consumes: `relativeTime`, `formatDuration`, `shortSha` (Task 6), `RunRecord` (Task 4), pola `status-client.ts`.
 - Produces: `fetchRuns(): Promise<{ data: RunsPayload; stale: boolean }>`; `<RecentRuns runs={RunRecord[]} stale={boolean} />`.
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```ts
 // runs-client.test.ts
@@ -579,13 +579,13 @@ it("badge status dan durasi relatif tampil", () => {
 it("empty state saat tidak ada run", () => { /* teks "Belum ada run" */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi** — tabel `w-full text-sm`, header `text-xs uppercase tracking-wide text-gray-500`, baris `border-t border-gray-200`, commit pakai `font-mono` + link ke `run.url` (`target="_blank" rel="noreferrer"`), status pakai `StatusBadge` yang sudah ada, waktu pakai `<time dateTime={run.started_at}>`. Stale: `<span className="text-xs text-amber-600">data terakhir</span>` di header kartu.
+- [x] **Step 3: Implementasi** — tabel `w-full text-sm`, header `text-xs uppercase tracking-wide text-gray-500`, baris `border-t border-gray-200`, commit pakai `font-mono` + link ke `run.url` (`target="_blank" rel="noreferrer"`), status pakai `StatusBadge` yang sudah ada, waktu pakai `<time dateTime={run.started_at}>`. Stale: `<span className="text-xs text-amber-600">data terakhir</span>` di header kartu.
 
-- [ ] **Step 4: Tes hijau** → PASS.
+- [x] **Step 4: Tes hijau** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/runs-client.ts web/apps/dashboard/src/lib/runs-client.test.ts web/apps/dashboard/src/components/recent-runs.tsx web/apps/dashboard/src/components/recent-runs.test.tsx
@@ -603,7 +603,7 @@ git commit -m "feat(dashboard): section Recent Runs dengan waktu relatif dan dur
 **Interfaces:**
 - Consumes: `<RunTrends>`, `<RunDistribution>` (Task 11), `<RecentRuns>` (Task 12), `fetchRuns` (Task 12), `fetchStatus` yang sudah ada.
 
-- [ ] **Step 1: Tulis tes yang gagal** — tambahkan ke `app/page.test.tsx`
+- [x] **Step 1: Tulis tes yang gagal** — tambahkan ke `app/page.test.tsx`
 
 ```ts
 it("Overview menampilkan tren, distribusi, dan recent runs", async () => {
@@ -615,13 +615,13 @@ it("Overview tetap tampil saat /api/runs gagal", async () => {
 it("banner stale status tetap muncul", () => {});
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/app/page.test.tsx`.
+- [x] **Step 2: Jalankan, pastikan GAGAL** — `npx vitest run apps/dashboard/src/app/page.test.tsx`.
 
-- [ ] **Step 3: Implementasi** — grid `grid gap-4 md:grid-cols-3`: tren `md:col-span-2`, distribusi `md:col-span-1`, lalu `<RecentRuns>` selebar penuh. Fetch paralel (`Promise.allSettled`) supaya kegagalan runs tidak menjatuhkan status.
+- [x] **Step 3: Implementasi** — grid `grid gap-4 md:grid-cols-3`: tren `md:col-span-2`, distribusi `md:col-span-1`, lalu `<RecentRuns>` selebar penuh. Fetch paralel (`Promise.allSettled`) supaya kegagalan runs tidak menjatuhkan status.
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run` semua PASS; `npx tsc --noEmit`; `npm run build:dashboard`.
+- [x] **Step 4: Tes hijau** — `npx vitest run` semua PASS; `npx tsc --noEmit`; `npm run build:dashboard`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/app/page.tsx web/apps/dashboard/src/app/page.test.tsx
@@ -642,7 +642,7 @@ git commit -m "feat(dashboard): overview dengan grafik tren, distribusi, dan rec
 - Consumes: `stageRows` (Task 7), `formatDuration` (Task 6), `Profile` belum ada — cukup props.
 - Produces: `<StageMatrix rows={StageRow[]} stages={string[]} pipelineStatus={string} />` — `stages` dipakai bila `rows` kosong (snapshot lama).
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```tsx
 it("merender satu kartu per tahap", () => { /* 5 tahap → 5 kartu, ada data-testid "stage-card" */ });
@@ -656,15 +656,15 @@ it("snapshot lama tanpa stage_times tetap merender kartu dari stages", () => { /
 it("menampilkan nomor urut dan panah antar kartu", () => { /* ada "1","2" dan elemen pemisah data-testid "stage-arrow" */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Kartu: `min-w-[168px] rounded-lg border border-gray-200 bg-white p-4`, status lulus `border-emerald-200 bg-emerald-50/40`, gagal `border-red-300 bg-red-50/40`, berjalan `border-amber-200 bg-amber-50/40`. Grid horizontal `flex items-stretch gap-2 overflow-x-auto` dengan pemisah `<span data-testid="stage-arrow" aria-hidden>→</span>`. Tiap kartu: nomor urut `text-[11px] text-gray-400`, nama tahap `text-sm font-medium capitalize`, durasi `font-mono text-xs`, chip status. Log mentah tetap panel terpisah yang sudah ada di halaman (jangan diubah).
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/components/pipeline` + `npx vitest run apps/dashboard/src/app/pipeline` → PASS.
+- [x] **Step 4: Tes hijau** — `npx vitest run apps/dashboard/src/components/pipeline` + `npx vitest run apps/dashboard/src/app/pipeline` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/components/pipeline web/apps/dashboard/src/app/pipeline
@@ -684,7 +684,7 @@ git commit -m "feat(dashboard): pipeline detail jadi matriks kartu dengan durasi
 - Consumes: `filterApps`, `StatusFilter` (Task 8).
 - Produces: `<ApplicationsFilter query onQueryChange status onStatusChange total shown />` (controlled, tanpa state internal).
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```tsx
 it("mengetik di pencarian menyaring tabel", async () => {
@@ -697,13 +697,13 @@ it("menampilkan jumlah hasil", () => { /* "3 dari 10 aplikasi" */ });
 it("empty state saat tidak ada yang cocok", () => { /* teks "Tidak ada aplikasi yang cocok" */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi** — input `type="search"` dengan ikon `lucide-react` `Search`, placeholder "Cari aplikasi…", `className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"`; select status opsi `Semua status`, `Lulus`, `Gagal`, `Unknown`. State di `applications/page.tsx` (`useState`), tabel memakai `filterApps`.
+- [x] **Step 3: Implementasi** — input `type="search"` dengan ikon `lucide-react` `Search`, placeholder "Cari aplikasi…", `className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"`; select status opsi `Semua status`, `Lulus`, `Gagal`, `Unknown`. State di `applications/page.tsx` (`useState`), tabel memakai `filterApps`.
 
-- [ ] **Step 4: Tes hijau** → PASS.
+- [x] **Step 4: Tes hijau** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/components/applications-filter.tsx web/apps/dashboard/src/app/applications
@@ -737,7 +737,7 @@ Aturan (semua terukur, tanpa angka karangan):
 - `freshness` = umur run terbaru: `100 - (jam/24)*100` clamp 0..100; tanpa run → `null`
 - `coverage` = `total_apps > 0 ? (apps punya minimal satu run)/total_apps*100 : null`
 
-- [ ] **Step 1: Tulis tes yang gagal**
+- [x] **Step 1: Tulis tes yang gagal**
 
 ```ts
 // score.test.ts
@@ -755,13 +755,13 @@ it("mengirim sumbu terukur ke RadarChart", () => { /* speed null → 4 sumbu; la
 it("empty state saat semua null", () => { /* teks "Belum ada data untuk dinilai" */ });
 ```
 
-- [ ] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
+- [x] **Step 2: Jalankan, pastikan GAGAL** → import gagal.
 
-- [ ] **Step 3: Implementasi** — `quality-radar.tsx` (`"use client"`): `RadarChart` + `<PolarGrid stroke="#e5e7eb" />` + `<PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: "#64748b" }} />` + `<PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false} />` + `<Radar dataKey="value" stroke="#0f766e" fill="#14b8a6" fillOpacity={0.25} strokeWidth={2} />`. Halaman `/security`: kartu radar + daftar gerbang (`gates_passed`/`gates_total` dari status) + tabel aplikasi dengan `security_issues > 0`. Catatan kaki jujur: "Skor dihitung dari data pipeline yang ada; sumbu tanpa data tidak ditampilkan."
+- [x] **Step 3: Implementasi** — `quality-radar.tsx` (`"use client"`): `RadarChart` + `<PolarGrid stroke="#e5e7eb" />` + `<PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: "#64748b" }} />` + `<PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false} />` + `<Radar dataKey="value" stroke="#0f766e" fill="#14b8a6" fillOpacity={0.25} strokeWidth={2} />`. Halaman `/security`: kartu radar + daftar gerbang (`gates_passed`/`gates_total` dari status) + tabel aplikasi dengan `security_issues > 0`. Catatan kaki jujur: "Skor dihitung dari data pipeline yang ada; sumbu tanpa data tidak ditampilkan."
 
-- [ ] **Step 4: Tes hijau** — `npx vitest run` semua PASS; `npx tsc --noEmit`; `npm run build:dashboard`.
+- [x] **Step 4: Tes hijau** — `npx vitest run` semua PASS; `npx tsc --noEmit`; `npm run build:dashboard`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/score.ts web/apps/dashboard/src/lib/score.test.ts web/apps/dashboard/src/components/security web/apps/dashboard/src/app/security web/apps/dashboard/src/components/nav-items.tsx
@@ -776,13 +776,13 @@ git commit -m "feat(dashboard): halaman keamanan dengan radar skor pipeline"
 - Modify: `web/README.md` (endpoint `/api/runs`, sumber data, batasan jujur)
 - Modify: `docs/plans/2026-11-04-autore-visual-analytics.md` (centang progres)
 
-- [ ] **Step 1: Dokumentasi** — README bagian baru: `GET /api/runs`, contoh keluaran, sumber data (Jenkins API + `git log`), tiga batasan: (a) durasi tahap pertama tidak terekam, (b) author hanya bila commit ada di repo lokal, (c) histori hanya untuk aplikasi yang punya job Jenkins.
+- [x] **Step 1: Dokumentasi** — README bagian baru: `GET /api/runs`, contoh keluaran, sumber data (Jenkins API + `git log`), tiga batasan: (a) durasi tahap pertama tidak terekam, (b) author hanya bila commit ada di repo lokal, (c) histori hanya untuk aplikasi yang punya job Jenkins.
 
-- [ ] **Step 2: Pasang binary baru** — di VPS: `. "$HOME/.cargo/env" && cd ~/Autore && cargo build --release && sudo install -m 0755 cli/target/release/autore /usr/local/bin/autore && autore runs --json --days 7 --limit 5 | head -40`.
+- [x] **Step 2: Pasang binary baru** — di VPS: `. "$HOME/.cargo/env" && cd ~/Autore && cargo build --release && sudo install -m 0755 cli/target/release/autore /usr/local/bin/autore && autore runs --json --days 7 --limit 5 | head -40`.
 
-- [ ] **Step 3: Build + restart web** — `cd ~/Autore/web && npm run build:dashboard && npm run build:api` (sesuai skrip yang ada), lalu `systemctl --user restart autore-web-api autore-web-dashboard`, `systemctl --user is-active` keduanya.
+- [x] **Step 3: Build + restart web** — `cd ~/Autore/web && npm run build:dashboard && npm run build:api` (sesuai skrip yang ada), lalu `systemctl --user restart autore-web-api autore-web-dashboard`, `systemctl --user is-active` keduanya.
 
-- [ ] **Step 4: Verifikasi hidup (bukan klaim)**
+- [x] **Step 4: Verifikasi hidup (bukan klaim)**
 
 ```bash
 curl -s http://127.0.0.1:9121/api/runs | python3 -m json.tool | head -40
@@ -795,7 +795,7 @@ Semua harus 200 dan berisi data nyata (bukan `[]`) kecuali aplikasi tanpa job Je
 
 - [ ] **Step 5: Trigger build baru** — `POST /api/actions/deploy` (nomor build baru = path artefak baru, hindari 409 ALLOW_ONCE), tunggu SUCCESS, lalu ulangi Step 4 dan pastikan `stage_times` bertambah serta Recent Runs bertambah satu baris.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add web/README.md docs/plans/2026-11-04-autore-visual-analytics.md

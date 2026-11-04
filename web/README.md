@@ -159,6 +159,21 @@ print(len(payload["data"]["applications"]), "aplikasi terdaftar")
 '
 curl -fsS -o /dev/null -w "applications %{http_code}\n" http://127.0.0.1:9120/applications
 curl -fsS -o /dev/null -w "pipeline %{http_code}\n" "http://127.0.0.1:9120/pipeline?app=tes-web"
+curl -fsS -o /dev/null -w "security %{http_code}\n" http://127.0.0.1:9120/security
+
+# Riwayat build: satu-satunya endpoint yang isinya bukan snapshot status.
+curl -fsS http://127.0.0.1:9121/api/runs | python3 -c '
+import json,sys
+payload=json.load(sys.stdin)
+assert payload["stale"] is False, "CLI runs gagal: cek ~/.config/autore/jenkins.conf"
+print(payload["data"]["totals"], len(payload["data"]["runs"]), "run dalam", payload["data"]["window_days"], "hari")
+'
+# Tahap terekam hanya setelah biner baru terpasang di /usr/local/bin/autore.
+curl -fsS http://127.0.0.1:9121/api/status | python3 -c '
+import json,sys
+p=json.load(sys.stdin)["data"]["latest_pipeline"]
+print("gates", p.get("gates_passed"), "/", p.get("gates_total"), "stage_times", len(p.get("stage_times") or []))
+'
 ```
 
 Expected: the CLI and API dumps match, `<n> aplikasi terdaftar`, then
@@ -240,7 +255,61 @@ stage 1, with the `sudo install` command in the message.
 
 Stage ids the dashboard understands — `checkout`, `scan`, `build`, `pasang`,
 `periksa` — are mapped in
-`web/apps/dashboard/src/components/pipeline/stage-timeline.tsx`.
+`web/apps/dashboard/src/components/pipeline/stage-matrix.tsx`.
+
+## `GET /api/runs` — riwayat build untuk grafik
+
+`autore runs --json` membaca Jenkins API, jadi dashboard bisa menggambar tren
+7 hari tanpa menyimpan datanya sendiri.
+
+```bash
+curl -fsS http://127.0.0.1:9121/api/runs | python3 -m json.tool | head -30
+```
+
+```json
+{
+  "data": {
+    "generated_at": "2026-11-04T14:33:46Z",
+    "window_days": 7,
+    "runs": [
+      {
+        "app": "tes-web",
+        "number": 10,
+        "status": "passed",
+        "duration_ms": 45222,
+        "started_at": "2026-11-04T14:21:07Z",
+        "commit_sha": "2dfd6ef3b42a965dd03c392095a116faf1c8a8c2",
+        "author": "Autore CLI <autore@tugu-re.com>",
+        "url": "http://100.80.3.14:8080/job/tes-web/10"
+      }
+    ],
+    "daily": [{ "date": "2026-11-04", "passed": 4, "failed": 1 }],
+    "totals": { "passed": 4, "failed": 1, "running": 0 }
+  },
+  "stale": false
+}
+```
+
+Sumber data: `GET /job/<app>/api/json` (nomor, result, durasi, timestamp, SHA
+dari `lastBuiltRevision` untuk branch `origin/*`), plus `git log -1` di repo
+lokal untuk nama penulis — Jenkins tidak mengisi `changeSet` untuk job pipeline
+ini. Hasilnya di-cache 60 detik di API; kalau CLI gagal, endpoint tetap 200 dan
+`stale: true` dengan data terakhir yang bagus.
+
+Tiga batasan yang jujur:
+
+1. **Durasi tahap pertama tidak terekam.** `stage_times` mencatat waktu *mulai*
+   tiap tahap, jadi durasi `checkout` dihitung dari selisih ke tahap berikutnya;
+   tahap terakhir memakai `finished_at`.
+2. **Penulis hanya terbaca kalau commit-nya ada di repo lokal.** Commit dari
+   mesin lain tampil `—`, bukan nama karangan.
+3. **Riwayat hanya untuk aplikasi yang punya job Jenkins.** Sembilan aplikasi lain
+   di `registry.tsv` belum punya job, jadi mereka tidak pernah muncul di Recent
+   Runs (dan tidak dihitung di Cakupan).
+
+`stage_times`, `finished_at`, `gates_passed`, dan `gates_total` bersifat opsional
+di kontrak: snapshot yang ditulis CLI lama tetap terbaca, dashboard cuma
+menampilkan kartu tahap tanpa durasi.
 
 Logs, status and restart:
 

@@ -1,0 +1,23 @@
+{
+  "name": "autore-web",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:dashboard": "npm run dev --workspace @autore/dashboard",
+    "dev:api": "npm run dev --workspace @autore/api",
+    "build:dashboard": "npm run build --workspace @autore/dashboard",
+    "start:dashboard": "npm run start --workspace @autore/dashboard",
+    "start:api": "npm run start --workspace @autore/api",
+    "test": "vitest",
+    "test:e2e": "npm run test:e2e --workspace @autore/dashboard"
+  },
+  "devDependencies": {
+    "vitest": "3.2.7"
+  },
+  "overrides": {
+    "postcss": "8.5.32"
+  }
+}

@@ -134,7 +134,7 @@ fn display_host(bind_host: &str) -> String {
     }
 }
 
-fn workspace_dir() -> PathBuf {
+pub(crate) fn workspace_dir() -> PathBuf {
     if let Ok(p) = std::env::var("AUTORE_WORKSPACE") {
         if !p.trim().is_empty() {
             return PathBuf::from(p);
@@ -371,6 +371,8 @@ impl Server {
                 pesan: String::new(),
             };
         }
+        // Pekerjaan mulai = simpan dulu, supaya dashboard langsung lihat `running`.
+        self.simpan_status();
 
         let srv = Server {
             job: Arc::clone(&self.job),
@@ -390,10 +392,77 @@ impl Server {
     }
 
     fn catat_tahap_id(&self, run_id: u64, id: &str) {
-        let mut j = self.job.lock().unwrap();
-        if j.id == run_id && j.tahap_urut.last().map(|t| t.as_str()) != Some(id) {
-            j.tahap_urut.push(id.to_string());
+        let baru = {
+            let mut j = self.job.lock().unwrap();
+            if j.id == run_id && j.tahap_urut.last().map(|t| t.as_str()) != Some(id) {
+                j.tahap_urut.push(id.to_string());
+                true
+            } else {
+                false
+            }
+        };
+        // Tahap baru = titik simpan. Baris log tidak disimpan satu-satu (biaya tulis).
+        if baru {
+            self.simpan_status();
         }
+    }
+
+    /// Tulis `dashboard-status.json` di workspace supaya `autore status --json`
+    /// (dan dashboard web) membaca keadaan terakhir. Dipanggil di awal pekerjaan,
+    /// tiap tahap, dan saat sukses/gagal/batal.
+    ///
+    /// ponytail: `commit_sha`, `author`, dan `security_summary` masih kosong —
+    /// isi saat pipeline melaporkan ketiganya lewat `progress::tahap`.
+    fn simpan_status(&self) {
+        let (status, nama, tahap, baris, pesan, tautan) = {
+            let j = self.job.lock().unwrap();
+            (
+                match j.status {
+                    Status::Idle => "idle",
+                    Status::Running => "running",
+                    Status::Sukses => "passed",
+                    Status::Gagal => "failed",
+                },
+                j.nama.clone(),
+                j.tahap_urut.clone(),
+                j.baris.clone(),
+                j.pesan.clone(),
+                j.tautan.clone(),
+            )
+        };
+
+        let mut snap = crate::status::load(&self.workspace);
+        snap.system_status = status.to_string();
+        snap.latest_pipeline.status = status.to_string();
+        snap.latest_pipeline.stages = tahap;
+        snap.latest_pipeline.raw_log = baris;
+        snap.latest_pipeline.failure_reason = if status == "failed" {
+            pesan
+        } else {
+            String::new()
+        };
+        if status == "passed" {
+            snap.latest_pipeline.security_summary = tautan;
+        }
+
+        // Hanya hasil akhir yang menulis status aplikasi: `passed`/`failed`.
+        // Saat masih berjalan aplikasi tetap `unknown` supaya web tidak mengklaim sukses.
+        if !nama.is_empty() && (status == "passed" || status == "failed") {
+            let catatan = crate::status::Application {
+                id: nama.clone(),
+                name: nama.clone(),
+                status: status.to_string(),
+                last_build: crate::status::now_iso8601(),
+                commit_sha: snap.latest_pipeline.commit_sha.clone(),
+                security_issues: 0,
+            };
+            match snap.applications.iter_mut().find(|a| a.name == nama) {
+                Some(lama) => *lama = catatan,
+                None => snap.applications.push(catatan),
+            }
+        }
+
+        crate::status::save(&self.workspace, &snap);
     }
 
     /// Hentikan pekerjaan yang sedang jalan di mesin ini.
@@ -637,22 +706,28 @@ impl Server {
         if DIBATALKAN_RUN_ID.load(Ordering::SeqCst) == run_id {
             return;
         }
-        let mut j = self.job.lock().unwrap();
-        if j.id == run_id {
-            j.status = Status::Sukses;
-            j.tautan = tautan.to_string();
-            j.pesan = pesan.to_string();
-            j.baris.push(pesan.to_string());
+        {
+            let mut j = self.job.lock().unwrap();
+            if j.id == run_id {
+                j.status = Status::Sukses;
+                j.tautan = tautan.to_string();
+                j.pesan = pesan.to_string();
+                j.baris.push(pesan.to_string());
+            }
         }
+        self.simpan_status();
     }
 
     fn selesai_gagal_id(&self, run_id: u64, pesan: &str) {
-        let mut j = self.job.lock().unwrap();
-        if j.id == run_id {
-            j.status = Status::Gagal;
-            j.pesan = pesan.to_string();
-            j.baris.push(pesan.to_string());
+        {
+            let mut j = self.job.lock().unwrap();
+            if j.id == run_id {
+                j.status = Status::Gagal;
+                j.pesan = pesan.to_string();
+                j.baris.push(pesan.to_string());
+            }
         }
+        self.simpan_status();
     }
 
     fn clone_ringan(&self) -> Server {
@@ -665,14 +740,14 @@ impl Server {
 }
 
 /// Satu project yang tercatat di `registry.tsv`.
-struct Proyek {
-    nama: String,
-    deploy_port: u16,
+pub(crate) struct Proyek {
+    pub(crate) nama: String,
+    pub(crate) deploy_port: u16,
 }
 
 /// Baca catatan project di workspace (dibuat saat pertama kali deploy).
 /// Baris rusak dilewati, bukan bikin seluruh daftar hilang.
-fn baca_registry(workspace: &std::path::Path) -> Vec<Proyek> {
+pub(crate) fn baca_registry(workspace: &std::path::Path) -> Vec<Proyek> {
     let mut out = Vec::new();
     let Ok(isi) = std::fs::read_to_string(workspace.join("registry.tsv")) else {
         return out;
@@ -697,7 +772,7 @@ fn baca_registry(workspace: &std::path::Path) -> Vec<Proyek> {
 
 /// Nama container yang sedang jalan. `None` = docker tidak bisa ditanya, supaya
 /// halaman bisa bilang "tidak diketahui" alih-alih menuduh aplikasi mati.
-fn container_jalan() -> Option<Vec<String>> {
+pub(crate) fn container_jalan() -> Option<Vec<String>> {
     let out = Command::new("docker")
         .args(["ps", "--format", "{{.Names}}"])
         .output()
@@ -1337,5 +1412,130 @@ mod tests {
         assert!(HALAMAN_V2.contains("v2"));
         assert!(HALAMAN_V2.contains("dag-container"));
         assert!(HALAMAN_V2.contains("/api/daftar"));
+    }
+
+    fn srv_dengan_job(tmp: &TempDir, job: Job) -> Server {
+        Server {
+            job: Arc::new(Mutex::new(job)),
+            workspace: tmp.path().to_path_buf(),
+            host_tampil: "127.0.0.1".to_string(),
+        }
+    }
+
+    fn catatan(tmp: &TempDir) -> crate::status::Snapshot {
+        crate::status::load(tmp.path())
+    }
+
+    #[test]
+    fn tahap_dan_selesai_menyimpan_status_dashboard() {
+        let tmp = TempDir::new().unwrap();
+        let srv = srv_dengan_job(
+            &tmp,
+            Job {
+                id: 7,
+                nama: "portal-klaim".to_string(),
+                status: Status::Running,
+                baris: vec!["menyiapkan".to_string()],
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            },
+        );
+
+        srv.simpan_status();
+        let awal = catatan(&tmp);
+        assert_eq!(awal.system_status, "running");
+        assert_eq!(awal.latest_pipeline.status, "running");
+        assert_eq!(awal.latest_pipeline.raw_log, vec!["menyiapkan".to_string()]);
+
+        // tahap baru -> tersimpan tanpa menunggu pekerjaan selesai
+        srv.catat_tahap_id(7, "kerangka");
+        assert_eq!(
+            catatan(&tmp).latest_pipeline.stages,
+            vec!["kerangka".to_string()]
+        );
+
+        srv.selesai_sukses_id(7, "http://127.0.0.1:8003", "Aplikasi 'portal-klaim' hidup.");
+        let akhir = catatan(&tmp);
+        assert_eq!(akhir.system_status, "passed");
+        assert_eq!(akhir.latest_pipeline.status, "passed");
+        let app = akhir
+            .applications
+            .iter()
+            .find(|a| a.name == "portal-klaim")
+            .expect("aplikasi tercatat setelah build sukses");
+        assert_eq!(app.status, "passed");
+        assert!(app.last_build.ends_with('Z'), "{}", app.last_build);
+    }
+
+    #[test]
+    fn gagal_dan_batal_menyimpan_alasan_gagal() {
+        let tmp = TempDir::new().unwrap();
+        let srv = srv_dengan_job(
+            &tmp,
+            Job {
+                id: 9,
+                nama: "app-gagal".to_string(),
+                status: Status::Running,
+                baris: Vec::new(),
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            },
+        );
+
+        srv.selesai_gagal_id(9, "Build di Jenkins gagal (FAILURE).");
+        let gagal = catatan(&tmp);
+        assert_eq!(gagal.system_status, "failed");
+        assert_eq!(
+            gagal.latest_pipeline.failure_reason,
+            "Build di Jenkins gagal (FAILURE)."
+        );
+
+        // Batalkan pekerjaan berikutnya juga tersimpan.
+        {
+            let mut j = srv.job.lock().unwrap();
+            j.id = 10;
+            j.status = Status::Running;
+            j.pesan = String::new();
+        }
+        assert!(srv.batalkan());
+        let batal = catatan(&tmp);
+        assert_eq!(batal.latest_pipeline.status, "failed");
+        assert!(batal.latest_pipeline.failure_reason.contains("Dibatalkan"));
+    }
+
+    #[test]
+    fn gagal_menulis_status_tidak_mengubah_hasil_pipeline() {
+        let tmp = TempDir::new().unwrap();
+        // Workspace berupa berkas biasa: penulisan simpanan pasti gagal.
+        let bukan_folder = tmp.path().join("bukan-folder");
+        std::fs::write(&bukan_folder, "x").unwrap();
+        let srv = Server {
+            job: Arc::new(Mutex::new(Job {
+                id: 11,
+                nama: "app-x".to_string(),
+                status: Status::Running,
+                baris: Vec::new(),
+                tahap_urut: Vec::new(),
+                tautan: String::new(),
+                pesan: String::new(),
+            })),
+            workspace: bukan_folder,
+            host_tampil: "127.0.0.1".to_string(),
+        };
+
+        srv.selesai_gagal_id(11, "gagal apa saja");
+        {
+            let j = srv.job.lock().unwrap();
+            assert_eq!(
+                j.status,
+                Status::Gagal,
+                "hasil pipeline tetap seperti semula"
+            );
+            assert_eq!(j.pesan, "gagal apa saja");
+        }
+        srv.selesai_sukses_id(11, "http://app", "sukses");
+        assert_eq!(srv.job.lock().unwrap().status, Status::Sukses);
     }
 }

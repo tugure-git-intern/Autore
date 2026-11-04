@@ -6,6 +6,7 @@ mod hooks;
 mod jenkins;
 mod scanner;
 mod serve;
+mod status;
 mod templates;
 mod tui;
 mod updater;
@@ -744,6 +745,13 @@ enum Commands {
 
     /// Tampilkan kemampuan mesin ini sebagai data (dipakai dashboard web)
     Kemampuan,
+
+    /// Status sistem & pipeline terakhir dari simpanan pipeline (dipakai dashboard web)
+    Status {
+        /// Cetak satu objek JSON kanonik sesuai kontrak dashboard
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Kemampuan mesin ini sebagai data. Dashboard web menyusun pertanyaannya dari
@@ -1353,6 +1361,48 @@ fn execute_command(
 
         Commands::Kemampuan => {
             println!("{}", kemampuan_json());
+            0
+        }
+
+        Commands::Status { json } => {
+            // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.
+            // Peringatan (kalau ada) harus ke stderr supaya stdout tetap satu JSON.
+            let snap = status::build(&serve::workspace_dir());
+            if json {
+                println!("{}", status::canonical(&snap));
+                return 0;
+            }
+            println!(
+                "\n{} Status Sistem: {}\n",
+                "==>".cyan().bold(),
+                snap.system_status
+            );
+            println!(
+                "  • Infrastruktur : jenkins={} nexus={}",
+                snap.infra.jenkins, snap.infra.nexus
+            );
+            println!(
+                "  • Aplikasi      : {} terdaftar, {} container jalan",
+                snap.stats.total_apps, snap.stats.running_containers
+            );
+            if snap.applications.is_empty() {
+                println!("  • (belum ada aplikasi yang didaftarkan)");
+            }
+            for a in &snap.applications {
+                println!("    - {:<28} {}", a.name, a.status);
+            }
+            println!(
+                "  • Pipeline      : {} ({} tahap)",
+                snap.latest_pipeline.status,
+                snap.latest_pipeline.stages.len()
+            );
+            if !snap.latest_pipeline.failure_reason.is_empty() {
+                println!(
+                    "    {} {}",
+                    "SEBAB:".red().bold(),
+                    snap.latest_pipeline.failure_reason
+                );
+            }
             0
         }
 
@@ -2039,5 +2089,17 @@ mod tests {
     fn jeda_setelah_aksi_tidak_menggantung_kalau_bukan_terminal() {
         // Di dalam cargo test stdout bukan TTY: harus langsung false tanpa menunggu tombol.
         assert!(!prompt_after_action());
+    }
+
+    #[test]
+    fn status_mendukung_flag_json_lewat_cli() {
+        use clap::CommandFactory;
+        let mut status = Cli::command()
+            .get_subcommands()
+            .find(|c| c.get_name() == "status")
+            .expect("subcommand status ada")
+            .clone();
+        let bantuan = status.render_long_help().to_string();
+        assert!(bantuan.contains("--json"), "{bantuan}");
     }
 }

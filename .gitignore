@@ -20,6 +20,15 @@ sandbox/services/.nexus-policy-spec.json
 .security-gate-reason
 **/.security-gate-reason
 
+# Web workspace (Next.js + npm)
+node_modules/
+web/apps/dashboard/.next/
+web/apps/dashboard/next-env.d.ts
+web/apps/dashboard/tsconfig.tsbuildinfo
+web/apps/dashboard/e2e/__screenshots__/
+web/apps/dashboard/test-results/
+web/apps/dashboard/playwright-report/
+
 # SonarQube & Scanner artifacts
 .scannerwork/
 **/.scannerwork/

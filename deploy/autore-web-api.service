@@ -9,7 +9,7 @@ Type=simple
 WorkingDirectory=/home/tugure/Autore/web
 Environment=NODE_ENV=production
 Environment=AUTORE_BIN=/home/tugure/Autore/cli/target/release/autore
-Environment=AUTORE_WORKSPACE=/home/tugure/Autore
+Environment=AUTORE_WORKSPACE=/home/tugure/autore-workspace
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:api
 Restart=on-failure

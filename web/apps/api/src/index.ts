@@ -24,5 +24,6 @@ export function createApp(run: RunAutore = runAutore) {
 export const app = createApp();
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 9121 });
+  // PORT override exists so a smoke test can run beside the deployed 9121 API.
+  serve({ fetch: app.fetch, hostname: "127.0.0.1", port: Number(process.env.PORT ?? 9121) });
 }

@@ -22,7 +22,7 @@ Run from `web/`:
 | `npm run dev:api`           | Hono dev server on 9121                   |
 | `npm run build:dashboard`   | production build (`apps/dashboard/.next`) |
 | `npm run start:dashboard`   | serve the production build on 9120        |
-| `npm run start:api`         | serve the API on 9121                     |
+| `npm run start:api`         | serve the API on 9121 (override `PORT`)   |
 | `npm test`                  | run every workspace test suite            |
 
 Browser requests to `/api/*` on the dashboard are proxied to the Hono app on
@@ -86,6 +86,50 @@ curl -fsS http://127.0.0.1:9121/healthz      # {"ok":true}
 curl -fsS http://127.0.0.1:9121/api/status   # CLI status snapshot JSON
 curl -fsS http://127.0.0.1:9120/ | grep -q Dashboard && echo dashboard ok
 ```
+
+## Live status contract check
+
+Proves the chain CLI → Hono (`9121`) → Next (`9120`) while the deployed
+services keep running.
+
+```bash
+# Same workspace the deploy unit uses: registry.tsv and per-app build dirs.
+AUTORE_WORKSPACE="$HOME/autore-workspace" \
+  "$HOME/Autore/cli/target/release/autore" status --json | python3 -m json.tool
+curl -fsS http://127.0.0.1:9121/api/status | python3 -m json.tool
+curl -fsS http://127.0.0.1:9120/applications | grep -q "Daftar Aplikasi" && echo applications-ok
+curl -fsS "http://127.0.0.1:9120/pipeline?app=tes-web" | grep -q "Detail Pipeline" && echo pipeline-ok
+```
+
+`AUTORE_WORKSPACE` must point at `$HOME/autore-workspace` — the directory the
+Jenkins pipeline fills with `registry.tsv` and one build dir per app. Pointing
+it at the repo root is not an error the API can detect: it just reports zero
+applications.
+
+Smoke the API alone on a spare port without touching `9121`. `PORT` defaults to
+`9121` and the server binds loopback only:
+
+```bash
+cd web
+PORT=9123 \
+AUTORE_BIN="$HOME/Autore/cli/target/release/autore" \
+AUTORE_WORKSPACE="$(mktemp -d)" \
+  npm run start:api > /tmp/autore-api-smoke.log 2>&1 &
+curl -fsS http://127.0.0.1:9123/api/status | python3 -c '
+import json,sys
+payload=json.load(sys.stdin)
+assert payload["stale"] is False
+assert payload["data"]["applications"] == []
+print("api contract OK")
+'
+```
+
+`stale: false` means the CLI answered; `stale: true` means the shim kept the
+last good snapshot because the call failed.
+
+Installing units, restarting production (`systemctl --user restart
+autore-web-api.service autore-web-dashboard.service`) and deploying are
+deliberate manual steps — never part of a check.
 
 Logs, status and restart:
 

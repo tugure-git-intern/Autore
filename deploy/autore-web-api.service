@@ -1,14 +1,14 @@
 [Unit]
 Description=Autore web API (Hono status shim, loopback 127.0.0.1:9121)
-Documentation=file:///home/tugure/Autore/.worktrees/autore-web-v1/web/README.md
+Documentation=file:///home/tugure/Autore/web/README.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/tugure/Autore/.worktrees/autore-web-v1/web
+WorkingDirectory=/home/tugure/Autore/web
 Environment=NODE_ENV=production
-Environment=AUTORE_BIN=/home/tugure/Autore/.worktrees/autore-web-v1/cli/target/release/autore
+Environment=AUTORE_BIN=/home/tugure/Autore/cli/target/release/autore
 Environment=AUTORE_WORKSPACE=/home/tugure/Autore
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:api

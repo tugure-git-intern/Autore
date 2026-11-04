@@ -1,12 +1,13 @@
 import type { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "green";
 type Size = "md" | "icon";
 
 const variants: Record<Variant, string> = {
   primary: "bg-blue-600 text-white hover:bg-blue-700",
   secondary: "border border-gray-200 bg-white text-ink hover:bg-gray-50",
   ghost: "text-muted hover:bg-gray-100 hover:text-ink",
+  green: "bg-green-600 text-white hover:bg-green-700",
 };
 
 // "icon" keeps the 44px minimum touch target required for icon-only controls.

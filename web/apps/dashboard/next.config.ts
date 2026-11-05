@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 /**
- * Dashboard berbicara ke unit API lewat tiga endpoint ini saja.
+ * Dashboard berbicara ke unit API lewat empat endpoint ini saja.
  *
  * Daftarnya ditulis satu per satu, **bukan** `/api/:path*`: rewrite itu juga
  * menelan `/api/auth/*`, sehingga callback GitHub diteruskan ke Hono dan
@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/api/status", destination: `${API_ASAL}/api/status` },
       { source: "/api/runs", destination: `${API_ASAL}/api/runs` },
+      { source: "/api/active", destination: `${API_ASAL}/api/active` },
       { source: "/api/actions/:path*", destination: `${API_ASAL}/api/actions/:path*` },
     ];
   },

@@ -74,6 +74,32 @@ export type ApiStatusResponse = { data: DashboardStatus; stale: boolean };
 
 export type ApiRunsResponse = { data: RunsPayload; stale: boolean };
 
+export type ActiveStatus = "running" | "queued";
+
+export type ActivePipeline = {
+  app: string;
+  /** 0 untuk yang masih menunggu — belum ada build. */
+  number: number;
+  status: ActiveStatus;
+  /** CLI sends "" (never null) when Jenkins does not report it. */
+  branch: string;
+  commit_sha: string;
+  author: string;
+  started_at: string;
+  url: string;
+};
+
+export type ActiveCounts = { running: number; queued: number };
+
+/** Mirrors `autore active --json` (diteruskan apa adanya oleh Hono). */
+export type ActivePayload = {
+  generated_at: string;
+  active: ActivePipeline[];
+  counts: ActiveCounts;
+};
+
+export type ApiActiveResponse = { data: ActivePayload; stale: boolean };
+
 /** CLI sends "" (never null) for unavailable text. Empty must render as a dash, not as a fake value. */
 export function dash(value: string | null | undefined): string {
   return value && value.trim() ? value : "—";

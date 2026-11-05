@@ -275,3 +275,21 @@ test("daftar kosong tidak memunculkan tautan Lihat SBOM", async () => {
   expect(await screen.findByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
   expect(screen.queryByRole("link", { name: "Lihat SBOM" })).toBeNull();
 });
+
+test("menyediakan tombol buat aplikasi baru di kepala halaman", async () => {
+  mockFetch(TWO_APPS);
+
+  renderPage();
+
+  expect(await screen.findByRole("button", { name: /Buat Aplikasi Baru/ })).toBeVisible();
+});
+
+test("tombol buat aplikasi tetap ada saat daftar masih kosong", async () => {
+  mockFetch(EMPTY);
+
+  renderPage();
+
+  expect(await screen.findByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
+  expect(screen.getByRole("button", { name: /Buat Aplikasi Baru/ })).toBeVisible();
+});
+

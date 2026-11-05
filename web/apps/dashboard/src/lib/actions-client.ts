@@ -17,7 +17,8 @@ const SUCCESS: Record<ActionKind, string> = {
   scan: "Scan keamanan selesai tanpa temuan.",
 };
 
-function firstLine(text: string): string {
+/** Dipakai juga oleh quick-start-client: satu cara membaca baris pesan CLI. */
+export function firstLine(text: string): string {
   return text.split("\n").find((line) => line.trim())?.trim() ?? "";
 }
 

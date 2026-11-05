@@ -117,7 +117,7 @@ export function ActionButton({
         <dialog
           ref={dialog}
           aria-labelledby={titleId}
-          className="rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30"
+          className="m-auto rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30"
         >
           <h2 id={titleId} className="text-sm font-semibold text-gray-900">
             {confirm.title}

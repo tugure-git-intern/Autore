@@ -7,6 +7,7 @@ import { dash } from "@/lib/contracts";
 import { filterApps, type StatusFilter } from "@/lib/filter-apps";
 import { useStatus } from "@/components/app-shell";
 import { ActionButton } from "@/components/actions/action-button";
+import { QuickStartDialog } from "@/components/actions/quick-start-dialog";
 import { ApplicationsFilter } from "@/components/applications-filter";
 import { formatBuild } from "@/components/dashboard-overview";
 import { EmptyApplications } from "@/components/empty-applications";
@@ -75,9 +76,12 @@ export default function ApplicationsPage() {
         </div>
       ) : null}
 
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
-        <p className="mt-1 text-sm text-muted">{applications.length} aplikasi terdaftar.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
+          <p className="mt-1 text-sm text-muted">{applications.length} aplikasi terdaftar.</p>
+        </div>
+        <QuickStartDialog onSelesai={reload} />
       </div>
 
       <div className="mt-4 space-y-3">

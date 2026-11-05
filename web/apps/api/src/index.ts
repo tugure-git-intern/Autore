@@ -5,6 +5,7 @@ import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./ac
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
 import { getRuns, type RunsPayload } from "./runs";
 import { getActive, type ActivePayload } from "./active";
+import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom, type SbomResult } from "./sbom";
 import { parseAllowed, requireSession } from "./session";
 
@@ -57,6 +58,38 @@ async function readScanBody(
     return { ok: false, error: "app harus id aplikasi berupa string yang tidak kosong" };
   }
   return { ok: true, app: app.trim() };
+}
+
+const MAX_QUICK_START_BODY = 4 * 1024;
+
+/**
+ * Body quick-start wajib `{"nama":"...","stack":"python|nodejs|java|go","kode":"contoh|kosong"}`.
+ * Ukurannya dibatasi dua kali (content-length lalu panjang teks) supaya body raksasa
+ * tidak pernah sampai ke validator, apalagi ke spawn.
+ */
+async function readQuickStartBody(request: Request): Promise<HasilBaca> {
+  const panjang = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(panjang) && panjang > MAX_QUICK_START_BODY) {
+    return { ok: false, error: `body terlalu besar (maks ${MAX_QUICK_START_BODY} byte)` };
+  }
+
+  let teks: string;
+  try {
+    teks = await request.text();
+  } catch {
+    return { ok: false, error: "body tidak bisa dibaca" };
+  }
+  if (teks.length > MAX_QUICK_START_BODY) {
+    return { ok: false, error: `body terlalu besar (maks ${MAX_QUICK_START_BODY} byte)` };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(teks);
+  } catch {
+    return { ok: false, error: 'body harus JSON {"nama":"...","stack":"python|nodejs|java|go"}' };
+  }
+  return bacaBodyQuickStart(parsed);
 }
 
 /** HTTP status mengikuti hasil aksi; body-nya sama persis dengan hasil itu. */
@@ -121,6 +154,15 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     return reply(c, await actions.run("scan", body.app));
+  });
+
+  // Aksi paling berat: repo GitHub PUBLIK + job Jenkins + push. Konfirmasi ganda ada
+  // di UI; di sisi ini yang ditegakkan: sesi, validasi whitelist, lock `busy`, argv tetap.
+  app.post("/api/actions/quick-start", async (c) => {
+    const body = await readQuickStartBody(c.req.raw);
+    c.header("Cache-Control", "no-store");
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    return reply(c, await actions.quickStart(body.nilai));
   });
 
   return app;

@@ -432,3 +432,92 @@ describe("POST /api/actions/deploy", () => {
     expect((await response.json()).error).toContain("AUTORE_WORKSPACE");
   });
 });
+
+
+describe("POST /api/actions/quick-start", () => {
+  const BODY = { nama: "coba-web", stack: "python", kode: "contoh" };
+
+  it("menolak tanpa sesi meski body-nya sah", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const res = await app.request("http://localhost/api/actions/quick-start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(BODY),
+    });
+
+    expect(res.status).toBe(401);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("meneruskan permintaan sah ke CLI dan mengembalikan URL repo", async () => {
+    const spawn = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "  2/4 Repo GitHub akun/coba-web (baru dibuat)\n  3/4 Push ke Git...\n",
+      stderr: "",
+    }));
+    const app = await testApp(spawn);
+
+    const res = await post(app, "/api/actions/quick-start", BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      status: 200,
+      action: "quick-start",
+      target: "coba-web",
+      repo: "https://github.com/akun/coba-web",
+    });
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args.slice(0, 2)).toEqual(["quick-start", "--path"]);
+    expect(args.at(-1)).toBe("contoh");
+  });
+
+  it("menolak nama tidak sah dengan 400 tanpa menjalankan proses apa pun", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const res = await post(app, "/api/actions/quick-start", { ...BODY, nama: "../rahasia" });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("nama aplikasi tidak sah");
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("menolak stack di luar whitelist dengan 400", async () => {
+    const app = await testApp();
+    const res = await post(app, "/api/actions/quick-start", { ...BODY, stack: "ruby" });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("python");
+  });
+
+  it("menolak body yang tidak bisa di-parse", async () => {
+    const app = await testApp();
+    const res = await post(app, "/api/actions/quick-start", undefined, "{bukan json");
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("body harus JSON");
+  });
+
+  it("menolak body lebih besar dari 4 KB sebelum menyentuh spawn", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const res = await app.request("http://localhost/api/actions/quick-start", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: await cookie(),
+        "content-length": "5000",
+      },
+      body: JSON.stringify(BODY),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("terlalu besar");
+    expect(spawn).not.toHaveBeenCalled();
+  });
+});

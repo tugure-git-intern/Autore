@@ -285,3 +285,124 @@ describe("spawnAutore", () => {
     expect(out).toMatchObject({ exitCode: 2, stdout: "keluar", stderr: "galat" });
   });
 });
+
+describe("quick-start", () => {
+  const INPUT = { nama: "coba-web", stack: "nodejs", kode: "contoh" } as const;
+
+  it("menjalankan argv tetap dengan lock, cwd workspace, dan penanda tahap aktif", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ ok: true, status: 200, action: "quick-start", target: "coba-web" });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const [file, args, opts] = spawn.mock.calls[0] as [
+      string,
+      string[],
+      { shell: boolean; cwd: string; env: NodeJS.ProcessEnv; timeout: number },
+    ];
+    expect(file).toBe(process.env.AUTORE_BIN || "autore");
+    expect(args).toEqual([
+      "quick-start",
+      "--path",
+      dir,
+      "--app-name",
+      "coba-web",
+      "--stack",
+      "nodejs",
+      "--kode",
+      "contoh",
+    ]);
+    expect(opts.shell).toBe(false);
+    expect(opts.cwd).toBe(dir);
+    expect(opts.env.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(opts.env.AUTORE_PROGRESS).toBe("json");
+    expect(opts.timeout).toBe(180_000);
+  });
+
+  it("mengembalikan URL repo yang dibaca dari keluaran CLI", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({ stdout: "  2/4 Repo GitHub tugure-git-intern/coba-web (baru dibuat)\n" }),
+      ),
+    });
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ repo: "https://github.com/tugure-git-intern/coba-web" });
+  });
+
+  it("menolak folder aplikasi yang sudah ada tanpa menjalankan apa pun", async () => {
+    const dir = await workspace(["coba-web"]);
+    const { actions, spawn } = make(dir);
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ ok: false, status: 409 });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("menolak quick-start kedua selama aksi lain masih berjalan", async () => {
+    const dir = await workspace(["tes-web"]);
+    let lepas: ((hasil: SpawnResult) => void) | undefined;
+    const spawn = vi.fn(() => new Promise<SpawnResult>((resolve) => { lepas = resolve; }));
+    const { actions } = make(dir, { spawn });
+
+    const berjalan = actions.run("deploy");
+    // Lock dipegang setelah spawn dipanggil: menunggu spawn membuat urutannya pasti,
+    // bukan bergantung pada berapa kali event loop sempat berputar.
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
+
+    const kedua = await actions.quickStart(INPUT);
+
+    expect(kedua).toMatchObject({ ok: false, status: 409 });
+    lepas?.(result());
+    expect(await berjalan).toMatchObject({ ok: true, action: "deploy" });
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("menerjemahkan kegagalan CLI jadi 422 dengan keluaran mentahnya", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({ exitCode: 1, stdout: "  1/4 File pipeline dibuat:", stderr: "ERROR: Token GitHub ditolak" }),
+      ),
+    });
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ ok: false, status: 422 });
+    expect(out.ok === false && out.output).toContain("Token GitHub ditolak");
+    expect(out.ok === false && out.output).toContain("1/4");
+  });
+
+  it("menerjemahkan timeout jadi 504 dan perintah-hilang jadi 503", async () => {
+    const dir = await workspace(["tes-web"]);
+    const timeout = make(dir, {
+      spawn: vi.fn(async () => {
+        throw Object.assign(new Error("lewat batas"), { code: "ETIMEDOUT" });
+      }),
+    });
+    const hilang = make(dir, {
+      spawn: vi.fn(async () => {
+        throw Object.assign(new Error("tidak ada"), { code: "ENOENT" });
+      }),
+    });
+
+    expect(await timeout.actions.quickStart(INPUT)).toMatchObject({ ok: false, status: 504 });
+    expect(await hilang.actions.quickStart(INPUT)).toMatchObject({ ok: false, status: 503 });
+  });
+
+  it("menolak 503 kalau AUTORE_WORKSPACE belum diset di unit", async () => {
+    const kosong = hatchActions({
+      workspace: "   ",
+      run: async () => statusJson(["tes-web"]),
+      spawn: vi.fn(async () => result()),
+      deployApp: "tes-web",
+    });
+
+    expect(await kosong.quickStart(INPUT)).toMatchObject({ ok: false, status: 503 });
+  });
+});

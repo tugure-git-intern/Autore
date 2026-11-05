@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
 import { loadDashboardStatus, type RunAutore } from "./status";
 
 const execFileAsync = promisify(execFile);
@@ -16,17 +17,25 @@ export type SpawnOptions = {
 /** Menyelesaikan hasil untuk exit code apa pun; melempar dengan `code` "ETIMEDOUT"/"ENOENT" saat gagal jalan. */
 export type SpawnAction = (file: string, args: string[], options: SpawnOptions) => Promise<SpawnResult>;
 
-export type ActionKind = "deploy" | "scan";
+export type ActionKind = "deploy" | "scan" | "quick-start";
 
 export type ActionResult =
-  | { ok: true; status: 200; action: ActionKind; target: string; output: string }
+  | {
+      ok: true;
+      status: 200;
+      action: ActionKind;
+      target: string;
+      /** Hanya quick-start: URL repo GitHub yang dibaca dari keluaran CLI. */
+      repo?: string;
+      output: string;
+    }
   | { ok: false; status: 400 | 404 | 409 | 422 | 503 | 504; error: string; output?: string };
 
 /** Id aplikasi dari registry: cukup ketat untuk menolak "/", "..", spasi, dan NUL. */
 const APP_ID = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_OUTPUT = 4_000;
 const MAX_BUFFER = 1024 * 1024;
-const TIMEOUT: Record<ActionKind, number> = { deploy: 180_000, scan: 60_000 };
+const TIMEOUT: Record<ActionKind, number> = { deploy: 180_000, scan: 60_000, "quick-start": 180_000 };
 
 /**
  * Cangkang tipis di atas `execFile`: satu tempat yang tahu cara menerjemahkan
@@ -183,5 +192,73 @@ export function hatchActions(deps: {
     }
   }
 
-  return { run };
+  /**
+   * Alur 1-klik: kerangka pipeline, repo GitHub, push, daftar ke Jenkins, build pertama.
+   * Lock `busy` dipakai bersama deploy/scan - dua push ke repo yang sama tidak bisa
+   * diselamatkan di sisi klien.
+   */
+  async function quickStart(input: QuickStartInput): Promise<ActionResult> {
+    if (!workspace) {
+      return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
+    }
+    if (busy) {
+      return failed(409, `aksi ${busy} masih berjalan, tunggu sampai selesai`);
+    }
+
+    const dir = join(workspace, input.nama);
+    if (dirname(resolve(dir)) !== resolve(workspace)) {
+      return failed(400, `nama aplikasi keluar dari workspace: ${input.nama}`);
+    }
+    try {
+      if ((await stat(dir)).isDirectory()) {
+        return failed(409, `folder aplikasi "${input.nama}" sudah ada di workspace`);
+      }
+    } catch {
+      // Belum ada: itu keadaan yang diinginkan.
+    }
+
+    busy = "quick-start";
+    try {
+      let res: SpawnResult;
+      try {
+        res = await deps.spawn(bin, argvQuickStart(workspace, input), {
+          shell: false,
+          timeout: TIMEOUT["quick-start"],
+          cwd: workspace,
+          env: {
+            ...process.env,
+            // Tanpa TTY, git tidak boleh menggantung menunggu password.
+            GIT_TERMINAL_PROMPT: "0",
+            AUTORE_PROGRESS: "json",
+          },
+        });
+      } catch (error) {
+        const code = (error as { code?: unknown }).code;
+        if (code === "ETIMEDOUT") {
+          return failed(
+            504,
+            `quick-start melewati batas waktu ${TIMEOUT["quick-start"] / 1000} detik. ` +
+              "Prosesnya mungkin masih jalan di Jenkins - periksa daftar pipeline sebelum mengulang.",
+          );
+        }
+        return failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);
+      }
+
+      const output = capped([res.stdout.trim(), res.stderr.trim()].filter(Boolean).join("\n"));
+      return res.exitCode === 0
+        ? {
+            ok: true,
+            status: 200,
+            action: "quick-start",
+            target: input.nama,
+            repo: repoDariOutput(output),
+            output,
+          }
+        : failed(422, `quick-start keluar dengan kode ${res.exitCode}`, output);
+    } finally {
+      busy = null;
+    }
+  }
+
+  return { run, quickStart };
 }

@@ -284,3 +284,28 @@ test("Sync menukar angka di layar ke payload baru, tanpa reload", async () => {
   expect(await screen.findByText("tes-web #21")).toBeInTheDocument();
   expect(await screen.findByText("Data berhasil disinkronkan.")).toBeInTheDocument();
 });
+
+test("Overview menyapa user dengan login GitHub apa adanya", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+  render(
+    <AppShell user={{ login: "MAliffadlan", name: "", image: null } as SessionUser}>
+      <DashboardPage />
+    </AppShell>,
+  );
+
+  expect(screen.getByText(/Selamat datang, MAliffadlan/)).toBeInTheDocument();
+});
+
+test("Overview tidak mengarang sapaan saat tidak ada user (halaman auth)", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+  render(
+    <StatusProvider>
+      <DashboardPage />
+    </StatusProvider>,
+  );
+
+  expect(screen.queryByText(/Selamat datang/)).toBeNull();
+  expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+});

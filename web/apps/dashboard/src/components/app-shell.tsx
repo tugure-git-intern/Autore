@@ -48,6 +48,18 @@ export function useStatus(): StatusState {
 }
 
 /**
+ * User disediakan lewat context karena `app/page.tsx` komponen klien:
+ * `currentUser()` (server) tidak bisa dipanggil dari sana. Default kosong —
+ * bukan throw — supaya render tanpa kerangka (halaman auth, tes satuan) tetap
+ * jalan, dengan sapaan yang hilang alih-alih nama palsu.
+ */
+const UserContext = createContext<SessionUser>({ login: "", name: "", image: null });
+
+export function useCurrentUser(): SessionUser {
+  return useContext(UserContext);
+}
+
+/**
  * Single owner of `/api/status`, plus the two other things the topbar Sync
  * button has to move: `/api/runs` and `/api/active`. Keeping all three here is
  * what lets one click repaint the indicator, the charts and the active cards —
@@ -182,8 +194,10 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
 
 export function AppShell({ children, user }: { children: ReactNode; user: SessionUser }) {
   return (
-    <StatusProvider>
-      <Shell user={user}>{children}</Shell>
-    </StatusProvider>
+    <UserContext.Provider value={user}>
+      <StatusProvider>
+        <Shell user={user}>{children}</Shell>
+      </StatusProvider>
+    </UserContext.Provider>
   );
 }

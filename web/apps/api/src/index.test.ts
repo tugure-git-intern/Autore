@@ -1,9 +1,27 @@
+import { randomBytes } from "node:crypto";
 import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { encode } from "@auth/core/jwt";
 import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
 import { emptyRuns, type RunsPayload } from "./runs";
+
+/**
+ * Aksi sekarang butuh sesi. Cookie-nya asli (JWE dari @auth/core) supaya tes
+ * guard-rail body tetap lewat middleware auth yang sama dengan produksi.
+ */
+const TEST_SECRET = randomBytes(40).toString("hex");
+let cookieSah: string | undefined;
+
+async function cookie() {
+  cookieSah ??= `authjs.session-token=${await encode({
+    token: { login: "alif", sub: "1" },
+    secret: TEST_SECRET,
+    salt: "authjs.session-token",
+  })}`;
+  return cookieSah;
+}
 
 const STATUS = JSON.stringify({
   system_status: "idle",
@@ -90,7 +108,7 @@ async function testApp(
     spawn,
     deployApp: "tes-web",
     bin: "autore",
-  }), runs);
+  }), runs, { secret: TEST_SECRET });
 }
 
 async function workspace() {
@@ -99,10 +117,15 @@ async function workspace() {
   return dir;
 }
 
-const post = (app: { request: (input: string, init?: RequestInit) => Promise<Response> }, path: string, body?: unknown, raw?: string) =>
+const post = async (
+  app: { request: (input: string, init?: RequestInit) => Promise<Response> },
+  path: string,
+  body?: unknown,
+  raw?: string,
+) =>
   app.request(`http://localhost${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", cookie: await cookie() },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
 
@@ -260,7 +283,7 @@ describe("POST /api/actions/deploy", () => {
       spawn: vi.fn(async () => ok()),
       deployApp: "",
       bin: "autore",
-    }));
+    }), undefined, { secret: TEST_SECRET });
 
     const response = await post(app, "/api/actions/deploy");
 
@@ -277,7 +300,7 @@ describe("POST /api/actions/deploy", () => {
       spawn: vi.fn(async () => ok()),
       deployApp: "tes-web",
       bin: "autore",
-    }));
+    }), undefined, { secret: TEST_SECRET });
 
     const response = await post(app, "/api/actions/deploy");
 

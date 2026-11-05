@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
 import { getRuns, type RunsPayload } from "./runs";
+import { parseAllowed, requireSession } from "./session";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 
@@ -54,10 +55,15 @@ export function createApp(
   run: RunAutore = runAutore,
   actions: Actions = configuredActions(run),
   runs: RunsLoader = () => getRuns(),
+  auth: { secret?: string; allowed?: string[] } = {},
 ) {
   const app = new Hono();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // Hanya aksi yang butuh identitas; halaman read-only tetap terbuka dan unit
+  // ini hanya listen di 127.0.0.1.
+  app.use("/api/actions/*", requireSession(auth));
 
   // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
   app.get("/api/runs", async (c) => {
@@ -89,7 +95,11 @@ export function createApp(
   return app;
 }
 
-export const app = createApp();
+export const app = createApp(undefined, undefined, undefined, {
+  // Rahasia dibaca saat start; unit di-restart kalau `.env` berubah.
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  allowed: parseAllowed(process.env.AUTORE_ALLOWED_USERS),
+});
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // PORT override exists so a smoke test can run beside the deployed 9121 API.

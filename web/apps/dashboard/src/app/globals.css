@@ -30,3 +30,17 @@
     outline-offset: 2px;
   }
 }
+
+/**
+ * Bar kemajuan kartu pipeline aktif. Indeterminate dengan sengaja: Jenkins tidak
+ * melaporkan persentase yang bisa dipercaya, jadi yang ditampilkan hanya "sedang
+ * jalan". Dipakai satu komponen (`active-pipelines.tsx`).
+ */
+@keyframes geser {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}

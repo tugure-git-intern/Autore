@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, relativeTime, shortSha } from "./format";
+import { formatDuration, inisial, relativeTime, shortSha } from "./format";
 
 const SEKARANG = Date.parse("2026-11-04T10:00:00Z");
 
@@ -44,5 +44,22 @@ describe("shortSha", () => {
   it("sha kosong jadi strip", () => {
     expect(shortSha("")).toBe("—");
     expect(shortSha("   ")).toBe("—");
+  });
+});
+
+describe("inisial", () => {
+  it("mengambil dua huruf pertama, mengabaikan bagian email", () => {
+    expect(inisial("Alif Fadlan")).toBe("AF");
+    expect(inisial("Autore CLI <autore@tugu-re.com>")).toBe("AC");
+  });
+
+  it("nama satu kata jadi satu huruf", () => {
+    expect(inisial("tugure")).toBe("T");
+  });
+
+  it("nama kosong jadi tanda tanya, bukan string kosong", () => {
+    expect(inisial("")).toBe("?");
+    expect(inisial("   ")).toBe("?");
+    expect(inisial("<only@email.test>")).toBe("?");
   });
 });

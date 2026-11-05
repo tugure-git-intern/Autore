@@ -26,3 +26,17 @@ export function shortSha(sha: string): string {
   const bersih = sha.trim();
   return bersih ? bersih.slice(0, 7) : "—";
 }
+
+/** Avatar kartu: dua huruf pertama nama. Format CLI `Nama <email>`; tanpa nama jadi "?". */
+export function inisial(nama: string): string {
+  const kata = (nama.split("<")[0] ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (kata.length === 0) return "?";
+  return kata
+    .slice(0, 2)
+    .map((k) => k[0])
+    .join("")
+    .toUpperCase();
+}

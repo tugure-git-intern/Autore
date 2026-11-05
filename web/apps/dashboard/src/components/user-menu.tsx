@@ -1,0 +1,46 @@
+"use client";
+
+import { LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
+import type { SessionUser } from "@/lib/current-user";
+import { Button } from "./ui/button";
+
+export function UserMenu({ user }: { user: SessionUser }) {
+  // Nama GitHub bisa kosong; login selalu ada karena whitelist yang mengizinkan.
+  const label = user.name.trim() || user.login;
+
+  return (
+    <details className="relative">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 hover:bg-gray-50">
+        {user.image ? (
+          <img
+            src={user.image}
+            alt={user.login}
+            width={28}
+            height={28}
+            className="h-7 w-7 rounded-full border border-gray-200"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-ink"
+          >
+            {user.login.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+        <span className="text-xs font-medium text-ink">{label}</span>
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+        <p className="px-2 py-1 text-xs text-muted">@{user.login}</p>
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => void signOut({ callbackUrl: "/login" })}
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          Keluar
+        </Button>
+      </div>
+    </details>
+  );
+}

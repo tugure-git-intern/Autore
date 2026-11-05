@@ -5,10 +5,15 @@ import { afterEach, vi } from "vitest";
 // each test can stand on a different route.
 const nav = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
+vi.mock("next-auth/react", () => ({ signOut: vi.fn() }));
 
 import type { ApiStatusResponse } from "@/lib/contracts";
+import type { SessionUser } from "@/lib/current-user";
 import { AppShell } from "./app-shell";
 import { connectionStatus, Navbar } from "./navbar";
+
+const USER: SessionUser = { login: "tugure-git-intern", name: "Alif", image: "https://x/a.png" };
+const TAMU: SessionUser = { login: "", name: "", image: null };
 
 function status(jenkins: "active" | "inactive" | "unknown", stale = false): ApiStatusResponse {
   return {
@@ -42,7 +47,7 @@ describe("topbar route context", () => {
     // Hang the shared status fetch: the shell is all we assert here.
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     return render(
-      <AppShell>
+      <AppShell user={USER}>
         <div />
       </AppShell>,
     );
@@ -65,6 +70,13 @@ describe("topbar route context", () => {
     const banner = within(screen.getByRole("banner"));
     expect(banner.getByText("Autore", { selector: "p" })).toBeVisible();
     expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
+  });
+
+  it("drops the sidebar and topbar on the auth pages", () => {
+    renderShell("/login");
+
+    expect(screen.queryByRole("banner")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Navigasi utama" })).toBeNull();
   });
 });
 
@@ -90,21 +102,37 @@ describe("connectionStatus", () => {
 });
 
 describe("Navbar", () => {
-  it("carries a non-heading title, the status dot, Sync and the initials avatar", () => {
-    render(
+  function renderNavbar(user: SessionUser) {
+    const hasil = render(
       <Navbar
         title="Dashboard"
         connection={{ tone: "green", label: "Sistem Siap" }}
         onSync={() => {}}
-        initials="AR"
+        user={user}
       />,
     );
+    // Isi <details> yang tertutup dianggap tidak terlihat oleh jsdom.
+    const details = hasil.container.querySelector("details");
+    if (details) details.open = true;
+    return hasil;
+  }
+
+  it("carries a non-heading title, the status dot, Sync and the signed-in user", () => {
+    renderNavbar(USER);
 
     expect(screen.queryByRole("heading")).toBeNull();
     expect(screen.getByText("Dashboard", { selector: "p" })).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("Sistem Siap");
     expect(screen.getByRole("button", { name: "Sync" })).toBeVisible();
-    expect(screen.getByText("AR")).toBeVisible();
+    expect(screen.getByAltText("tugure-git-intern")).toBeVisible();
+    expect(screen.getByRole("button", { name: /keluar/i })).toBeVisible();
+  });
+
+  it("tidak menampilkan menu pengguna saat belum ada sesi", () => {
+    renderNavbar(TAMU);
+
+    expect(screen.queryByRole("button", { name: /keluar/i })).toBeNull();
+    expect(screen.queryByText(/^@/)).toBeNull();
   });
 });
 
@@ -116,7 +144,7 @@ describe("AppShell", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <AppShell>
+      <AppShell user={USER}>
         <div />
       </AppShell>,
     );

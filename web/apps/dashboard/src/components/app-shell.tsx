@@ -11,6 +11,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
+import type { SessionUser } from "@/lib/current-user";
 import { fetchDashboardStatus } from "@/lib/status-client";
 import { connectionStatus, Navbar } from "./navbar";
 import { routeTitle } from "./nav-items";
@@ -83,10 +84,15 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
+/** Halaman auth punya kartu sendiri di tengah layar; sidebar/topbar di sana cuma jadi kebisingan. */
+const TANPA_KERANGKA = new Set(["/login", "/403"]);
+
+function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   const status = useStatus();
   // Same pathname source as the sidebar active rule: one title per route.
   const pathname = usePathname() ?? "/";
+
+  if (TANPA_KERANGKA.has(pathname)) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">
@@ -97,7 +103,7 @@ function Shell({ children }: { children: ReactNode }) {
           connection={connectionStatus(status.state, status.loading, status.failed)}
           onSync={status.refresh}
           refreshing={status.refreshing}
-          initials="AR"
+          user={user}
         />
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 lg:px-6">{children}</main>
       </div>
@@ -105,10 +111,10 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, user }: { children: ReactNode; user: SessionUser }) {
   return (
     <StatusProvider>
-      <Shell>{children}</Shell>
+      <Shell user={user}>{children}</Shell>
     </StatusProvider>
   );
 }

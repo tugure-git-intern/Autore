@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
 import { AppShell, StatusProvider } from "@/components/app-shell";
+import type { SessionUser } from "@/lib/current-user";
 import DashboardPage from "./page";
 
 afterEach(() => {
@@ -27,7 +28,7 @@ test("the topbar carries route context and never repeats the H1 word", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
   render(
-    <AppShell>
+    <AppShell user={{ login: "alif", name: "Alif", image: null } as SessionUser}>
       <DashboardPage />
     </AppShell>,
   );

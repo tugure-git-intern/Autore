@@ -3,8 +3,10 @@
 import { usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import type { ApiStatusResponse } from "@/lib/contracts";
+import type { SessionUser } from "@/lib/current-user";
 import { isActiveHref, navItems } from "./nav-items";
 import { Button } from "./ui/button";
+import { UserMenu } from "./user-menu";
 
 export type ConnectionTone = "green" | "neutral" | "red";
 export type Connection = { tone: ConnectionTone; label: string };
@@ -49,13 +51,13 @@ export function Navbar({
   connection,
   onSync,
   refreshing,
-  initials,
+  user,
 }: {
   title: string;
   connection: Connection;
   onSync: () => void;
   refreshing?: boolean;
-  initials: string;
+  user: SessionUser;
 }) {
   const pathname = usePathname() ?? "/";
 
@@ -78,12 +80,7 @@ export function Navbar({
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Sync
           </Button>
-          <span
-            aria-hidden="true"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-ink"
-          >
-            {initials}
-          </span>
+          {user.login ? <UserMenu user={user} /> : null}
         </div>
       </div>
       {/* Below lg the sidebar is hidden, so navigation collapses into this row. */}

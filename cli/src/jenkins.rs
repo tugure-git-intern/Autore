@@ -266,7 +266,63 @@ pub fn read_git_remote_origin(project_dir: &Path) -> Option<String> {
     }
 }
 
-pub fn ensure_git_committed_and_remote(project_dir: &Path, remote_url: &str) -> Result<(), String> {
+/// Identitas commit dari sesi dashboard (audit trail). Bukan input browser: API
+/// hanya meneruskan `name`/`email` milik akun GitHub yang login.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Author {
+    pub nama: String,
+    pub email: String,
+}
+
+const NAMA_AUTHOR_MAKS: usize = 100;
+
+/// Pesan commit scaffold; identitasnya yang berbeda, isinya tidak.
+const PESAN_COMMIT_SCAFFOLD: &str = "chore: setup project for Jenkins CI/CD via Autore";
+
+/// Nilai tidak sah dibuang ke `None` (= identitas bot), bukan digagalkan: aplikasi
+/// tetap harus jadi walau nama GitHub-nya aneh. Karakter kontrol dibuang karena
+/// nilai ini ditulis ke `.git/config`.
+pub fn validasi_author(nama: Option<&str>, email: Option<&str>) -> Option<Author> {
+    let bersih = |teks: Option<&str>| -> String {
+        teks.unwrap_or("")
+            .chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect::<String>()
+            .trim()
+            .to_string()
+    };
+    let nama = bersih(nama);
+    let email = bersih(email);
+    if nama.is_empty() || !email_polos(&email) {
+        return None;
+    }
+    Some(Author {
+        nama: nama.chars().take(NAMA_AUTHOR_MAKS).collect(),
+        email,
+    })
+}
+
+/// Cermin `EMAIL_POLOS` di `web/apps/api/src/session.ts`: satu `@`, tanpa spasi
+/// atau kurung sudut, panjang wajar.
+fn email_polos(email: &str) -> bool {
+    match email.split_once('@') {
+        Some((user, domain)) => {
+            !user.is_empty()
+                && !domain.is_empty()
+                && !domain.contains('@')
+                && user.len() <= 64
+                && domain.len() <= 190
+                && !email.chars().any(|c| c.is_whitespace() || c == '<' || c == '>')
+        }
+        None => false,
+    }
+}
+
+pub fn ensure_git_committed_and_remote(
+    project_dir: &Path,
+    remote_url: &str,
+    author: Option<&Author>,
+) -> Result<(), String> {
     if !project_dir.join(".git").exists() {
         let st = Command::new("git")
             .args(["init", "-q", "-b", "main"])
@@ -301,17 +357,41 @@ pub fn ensure_git_committed_and_remote(project_dir: &Path, remote_url: &str) -> 
             .args(["add", "."])
             .current_dir(project_dir)
             .status();
-        let _ = Command::new("git")
-            .args([
+        // Identitas dulu, commit kemudian: config lokal folder aplikasi ditulis
+        // supaya siapa pembuatnya tetap terbaca setelah ini (dashboard membaca
+        // config ini, bukan `-c` yang cuma berlaku sekali jalan).
+        if let Some(a) = author {
+            for (kunci, nilai) in [
+                ("user.name", a.nama.as_str()),
+                ("user.email", a.email.as_str()),
+            ] {
+                let st = Command::new("git")
+                    .args(["config", kunci, nilai])
+                    .current_dir(project_dir)
+                    .status()
+                    .map_err(|e| format!("Gagal menjalankan git config {kunci}: {e}"))?;
+                if !st.success() {
+                    return Err(format!("git config {kunci} gagal dijalankan"));
+                }
+            }
+        }
+        let mut cmd = Command::new("git");
+        if author.is_none() {
+            // Tanpa sesi (CLI dipanggil langsung): identitas bot seperti sebelumnya.
+            cmd.args([
                 "-c",
                 "user.name=Autore CLI",
                 "-c",
                 "user.email=autore@tugu-re.com",
+            ]);
+        }
+        let _ = cmd
+            .args([
                 "commit",
                 "-q",
                 "--no-verify",
                 "-m",
-                "chore: setup project for Jenkins CI/CD via Autore",
+                PESAN_COMMIT_SCAFFOLD,
             ])
             .current_dir(project_dir)
             .status();
@@ -510,6 +590,78 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Output git di folder uji (tanpa shell, argumen array).
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git harus ada di mesin uji");
+        assert!(out.status.success(), "git {args:?} gagal");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn repo_uji(nama: &str) -> (TempDir, std::path::PathBuf) {
+        let tmp = TempDir::new().unwrap();
+        let repo = tmp.path().join(nama);
+        fs::create_dir_all(&repo).unwrap();
+        fs::write(repo.join("app.py"), "print('hai')\n").unwrap();
+        (tmp, repo)
+    }
+
+    #[test]
+    fn author_dari_dashboard_dipakai_di_commit() {
+        let (_tmp, repo) = repo_uji("audit-uji");
+        let author = validasi_author(Some("Alif Fadlan"), Some("alif@example.com")).unwrap();
+
+        ensure_git_committed_and_remote(&repo, "", Some(&author)).unwrap();
+
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%an <%ae>"]),
+            "Alif Fadlan <alif@example.com>"
+        );
+        // Config lokal ditulis supaya dashboard bisa membaca pembuatnya tanpa GitHub API.
+        assert_eq!(git(&repo, &["config", "--get", "user.name"]), "Alif Fadlan");
+        assert_eq!(git(&repo, &["config", "--get", "user.email"]), "alif@example.com");
+    }
+
+    #[test]
+    fn tanpa_author_identitas_bot_tetap_dipakai() {
+        let (_tmp, repo) = repo_uji("tanpa-author");
+
+        ensure_git_committed_and_remote(&repo, "", None).unwrap();
+
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%an <%ae>"]),
+            "Autore CLI <autore@tugu-re.com>"
+        );
+        // Config LOKAL tidak ditulis: identitas bot dipasang per-commit (`-c`),
+        // jadi config global user tidak pernah tertimpa.
+        assert!(!git(&repo, &["config", "--local", "--list"]).contains("user.name"));
+    }
+
+    #[test]
+    fn author_kotor_dibuang_bukan_digagalkan() {
+        let kotor = validasi_author(Some("Alif\n[user]\nevil = 1"), Some("alif@example.com")).unwrap();
+        assert_eq!(kotor.nama, "Alif [user] evil = 1");
+
+        // Email tidak sah atau nama kosong = jatuh ke identitas bot, bukan error.
+        assert!(validasi_author(Some("Alif"), Some("bukan-email")).is_none());
+        assert!(validasi_author(Some("Alif"), Some("a@b c")).is_none());
+        assert!(validasi_author(Some("Alif"), Some("a@@b.com")).is_none());
+        assert!(validasi_author(None, Some("alif@example.com")).is_none());
+        assert!(validasi_author(Some(""), Some("")).is_none());
+    }
+
+    #[test]
+    fn nama_author_kepanjangan_dipotong() {
+        let panjang = "x".repeat(300);
+        let author = validasi_author(Some(&panjang), Some("alif@example.com")).unwrap();
+
+        assert_eq!(author.nama.chars().count(), 100);
+    }
+
     #[test]
     fn saves_and_loads_jenkins_config_roundtrip() {
         let tmp = TempDir::new().unwrap();
@@ -577,6 +729,7 @@ mod tests {
         ensure_git_committed_and_remote(
             tmp.path(),
             "https://github.com/tugure-git-intern/test-app.git",
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -587,6 +740,7 @@ mod tests {
         ensure_git_committed_and_remote(
             tmp.path(),
             "https://github.com/tugure-git-intern/test-app-v2.git",
+            None,
         )
         .unwrap();
         assert_eq!(

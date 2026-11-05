@@ -432,6 +432,8 @@ fn commands_for(index: usize) -> Commands {
             app_port: None,
             deploy_port: None,
             kode: "kosong".to_string(),
+            author_name: None,
+            author_email: None,
         },
         1 => Commands::Init {
             app_name: None,
@@ -726,6 +728,15 @@ enum Commands {
         /// Port host untuk deployment (default: port bebas pertama mulai 8081)
         #[arg(long)]
         deploy_port: Option<u16>,
+
+        /// Identitas commit dari sesi dashboard: nama GitHub yang menekan tombol
+        /// (audit trail). Tanpa ini dipakai identitas bot `Autore CLI`.
+        #[arg(long)]
+        author_name: Option<String>,
+
+        /// Email identitas commit dari sesi dashboard (pasangan `--author-name`)
+        #[arg(long)]
+        author_email: Option<String>,
     },
 
     /// Hapus folder project Autore secara interaktif
@@ -1372,7 +1383,8 @@ fn execute_command(
                 job_name,
                 jk_cfg.url
             );
-            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url)
+            if let Err(e) =
+                jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url, None)
             {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
@@ -1484,6 +1496,8 @@ fn execute_command(
             app_port,
             deploy_port,
             kode,
+            author_name,
+            author_email,
         } => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let base_dir = if path == std::path::Path::new(".") {
@@ -1690,7 +1704,11 @@ fn execute_command(
             progress::tahap("repo", "selesai", &format!("Repo GitHub {full_name} siap."));
 
             let git_url = format!("https://github.com/{full_name}.git");
-            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &git_url) {
+            // Identitas author hanya ada kalau dipanggil dari dashboard (flag dari
+            // sesi); dipanggil langsung dari terminal = identitas bot seperti dulu.
+            let author = jenkins::validasi_author(author_name.as_deref(), author_email.as_deref());
+            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &git_url, author.as_ref())
+            {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
             }
@@ -1942,6 +1960,8 @@ mod tests {
             app_port: None,
             deploy_port: None,
             kode: "kosong".to_string(),
+            author_name: None,
+            author_email: None,
         };
         let mut act = None;
         assert_eq!(execute_command(qs(None, None), true, &mut act), 0);

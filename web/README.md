@@ -212,6 +212,53 @@ UI menampilkan "Sesi Anda sudah berakhir. Silakan login ulang." lalu berpindah k
 - Verifikasi sesi butuh `globalThis.crypto`; Node 18 belum menyediakannya, jadi
   `apps/api/src/session.ts` memasang `webcrypto` sendiri. Jangan hapus.
 
+### Callback URL dan rewrite `/api`
+
+Dua hal pernah membuat login gagal dengan gejala "callback 404". Keduanya sudah
+ditutup, tapi mudah terulang:
+
+1. **Rewrite `/api/:path*` menelan `/api/auth/*`.** Rewrite itu meneruskan
+   callback GitHub ke Hono, yang menjawab `404 Not Found` (`text/plain`, 13
+   byte). Karena itu `apps/dashboard/next.config.ts` mendaftar tiga endpoint
+   satu per satu — `/api/status`, `/api/runs`, `/api/actions/:path*` — dan
+   jangan kembali ke pola liar. Tandanya: `/api/auth/csrf` juga 404, bukan hanya
+   callback.
+2. **`request.url` berisi `localhost`.** Di belakang `next start`, Auth.js
+   menyusun `callbackUrl` provider dari `request.url`
+   (`@auth/core/lib/index.js` → `url: request.url`, lalu
+   `@auth/core/lib/utils/providers.js:8`), jadi `redirect_uri` ke GitHub menjadi
+   `http://localhost:9120/api/auth/callback/github` dan GitHub menolak
+   (`redirect_uri_mismatch`). `apps/dashboard/src/lib/auth-request-url.ts`
+   merakit ulang origin dari header `Host`; dipasang di
+   `app/api/auth/[...nextauth]/route.ts` untuk GET dan POST.
+
+Karena origin diambil dari header, `NEXTAUTH_URL`/`AUTH_URL` tidak wajib diisi:
+host mengikuti alamat yang dibuka user. Isi `AUTH_URL` hanya kalau dashboard
+benar-benar berada di belakang reverse proxy yang mengganti header `Host`.
+
+Callback URL di OAuth App GitHub harus sama persis dengan alamat dashboard
+dibuka, mis. `http://100.80.3.14:9120/api/auth/callback/github`.
+
+Cek cepat tanpa browser, dijalankan dari VPS:
+
+```bash
+# 1. Route auth hidup? Harus 200 JSON berisi csrfToken, bukan 404 "Not Found".
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: 100.80.3.14:9120' http://127.0.0.1:9120/api/auth/csrf
+
+# 2. redirect_uri yang dikirim ke GitHub memakai host mana?
+J=$(mktemp)
+T=$(curl -s -c $J -H 'Host: 100.80.3.14:9120' http://127.0.0.1:9120/api/auth/csrf | sed 's/.*csrfToken":"\([a-f0-9]*\)".*/\1/')
+curl -s -b $J -H 'Host: 100.80.3.14:9120' -H 'X-Auth-Return-Redirect: 1' \
+  -H 'content-type: application/x-www-form-urlencoded' --data-urlencode "csrfToken=$T" \
+  http://127.0.0.1:9120/api/auth/signin/github | grep -o 'redirect_uri=[^&]*'
+rm -f $J
+```
+
+Baris terakhir harus menampilkan
+`redirect_uri=http%3A%2F%2F100.80.3.14%3A9120%2Fapi%2Fauth%2Fcallback%2Fgithub`.
+Kalau masih `localhost`, perbaikan di `lib/auth-request-url.ts` hilang atau
+rewrite-nya kembali liar.
+
 ### Uji login manual
 
 ```bash

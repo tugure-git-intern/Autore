@@ -107,7 +107,13 @@ export function ActivePipelines({
                         />
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div
+                      data-testid="antre-statis"
+                      aria-hidden="true"
+                      className="absolute inset-x-0 bottom-0 h-1 bg-yellow-400/70"
+                    />
+                  )}
                 </Card>
               </div>
             );

@@ -111,6 +111,20 @@ describe("ActivePipelines", () => {
     expect(isi.queryByTestId("progress-indeterminate")).toBeNull();
   });
 
+  it("kartu menunggu memakai garis statis kuning, bukan bar beranimasi", () => {
+    const { kartu } = gambar([antre()]);
+
+    const isi = within(kartu()[0]);
+    const garis = isi.getByTestId("antre-statis");
+    expect(garis.className).toContain("bg-yellow-400");
+    expect(garis.className).toContain("h-1");
+    expect(garis.className).toContain("absolute");
+    // Belum jalan = tidak ada yang bergerak: tidak ada animasi, tidak ada komet.
+    expect(garis.className).not.toContain("animate-");
+    expect(isi.queryByTestId("progress-comet")).toBeNull();
+    expect(isi.queryByTestId("progress-band-depan")).toBeNull();
+  });
+
   it("menampilkan branch, commit monospace, dan inisial penulis", () => {
     const { kartu } = gambar([pipeline()]);
 

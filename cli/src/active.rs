@@ -255,6 +255,113 @@ pub fn parse_active(
     Ok(susun_aktif(jalan, antre, base, sekarang_ms))
 }
 
+/// Brackets di-encode: Jenkins menolak query mentah, dan `-g` mematikan globbing
+/// curl supaya `[`, `]`, `{`, `}` tidak dianggap pola.
+const TREE_JOBS: &str = "jobs%5Bname,lastBuild%5Bnumber,building,timestamp,actions%5BlastBuiltRevision%5BSHA1,branch%5Bname%5D%5D%5D%5D%5D";
+const TREE_QUEUE: &str = "items%5Bid,why,inQueueSince,task%5Bname,fullName%5D%5D";
+
+fn ambil(cfg: &JenkinsConfig, url: &str) -> Result<String, String> {
+    let kredensial = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+    let (code, body) = crate::jenkins::curl_with_stdin_config(
+        &[
+            "-g",
+            "-sS",
+            "--max-time",
+            "15",
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            url,
+        ],
+        &kredensial,
+    )?;
+    if code != 200 {
+        return Err(format!("Jenkins membalas HTTP {code} untuk {url}"));
+    }
+    Ok(body)
+}
+
+/// Dua panggilan Jenkins → laporan siap kirim. Author diisi di sini karena
+/// butuh repo lokal (`runs::cari_penulis`), jadi `parse_active` tetap murni.
+///
+/// Jenkins tidak bisa dihubungi = error, bukan laporan kosong: bedanya penting
+/// (yang satu "tidak ada yang jalan", yang satu "tidak tahu").
+pub fn kumpulkan(
+    workspace: &Path,
+    cfg: &JenkinsConfig,
+    sekarang_ms: u64,
+) -> Result<LaporanAktif, String> {
+    let base = crate::jenkins::normalize_jenkins_url(&cfg.url)?;
+    let jobs = ambil(cfg, &format!("{base}/api/json?tree={TREE_JOBS}"))?;
+    let queue = ambil(cfg, &format!("{base}/queue/api/json?tree={TREE_QUEUE}"))?;
+
+    let mut laporan = parse_active(&jobs, &queue, &base, sekarang_ms)?;
+    for p in &mut laporan.active {
+        if p.status != "running" || p.commit_sha.is_empty() {
+            continue;
+        }
+        p.author = crate::runs::cari_penulis(&workspace.join(&p.app), &p.commit_sha);
+    }
+    Ok(laporan)
+}
+
+pub fn jalankan(json: bool) -> i32 {
+    let path = crate::jenkins::default_config_path();
+    let Some(cfg) = crate::jenkins::load_config_from(&path) else {
+        eprintln!(
+            "ERROR: konfigurasi Jenkins belum ada di {}. Jalankan `autore deploy` dulu.",
+            path.display()
+        );
+        return 1;
+    };
+
+    let sekarang_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let laporan = match kumpulkan(&crate::serve::workspace_dir(), &cfg, sekarang_ms) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("ERROR: {e}");
+            return 1;
+        }
+    };
+
+    if json {
+        println!("{}", serde_json::to_string(&laporan).unwrap_or_default());
+        return 0;
+    }
+
+    if laporan.active.is_empty() {
+        println!("Tidak ada pipeline yang berjalan atau menunggu.");
+        return 0;
+    }
+    println!(
+        "{:<9} {:<16} {:<10} {:<9} PENULIS",
+        "STATUS", "APLIKASI", "BRANCH", "COMMIT"
+    );
+    for p in &laporan.active {
+        let commit = if p.commit_sha.is_empty() {
+            "—".to_string()
+        } else {
+            p.commit_sha[..7.min(p.commit_sha.len())].to_string()
+        };
+        let branch = if p.branch.is_empty() { "—" } else { &p.branch };
+        let penulis = if p.author.is_empty() {
+            "—".to_string()
+        } else {
+            p.author.clone()
+        };
+        println!(
+            "{:<9} {:<16} {:<10} {:<9} {}",
+            p.status, p.app, branch, commit, penulis
+        );
+    }
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

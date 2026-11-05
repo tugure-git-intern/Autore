@@ -771,6 +771,13 @@ enum Commands {
         json: bool,
     },
 
+    /// Pipeline yang sedang berjalan atau menunggu di Jenkins (dipakai dashboard web)
+    Active {
+        /// Cetak satu objek JSON sesuai kontrak `/api/active`
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Catat kemajuan pipeline ke simpanan status (dipakai pipeline Jenkins)
     Pipeline {
         #[command(subcommand)]
@@ -1408,6 +1415,8 @@ fn execute_command(
         }
 
         Commands::Runs { json, days, limit } => runs::jalankan(days, limit, json),
+
+        Commands::Active { json } => active::jalankan(json),
 
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.

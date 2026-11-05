@@ -183,10 +183,12 @@ def call(Map config = [:]) {
                           # dashboard). Salin ke workspace Autore supaya `autore sbom`
                           # bisa membacanya. Best-effort: gagal salin tidak boleh
                           # menggagalkan gerbang keamanan.
-                          if mkdir -p "${q(workspace)}/${appReported}/dist" && cp -f dist/sbom.cdx.json "${q(workspace)}/${appReported}/dist/sbom.cdx.json"; then
+                          target="${q(workspace)}/${appReported}/dist"
+                          if mkdir -p "\$target" && cp -f dist/sbom.cdx.json "\$target/sbom.cdx.json"; then
                             echo "SBOM disalin ke workspace Autore: ${appReported}/dist/sbom.cdx.json"
+                            echo "DIAG uid=\$(id -u) ns=\$(readlink /proc/self/ns/mnt) inode=\$(stat -c %i "\$target") file=\$(stat -c '%i %s' "\$target/sbom.cdx.json" 2>&1)"
                           else
-                            echo "WARNING: gagal menyalin SBOM ke workspace Autore"
+                            echo "WARNING: gagal menyalin SBOM ke workspace Autore (target=\$target)"
                           fi
                         fi
                     """

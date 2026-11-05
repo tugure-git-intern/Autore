@@ -147,3 +147,116 @@ test.describe("halaman publik @1280x720", () => {
     });
   }
 });
+
+// Data live Jenkins berubah-ubah, jadi kasus yang harus deterministik dikunci
+// dengan `page.route`. Satu tes tetap memakai data nyata untuk membuktikan dua
+// panggilan Jenkins memang tersambung sampai ke kartu.
+test.describe("section Active Pipelines", () => {
+  const pipeline = (over: Partial<Record<string, unknown>> = {}) => ({
+    app: "tes-web",
+    number: 42,
+    status: "running",
+    branch: "main",
+    commit_sha: "3878d9307475eb84316edde4e77f63fd0b98ae4e",
+    author: "Alif Fadlan <alif@example.test>",
+    started_at: "2026-11-05T03:23:08Z",
+    url: "http://100.80.3.14:8080/job/tes-web/42",
+    ...over,
+  });
+
+  const paksaActive = (
+    page: import("@playwright/test").Page,
+    active: unknown[],
+    counts: { running: number; queued: number },
+  ) =>
+    page.route("**/api/active", (route) =>
+      route.fulfill({
+        json: { data: { generated_at: "2026-11-05T03:40:00Z", active, counts }, stale: false },
+      }),
+    );
+
+  test("berada di atas grafik Tren 7 Hari", async ({ page }) => {
+    await page.goto("/");
+
+    const judul = page.getByRole("heading", { name: "Active Pipelines" });
+    await expect(judul).toBeVisible();
+
+    const kotakJudul = (await judul.boundingBox())!;
+    const kotakGrafik = (await page.getByRole("heading", { name: "Tren 7 Hari" }).boundingBox())!;
+    expect(kotakJudul.y).toBeLessThan(kotakGrafik.y);
+  });
+
+  test("dengan data nyata: hitungan sama dengan jumlah kartu", async ({ page }) => {
+    await page.goto("/");
+
+    const hitungan = page.getByText(/\d+ berjalan atau menunggu/);
+    await expect(hitungan).toBeVisible();
+
+    const jumlah = Number((await hitungan.textContent())!.match(/^(\d+)/)![1]);
+    await expect(page.getByTestId("pipeline-card")).toHaveCount(jumlah);
+  });
+
+  test("dua pipeline: satu Berjalan dengan bar, satu Menunggu tanpa bar", async ({ page }) => {
+    await paksaActive(
+      page,
+      [pipeline(), pipeline({ app: "diag-ws", number: 0, status: "queued", branch: "" })],
+      { running: 1, queued: 1 },
+    );
+
+    await page.goto("/");
+
+    await expect(page.getByText("2 berjalan atau menunggu")).toBeVisible();
+    const kartu = page.getByTestId("pipeline-card");
+    await expect(kartu).toHaveCount(2);
+
+    const berjalan = kartu.filter({ hasText: "Berjalan" });
+    const menunggu = kartu.filter({ hasText: "Menunggu" });
+    await expect(berjalan).toHaveCount(1);
+    await expect(menunggu).toHaveCount(1);
+    await expect(berjalan.getByTestId("progress-indeterminate")).toHaveCount(1);
+    await expect(menunggu.getByTestId("progress-indeterminate")).toHaveCount(0);
+    // Nomor build hanya ditampilkan kalau Jenkins sudah punya nomor.
+    await expect(menunggu.getByText("#")).toHaveCount(0);
+  });
+
+  test("bar kemajuan benar-benar beranimasi (keyframes ada)", async ({ page }) => {
+    await paksaActive(page, [pipeline()], { running: 1, queued: 0 });
+
+    await page.goto("/");
+
+    const bar = page.getByTestId("progress-indeterminate");
+    await expect(bar).toBeVisible();
+    // Tanpa `@keyframes geser` di globals.css, animasi ini tidak pernah dibuat
+    // browser sehingga `getAnimations()` kosong walau kelasnya tetap terpasang.
+    expect(await bar.evaluate((el) => el.getAnimations().length)).toBeGreaterThan(0);
+  });
+
+  test("kosong: section tetap tampil dengan teks Semua pipeline selesai", async ({ page }) => {
+    await paksaActive(page, [], { running: 0, queued: 0 });
+
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: "Active Pipelines" })).toBeVisible();
+    await expect(page.getByText("0 berjalan atau menunggu")).toBeVisible();
+    await expect(page.getByText("Semua pipeline selesai")).toBeVisible();
+    await expect(page.getByTestId("pipeline-card")).toHaveCount(0);
+  });
+});
+
+test.describe("tanpa sesi — /api/active", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("GET /api/active tetap terbuka dan berbentuk kontrak", async ({ request }) => {
+    const respons = await request.get("/api/active");
+
+    expect(respons.status()).toBe(200);
+    const body = await respons.json();
+    expect(typeof body.stale).toBe("boolean");
+    expect(Array.isArray(body.data.active)).toBe(true);
+    expect(body.data.counts).toMatchObject({
+      running: expect.any(Number),
+      queued: expect.any(Number),
+    });
+  });
+});
+

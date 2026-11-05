@@ -138,4 +138,54 @@ describe("useActivePipelines", () => {
 
     expect(result.current.stale).toBe(true);
   });
+
+  it("refresh manual menunggu permintaan yang sedang jalan, bukan menambah hit kedua", async () => {
+    let lepas: (r: Response) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise<Response>((r) => (lepas = r)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useActivePipelines());
+    await lancar();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    let janji: Promise<boolean> | null = null;
+    await act(async () => {
+      janji = result.current.refresh();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      lepas(response({ data: PAYLOAD, stale: false }));
+      await expect(janji).resolves.toBe(true);
+    });
+    expect(result.current.active).toEqual(PAYLOAD.active);
+  });
+
+  it("refresh manual saat idle menarik ulang, true kalau sukses dan false kalau gagal", async () => {
+    let rusak = false;
+    const fetchMock = vi.fn(async () => {
+      if (rusak) throw new Error("api mati");
+      return response({ data: PAYLOAD, stale: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useActivePipelines());
+    await lancar();
+
+    let sukses = false;
+    await act(async () => {
+      sukses = await result.current.refresh();
+    });
+    expect(sukses).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    rusak = true;
+    let lagi = true;
+    await act(async () => {
+      lagi = await result.current.refresh();
+    });
+    expect(lagi).toBe(false);
+    expect(result.current.active).toEqual(PAYLOAD.active);
+  });
 });

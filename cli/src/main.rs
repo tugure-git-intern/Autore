@@ -10,6 +10,7 @@ mod serve;
 mod status;
 mod pipeline_record;
 mod runs;
+mod sbom;
 mod templates;
 mod tui;
 mod updater;
@@ -778,6 +779,17 @@ enum Commands {
         json: bool,
     },
 
+    /// Daftar dependensi dari SBOM CycloneDX hasil build (dipakai dashboard web)
+    Sbom {
+        /// Id aplikasi di registry Autore (contoh: tes-web)
+        #[arg(long)]
+        app: String,
+
+        /// Cetak satu objek JSON sesuai kontrak `/api/sbom/:app`
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Catat kemajuan pipeline ke simpanan status (dipakai pipeline Jenkins)
     Pipeline {
         #[command(subcommand)]
@@ -1417,6 +1429,7 @@ fn execute_command(
         Commands::Runs { json, days, limit } => runs::jalankan(days, limit, json),
 
         Commands::Active { json } => active::jalankan(json),
+        Commands::Sbom { app, json } => sbom::jalankan(&app, json),
 
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.

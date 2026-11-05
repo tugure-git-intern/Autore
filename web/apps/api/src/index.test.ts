@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
 import { emptyRuns, type RunsPayload } from "./runs";
 import { emptyActive, type ActivePayload } from "./active";
+import type { SbomResult } from "./sbom";
 
 /**
  * Aksi sekarang butuh sesi. Cookie-nya asli (JWE dari @auth/core) supaya tes
@@ -163,6 +164,64 @@ const post = async (
     headers: { "content-type": "application/json", cookie: await cookie() },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
+
+describe("GET /api/sbom/:app", () => {
+  const PAYLOAD = {
+    app: "tes-web",
+    generated_at: "2026-11-05T08:27:11Z",
+    source: "/home/tugure/autore-workspace/tes-web/dist/sbom.cdx.json",
+    total: 1,
+    packages: [{ name: "openssl", version: "3.0.11", type: "os" as const }],
+  };
+
+  /** Loader SBOM palsu: tidak ada proses nyata yang dijalankan di tes ini. */
+  async function appSbom(sbom: (app: string) => Promise<SbomResult>) {
+    const { createApp } = await freshApp();
+    const { hatchActions } = await import("./actions");
+    const dir = await workspace();
+    return createApp(
+      async () => STATUS,
+      hatchActions({
+        workspace: dir,
+        run: async () => STATUS,
+        spawn: vi.fn(async () => ok()),
+        deployApp: "tes-web",
+        bin: "autore",
+      }),
+      async () => ({ data: RUNS, stale: false }),
+      { secret: TEST_SECRET },
+      async () => ({ data: ACTIVE, stale: false }),
+      sbom,
+    );
+  }
+
+  it("mengembalikan payload SBOM apa adanya tanpa menuntut sesi", async () => {
+    const app = await appSbom(async (id) => ({
+      ok: true,
+      status: 200,
+      data: { ...PAYLOAD, app: id },
+    }));
+
+    const res = await app.request("http://localhost/api/sbom/tes-web");
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ ...PAYLOAD, app: "tes-web" });
+  });
+
+  it("meneruskan alasan gagal dari CLI beserta statusnya", async () => {
+    const app = await appSbom(async () => ({
+      ok: false,
+      status: 404,
+      error: "SBOM belum ada untuk `tes-web`",
+    }));
+
+    const res = await app.request("http://localhost/api/sbom/tes-web");
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "SBOM belum ada untuk `tes-web`" });
+  });
+});
 
 describe("GET /api/runs", () => {
   it("mengembalikan payload runs beserta penanda stale", async () => {

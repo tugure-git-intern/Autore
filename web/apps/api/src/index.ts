@@ -5,10 +5,12 @@ import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./ac
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
 import { getRuns, type RunsPayload } from "./runs";
 import { getActive, type ActivePayload } from "./active";
+import { hatchSbom, type SbomResult } from "./sbom";
 import { parseAllowed, requireSession } from "./session";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
+export type SbomLoader = (app: string) => Promise<SbomResult>;
 
 /**
  * Aksi (deploy/scan) membaca konfigurasi unit. Tanpa `AUTORE_WORKSPACE` aksi
@@ -21,6 +23,16 @@ function configuredActions(run: RunAutore): Actions {
     spawn: spawnAutore,
     deployApp: process.env.AUTORE_DEPLOY_APP ?? "",
   });
+}
+
+/** Sama seperti aksi: workspace dibaca dari unit, bukan ditebak. */
+function configuredSbom(run: RunAutore): SbomLoader {
+  const sbom = hatchSbom({
+    workspace: process.env.AUTORE_WORKSPACE ?? "",
+    run,
+    spawn: spawnAutore,
+  });
+  return (app) => sbom.get(app);
 }
 
 /** Body scan wajib `{"app":"<id>"}`: satu kunci, string tidak kosong, tidak ada tambahan. */
@@ -59,6 +71,7 @@ export function createApp(
   runs: RunsLoader = () => getRuns(),
   auth: { secret?: string; allowed?: string[] } = {},
   active: ActiveLoader = () => getActive(),
+  sbom: SbomLoader = configuredSbom(run),
 ) {
   const app = new Hono();
 
@@ -90,6 +103,14 @@ export function createApp(
       c.header("Cache-Control", "no-store");
       return c.json({ error: "Autore status unavailable" }, 503);
     }
+  });
+
+  // Daftar dependensi dari SBOM build terakhir. Read-only: tanpa sesi,
+  // sama seperti GET /api/* lain (unit ini hanya listen di 127.0.0.1).
+  app.get("/api/sbom/:app", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const hasil = await sbom(c.req.param("app"));
+    return hasil.ok ? c.json(hasil.data, 200) : c.json({ error: hasil.error }, hasil.status);
   });
 
   // Body deploy sengaja tidak dibaca: targetnya milik server, bukan milik pemanggil.

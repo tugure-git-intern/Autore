@@ -370,3 +370,61 @@ test.describe("tanpa sesi — /api/active", () => {
   });
 });
 
+// Tombol Sync hanya menarik data baca: tiga GET ke Hono, dan tidak pernah POST
+// ke /api/actions — itulah jalur yang men-trigger build Jenkins.
+test.describe("tombol Sync", () => {
+  test("berputar, terkunci, memunculkan toast, dan tidak pernah POST", async ({ page }) => {
+    const bukanGet: string[] = [];
+    const urlGet: string[] = [];
+
+    // Ditahan 500 ms supaya keadaan "sedang sync" benar-benar bisa diamati, bukan
+    // lolos sekejap di jaringan lokal.
+    const tahan = async (route: import("@playwright/test").Route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
+    };
+    await page.route("**/api/status", tahan);
+    await page.route("**/api/runs", tahan);
+    await page.route("**/api/active", tahan);
+
+    await page.goto("/");
+    const tombol = page.getByRole("button", { name: "Sync" });
+    await expect(tombol).toBeEnabled();
+    // Tunggu sampai tarikan awal selesai. Kalau masih ada permintaan menggantung,
+    // Sync sengaja memakai permintaan itu alih-alih menambah hit — jadi tes ini
+    // harus berangkat dari keadaan diam supaya bisa menghitung tiga GET.
+    await page.waitForLoadState("networkidle");
+
+    // Perekaman dimulai setelah halaman siap, jadi hanya lalu lintas Sync.
+    page.on("request", (permintaan) => {
+      const url = permintaan.url();
+      if (!url.includes("/api/")) return;
+      if (permintaan.method() !== "GET") bukanGet.push(`${permintaan.method()} ${url}`);
+      else urlGet.push(new URL(url).pathname);
+    });
+
+    await tombol.click();
+
+    await expect(tombol).toBeDisabled();
+    // Kelas spin tidak cukup: pastikan browser benar-benar membuat animasinya.
+    expect(
+      await tombol.locator("svg").first().evaluate((el) => el.getAnimations().length),
+    ).toBeGreaterThan(0);
+
+    await expect(page.getByText("Data berhasil disinkronkan.")).toBeVisible();
+    await expect(tombol).toBeEnabled();
+
+    expect(new Set(urlGet)).toEqual(new Set(["/api/status", "/api/runs", "/api/active"]));
+    expect(bukanGet, `permintaan bukan GET saat Sync: ${bukanGet.join(", ")}`).toEqual([]);
+  });
+
+  test("toast hilang sendiri sekitar 4 detik", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sync" }).click();
+
+    const toast = page.getByText("Data berhasil disinkronkan.");
+    await expect(toast).toBeVisible();
+    await expect(toast).toBeHidden({ timeout: 6000 });
+  });
+});
+

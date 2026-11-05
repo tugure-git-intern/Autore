@@ -1,9 +1,12 @@
 import { defineConfig } from "@playwright/test";
 
-// E2E targets the production services on 127.0.0.1:9120 (Next) which proxy
-// /api/* to 127.0.0.1:9121 (Hono). Those processes are started outside the
-// test run (npm run start:api / npm run start:dashboard, or the systemd units),
-// so no webServer block — the spec fails loudly if they are not up.
+// E2E targets the production services on 127.0.0.1:9120 (Next), which rewrites
+// three Hono endpoints on 127.0.0.1:9121: /api/status, /api/runs and
+// /api/actions/*. The list is explicit on purpose — a `/api/:path*` rewrite
+// also swallows /api/auth/*, and GitHub login then dies with 404. Those
+// processes are started outside the test run (npm run start:api /
+// start:dashboard, or the systemd units), so no webServer block — the spec
+// fails loudly if they are not up.
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,

@@ -1,12 +1,22 @@
 import type { NextConfig } from "next";
 
+/**
+ * Dashboard berbicara ke unit API lewat tiga endpoint ini saja.
+ *
+ * Daftarnya ditulis satu per satu, **bukan** `/api/:path*`: rewrite itu juga
+ * menelan `/api/auth/*`, sehingga callback GitHub diteruskan ke Hono dan
+ * dijawab `404 Not Found` — gejalanya "callback 404" padahal route NextAuth-nya
+ * ada dan sehat. Apa pun yang bertambah di sini harus lewat daftar ini, jangan
+ * kembali ke pola liar.
+ */
+const API_ASAL = "http://127.0.0.1:9121";
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
-      {
-        source: "/api/:path*",
-        destination: "http://127.0.0.1:9121/api/:path*",
-      },
+      { source: "/api/status", destination: `${API_ASAL}/api/status` },
+      { source: "/api/runs", destination: `${API_ASAL}/api/runs` },
+      { source: "/api/actions/:path*", destination: `${API_ASAL}/api/actions/:path*` },
     ];
   },
 };

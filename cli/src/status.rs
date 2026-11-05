@@ -273,13 +273,14 @@ pub fn save(workspace: &Path, snapshot: &Snapshot) -> Result<(), String> {
 ///
 /// Ditulis CLI saat scaffold, jadi sudah terisi sejak commit pertama — sebelum
 /// Jenkins jalan. Baca config, bukan history commit: repo yang baru di-clone juga
-/// punya jawabannya. Folder tanpa git (atau config kosong) = string kosong, dan
-/// dashboard menyembunyikan barisnya.
+/// punya jawabannya. `--local` wajib: tanpa itu identitas global mesin VPS ikut
+/// terbaca dan semua aplikasi lama tampak dibuat orang yang sama. Folder tanpa
+/// config lokal = string kosong, dan dashboard menyembunyikan barisnya.
 fn cari_pembuat(dir_app: &Path) -> String {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(dir_app)
-        .args(["config", "--get-regexp", r"^user\.(name|email)$"])
+        .args(["config", "--local", "--get-regexp", r"^user\.(name|email)$"])
         .output();
     let teks = match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
@@ -429,6 +430,24 @@ mod tests {
     #[test]
     fn pembuat_kosong_kalau_folder_belum_punya_git() {
         let tmp = reg(vec![("baru", "8000")]);
+
+        assert_eq!(build(tmp.path()).applications[0].author, "");
+    }
+
+    #[test]
+    fn identitas_global_mesin_tidak_dipakai_sebagai_pembuat() {
+        // Repo ada, tapi identitas hanya di config global (kasus aplikasi lama yang
+        // di-scaffold sebelum propagasi identitas): jangan mengarang pembuat.
+        let tmp = reg(vec![("lama", "8000")]);
+        let app = tmp.path().join("lama");
+        std::fs::create_dir_all(&app).unwrap();
+        let st = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&app)
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        assert!(st.success());
 
         assert_eq!(build(tmp.path()).applications[0].author, "");
     }

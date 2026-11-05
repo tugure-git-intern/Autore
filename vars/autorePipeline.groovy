@@ -186,12 +186,17 @@ def call(Map config = [:]) {
                           target="${q(workspace)}/${appReported}/dist"
                           if mkdir -p "\$target" && cp -f dist/sbom.cdx.json "\$target/sbom.cdx.json"; then
                             echo "SBOM disalin ke workspace Autore: ${appReported}/dist/sbom.cdx.json"
-                            echo "DIAG uid=\$(id -u) ns=\$(readlink /proc/self/ns/mnt) inode=\$(stat -c %i "\$target") file=\$(stat -c '%i %s' "\$target/sbom.cdx.json" 2>&1)"
+                            echo "DIAG2 host=\$(hostname) uid=\$(id -u) ns=\$(readlink /proc/self/ns/mnt) dev_ino=\$(stat -c '%d %i' "\$target")"
+                            ls -la "\$target"
+                            ls -ld "\$(dirname "\$target")"
+                            [ -f /.dockerenv ] && echo "DIAG2 /.dockerenv=ADA" || echo "DIAG2 /.dockerenv=tidak-ada"
+                            grep -m3 -E ' / |overlay' /proc/mounts
                           else
                             echo "WARNING: gagal menyalin SBOM ke workspace Autore (target=\$target)"
                           fi
                         fi
                     """
+                    archiveArtifacts artifacts: 'dist/sbom.cdx.json', allowEmptyArchive: true
                 }
             }
 

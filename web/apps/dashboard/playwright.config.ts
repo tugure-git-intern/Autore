@@ -14,9 +14,14 @@ export default defineConfig({
   retries: 0,
   timeout: 30_000,
   reporter: [["list"]],
+  // Sesi palsu yang sah: cookie `authjs.session-token` asli (encode() Auth.js)
+  // untuk 127.0.0.1 dan 100.80.3.14. Tanpa ini dashboard hanya menampilkan
+  // /login, karena satu-satunya cara masuk adalah OAuth GitHub.
+  globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: "http://127.0.0.1:9120",
     viewport: { width: 1280, height: 720 },
+    storageState: "./e2e/.auth/state.json",
     // Host workaround, harmless on a normal box:
     //  - the bundled headless-shell binary crashes on this kernel, so force the
     //    full chromium build (`npx playwright install chromium` ships both);

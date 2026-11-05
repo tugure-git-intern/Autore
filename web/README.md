@@ -42,17 +42,32 @@ versions are pinned, not floated — bump them deliberately.
 
 Visual contract for the dashboard at 1280x720: `Dashboard` heading visible, no
 horizontal overflow (`scrollWidth <= 1280`), the sidebar links to `/`,
-`/applications` and `/pipeline`, no element with a gradient background, and no
-`box-shadow` heavier than `box-shadow-sm`. Screenshots land in
+`/applications`, `/pipeline` and `/security`, no element with a gradient
+background, and no `box-shadow` heavier than `box-shadow-sm`. Screenshots land in
 `apps/dashboard/e2e/__screenshots__/` (gitignored) for a human to eyeball — no
 golden image diff is frozen.
 
+Auth is part of the contract, and OAuth cannot be driven headlessly, so
+`e2e/global-setup.ts` writes a **real** session cookie (`encode()` from Auth.js,
+same `AUTH_SECRET` and cookie name the services verify) to
+`e2e/.auth/state.json` (gitignored) for both `127.0.0.1` and `100.80.3.14`. That
+is why e2e must be started through `npm run test:e2e`, which loads `web/.env`;
+without a secret the setup fails loudly instead of silently testing `/login`.
+The `tanpa sesi` block opts out with an empty `storageState` and asserts the
+redirect to `/login`, plus 401 on `POST /api/actions/*` and 200 on `/api/status`.
+
 ```bash
-npx playwright install chromium   # one-off browser download
-npm run build:dashboard           # e2e hits the production build
-npm run start:api &               # Hono on 9121
-npm run start:dashboard &         # Next on 9120
-npm run test:e2e                  # == npm run test:e2e --workspace @autore/dashboard
+npx playwright install chromium         # one-off browser download
+sudo npx playwright install-deps chromium   # 4 missing libs here: libatk1.0-0t64,
+                                        # libatk-bridge2.0-0t64, libatspi2.0-0t64,
+                                        # libxdamage1. Without them every test dies
+                                        # with "Host system is missing dependencies".
+npm run build:dashboard                 # e2e hits the production build; the script
+                                        # loads web/.env via dotenv-cli (no manual
+                                        # `set -a; . ./.env` needed any more)
+npm run start:api &                     # Hono on 9121
+npm run start:dashboard &               # Next on 9120
+npm run test:e2e                        # == dotenv -e .env -- ... --workspace @autore/dashboard
 ```
 
 Both services must already be up; the Playwright config does not start them.

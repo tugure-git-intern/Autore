@@ -291,22 +291,39 @@ pub fn generate_project_files_with(
 pub const CONTOH_APP_PY: &str = include_str!("../../sandbox/dummy-app/app.py");
 pub const CONTOH_TEST_PY: &str = include_str!("../../sandbox/dummy-app/test_app.py");
 
+/// Contoh Node.js juga datang dari sandbox supaya tidak ada dua versi contoh.
+/// `package.json`-nya memakai `npm start` + `npm test` (`node --test`), jadi
+/// Dockerfile hasil generate langsung menemukan entrypoint dan menjalankan tes.
+pub const CONTOH_PACKAGE_JSON: &str = include_str!("../../sandbox/dummy-app-node/package.json");
+pub const CONTOH_APP_JS: &str = include_str!("../../sandbox/dummy-app-node/app.js");
+pub const CONTOH_TEST_JS: &str = include_str!("../../sandbox/dummy-app-node/test.js");
+
+/// Berkas contoh per stack. Python dan Node.js punya contoh yang langsung jalan
+/// (endpoint `/` + `/health`); stack lain belum punya contoh sama sekali.
+fn berkas_contoh(stack: TechStack) -> &'static [(&'static str, &'static str)] {
+    match stack {
+        TechStack::Python => &[("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)],
+        TechStack::NodeJs => &[
+            ("package.json", CONTOH_PACKAGE_JSON),
+            ("app.js", CONTOH_APP_JS),
+            ("test.js", CONTOH_TEST_JS),
+        ],
+        _ => &[],
+    }
+}
+
 /// Tulis kode contoh ke folder project supaya tahap deploy tidak ditolak karena
 /// folder kosong. File yang sudah ada TIDAK ditimpa.
-///
-/// ponytail: hanya stack yang punya contoh (python). Tambah cabang kalau ada
-/// template stack lain yang siap dipakai.
 pub fn tulis_kode_contoh(dir: &Path, stack: TechStack) -> std::io::Result<Vec<&'static str>> {
     let mut dibuat = Vec::new();
-    if stack == TechStack::Python {
-        for (nama, isi) in [("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)] {
-            let tujuan = dir.join(nama);
-            if !tujuan.exists() {
-                fs::create_dir_all(dir)?;
-                fs::write(&tujuan, isi)?;
-                dibuat.push(nama);
-            }
+    for (nama, isi) in berkas_contoh(stack) {
+        let tujuan = dir.join(nama);
+        if tujuan.exists() {
+            continue;
         }
+        fs::create_dir_all(dir)?;
+        fs::write(&tujuan, isi)?;
+        dibuat.push(*nama);
     }
     Ok(dibuat)
 }
@@ -344,6 +361,25 @@ mod tests {
     fn kode_contoh_kosong_untuk_stack_tanpa_template() {
         let tmp = TempDir::new().unwrap();
         assert!(tulis_kode_contoh(tmp.path(), TechStack::Go).unwrap().is_empty());
+    }
+
+    #[test]
+    fn kode_contoh_node_langsung_jalan_dengan_npm_start_dan_npm_test() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+
+        let dibuat = tulis_kode_contoh(dir, TechStack::NodeJs).unwrap();
+
+        assert_eq!(dibuat, vec!["package.json", "app.js", "test.js"]);
+        let pkg: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join("package.json")).unwrap()).unwrap();
+        // Dockerfile hasil generate memanggil `npm start` kalau scripts.start ada dan
+        // `npm test --if-present` di stage test: dua-duanya harus benar-benar ada,
+        // kalau tidak image node ter-deploy tanpa entrypoint atau tanpa tes.
+        assert_eq!(pkg["main"], "app.js");
+        assert_eq!(pkg["scripts"]["start"], "node app.js");
+        assert_eq!(pkg["scripts"]["test"], "node --test");
+        assert!(fs::read_to_string(dir.join("app.js")).unwrap().contains("/health"));
     }
 
     #[test]

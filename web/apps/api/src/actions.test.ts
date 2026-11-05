@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -404,5 +404,71 @@ describe("quick-start", () => {
     });
 
     expect(await kosong.quickStart(INPUT)).toMatchObject({ ok: false, status: 503 });
+  });
+});
+
+describe("registry aplikasi", () => {
+  const INPUT = { nama: "coba-web", stack: "nodejs", kode: "contoh" } as const;
+
+  it("mencatat aplikasi baru supaya muncul di daftar dashboard", async () => {
+    const dir = await workspace(["tes-web"]);
+    await writeFile(join(dir, "registry.tsv"), "tes-web\t8000\t8003\n");
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => {
+        await mkdir(join(dir, "coba-web"), { recursive: true });
+        return result();
+      }),
+    });
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ ok: true });
+    const baris = (await readFile(join(dir, "registry.tsv"), "utf8")).trimEnd().split("\n");
+    expect(baris[0]).toBe("tes-web\t8000\t8003");
+    const [, app, deploy] = baris[1].split("\t");
+    expect([baris[1].split("\t")[0], app]).toEqual(["coba-web", "8000"]);
+    expect(Number(deploy)).toBeGreaterThanOrEqual(8003);
+    expect(Number(deploy) % 10).toBe(3);
+  });
+
+  it("tetap mencatat aplikasi yang build pertamanya gagal, karena aplikasinya nyata", async () => {
+    const dir = await workspace(["tes-web"]);
+    await writeFile(join(dir, "registry.tsv"), "");
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => {
+        await mkdir(join(dir, "coba-web"), { recursive: true });
+        return result({ exitCode: 1, stderr: "ERROR: job Jenkins gagal dibuat" });
+      }),
+    });
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ status: 422 });
+    const baris = (await readFile(join(dir, "registry.tsv"), "utf8")).trimEnd().split("\n");
+    expect(baris).toHaveLength(1);
+    expect(baris[0].startsWith("coba-web\t8000\t")).toBe(true);
+  });
+
+  it("tidak mencatat apa pun kalau folder aplikasi sudah ada (409)", async () => {
+    const dir = await workspace(["coba-web"]);
+    await writeFile(join(dir, "registry.tsv"), "");
+    const { actions } = make(dir);
+
+    const out = await actions.quickStart(INPUT);
+
+    expect(out).toMatchObject({ status: 409 });
+    expect(await readFile(join(dir, "registry.tsv"), "utf8")).toBe("");
+  });
+
+  it("tidak mencatat kalau CLI tidak meninggalkan folder aplikasi", async () => {
+    const dir = await workspace(["tes-web"]);
+    await writeFile(join(dir, "registry.tsv"), "");
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => result({ exitCode: 1, stderr: "ERROR: nama ditolak" })),
+    });
+
+    await actions.quickStart(INPUT);
+
+    expect(await readFile(join(dir, "registry.tsv"), "utf8")).toBe("");
   });
 });

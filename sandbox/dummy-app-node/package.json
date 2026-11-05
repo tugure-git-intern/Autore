@@ -1,0 +1,14 @@
+{
+  "name": "autore-dummy-app-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Node.js app used to exercise the Autore sandbox pipeline.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

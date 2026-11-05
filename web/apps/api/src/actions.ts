@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { catatAplikasi } from "./registry";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
 import { loadDashboardStatus, type RunAutore } from "./status";
@@ -90,6 +91,29 @@ export type Actions = ReturnType<typeof hatchActions>;
  * teks yang datang dari browser: id aplikasi hanya dipakai sebagai kunci pencarian,
  * dan path selalu dibentuk di sini dari `workspace` yang dikonfigurasi unit.
  */
+/** Aplikasi dianggap nyata kalau CLI meninggalkan foldernya di workspace. */
+async function folderAda(dir: string): Promise<boolean> {
+  try {
+    return (await stat(dir)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Aplikasi yang dibuat lewat dashboard WAJIB masuk `registry.tsv`, karena daftar
+ * aplikasi di dashboard dibaca dari file itu. Gagal mencatat tidak boleh
+ * menyembunyikan hasil aksinya, jadi pesannya cuma ditempel ke keluaran.
+ */
+async function catatKeRegistry(workspace: string, dir: string, nama: string): Promise<string> {
+  if (!(await folderAda(dir))) return "";
+  try {
+    return `terdaftar di registry (port ${await catatAplikasi(workspace, nama)})`;
+  } catch (error) {
+    return `gagal menambah "${nama}" ke registry.tsv: ${String(error)}`;
+  }
+}
+
 export function hatchActions(deps: {
   workspace: string;
   run: RunAutore;
@@ -244,7 +268,10 @@ export function hatchActions(deps: {
         return failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);
       }
 
-      const output = capped([res.stdout.trim(), res.stderr.trim()].filter(Boolean).join("\n"));
+      const catatan = await catatKeRegistry(workspace, dir, input.nama);
+      const output = capped(
+        [res.stdout.trim(), res.stderr.trim(), catatan].filter(Boolean).join("\n"),
+      );
       return res.exitCode === 0
         ? {
             ok: true,

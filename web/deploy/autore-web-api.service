@@ -7,6 +7,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/tugure/Autore/web
+# Satu `.env` untuk dua unit: dashboard butuh auth, API butuh rahasia sesi yang
+# sama. `-` = jangan gagal saat berkasnya belum ada, supaya urutan pemasangan
+# tidak mematikan service.
+EnvironmentFile=-/home/tugure/Autore/web/.env
 Environment=NODE_ENV=production
 # Aksi (deploy/scan) memakai tiga variabel ini; tanpa workspace dan target deploy
 # endpoint-nya menolak dengan 503, bukan menebak direktori.

@@ -8,6 +8,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/tugure/Autore/web
+# Sumber rahasia auth (GITHUB_ID/SECRET, NEXTAUTH_SECRET, NEXTAUTH_URL).
+# `-` = jangan gagal kalau `.env` belum ada.
+EnvironmentFile=-/home/tugure/Autore/web/.env
 Environment=NODE_ENV=production
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:dashboard

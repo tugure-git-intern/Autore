@@ -79,6 +79,19 @@ systemctl --user daemon-reload
 systemctl --user enable --now autore-web-api.service autore-web-dashboard.service
 ```
 
+Kedua unit memuat `web/.env` lewat
+`EnvironmentFile=-/home/tugure/Autore/web/.env` (`-` = jangan gagal kalau berkas
+itu belum ada). Setelah mengubah `.env` atau berkas unit:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart autore-web-api autore-web-dashboard
+systemctl --user is-active autore-web-api autore-web-dashboard   # dua kali "active"
+```
+
+Rahasia auth dan cara mengisinya: lihat [Auth (GitHub OAuth +
+whitelist)](#auth-github-oauth--whitelist).
+
 Health probes:
 
 ```bash
@@ -130,12 +143,86 @@ curl -s -w "\n%{http_code}\n" -X POST http://127.0.0.1:9121/api/actions/scan \
   -H 'content-type: application/json' -d '{"app":"tes-web","x":1}'      # 400: kunci ekstra
 ```
 
-**Jaringan tepercaya saja.** Tidak ada autentikasi: siapa pun yang bisa
-menjangkau `9120` (yang meneruskan ke `9121`) bisa memicu commit+push dan build
-Jenkins. Jangan pernah expose port ini ke internet; biarkan hanya di
-tailnet/jaringan internal. Perintah tidak pernah disusun dari string kiriman
-browser (`execFile` + `shell: false`, argv tetap), jadi ini bukan jalur eksekusi
-perintah sembarang — tapi tetap jalur yang mengubah repo dan memicu build.
+**Butuh sesi GitHub.** `POST /api/actions/*` menjawab 401 tanpa cookie
+`authjs.session-token` yang sah — lihat
+[Auth (GitHub OAuth + whitelist)](#auth-github-oauth--whitelist). Perintah tidak
+pernah disusun dari string kiriman browser (`execFile` + `shell: false`, argv
+tetap), jadi ini bukan jalur eksekusi perintah sembarang — tapi tetap jalur yang
+mengubah repo dan memicu build Jenkins, dan sekarang hanya akun di whitelist
+yang bisa memicunya. Port ini tetap jangan di-expose ke internet; biarkan hanya
+di tailnet/jaringan internal.
+
+## Auth (GitHub OAuth + whitelist)
+
+Identitas dipegang GitHub: tidak ada kata sandi, tidak ada credential store,
+tidak ada database. Login menerbitkan cookie JWE `authjs.session-token`
+(ditandatangani `AUTH_SECRET`/`NEXTAUTH_SECRET`, umur 8 jam) yang dibaca tiga
+tempat: halaman (`apps/dashboard/src/middleware.ts`), API aksi
+(`apps/api/src/session.ts`), dan tombol Keluar (`signOut()`).
+
+- Semua route butuh sesi kecuali `/login`, `/403` dan `/api/auth/*`. Tanpa sesi →
+  `/login?callbackUrl=...`; login sah tapi di luar whitelist → `/403`.
+- Username GitHub diperiksa dua kali — saat login (`auth.config.ts`) dan tiap
+  request (`middleware.ts`) — jadi mencabut user dari whitelist berlaku begitu
+  service di-restart.
+- Whitelist: `web/allowed-users.json` (array login GitHub, huruf besar-kecil
+  diabaikan). `AUTORE_ALLOWED_USERS` di `web/.env` (dipisah koma) **menimpa**
+  berkas itu kalau tidak kosong.
+
+### Environment
+
+`web/.env` satu-satunya tempat rahasia dan ter-ignore git (`.gitignore:3`).
+
+```bash
+cp .env.example .env     # lalu isi nilainya; jangan pernah commit
+grep -c . .env           # memastikan berkasnya berisi
+```
+
+| Variabel | Isi |
+| --- | --- |
+| `GITHUB_ID`, `GITHUB_SECRET` | OAuth App GitHub (akun pemilik repo) |
+| `NEXTAUTH_SECRET` (atau `AUTH_SECRET`) | penandatangan cookie; `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | URL yang dilihat browser, mis. `http://100.80.3.14:9120` |
+| `AUTH_TRUST_HOST` | `true` — wajib di belakang tailnet (host bukan localhost) |
+| `AUTORE_ALLOWED_USERS` | opsional; menimpa `allowed-users.json` |
+
+Callback URL OAuth App GitHub harus `http://<host>:9120/api/auth/callback/github`.
+
+### Apa yang terbuka, apa yang ditolak
+
+| Endpoint | Tanpa sesi |
+| --- | --- |
+| `GET /healthz`, `GET /api/status`, `GET /api/runs` | 200 — hanya baca, dan unit listen di `127.0.0.1` |
+| `POST /api/actions/deploy`, `POST /api/actions/scan` | **401** `{"ok":false,"status":401}` |
+| Aksi dari login di luar whitelist | **401** dari API, `/403` dari halaman |
+| `AUTH_SECRET` kosong di unit API | **503** — fail closed, bukan 200 tanpa pemeriksaan |
+
+UI menampilkan "Sesi Anda sudah berakhir. Silakan login ulang." lalu berpindah ke
+`/login` begitu API menjawab 401/403.
+
+### Batas jujur
+
+- Kalau `AUTORE_ALLOWED_USERS` kosong, API hanya memverifikasi tanda tangan
+  token: pencabutan user baru efektif setelah cookie habis (maks 8 jam) atau
+  setelah whitelist diubah **dan** service di-restart. Isi
+  `AUTORE_ALLOWED_USERS` kalau ingin API ikut mencocokkan daftar tiap request.
+- Middleware sengaja tidak menyaring `/api/*`: redirect 307 di dalam `fetch()`
+  terbaca sebagai HTML 200 oleh klien. Boundary API dipegang Hono dengan JSON
+  401, bukan redirect.
+- Verifikasi sesi butuh `globalThis.crypto`; Node 18 belum menyediakannya, jadi
+  `apps/api/src/session.ts` memasang `webcrypto` sendiri. Jangan hapus.
+
+### Uji login manual
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart autore-web-api autore-web-dashboard
+systemctl --user is-active autore-web-api autore-web-dashboard
+```
+
+Buka `http://100.80.3.14:9120/` → harus mendarat di `/login` → `Lanjut dengan
+GitHub`. Akun di whitelist masuk ke `/` dengan avatar + username di topbar
+(tombol Keluar kembali ke `/login`); akun di luar whitelist mendarat di `/403`.
 
 ## Live status contract check
 

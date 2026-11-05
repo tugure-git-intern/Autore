@@ -78,6 +78,14 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY --from=test /usr/local /usr/local
 COPY --from=test /app /app
+# Tambal paket OS dari repo security. Base `python:3.12-slim` masih membawa apt
+# 3.0.3, dan CVE-2026-109518 sudah punya perbaikan (3.0.4 di trixie-security),
+# sehingga gerbang Trivy memblokir image. Hanya stage ini yang dikirim, jadi
+# menambal di stage `test` tidak menolong. Tanpa pin versi: `upgrade` ikut
+# membawa perbaikan berikutnya tanpa perlu menyunting template lagi.
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --no-create-home appuser
 USER appuser
 EXPOSE {port}
@@ -336,6 +344,41 @@ mod tests {
     fn kode_contoh_kosong_untuk_stack_tanpa_template() {
         let tmp = TempDir::new().unwrap();
         assert!(tulis_kode_contoh(tmp.path(), TechStack::Go).unwrap().is_empty());
+    }
+
+    #[test]
+    fn dockerfile_python_menambal_paket_os_di_stage_runtime() {
+        let cfg = InitConfig {
+            app_name: "sample-service".to_string(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8081,
+        };
+        let dockerfile = render_dockerfile(&cfg);
+
+        // Tarikan terakhir adalah stage yang dikirim: menambal paket OS di stage
+        // `test` tidak menolong image yang dipindai Trivy, karena stage runtime
+        // memulai lagi dari base yang sama (kasus nyata: apt 3.0.3 → 3.0.4).
+        let stage_runtime = dockerfile
+            .rfind("FROM python:3.12-slim")
+            .expect("stage runtime ada");
+        let tambalan = dockerfile
+            .find("apt-get -y upgrade")
+            .expect("paket OS ditambal di image akhir");
+        assert!(
+            tambalan > stage_runtime,
+            "tambalan harus di stage runtime, bukan stage test"
+        );
+        // `apt-get upgrade` butuh root, jadi harus mendahului `USER appuser`.
+        let jadi_non_root = dockerfile.find("USER appuser").expect("USER non-root ada");
+        assert!(
+            tambalan < jadi_non_root,
+            "tambalan harus jalan sebagai root sebelum USER appuser"
+        );
+        assert!(
+            dockerfile.contains("rm -rf /var/lib/apt/lists/*"),
+            "daftar paket apt wajib dibersihkan supaya image tidak membengkak"
+        );
     }
 
     #[test]

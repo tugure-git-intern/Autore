@@ -112,6 +112,25 @@ export type ActivePayload = {
 
 export type ApiActiveResponse = { data: ActivePayload; stale: boolean };
 
+export type SbomPackageType = "os" | "language";
+
+/** Mirrors `autore sbom --json` (diteruskan apa adanya oleh Hono). */
+export type SbomPackage = {
+  name: string;
+  /** CLI sends "" (never null) when the SBOM does not record a version. */
+  version: string;
+  type: SbomPackageType;
+};
+
+export type SbomPayload = {
+  app: string;
+  /** `metadata.timestamp` CycloneDX; "" kalau SBOM tidak mencatatnya. */
+  generated_at: string;
+  source: string;
+  total: number;
+  packages: SbomPackage[];
+};
+
 /** CLI sends "" (never null) for unavailable text. Empty must render as a dash, not as a fake value. */
 export function dash(value: string | null | undefined): string {
   return value && value.trim() ? value : "—";

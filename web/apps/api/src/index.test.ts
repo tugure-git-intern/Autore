@@ -6,6 +6,7 @@ import { encode } from "@auth/core/jwt";
 import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
 import { emptyRuns, type RunsPayload } from "./runs";
+import { emptyActive, type ActivePayload } from "./active";
 
 /**
  * Aksi sekarang butuh sesi. Cookie-nya asli (JWE dari @auth/core) supaya tes
@@ -49,6 +50,34 @@ const STATUS = JSON.stringify({
 });
 
 const ok = (): SpawnResult => ({ exitCode: 0, stdout: "lulus", stderr: "" });
+
+/** Satu kartu berjalan + satu menunggu, seperti kontrak `autore active --json`. */
+const ACTIVE: ActivePayload = {
+  generated_at: "2026-11-05T03:40:00Z",
+  active: [
+    {
+      app: "tes-web",
+      number: 42,
+      status: "running",
+      branch: "main",
+      commit_sha: "3878d9307475eb84316edde4e77f63fd0b98ae4e",
+      author: "Uji <uji@example.test>",
+      started_at: "2026-11-05T03:23:08Z",
+      url: "http://100.80.3.14:8080/job/tes-web/42",
+    },
+    {
+      app: "ui-demo",
+      number: 0,
+      status: "queued",
+      branch: "",
+      commit_sha: "",
+      author: "",
+      started_at: "2026-11-05T03:25:00Z",
+      url: "http://100.80.3.14:8080/job/ui-demo",
+    },
+  ],
+  counts: { running: 1, queued: 1 },
+};
 
 async function freshApp() {
   vi.resetModules();
@@ -98,6 +127,10 @@ async function testApp(
     stale: false,
   }),
   status: string = STATUS,
+  active: () => Promise<{ data: ActivePayload; stale: boolean }> = async () => ({
+    data: ACTIVE,
+    stale: false,
+  }),
 ) {
   const { createApp } = await freshApp();
   const { hatchActions } = await import("./actions");
@@ -108,7 +141,7 @@ async function testApp(
     spawn,
     deployApp: "tes-web",
     bin: "autore",
-  }), runs, { secret: TEST_SECRET });
+  }), runs, { secret: TEST_SECRET }, active);
 }
 
 async function workspace() {
@@ -155,6 +188,36 @@ describe("GET /api/runs", () => {
     expect(body.stale).toBe(true);
     expect(body.data.runs).toEqual([]);
     expect(body.data.daily).toHaveLength(7);
+  });
+});
+
+describe("GET /api/active", () => {
+  it("mengembalikan kartu pipeline aktif tanpa memerlukan sesi", async () => {
+    const app = await testApp();
+
+    const response = await app.request("http://localhost/api/active");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(body).toMatchObject({ stale: false, data: { counts: { running: 1, queued: 1 } } });
+    expect(body.data.active[0]).toMatchObject({ app: "tes-web", status: "running", branch: "main" });
+    expect(body.data.active[1]).toMatchObject({ app: "ui-demo", status: "queued" });
+  });
+
+  it("tetap 200 dengan daftar kosong saat CLI gagal", async () => {
+    const app = await testApp(undefined, undefined, undefined, async () => ({
+      data: emptyActive(Date.parse("2026-11-05T03:40:00Z")),
+      stale: true,
+    }));
+
+    const response = await app.request("http://localhost/api/active");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.stale).toBe(true);
+    expect(body.data.active).toEqual([]);
+    expect(body.data.counts).toEqual({ running: 0, queued: 0 });
   });
 });
 

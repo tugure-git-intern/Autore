@@ -4,9 +4,11 @@ import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
 import { getRuns, type RunsPayload } from "./runs";
+import { getActive, type ActivePayload } from "./active";
 import { parseAllowed, requireSession } from "./session";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
+export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
 
 /**
  * Aksi (deploy/scan) membaca konfigurasi unit. Tanpa `AUTORE_WORKSPACE` aksi
@@ -56,6 +58,7 @@ export function createApp(
   actions: Actions = configuredActions(run),
   runs: RunsLoader = () => getRuns(),
   auth: { secret?: string; allowed?: string[] } = {},
+  active: ActiveLoader = () => getActive(),
 ) {
   const app = new Hono();
 
@@ -69,6 +72,13 @@ export function createApp(
   app.get("/api/runs", async (c) => {
     c.header("Cache-Control", "no-store");
     return c.json(await runs());
+  });
+
+  // Data live untuk section "Active Pipelines": cache 5 detik di dalam `getActive`
+  // supaya polling 10 detik dari klien tidak menambah beban Jenkins.
+  app.get("/api/active", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await active());
   });
 
   app.get("/api/status", async (c) => {

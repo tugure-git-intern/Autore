@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { catatAplikasi } from "./registry";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
+import type { Identitas } from "./session";
 import { loadDashboardStatus, type RunAutore } from "./status";
 
 const execFileAsync = promisify(execFile);
@@ -220,8 +221,10 @@ export function hatchActions(deps: {
    * Alur 1-klik: kerangka pipeline, repo GitHub, push, daftar ke Jenkins, build pertama.
    * Lock `busy` dipakai bersama deploy/scan - dua push ke repo yang sama tidak bisa
    * diselamatkan di sisi klien.
+   *
+   * `author` = identitas dari sesi dashboard; jadi author commit di repo (audit trail).
    */
-  async function quickStart(input: QuickStartInput): Promise<ActionResult> {
+  async function quickStart(input: QuickStartInput, author?: Identitas): Promise<ActionResult> {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
@@ -245,7 +248,7 @@ export function hatchActions(deps: {
     try {
       let res: SpawnResult;
       try {
-        res = await deps.spawn(bin, argvQuickStart(workspace, input), {
+        res = await deps.spawn(bin, argvQuickStart(workspace, input, author), {
           shell: false,
           timeout: TIMEOUT["quick-start"],
           cwd: workspace,

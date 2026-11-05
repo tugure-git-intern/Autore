@@ -70,6 +70,8 @@ describe("bacaBodyQuickStart", () => {
       false,
     );
     expect(bacaBodyQuickStart({ nama: "web-1", stack: "go", app: "lain" }).ok).toBe(false);
+    // Identitas datang dari sesi, bukan dari browser: kunci `author` = body salah bentuk.
+    expect(bacaBodyQuickStart({ nama: "web-1", stack: "go", author: { nama: "Penyerang" } }).ok).toBe(false);
   });
 
   it("whitelist hanya memuat empat bahasa dan dua pilihan kode", () => {
@@ -97,6 +99,27 @@ describe("argvQuickStart", () => {
       "--kode",
       "contoh",
     ]);
+  });
+
+  it("menambahkan --author-name/--author-email dari sesi", () => {
+    const args = argvQuickStart(
+      "/home/tugure/autore-workspace",
+      { nama: "coba-web", stack: "nodejs", kode: "contoh" },
+      { login: "maliffadlan", nama: "Alif Fadlan", email: "alif@example.com" },
+    );
+
+    expect(args.slice(-4)).toEqual([
+      "--author-name",
+      "Alif Fadlan",
+      "--author-email",
+      "alif@example.com",
+    ]);
+  });
+
+  it("tanpa identitas tidak mengirim flag apa pun (CLI dipanggil langsung)", () => {
+    const args = argvQuickStart("/ws", { nama: "coba-web", stack: "go", kode: "kosong" });
+
+    expect(args.some((a) => a.startsWith("--author-"))).toBe(false);
   });
 });
 

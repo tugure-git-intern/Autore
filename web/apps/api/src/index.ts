@@ -7,7 +7,7 @@ import { getRuns, type RunsPayload } from "./runs";
 import { getActive, type ActivePayload } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom, type SbomResult } from "./sbom";
-import { parseAllowed, requireSession } from "./session";
+import { parseAllowed, requireSession, type Identitas } from "./session";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
@@ -106,7 +106,7 @@ export function createApp(
   active: ActiveLoader = () => getActive(),
   sbom: SbomLoader = configuredSbom(run),
 ) {
-  const app = new Hono();
+  const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
 
@@ -158,11 +158,13 @@ export function createApp(
 
   // Aksi paling berat: repo GitHub PUBLIK + job Jenkins + push. Konfirmasi ganda ada
   // di UI; di sisi ini yang ditegakkan: sesi, validasi whitelist, lock `busy`, argv tetap.
+  // Identitas author diambil dari sesi (bukan body) supaya audit trail menunjuk
+  // orangnya, bukan bot.
   app.post("/api/actions/quick-start", async (c) => {
     const body = await readQuickStartBody(c.req.raw);
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
-    return reply(c, await actions.quickStart(body.nilai));
+    return reply(c, await actions.quickStart(body.nilai, c.get("sesi")));
   });
 
   return app;

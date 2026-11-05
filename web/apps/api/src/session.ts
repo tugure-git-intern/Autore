@@ -10,6 +10,13 @@ if (!globalThis.crypto) {
 }
 
 /**
+ * Identitas pemanggil dari sesi dashboard. Dipakai sebagai author commit supaya
+ * audit trail menunjuk orang yang menekan tombol, bukan bot. Nilainya mendarat di
+ * argv CLI dan dari sana ke `.git/config`, jadi dibersihkan di sini juga.
+ */
+export type Identitas = { login: string; nama: string; email: string };
+
+/**
  * Satu-satunya tempat di sisi API yang menyentuh `@auth/core/jwt`. Cookie-nya
  * sama persis dengan yang ditulis dashboard: JWE yang dienkripsi `AUTH_SECRET`
  * dengan `salt` = nama cookie. Jadi tidak ada session store bersama dan tidak
@@ -19,11 +26,39 @@ const NAMA_COOKIE = ["authjs.session-token", "__Secure-authjs.session-token"];
 
 const normal = (teks: string) => teks.trim().toLowerCase();
 
-export async function verifySession(request: Request, secret: string): Promise<{ login: string } | null> {
+const NAMA_MAKS = 100;
+
+/** Alamat polos saja — tidak ada spasi, kurung sudut, atau `@` ganda. */
+const EMAIL_POLOS = /^[^@\s<>]{1,64}@[^@\s<>]{1,190}$/;
+
+/** Buang karakter kontrol: `\n` di nama bisa menyuntik baris ke `.git/config`. */
+const bersih = (nilai: unknown): string =>
+  typeof nilai === "string" ? nilai.replace(/[\u0000-\u001f\u007f]/g, " ").trim() : "";
+
+/**
+ * Terjemahkan token Auth.js jadi identitas commit. Nama kosong jatuh ke login dan
+ * email privat GitHub (`null`) jatuh ke alamat noreply resmi, supaya author tidak
+ * pernah kosong. Tanpa login tidak ada identitas sama sekali (`null`).
+ */
+export function identitasDariToken(token: unknown): Identitas | null {
+  const t = (token ?? {}) as { login?: unknown; name?: unknown; email?: unknown };
+  const login = typeof t.login === "string" ? t.login.trim() : "";
+  if (!login) return null;
+
+  const nama = bersih(t.name).slice(0, NAMA_MAKS) || login;
+  const email = bersih(t.email);
+  return {
+    login,
+    nama,
+    email: EMAIL_POLOS.test(email) ? email : `${normal(login)}@users.noreply.github.com`,
+  };
+}
+
+export async function verifySession(request: Request, secret: string): Promise<Identitas | null> {
   for (const cookieName of NAMA_COOKIE) {
     const token = await getToken({ req: request, secret, salt: cookieName, cookieName }).catch(() => null);
-    const login = typeof token?.login === "string" ? token.login.trim() : "";
-    if (login) return { login };
+    const identitas = identitasDariToken(token);
+    if (identitas) return identitas;
   }
   return null;
 }
@@ -40,8 +75,13 @@ export function parseAllowed(raw: string | undefined): string[] | undefined {
 /**
  * Fail closed: tanpa rahasia, aksi tidak boleh jalan sama sekali — 503, bukan
  * 200 tanpa pemeriksaan.
+ *
+ * Sesi yang lolos disimpan di context (`sesi`) supaya aksi yang butuh identitas
+ * (quick-start) tidak memverifikasi cookie untuk kedua kalinya.
  */
-export function requireSession(options: { secret?: string; allowed?: string[] } = {}): MiddlewareHandler {
+export function requireSession(
+  options: { secret?: string; allowed?: string[] } = {},
+): MiddlewareHandler<{ Variables: { sesi: Identitas } }> {
   return async (c, next) => {
     const secret = options.secret ?? process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
     if (!secret) {
@@ -57,6 +97,7 @@ export function requireSession(options: { secret?: string; allowed?: string[] } 
       return c.json({ ok: false, status: 403, error: "Akun GitHub ini tidak ada di whitelist." }, 403);
     }
 
+    c.set("sesi", sesi);
     await next();
   };
 }

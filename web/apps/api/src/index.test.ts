@@ -472,7 +472,10 @@ describe("POST /api/actions/quick-start", () => {
     });
     const [, args] = spawn.mock.calls[0] as [string, string[]];
     expect(args.slice(0, 2)).toEqual(["quick-start", "--path"]);
-    expect(args.at(-1)).toBe("contoh");
+    // Identitas sesi ikut di ujung argv (audit trail), jadi kode bukan lagi elemen terakhir.
+    expect(args).toEqual(
+      expect.arrayContaining(["--app-name", "coba-web", "--kode", "contoh", "--author-name", "alif"]),
+    );
   });
 
   it("menolak nama tidak sah dengan 400 tanpa menjalankan proses apa pun", async () => {

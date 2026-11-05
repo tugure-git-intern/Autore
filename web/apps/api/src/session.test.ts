@@ -29,7 +29,13 @@ async function app(name: string, auth: { secret?: string; allowed?: string[] }) 
   const { hatchActions } = await import("./actions");
   const dir = await mkdtemp(join(tmpdir(), `autore-sesi-${name}-`));
   await mkdir(join(dir, "tes-web"), { recursive: true });
-  const spawn = vi.fn(async (): Promise<SpawnResult> => ({ exitCode: 0, stdout: "lulus", stderr: "" }));
+  const spawn = vi.fn(
+    async (_file: string, _args: string[], _options: unknown): Promise<SpawnResult> => ({
+      exitCode: 0,
+      stdout: "lulus",
+      stderr: "",
+    }),
+  );
   const app = createApp(
     async () => STATUS,
     hatchActions({ workspace: dir, run: async () => STATUS, spawn, deployApp: "tes-web", bin: "autore" }),
@@ -66,19 +72,87 @@ const RUNS = {
   totals: { passed: 0, failed: 0, running: 0 },
 };
 
+/** Cookie dengan nama & email seperti token GitHub sungguhan. */
+const sesiGithub = (nama: string | null, email: string | null) =>
+  encode({
+    token: { login: "MAliffadlan", name: nama, email, sub: "7" },
+    secret: SECRET,
+    salt: "authjs.session-token",
+  });
+
 const aksi = (aplikasi: { request: (input: string, init?: RequestInit) => Promise<Response> }, cookie?: string) =>
   aplikasi.request("http://localhost/api/actions/deploy", {
     method: "POST",
     headers: cookie ? { cookie } : {},
   });
 
+describe("identitasDariToken", () => {
+  it("memakai name & email dari token apa adanya", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    expect(
+      identitasDariToken({ login: "MAliffadlan", name: "Alif Fadlan", email: "alif@example.com" }),
+    ).toEqual({ login: "MAliffadlan", nama: "Alif Fadlan", email: "alif@example.com" });
+  });
+
+  it("email null (privat di GitHub) jatuh ke noreply login", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    expect(identitasDariToken({ login: "MAliffadlan", name: "Alif Fadlan", email: null }).email).toBe(
+      "maliffadlan@users.noreply.github.com",
+    );
+    expect(identitasDariToken({ login: "MAliffadlan", name: null, email: "" }).email).toBe(
+      "maliffadlan@users.noreply.github.com",
+    );
+  });
+
+  it("nama kosong jatuh ke login, jadi author tidak pernah kosong", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    expect(identitasDariToken({ login: "MAliffadlan", name: "   ", email: null }).nama).toBe("MAliffadlan");
+  });
+
+  it("membuang karakter kontrol dan memotong nama yang kepanjangan", async () => {
+    const { identitasDariToken } = await import("./session");
+    const hasil = identitasDariToken({
+      login: "alif",
+      name: `Alif\n[user]\n\tevil = 1 ${"x".repeat(200)}`,
+      email: null,
+    });
+
+    expect(hasil.nama).not.toContain("\n");
+    expect(hasil.nama.split("").every((c) => c.codePointAt(0)! >= 32)).toBe(true);
+    expect(hasil.nama.length).toBeLessThanOrEqual(100);
+  });
+
+  it("menolak email yang bukan alamat polos", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    for (const jahat of ["bukan-email", "a@b c", "x@y<z>", "a@@b.com"]) {
+      expect(identitasDariToken({ login: "alif", name: "Alif", email: jahat }).email).toBe(
+        "alif@users.noreply.github.com",
+      );
+    }
+  });
+
+  it("tanpa login tidak ada identitas (null, bukan author kosong)", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    expect(identitasDariToken({ login: "", name: "Tanpa Login" })).toBeNull();
+    expect(identitasDariToken(null)).toBeNull();
+  });
+});
+
 describe("verifySession", () => {
   it("mengembalikan login dari cookie yang sah", async () => {
     const { verifySession } = await import("./session");
     const cookie = `authjs.session-token=${await sesi("alif")}`;
 
+    // Token tanpa name/email: nama jatuh ke login, email jatuh ke noreply GitHub.
     expect(await verifySession(new Request("http://localhost/", { headers: { cookie } }), SECRET)).toEqual({
       login: "alif",
+      nama: "alif",
+      email: "alif@users.noreply.github.com",
     });
   });
 
@@ -95,7 +169,18 @@ describe("verifySession", () => {
       SECRET,
     );
 
-    expect(hasil).toEqual({ login: "alif" });
+    expect(hasil).toMatchObject({ login: "alif" });
+  });
+
+  it("membawa nama dan email GitHub dari token, bukan hanya login", async () => {
+    const { verifySession } = await import("./session");
+    const cookie = `authjs.session-token=${await sesiGithub("Alif Fadlan", "alif@example.com")}`;
+
+    expect(await verifySession(new Request("http://localhost/", { headers: { cookie } }), SECRET)).toEqual({
+      login: "MAliffadlan",
+      nama: "Alif Fadlan",
+      email: "alif@example.com",
+    });
   });
 
   it("mengembalikan null tanpa cookie, tanpa login, atau dengan rahasia lain", async () => {
@@ -191,5 +276,38 @@ describe("POST /api/actions/* dengan sesi", () => {
 
     expect((await api.request("http://localhost/api/status")).status).toBe(200);
     expect((await api.request("http://localhost/api/runs")).status).toBe(200);
+  });
+
+  it("meneruskan identitas sesi ke argv quick-start (audit trail)", async () => {
+    const { app: api, spawn } = await app("identitas-quick-start", { secret: SECRET });
+    const cookie = `authjs.session-token=${await sesiGithub("Alif Fadlan", "alif@example.com")}`;
+
+    const res = await api.request("http://localhost/api/actions/quick-start", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ nama: "audit-uji", stack: "python", kode: "contoh" }),
+    });
+    const args = spawn.mock.calls[0][1];
+
+    expect(res.status).toBe(200);
+    expect(args).toEqual(
+      expect.arrayContaining(["--author-name", "Alif Fadlan", "--author-email", "alif@example.com"]),
+    );
+  });
+
+  it("menolak 400 body yang mencoba mengirim identitas sendiri", async () => {
+    const { app: api, spawn } = await app("identitas-palsu", { secret: SECRET });
+
+    const res = await api.request("http://localhost/api/actions/quick-start", {
+      method: "POST",
+      headers: {
+        cookie: `authjs.session-token=${await sesiGithub("Alif Fadlan", "alif@example.com")}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ nama: "audit-uji", stack: "python", author: { nama: "Penyerang" } }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(spawn).not.toHaveBeenCalled();
   });
 });

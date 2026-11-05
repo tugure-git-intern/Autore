@@ -4,7 +4,12 @@
  * Tidak ada teks dari browser yang masuk ke argv selain tiga nilai di bawah, dan
  * ketiganya sudah diloloskan whitelist/regex di sini. Argv disusun di server
  * sebagai array — `quick-start.ts` tidak pernah menyentuh shell.
+ *
+ * Identitas author (audit trail) juga bukan dari browser: nilainya datang dari
+ * sesi Auth.js, jadi dipanggil dari pemanggil (`argvQuickStart`) bukan dari body.
  */
+
+import type { Identitas } from "./session";
 
 /** Sama persis dengan `validate_app_name` di cli/src/templates.rs:227. */
 const NAMA_APP = /^[a-z0-9][a-z0-9_-]{0,62}$/;
@@ -81,8 +86,8 @@ export function bacaBodyQuickStart(body: unknown): HasilBaca {
 }
 
 /** Argv tetap: `--path` selalu workspace dari unit, bukan dari pemanggil. */
-export function argvQuickStart(workspace: string, nilai: QuickStartInput): string[] {
-  return [
+export function argvQuickStart(workspace: string, nilai: QuickStartInput, author?: Identitas): string[] {
+  const args = [
     "quick-start",
     "--path",
     workspace,
@@ -93,6 +98,10 @@ export function argvQuickStart(workspace: string, nilai: QuickStartInput): strin
     "--kode",
     nilai.kode,
   ];
+  // Identitas author hanya datang dari sesi (lihat `identitasDariToken`), tidak
+  // pernah dari body. Tanpa sesi, CLI memakai identitas bot bawaannya.
+  if (author) args.push("--author-name", author.nama, "--author-email", author.email);
+  return args;
 }
 
 /** CLI mencetak `• Repo GitHub <owner>/<nama> (baru dibuat|sudah ada)`. */

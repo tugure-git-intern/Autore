@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  exposeLogin,
-  githubLogin,
-  signInAllowed,
-  stampLogin,
-  type SessionLike,
-  type TokenLike,
-} from "./auth-callbacks";
+import { exposeLogin, githubLogin, signInAllowed, stampLogin } from "./auth-callbacks";
 
 describe("githubLogin", () => {
   it("mengambil login dari profil OAuth dan menormalkannya", () => {
@@ -45,7 +38,7 @@ describe("signInAllowed", () => {
 
 describe("stampLogin", () => {
   it("menyimpan login hasil normalisasi ke dalam token", () => {
-    const token: TokenLike = {};
+    const token = {};
     expect(stampLogin({ token, profile: { login: "AliF" } }).login).toBe("alif");
   });
 
@@ -54,7 +47,7 @@ describe("stampLogin", () => {
   });
 
   it("tidak menghapus isi token yang sudah ada", () => {
-    const token: TokenLike = { sub: "12345", name: "Alif" };
+    const token = { sub: "12345", name: "Alif" };
     expect(stampLogin({ token, profile: { login: "alif" } })).toMatchObject({
       sub: "12345",
       name: "Alif",
@@ -65,7 +58,7 @@ describe("stampLogin", () => {
 
 describe("exposeLogin", () => {
   it("meneruskan login dari token ke session.user", () => {
-    const session: SessionLike = { user: { name: "Alif" }, expires: "nanti" };
+    const session = { user: { name: "Alif" }, expires: "nanti" };
     const hasil = exposeLogin({ session, token: { login: "alif" } });
     expect(hasil.user).toMatchObject({ name: "Alif", login: "alif" });
     expect(hasil.expires).toBe("nanti");

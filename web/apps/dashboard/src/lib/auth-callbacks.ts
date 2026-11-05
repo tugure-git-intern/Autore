@@ -2,12 +2,10 @@ import { isAllowed, normalizeLogin } from "./allowlist";
 
 /**
  * Callback Auth.js versi murni: tanpa import runtime dari `next-auth`, sehingga
- * bisa diuji tanpa mock. Tipe lokal dipakai supaya berkas ini tidak menyeret
- * dependensi Next ke dalam tes.
+ * bisa diuji tanpa mock. Fungsi dibuat generik supaya tipe hasilnya tetap
+ * kompatibel dengan tanda tangan callback Auth.js tanpa deklarasi ulang tipe
+ * internalnya.
  */
-
-export type TokenLike = Record<string, unknown> & { login?: string };
-export type SessionLike = { user?: Record<string, unknown>; expires?: string };
 
 /**
  * Login OAuth dari profil GitHub. Tidak ada fallback ke nama tampilan: nama
@@ -23,13 +21,22 @@ export function signInAllowed(params: { profile?: unknown }, list: readonly stri
 }
 
 /** Token tanpa login menyimpan "" supaya middleware menolaknya, bukan meloloskannya. */
-export function stampLogin(params: { token: TokenLike; profile?: unknown }): TokenLike {
+export function stampLogin<T extends object>(params: {
+  token: T;
+  profile?: unknown;
+}): T & { login: string } {
   return { ...params.token, login: githubLogin(params.profile) };
 }
 
-export function exposeLogin(params: { session: SessionLike; token: TokenLike }): SessionLike {
-  return {
+export function exposeLogin<S extends { user?: unknown }, T extends object>(params: {
+  session: S;
+  token: T;
+}): S & { user: { login: string } } {
+  const lama = (params.session.user ?? {}) as Record<string, unknown>;
+  const login = (params.token as { login?: unknown }).login;
+  const hasil = {
     ...params.session,
-    user: { ...params.session.user, login: params.token.login ?? "" },
+    user: { ...lama, login: typeof login === "string" ? login : "" },
   };
+  return hasil as S & { user: { login: string } };
 }

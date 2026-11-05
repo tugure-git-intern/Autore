@@ -6,15 +6,16 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:dashboard": "npm run dev --workspace @autore/dashboard",
+    "dev:dashboard": "dotenv -e .env -- npm run dev --workspace @autore/dashboard",
     "dev:api": "npm run dev --workspace @autore/api",
-    "build:dashboard": "npm run build --workspace @autore/dashboard",
-    "start:dashboard": "npm run start --workspace @autore/dashboard",
+    "build:dashboard": "dotenv -e .env -- npm run build --workspace @autore/dashboard",
+    "start:dashboard": "dotenv -e .env -- npm run start --workspace @autore/dashboard",
     "start:api": "npm run start --workspace @autore/api",
     "test": "vitest",
-    "test:e2e": "npm run test:e2e --workspace @autore/dashboard"
+    "test:e2e": "dotenv -e .env -- npm run test:e2e --workspace @autore/dashboard"
   },
   "devDependencies": {
+    "dotenv-cli": "11.1.0",
     "vitest": "3.2.7"
   },
   "overrides": {

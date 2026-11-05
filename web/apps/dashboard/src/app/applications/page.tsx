@@ -140,6 +140,12 @@ export default function ApplicationsPage() {
                             >
                               Detail
                             </a>
+                            <a
+                              href={`/applications/sbom?app=${encodeURIComponent(app.id)}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Lihat SBOM
+                            </a>
                             <ActionButton
                               label="Scan Keamanan"
                               action="scan"

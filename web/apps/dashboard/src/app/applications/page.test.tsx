@@ -247,3 +247,31 @@ test("empty state saat pencarian tidak menemukan apa pun", async () => {
   expect(screen.getByText("0 dari 3 aplikasi")).toBeVisible();
   expect(screen.queryByRole("table")).toBeNull();
 });
+
+test("memberi tautan Lihat SBOM per baris ke halaman SBOM aplikasi itu", async () => {
+  mockFetch({
+    ...TWO_APPS,
+    data: {
+      ...TWO_APPS.data,
+      applications: [...TWO_APPS.data.applications, app({ id: "app satu/dua#tiga", name: "Aneh" })],
+    },
+  });
+
+  renderPage();
+
+  expect(await screen.findByText("Aneh")).toBeVisible();
+  expect(screen.getAllByRole("link", { name: "Lihat SBOM" }).map((link) => link.getAttribute("href"))).toEqual([
+    "/applications/sbom?app=portal-klaim",
+    "/applications/sbom?app=api-pegawai",
+    "/applications/sbom?app=app%20satu%2Fdua%23tiga",
+  ]);
+});
+
+test("daftar kosong tidak memunculkan tautan Lihat SBOM", async () => {
+  mockFetch(EMPTY);
+
+  renderPage();
+
+  expect(await screen.findByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Lihat SBOM" })).toBeNull();
+});

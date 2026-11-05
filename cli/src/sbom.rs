@@ -97,19 +97,37 @@ fn dari_jenkins(app: &str) -> Result<String, String> {
     }
 }
 
-fn jenis_paket(jenis_cyclonedx: &str) -> &'static str {
-    if jenis_cyclonedx == "operating-system" {
+/// Kategori dashboard: `os` untuk paket sistem, `language` untuk library aplikasi.
+/// Trivy menandai paket deb/rpm/apk sebagai `library` biasa, jadi purl-nya yang
+/// membedakan (`pkg:deb/...`); komponen `operating-system` tetap dihitung `os`.
+fn jenis_paket(jenis_cyclonedx: &str, purl: &str) -> &'static str {
+    let skema = purl.split('/').next().unwrap_or("");
+    if jenis_cyclonedx == "operating-system"
+        || matches!(
+            skema,
+            "pkg:deb" | "pkg:rpm" | "pkg:apk" | "pkg:alpm" | "pkg:ebuild"
+        )
+    {
         "os"
     } else {
         "language"
     }
 }
 
-/// CycloneDX mengizinkan komponen bersarang; Trivy menaruh OS package dan library
-/// bahasa di level atas, tapi satu level turun ini murah dan mencegah tabel kosong
-/// pada SBOM yang disusun alat lain.
-fn kumpulkan(komponen: &[Value], keluar: &mut Vec<Paket>) {
+/// CycloneDX melabeli paket OS (deb/rpm) sebagai `library` di *dalam* komponen
+/// `operating-system`, jadi kategori `os` diwariskan dari induk ke anak; kalau
+/// tidak, `apt`/`base-files` muncul sebagai library bahasa di dashboard.
+fn kumpulkan(komponen: &[Value], keluar: &mut Vec<Paket>, warisan_os: bool) {
     for c in komponen {
+        let jenis_cyclonedx = c.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let purl = c.get("purl").and_then(|v| v.as_str()).unwrap_or("");
+        let anak_dari_os = warisan_os && matches!(jenis_cyclonedx, "" | "library");
+        let jenis = if anak_dari_os {
+            "os"
+        } else {
+            jenis_paket(jenis_cyclonedx, purl)
+        };
+
         let nama = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
         if !nama.is_empty() {
             keluar.push(Paket {
@@ -119,11 +137,11 @@ fn kumpulkan(komponen: &[Value], keluar: &mut Vec<Paket>) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string(),
-                jenis: jenis_paket(c.get("type").and_then(|v| v.as_str()).unwrap_or("")).to_string(),
+                jenis: jenis.to_string(),
             });
         }
         if let Some(anak) = c.get("components").and_then(|v| v.as_array()) {
-            kumpulkan(anak, keluar);
+            kumpulkan(anak, keluar, jenis == "os");
         }
     }
 }
@@ -138,7 +156,7 @@ fn susun(app: &str, isi: &str, asal: &str) -> Result<LaporanSbom, String> {
         .ok_or_else(|| format!("{asal} bukan SBOM CycloneDX: tidak ada daftar \"components\""))?;
 
     let mut packages = Vec::new();
-    kumpulkan(komponen, &mut packages);
+    kumpulkan(komponen, &mut packages, false);
     packages.sort_by(|a, b| {
         a.name
             .to_lowercase()
@@ -237,9 +255,11 @@ mod tests {
 
     #[test]
     fn jenis_cyclonedx_dipetakan_ke_dua_kategori_dashboard() {
-        assert_eq!(jenis_paket("operating-system"), "os");
-        assert_eq!(jenis_paket("library"), "language");
-        assert_eq!(jenis_paket(""), "language");
+        assert_eq!(jenis_paket("operating-system", "pkg:generic/debian@13.7"), "os");
+        assert_eq!(jenis_paket("library", "pkg:deb/debian/apt@3.0.4?arch=amd64"), "os");
+        assert_eq!(jenis_paket("library", "pkg:apk/alpine/busybox@1.36"), "os");
+        assert_eq!(jenis_paket("library", "pkg:npm/express@5.1.0"), "language");
+        assert_eq!(jenis_paket("library", ""), "language");
     }
 
     #[test]
@@ -259,5 +279,34 @@ mod tests {
         assert_eq!(laporan.total, 1);
         assert_eq!(laporan.packages[0].name, "openssl");
         assert_eq!(laporan.packages[0].jenis, "os");
+    }
+
+    /// Dua bentuk SBOM nyata: Trivy menaruh paket deb sebagai `library` di level
+    /// atas dengan purl `pkg:deb/...`, alat lain menyarangkannya di dalam
+    /// komponen `operating-system`. Keduanya harus muncul sebagai `os`.
+    #[test]
+    fn paket_os_dikenali_dari_purl_maupun_dari_induk_operating_system() {
+        let isi = r#"{"components":[
+            {"type":"library","name":"apt","version":"3.0.4","purl":"pkg:deb/debian/apt@3.0.4?arch=amd64"},
+            {"type":"operating-system","name":"debian","version":"13.1","components":[
+                {"type":"library","name":"base-files","version":"13.8"}]},
+            {"type":"library","name":"express","version":"5.1.0","purl":"pkg:npm/express@5.1.0"}]}"#;
+        let laporan = susun("tes-web", isi, "uji").unwrap();
+
+        assert_eq!(laporan.total, 4);
+        let jenis: Vec<(&str, &str)> = laporan
+            .packages
+            .iter()
+            .map(|p| (p.name.as_str(), p.jenis.as_str()))
+            .collect();
+        assert_eq!(
+            jenis,
+            vec![
+                ("apt", "os"),
+                ("base-files", "os"),
+                ("debian", "os"),
+                ("express", "language")
+            ]
+        );
     }
 }

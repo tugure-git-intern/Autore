@@ -52,6 +52,15 @@ describe("UserMenu", () => {
     expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login" });
   });
 
+  it("menampilkan login github apa adanya, bukan versi huruf kecil", () => {
+    tampilkan({ login: "MAliffadlan", name: "", image: null });
+
+    // Label jatuh ke login saat nama tampilan kosong: casing GitHub yang tampil.
+    expect(screen.getByText("MAliffadlan")).toBeVisible();
+    expect(screen.getByText("@MAliffadlan")).toBeVisible();
+    expect(screen.queryByText("@maliffadlan")).toBeNull();
+  });
+
   it("tidak pernah menampilkan input kata sandi", () => {
     tampilkan({ login: "alif", name: "Alif", image: null });
 

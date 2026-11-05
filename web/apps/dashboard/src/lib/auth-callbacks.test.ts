@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { exposeLogin, githubLogin, signInAllowed, stampLogin } from "./auth-callbacks";
 
 describe("githubLogin", () => {
-  it("mengambil login dari profil OAuth dan menormalkannya", () => {
-    expect(githubLogin({ login: "Tugure-Git-Intern" })).toBe("tugure-git-intern");
-    expect(githubLogin({ login: "  alif  " })).toBe("alif");
+  it("mengambil login dari profil OAuth apa adanya (casing GitHub dipertahankan)", () => {
+    expect(githubLogin({ login: "MAliffadlan" })).toBe("MAliffadlan");
+    expect(githubLogin({ login: "Tugure-Git-Intern" })).toBe("Tugure-Git-Intern");
+    expect(githubLogin({ login: "  alif  " })).toBe("alif"); // hanya dipangkas
   });
 
   it("mengembalikan string kosong kalau profil tidak memuat login", () => {
@@ -31,15 +32,19 @@ describe("signInAllowed", () => {
     expect(signInAllowed({}, ["alif"])).toBe(false);
   });
 
+  it("menerima login di whitelist walau casing berbeda (whitelist tidak case-sensitive)", () => {
+    expect(signInAllowed({ profile: { login: "MAliffadlan" } }, ["maliffadlan"])).toBe(true);
+  });
+
   it("menolak semua orang saat whitelist kosong", () => {
     expect(signInAllowed({ profile: { login: "alif" } }, [])).toBe(false);
   });
 });
 
 describe("stampLogin", () => {
-  it("menyimpan login hasil normalisasi ke dalam token", () => {
+  it("menyimpan login apa adanya ke dalam token", () => {
     const token = {};
-    expect(stampLogin({ token, profile: { login: "AliF" } }).login).toBe("alif");
+    expect(stampLogin({ token, profile: { login: "AliF" } }).login).toBe("AliF");
   });
 
   it("menyimpan string kosong supaya token tanpa login ditolak middleware", () => {
@@ -55,12 +60,15 @@ describe("stampLogin", () => {
     });
   });
 
-  it("mempertahankan login saat callback jalan tanpa profil (pembacaan sesi)", () => {
+  it("mempertahankan login mentah saat callback jalan tanpa profil (pembacaan sesi)", () => {
     // Auth.js memanggil callback jwt lagi setiap sesi dibaca, dan saat itu
     // `profile` tidak dikirim. Tanpa penjagaan ini login akan terhapus dan
-    // setiap user yang sah langsung dilempar ke /login.
+    // setiap user yang sah langsung dilempar ke /login. Nilai token juga tidak
+    // boleh diubah casingnya di sini: pembacaan sesi bukan alasan untuk
+    // menurunkan "MAliffadlan" jadi "maliffadlan".
     const token = { login: "alif", sub: "1" };
     expect(stampLogin({ token })).toMatchObject({ login: "alif", sub: "1" });
+    expect(stampLogin({ token: { login: "MAliffadlan" } })).toMatchObject({ login: "MAliffadlan" });
   });
 
   it("memakai string kosong saat token belum punya login dan tidak ada profil", () => {

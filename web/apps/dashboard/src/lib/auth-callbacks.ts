@@ -1,4 +1,4 @@
-import { isAllowed, normalizeLogin } from "./allowlist";
+import { isAllowed } from "./allowlist";
 
 /**
  * Callback Auth.js versi murni: tanpa import runtime dari `next-auth`, sehingga
@@ -10,10 +10,15 @@ import { isAllowed, normalizeLogin } from "./allowlist";
 /**
  * Login OAuth dari profil GitHub. Tidak ada fallback ke nama tampilan: nama
  * tampilan bukan username, dan menebaknya = meloloskan orang yang salah.
+ *
+ * Nilai ini dipakai untuk **ditampilkan** (UserMenu, sapaan dashboard) dan
+ * sebagai author commit, jadi casing GitHub dipertahankan apa adanya
+ * (`MAliffadlan`). Perbandingan whitelist tidak ikut longgar: `isAllowed`
+ * menormalkan kedua sisi sebelum membandingkan.
  */
 export function githubLogin(profile: unknown): string {
   const p = (profile ?? {}) as { login?: unknown };
-  return typeof p.login === "string" ? normalizeLogin(p.login) : "";
+  return typeof p.login === "string" ? p.login.trim() : "";
 }
 
 export function signInAllowed(params: { profile?: unknown }, list: readonly string[]): boolean {

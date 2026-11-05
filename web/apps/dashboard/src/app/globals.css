@@ -34,16 +34,16 @@
 /**
  * Bar kemajuan kartu pipeline aktif. Indeterminate dengan sengaja: Jenkins tidak
  * melaporkan persentase yang bisa dipercaya, jadi yang ditampilkan hanya "sedang
- * jalan". Dipakai satu komponen (`active-pipelines.tsx`), yang menggambar dua pita
- * selebar 1/3 kartu di dalam track selebar kartu; jarak tempuh `translateX` relatif
- * ke lebar elemen sendiri, jadi pita harus sama lebar supaya fasanya tidak melenceng.
- * 300% = pita (1/3 lebar track) keluar penuh di kanan.
+ * jalan". Dipakai satu komponen (`active-pipelines.tsx`), yang menggeser satu komet
+ * rigid selebar 2/3 kartu di dalam track selebar kartu. Jarak tempuh `translateX`
+ * relatif ke lebar elemen sendiri, jadi angkanya tergantung lebar komet:
+ * -100% = komet persis di luar kiri, 250% (lebar komet sendiri) = komet persis di luar kanan.
  */
 @keyframes geser {
   from {
     transform: translateX(-100%);
   }
   to {
-    transform: translateX(300%);
+    transform: translateX(250%);
   }
 }

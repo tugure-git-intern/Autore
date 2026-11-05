@@ -55,7 +55,7 @@ describe("ActivePipelines", () => {
     expect(isi.getByTestId("progress-indeterminate")).toBeInTheDocument();
   });
 
-  it("bar indeterminate memenuhi lebar kartu dengan dua pita yang bergerak", () => {
+  it("bar indeterminate memenuhi lebar kartu dengan ekor komet yang menempel", () => {
     const { kartu } = gambar([pipeline()]);
 
     const isi = within(kartu()[0]);
@@ -65,20 +65,29 @@ describe("ActivePipelines", () => {
     expect(track.className).toContain("overflow-hidden");
     expect(track.className).toContain("bg-blue-500/15");
 
+    // Komet = satu pembungkus rigid selebar 2/3 kartu; kepala dan ekornya masing-masing 1/3.
+    // Dulu dua pita dibedakan fasa lewat `animation-delay`, tapi hasil ukur di browser: begitu
+    // satu pita wrap ke kanan sementara yang lain belum, pasangan itu pecah ~25% siklus.
+    // Pembungkus rigid membuat keduanya selalu menempel, berapa pun fasenya.
+    const komet = isi.getByTestId("progress-comet");
+    expect(komet.className).toContain("w-2/3");
+    expect(komet.className).toContain("flex");
+    expect(komet.className).toContain("motion-safe:animate-[geser_1.6s_linear_infinite]");
+
     const depan = isi.getByTestId("progress-band-depan");
     const ekor = isi.getByTestId("progress-band-belakang");
     for (const pita of [depan, ekor]) {
-      expect(pita.className).toContain("w-1/3");
-      expect(pita.className).toContain("rounded-full");
-      expect(pita.className).toMatch(/motion-safe:animate-\[geser_/);
+      expect(pita.className).toContain("w-1/2");
+      expect(pita.className).not.toContain("animate-");
     }
-
-    // Dua pita bergerak sinkron tapi beda fasa: yang depan solid tanpa delay, ekornya
-    // transparan dan ditunda supaya menempel di belakang (efek ekor komet).
-    expect(depan.className).toContain("bg-blue-500 ");
-    expect(depan.className).not.toContain("animation-delay");
+    expect(depan.className).toContain("bg-blue-500");
     expect(ekor.className).toContain("bg-blue-400/50");
-    expect(ekor.className).toMatch(/\[animation-delay:-\d/);
+    // Ujungnya dibulatkan hanya di sisi luar komet, supaya sambungannya tidak terlihat.
+    expect(ekor.className).toContain("rounded-l-full");
+    expect(depan.className).toContain("rounded-r-full");
+    for (const pita of [depan, ekor]) {
+      expect(pita.className).not.toContain("[animation-delay:");
+    }
     expect(ekor.className).not.toEqual(depan.className);
   });
 
@@ -91,8 +100,7 @@ describe("ActivePipelines", () => {
     // jsdom tidak mengevaluasi media query, jadi di sini yang dikunci kelasnya saja;
     // perilaku aslinya dibuktikan di e2e lewat `emulateMedia({ reducedMotion })`.
     expect(track.className).toContain("motion-reduce:bg-blue-500");
-    expect(isi.getByTestId("progress-band-depan").className).toContain("motion-reduce:hidden");
-    expect(isi.getByTestId("progress-band-belakang").className).toContain("motion-reduce:hidden");
+    expect(isi.getByTestId("progress-comet").className).toContain("motion-reduce:hidden");
   });
 
   it("kartu menunggu memakai badge kuning tanpa bar", () => {

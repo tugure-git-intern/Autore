@@ -89,16 +89,23 @@ export function ActivePipelines({
                       aria-hidden="true"
                       className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-blue-500/15 motion-reduce:bg-blue-500"
                     >
-                      {/* Dua pita, lebar sama, fasa digeser (delay negatif = ekor menempel
-                          di belakang kepala). Tanpa gradien: kontrak anti-gradien dijaga. */}
+                      {/* Satu komet rigid: pembungkus 2/3 lebar kartu berisi ekor (kiri, transparan)
+                          dan kepala (kanan, solid) yang menempel tanpa celah. Fasa tidak lagi
+                          diatur lewat `animation-delay`: hasil ukur di browser menunjukkan pita
+                          terpisah ~25% siklus saat salah satunya wrap lebih dulu. Tanpa gradien. */}
                       <div
-                        data-testid="progress-band-belakang"
-                        className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-blue-400/50 [animation-delay:-1.2s] motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"
-                      />
-                      <div
-                        data-testid="progress-band-depan"
-                        className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-blue-500 motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"
-                      />
+                        data-testid="progress-comet"
+                        className="absolute inset-y-0 left-0 flex w-2/3 motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"
+                      >
+                        <div
+                          data-testid="progress-band-belakang"
+                          className="h-full w-1/2 rounded-l-full bg-blue-400/50"
+                        />
+                        <div
+                          data-testid="progress-band-depan"
+                          className="h-full w-1/2 rounded-r-full bg-blue-500"
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </Card>

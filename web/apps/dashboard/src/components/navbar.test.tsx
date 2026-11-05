@@ -165,7 +165,10 @@ describe("AppShell", () => {
   // sumber sekaligus. Perilaku lengkapnya (toast, disabled, klik beruntun) ada
   // di app-shell.test.tsx; di sini cukup membuktikan cakupannya tiga endpoint.
   it("Sync menarik /api/status, /api/runs dan /api/active, bukan cuma status", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => status("active") }) as unknown as Response);
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL) =>
+        ({ ok: true, status: 200, json: async () => status("active") }) as unknown as Response,
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -174,8 +177,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    const jalurTerpakai = () =>
-      new Set(fetchMock.mock.calls.map((c) => c[0] as string));
+    const jalurTerpakai = () => new Set(fetchMock.mock.calls.map(([input]) => String(input)));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(jalurTerpakai()).toEqual(new Set(["/api/status", "/api/runs", "/api/active"]));
@@ -184,7 +186,7 @@ describe("AppShell", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
     for (const url of ["/api/status", "/api/runs", "/api/active"]) {
-      expect(fetchMock.mock.calls.filter((c) => c[0] === url)).toHaveLength(2);
+      expect(fetchMock.mock.calls.filter(([input]) => String(input) === url)).toHaveLength(2);
     }
   });
 });

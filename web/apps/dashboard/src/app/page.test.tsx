@@ -229,3 +229,58 @@ test("menaruh tombol Deploy Sekarang di pojok kanan atas dengan peringatan commi
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/deploy"),
   );
 });
+
+test("Sync menukar angka di layar ke payload baru, tanpa reload", async () => {
+  let tarikanStatus = 0;
+  let tarikanRuns = 0;
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/status") {
+        tarikanStatus += 1;
+        const emas = tarikanStatus > 1;
+        return ok({
+          data: {
+            ...STATUS,
+            repository_health: {
+              score_percent: emas ? 10 : 0,
+              total_repos: 10,
+              gold: emas ? 1 : 0,
+              silver: 0,
+              bronze: emas ? 9 : 10,
+            },
+          },
+          stale: false,
+        });
+      }
+      if (url === "/api/runs") {
+        tarikanRuns += 1;
+        return ok({ data: { ...RUNS, runs: [{ ...RUNS.runs[0], number: tarikanRuns > 1 ? 21 : 9 }] }, stale: false });
+      }
+      if (url === "/api/active") {
+        return ok({
+          data: { generated_at: "", active: [], counts: { running: 0, queued: 0 } },
+          stale: false,
+        });
+      }
+      throw new Error(`permintaan tidak terduga: ${url}`);
+    }),
+  );
+
+  render(
+    <AppShell user={{ login: "alif", name: "Alif", image: null } as SessionUser}>
+      <DashboardPage />
+    </AppShell>,
+  );
+
+  expect(await screen.findByText("0%")).toBeInTheDocument();
+  expect(await screen.findByText("tes-web #9")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+
+  expect(await screen.findByText("10%")).toBeInTheDocument();
+  expect(await screen.findByText("tes-web #21")).toBeInTheDocument();
+  expect(await screen.findByText("Data berhasil disinkronkan.")).toBeInTheDocument();
+});

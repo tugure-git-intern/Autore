@@ -178,6 +178,17 @@ def call(Map config = [:]) {
                         if [ ! -f "dist/SHA256SUMS" ]; then
                           (cd dist && sha256sum sbom.cdx.json > SHA256SUMS)
                         fi
+                        if [ -n "${appReported}" ]; then
+                          # SBOM hidup di workspace agen (mode 0700, tidak terbaca user
+                          # dashboard). Salin ke workspace Autore supaya `autore sbom`
+                          # bisa membacanya. Best-effort: gagal salin tidak boleh
+                          # menggagalkan gerbang keamanan.
+                          if mkdir -p "${q(workspace)}/${appReported}/dist" && cp -f dist/sbom.cdx.json "${q(workspace)}/${appReported}/dist/sbom.cdx.json"; then
+                            echo "SBOM disalin ke workspace Autore: ${appReported}/dist/sbom.cdx.json"
+                          else
+                            echo "WARNING: gagal menyalin SBOM ke workspace Autore"
+                          fi
+                        fi
                     """
                 }
             }

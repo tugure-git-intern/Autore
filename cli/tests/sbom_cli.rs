@@ -155,3 +155,90 @@ fn sbom_menolak_file_yang_bukan_cyclonedx() {
         );
     }
 }
+
+/// Build berjalan di runner dengan filesystem sendiri, jadi salinan lokal bisa
+/// tidak ada sementara artifact Jenkins ada. Jalur ini yang dipakai dashboard.
+#[test]
+fn sbom_diambil_dari_artifact_jenkins_kalau_salinan_lokal_tidak_ada() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let body = FIXTURE.to_string();
+    let handle = thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 8192];
+            let _ = stream.read(&mut buf);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+    fs::create_dir_all(home.join(".config").join("autore")).unwrap();
+    fs::write(
+        home.join(".config").join("autore").join("jenkins.conf"),
+        format!("url=http://{addr}\nuser=admin\ntoken=tok\n"),
+    )
+    .unwrap();
+    // Sengaja tanpa <workspace>/<app>/dist/sbom.cdx.json.
+    let ws = tmp.path().join("autore-workspace");
+    fs::create_dir_all(&ws).unwrap();
+
+    let out = jalankan(home, Some(&ws), &["--app", APP, "--json"]);
+    handle.join().unwrap();
+
+    assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
+    let laporan: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(laporan["total"], 6);
+    assert_eq!(
+        laporan["source"],
+        format!("jenkins:{APP}/lastSuccessfulBuild"),
+        "UI harus bisa menyebut sumber datanya"
+    );
+}
+
+/// Artifact yang belum diarsipkan (404) bukan crash: pesannya menyebut jalan keluar.
+#[test]
+fn sbom_menyebut_artifact_jenkins_hilang_dengan_pesan_yang_jelas() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 8192];
+            let _ = stream.read(&mut buf);
+            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+        }
+    });
+
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+    fs::create_dir_all(home.join(".config").join("autore")).unwrap();
+    fs::write(
+        home.join(".config").join("autore").join("jenkins.conf"),
+        format!("url=http://{addr}\nuser=admin\ntoken=tok\n"),
+    )
+    .unwrap();
+    let ws = tmp.path().join("autore-workspace");
+    fs::create_dir_all(&ws).unwrap();
+
+    let out = jalankan(home, Some(&ws), &["--app", APP, "--json"]);
+    handle.join().unwrap();
+
+    assert_ne!(out.status.code(), Some(0));
+    assert!(out.stdout.is_empty(), "tidak boleh mencetak JSON palsu");
+    let pesan = stderr(&out);
+    assert!(pesan.contains("belum mengarsipkan"), "pesan: {pesan}");
+    assert!(pesan.contains("jalankan build"), "pesan: {pesan}");
+}

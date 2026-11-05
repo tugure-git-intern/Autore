@@ -178,23 +178,11 @@ def call(Map config = [:]) {
                         if [ ! -f "dist/SHA256SUMS" ]; then
                           (cd dist && sha256sum sbom.cdx.json > SHA256SUMS)
                         fi
-                        if [ -n "${appReported}" ]; then
-                          # SBOM hidup di workspace agen (mode 0700, tidak terbaca user
-                          # dashboard). Salin ke workspace Autore supaya `autore sbom`
-                          # bisa membacanya. Best-effort: gagal salin tidak boleh
-                          # menggagalkan gerbang keamanan.
-                          target="${q(workspace)}/${appReported}/dist"
-                          if mkdir -p "\$target" && cp -f dist/sbom.cdx.json "\$target/sbom.cdx.json"; then
-                            echo "SBOM disalin ke workspace Autore: ${appReported}/dist/sbom.cdx.json"
-                            echo "DIAG2 host=\$(hostname) uid=\$(id -u) ns=\$(readlink /proc/self/ns/mnt) dev_ino=\$(stat -c '%d %i' "\$target")"
-                            ls -la "\$target"
-                            ls -ld "\$(dirname "\$target")"
-                            [ -f /.dockerenv ] && echo "DIAG2 /.dockerenv=ADA" || echo "DIAG2 /.dockerenv=tidak-ada"
-                            grep -m3 -E ' / |overlay' /proc/mounts
-                          else
-                            echo "WARNING: gagal menyalin SBOM ke workspace Autore (target=\$target)"
-                          fi
-                        fi
+                        # SBOM dibaca dashboard dari artifact Jenkins
+                        # (`dist/sbom.cdx.json` diarsipkan di bawah), bukan dari
+                        # filesystem runner: build berjalan di runner dengan
+                        # filesystem sendiri, jadi salinan apa pun ke jalur local
+                        # tidak terbaca oleh proses API.
                     """
                     archiveArtifacts artifacts: 'dist/sbom.cdx.json', allowEmptyArchive: true
                 }

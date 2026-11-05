@@ -1,13 +1,16 @@
 //! `autore sbom` — daftar dependensi dari SBOM CycloneDX hasil build.
 //!
-//! Sumber: `<AUTORE_WORKSPACE>/<app>/dist/sbom.cdx.json`. Bukan workspace
-//! Jenkins: agen menjalankan build sebagai user lain (`/home/jenkins` mode 0700),
-//! jadi stage 6 pipeline menyalin SBOM-nya ke workspace Autore lebih dulu.
+//! Dua sumber, dicoba berurutan:
+//!   1. `<AUTORE_WORKSPACE>/<app>/dist/sbom.cdx.json` (salinan cepat, kalau ada).
+//!   2. Artifact Jenkins `dist/sbom.cdx.json` yang diarsipkan stage 6 di build
+//!      sukses terakhir. Ini kanal utamanya untuk dashboard: build berjalan di
+//!      runner sendiri, jadi salinan di (1) tidak selalu terlihat oleh proses API.
 //!
 //! Aturan yang sama dengan `runs.rs`/`status.rs`: yang tidak tersedia jadi string
 //! kosong, bukan `null`; berkas hilang bukan panic, tapi pesan yang menyebut
 //! jalan keluarnya.
 
+use crate::jenkins;
 use crate::serve;
 use serde::Serialize;
 use serde_json::Value;
@@ -49,6 +52,51 @@ fn path_sbom(workspace: &Path, app: &str) -> PathBuf {
     workspace.join(app).join("dist").join("sbom.cdx.json")
 }
 
+/// Artifact SBOM satu aplikasi di Jenkins (build sukses terakhir).
+fn url_artifact(base: &str, app: &str) -> String {
+    format!(
+        "{}/job/{app}/lastSuccessfulBuild/artifact/dist/sbom.cdx.json",
+        base.trim_end_matches('/')
+    )
+}
+
+/// Ambil SBOM dari artifact Jenkins. Kredensial ikut lewat stdin curl (tidak
+/// pernah muncul di argv), sama seperti `runs`/`deploy`.
+fn dari_jenkins(app: &str) -> Result<String, String> {
+    let cfg = jenkins::load_config_from(&jenkins::default_config_path()).ok_or_else(|| {
+        format!(
+            "kredensial Jenkins belum ada di {}",
+            jenkins::default_config_path().display()
+        )
+    })?;
+    let url = url_artifact(&cfg.url, app);
+    let kredensial = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+    let (code, body) = jenkins::curl_with_stdin_config(
+        &[
+            "-g",
+            "-sS",
+            "--max-time",
+            "20",
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            &url,
+        ],
+        &kredensial,
+    )?;
+    match code {
+        200 if !body.trim().is_empty() => Ok(body),
+        200 => Err(format!(
+            "artifact SBOM `{app}` kosong di Jenkins ({url})"
+        )),
+        404 => Err(format!(
+            "Jenkins belum mengarsipkan SBOM `{app}` (404: {url}) — jalankan build sukses berikutnya"
+        )),
+        lain => Err(format!("Jenkins menolak permintaan SBOM `{app}`: HTTP {lain}")),
+    }
+}
+
 fn jenis_paket(jenis_cyclonedx: &str) -> &'static str {
     if jenis_cyclonedx == "operating-system" {
         "os"
@@ -80,27 +128,14 @@ fn kumpulkan(komponen: &[Value], keluar: &mut Vec<Paket>) {
     }
 }
 
-fn baca(app: &str) -> Result<LaporanSbom, String> {
-    let workspace = serve::workspace_dir();
-    let path = path_sbom(&workspace, app);
-    let isi = std::fs::read_to_string(&path).map_err(|e| {
-        format!(
-            "SBOM belum ada untuk `{app}`: {} ({e})\n\
-             Stage 6 pipeline menyalin SBOM ke sana — jalankan build aplikasinya lebih dulu.",
-            path.display()
-        )
+fn susun(app: &str, isi: &str, asal: &str) -> Result<LaporanSbom, String> {
+    let dokumen: Value = serde_json::from_str(isi).map_err(|e| {
+        format!("bukan SBOM CycloneDX: {asal} bukan JSON sah: {e}")
     })?;
-    let dokumen: Value = serde_json::from_str(&isi)
-        .map_err(|e| format!("bukan SBOM CycloneDX: {} bukan JSON sah: {e}", path.display()))?;
     let komponen = dokumen
         .get("components")
         .and_then(|c| c.as_array())
-        .ok_or_else(|| {
-            format!(
-                "{} bukan SBOM CycloneDX: tidak ada daftar \"components\"",
-                path.display()
-            )
-        })?;
+        .ok_or_else(|| format!("{asal} bukan SBOM CycloneDX: tidak ada daftar \"components\""))?;
 
     let mut packages = Vec::new();
     kumpulkan(komponen, &mut packages);
@@ -121,10 +156,27 @@ fn baca(app: &str) -> Result<LaporanSbom, String> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        source: path.display().to_string(),
+        source: asal.to_string(),
         total: packages.len(),
         packages,
     })
+}
+
+fn baca(app: &str) -> Result<LaporanSbom, String> {
+    let path = path_sbom(&serve::workspace_dir(), app);
+    match std::fs::read_to_string(&path) {
+        Ok(isi) => susun(app, &isi, &path.display().to_string()),
+        Err(lokal) => {
+            let isi = dari_jenkins(app).map_err(|jenkins| {
+                format!(
+                    "SBOM belum ada untuk `{app}`.\n  salinan lokal: {} ({lokal})\n  artifact Jenkins: {jenkins}\n\
+                     Jalankan build aplikasinya sampai stage 6 selesai, lalu coba lagi.",
+                    path.display()
+                )
+            })?;
+            susun(app, &isi, &format!("jenkins:{app}/lastSuccessfulBuild"))
+        }
+    }
 }
 
 /// `0` sukses, `1` gagal. Satu-satunya penulis stdout adalah jalur sukses, jadi
@@ -188,5 +240,24 @@ mod tests {
         assert_eq!(jenis_paket("operating-system"), "os");
         assert_eq!(jenis_paket("library"), "language");
         assert_eq!(jenis_paket(""), "language");
+    }
+
+    #[test]
+    fn url_artifact_menunjuk_build_sukses_terakhir() {
+        assert_eq!(
+            url_artifact("http://100.80.3.14:8080/", "tes-web"),
+            "http://100.80.3.14:8080/job/tes-web/lastSuccessfulBuild/artifact/dist/sbom.cdx.json"
+        );
+    }
+
+    #[test]
+    fn sbom_dari_jenkins_memakai_nama_sumber_artifact() {
+        let isi = r#"{"components":[{"type":"operating-system","name":"openssl","version":"3.0.11"}]}"#;
+        let laporan = susun("tes-web", isi, "jenkins:tes-web/lastSuccessfulBuild").unwrap();
+
+        assert_eq!(laporan.source, "jenkins:tes-web/lastSuccessfulBuild");
+        assert_eq!(laporan.total, 1);
+        assert_eq!(laporan.packages[0].name, "openssl");
+        assert_eq!(laporan.packages[0].jenis, "os");
     }
 }

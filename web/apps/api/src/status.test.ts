@@ -198,6 +198,47 @@ describe("repository_health", () => {
       ),
     ).rejects.toThrow("invalid Autore status JSON");
   });
+
+  it("menerima `author` audit trail dan aplikasi lama tanpa field itu", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const app = {
+      id: "audit-uji",
+      name: "audit-uji",
+      status: "passed" as const,
+      last_build: "2026-11-05T14:00:00Z",
+      commit_sha: "abc1234",
+      security_issues: 0,
+    };
+    const baru = { ...fixture, applications: [{ ...app, author: "Alif Fadlan <alif@example.com>" }] };
+    const lama = { ...fixture, applications: [app] };
+
+    await expect(loadDashboardStatus(async () => JSON.stringify(baru))).resolves.toEqual({
+      data: baru,
+      stale: false,
+    });
+    await expect(loadDashboardStatus(async () => JSON.stringify(lama))).resolves.toEqual({
+      data: lama,
+      stale: false,
+    });
+  });
+
+  it("menolak `author` yang bukan string", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const app = {
+      id: "tes-web",
+      name: "tes-web",
+      status: "passed" as const,
+      last_build: "",
+      commit_sha: "",
+      security_issues: 0,
+    };
+
+    await expect(
+      loadDashboardStatus(async () =>
+        JSON.stringify({ ...fixture, applications: [{ ...app, author: 7 }] }),
+      ),
+    ).rejects.toThrow("invalid Autore status JSON");
+  });
 });
 
 describe("status API", () => {

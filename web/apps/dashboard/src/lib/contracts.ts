@@ -19,6 +19,8 @@ export type ApplicationRecord = {
   security_issues: number;
   /** Snapshot lama dari CLI sebelum Phase 6 tidak membawa field ini. */
   deployed?: boolean;
+  /** Pembuat aplikasi (audit trail): "Nama <email>". Snapshot lama tidak punya. */
+  author?: string;
 };
 
 /** Ringkasan kesehatan repo: kelas tiap baris registry + skor terbobot. */

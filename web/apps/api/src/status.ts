@@ -46,6 +46,8 @@ export interface DashboardStatus {
     security_issues: number;
     /** Snapshot lama dari CLI sebelum Phase 6 tidak membawa field ini. */
     deployed?: boolean;
+    /** Pembuat aplikasi (audit trail) dari config git lokal; snapshot lama kosong. */
+    author?: string;
   }>;
   latest_pipeline: {
     status: StatusValue;
@@ -160,7 +162,7 @@ function isApplication(value: unknown): value is DashboardStatus["applications"]
     hasKeys(
       value,
       ["id", "name", "status", "last_build", "commit_sha", "security_issues"],
-      ["deployed"],
+      ["deployed", "author"],
     ) &&
     typeof value.id === "string" &&
     typeof value.name === "string" &&
@@ -168,7 +170,8 @@ function isApplication(value: unknown): value is DashboardStatus["applications"]
     isString(value.last_build) &&
     isString(value.commit_sha) &&
     isCount(value.security_issues) &&
-    isAbsentOr<boolean>(value.deployed, (v): v is boolean => typeof v === "boolean")
+    isAbsentOr<boolean>(value.deployed, (v): v is boolean => typeof v === "boolean") &&
+    isAbsentOr<string>(value.author, isString)
   );
 }
 

@@ -128,6 +128,9 @@ export default function ApplicationsPage() {
                         <td className="px-5 py-4">
                           <p className="font-medium text-ink">{dash(app.name)}</p>
                           <p className="font-mono text-xs text-muted">{app.id}</p>
+                          {app.author ? (
+                            <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
+                          ) : null}
                         </td>
                         <td className="px-5 py-4">
                           <StatusBadge status={badge} />

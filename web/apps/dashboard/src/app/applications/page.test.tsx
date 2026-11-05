@@ -293,3 +293,25 @@ test("tombol buat aplikasi tetap ada saat daftar masih kosong", async () => {
   expect(screen.getByRole("button", { name: /Buat Aplikasi Baru/ })).toBeVisible();
 });
 
+test("menampilkan 'Dibuat oleh' dari audit trail kalau CLI mengirim author", async () => {
+  mockFetch({
+    ...TWO_APPS,
+    data: {
+      ...TWO_APPS.data,
+      applications: [app({ author: "Alif Fadlan <alif@example.com>" })],
+    },
+  });
+
+  renderPage();
+
+  expect(await screen.findByText("Dibuat oleh: Alif Fadlan <alif@example.com>")).toBeVisible();
+});
+
+test("tidak mengarang 'Dibuat oleh' saat snapshot lama belum punya author", async () => {
+  mockFetch(TWO_APPS);
+
+  renderPage();
+
+  expect(await screen.findByText("Portal Klaim")).toBeVisible();
+  expect(screen.queryByText(/Dibuat oleh/)).toBeNull();
+});

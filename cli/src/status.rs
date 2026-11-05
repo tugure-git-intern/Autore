@@ -47,6 +47,10 @@ pub struct Application {
     pub last_build: String,
     pub commit_sha: String,
     pub security_issues: u32,
+    /// Pembuat aplikasi (audit trail), dibaca dari config git lokal folder app:
+    /// `Nama <email>`. Kosong kalau belum ada git, jadi opsional di kontrak.
+    #[serde(default)]
+    pub author: String,
     /// Pernah lewat tahap deploy (atau deploy lokal) — bukan "build terakhir deploy".
     /// Simpanan lama tidak punya field ini: `default` wajib supaya tetap dimuat.
     #[serde(default)]
@@ -63,6 +67,7 @@ impl Application {
             last_build: String::new(),
             commit_sha: String::new(),
             security_issues: 0,
+            author: String::new(),
             deployed: false,
         }
     }
@@ -264,6 +269,39 @@ pub fn save(workspace: &Path, snapshot: &Snapshot) -> Result<(), String> {
 ///
 /// Daftar aplikasi tetap dari registry; aplikasi yang belum punya hasil build di
 /// simpanan dilaporkan `unknown` — bukan `passed`.
+/// Pembuat aplikasi dari config git lokalnya (`Nama <email>`).
+///
+/// Ditulis CLI saat scaffold, jadi sudah terisi sejak commit pertama — sebelum
+/// Jenkins jalan. Baca config, bukan history commit: repo yang baru di-clone juga
+/// punya jawabannya. Folder tanpa git (atau config kosong) = string kosong, dan
+/// dashboard menyembunyikan barisnya.
+fn cari_pembuat(dir_app: &Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir_app)
+        .args(["config", "--get-regexp", r"^user\.(name|email)$"])
+        .output();
+    let teks = match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return String::new(),
+    };
+
+    let mut nama = String::new();
+    let mut email = String::new();
+    for baris in teks.lines() {
+        if let Some(v) = baris.strip_prefix("user.name ") {
+            nama = v.trim().to_string();
+        } else if let Some(v) = baris.strip_prefix("user.email ") {
+            email = v.trim().to_string();
+        }
+    }
+    match (nama.is_empty(), email.is_empty()) {
+        (true, _) => String::new(),
+        (false, true) => nama,
+        (false, false) => format!("{nama} <{email}>"),
+    }
+}
+
 pub fn build(workspace: &Path) -> Snapshot {
     let mut snap = load(workspace);
 
@@ -282,11 +320,14 @@ pub fn build(workspace: &Path) -> Snapshot {
             }
         })
         .map(|p| {
-            snap.applications
+            let mut app = snap
+                .applications
                 .iter()
                 .find(|a| a.name == p.nama)
                 .cloned()
-                .unwrap_or_else(|| Application::baru(&p.nama))
+                .unwrap_or_else(|| Application::baru(&p.nama));
+            app.author = cari_pembuat(&workspace.join(&p.nama));
+            app
         })
         .collect();
     snap.stats.total_apps = snap.applications.len();
@@ -357,6 +398,57 @@ mod tests {
         tmp
     }
 
+    fn siapkan_git(dir: &Path, nama: &str, email: &str) {
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.name", nama],
+            vec!["config", "user.email", email],
+        ] {
+            let st = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(&args)
+                .status()
+                .expect("git harus ada di mesin uji");
+            assert!(st.success(), "git {args:?} gagal");
+        }
+    }
+
+    #[test]
+    fn pembuat_aplikasi_dibaca_dari_config_git_lokal() {
+        let tmp = reg(vec![("audit-uji", "8000")]);
+        let app = tmp.path().join("audit-uji");
+        std::fs::create_dir_all(&app).unwrap();
+        siapkan_git(&app, "Alif Fadlan", "alif@example.com");
+
+        let snap = build(tmp.path());
+
+        assert_eq!(snap.applications[0].author, "Alif Fadlan <alif@example.com>");
+    }
+
+    #[test]
+    fn pembuat_kosong_kalau_folder_belum_punya_git() {
+        let tmp = reg(vec![("baru", "8000")]);
+
+        assert_eq!(build(tmp.path()).applications[0].author, "");
+    }
+
+    #[test]
+    fn snapshot_lama_tanpa_author_tetap_dimuat() {
+        let mut snap = Snapshot::default();
+        snap.applications.push(Application::baru("lama"));
+        // Snapshot yang ditulis CLI sebelum field ini ada: objeknya tanpa `author`.
+        let mut nilai: serde_json::Value = serde_json::from_str(&canonical(&snap)).unwrap();
+        nilai["applications"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("author");
+
+        let dimuat: Snapshot = serde_json::from_value(nilai).unwrap();
+
+        assert_eq!(dimuat.applications[0].author, "");
+    }
+
     #[test]
     fn canonical_mencetak_satu_objek_json_dengan_field_kontrak() {
         // Satu aplikasi di registry supaya field per-aplikasi ikut muncul.
@@ -425,6 +517,7 @@ mod tests {
             last_build: "2026-11-03T10:00:00Z".to_string(),
             commit_sha: "a1b2c3d4e5f6".to_string(),
             security_issues: 0,
+            author: String::new(),
             deployed: false,
         });
         snap.latest_pipeline.status = "passed".to_string();

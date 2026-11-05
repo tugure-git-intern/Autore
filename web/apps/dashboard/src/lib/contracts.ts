@@ -17,6 +17,17 @@ export type ApplicationRecord = {
   last_build: string | null;
   commit_sha: string | null;
   security_issues: number;
+  /** Snapshot lama dari CLI sebelum Phase 6 tidak membawa field ini. */
+  deployed?: boolean;
+};
+
+/** Ringkasan kesehatan repo: kelas tiap baris registry + skor terbobot. */
+export type RepositoryHealth = {
+  score_percent: number;
+  total_repos: number;
+  gold: number;
+  silver: number;
+  bronze: number;
 };
 
 export type StageTime = { id: string; at: string };
@@ -25,6 +36,7 @@ export type DashboardStatus = {
   system_status: StatusValue;
   infra: { jenkins: InfraStatus; nexus: InfraStatus };
   stats: { total_apps: number; running_containers: number };
+  repository_health: RepositoryHealth;
   applications: ApplicationRecord[];
   latest_pipeline: {
     status: StatusValue;

@@ -28,6 +28,7 @@ const STATUS = JSON.stringify({
   system_status: "idle",
   infra: { jenkins: "active", nexus: "active" },
   stats: { total_apps: 1, running_containers: 0 },
+  repository_health: { score_percent: 0, total_repos: 1, gold: 0, silver: 0, bronze: 1 },
   applications: [
     {
       id: "tes-web",
@@ -36,6 +37,7 @@ const STATUS = JSON.stringify({
       last_build: "",
       commit_sha: "",
       security_issues: 0,
+      deployed: false,
     },
   ],
   latest_pipeline: {

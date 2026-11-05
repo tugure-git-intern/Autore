@@ -83,10 +83,22 @@ describe("ActivePipelines", () => {
     expect(within(kartu()[0]).queryByText("#0")).toBeNull();
   });
 
-  it("penulis dan branch kosong jadi strip, bukan teks kosong", () => {
-    const { kartu } = gambar([antre()]);
+  it("branch kosong jadi strip, dan baris penulis kosong disembunyikan", () => {
+    const { kartu, container } = gambar([antre()]);
 
-    expect(within(kartu()[0]).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    const isi = within(kartu()[0]);
+    expect(isi.getAllByText("—")).toHaveLength(2); // cuma branch dan commit
+    expect(isi.queryByText("?")).toBeNull();
+    expect(container.querySelector("span.rounded-full")).toBeNull();
+  });
+
+  it("baris penulis tetap tampil kalau Jenkins mengirim namanya", () => {
+    const { kartu, container } = gambar([pipeline()]);
+
+    const isi = within(kartu()[0]);
+    expect(isi.getByText("Alif Fadlan <alif@example.test>")).toBeInTheDocument();
+    expect(isi.getByText("AF")).toBeInTheDocument();
+    expect(container.querySelector("span.rounded-full")).not.toBeNull();
   });
 
   it("empty state tetap tampil supaya fiturnya terlihat ada", () => {

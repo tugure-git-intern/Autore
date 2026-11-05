@@ -20,6 +20,7 @@ const status = (
   system_status: "passed",
   infra: { jenkins: "active", nexus: "active" },
   stats: { total_apps: apps.length, running_containers: 0 },
+  repository_health: { score_percent: 0, total_repos: 0, gold: 0, silver: 0, bronze: 0 },
   applications: apps,
   latest_pipeline: {
     status: "passed",

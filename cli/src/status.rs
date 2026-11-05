@@ -22,6 +22,10 @@ pub const MAX_SNAPSHOT_BYTES: usize = 64 * 1024;
 /// Status infrastruktur yang tidak bisa ditanya (docker mati) — jangan menuduh.
 pub const UNKNOWN: &str = "unknown";
 
+/// Id tahap kanonik tahap 9 ("Deploy by Verified Digest"): satu-satunya bukti
+/// aplikasi pernah benar-benar dideploy. Dipakai `pipeline record`.
+pub const TAHAP_DEPLOY: &str = "periksa";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Infra {
     pub jenkins: String,
@@ -43,6 +47,84 @@ pub struct Application {
     pub last_build: String,
     pub commit_sha: String,
     pub security_issues: u32,
+    /// Pernah lewat tahap deploy (atau deploy lokal) — bukan "build terakhir deploy".
+    /// Simpanan lama tidak punya field ini: `default` wajib supaya tetap dimuat.
+    #[serde(default)]
+    pub deployed: bool,
+}
+
+impl Application {
+    /// Baris registry yang belum pernah dibangun.
+    pub fn baru(nama: &str) -> Self {
+        Application {
+            id: nama.to_string(),
+            name: nama.to_string(),
+            status: UNKNOWN.to_string(),
+            last_build: String::new(),
+            commit_sha: String::new(),
+            security_issues: 0,
+            deployed: false,
+        }
+    }
+
+    /// Tandai hasil akhir build: status, waktu, commit, dan fakta pernah deploy.
+    /// `deployed` hanya pernah naik — build baru tidak menghapus riwayat deploy.
+    pub fn tuntaskan(&mut self, status: &str, commit_sha: &str, lewat_deploy: bool) {
+        self.status = status.to_string();
+        self.last_build = now_iso8601();
+        self.commit_sha = commit_sha.to_string();
+        self.deployed |= lewat_deploy;
+    }
+
+    /// Kelas kesehatan repo: gold = lulus & pernah deploy, silver = lulus tanpa
+    /// deploy, bronze = belum ada kabar atau gagal.
+    fn kelas(&self) -> Kelas {
+        match self.status.as_str() {
+            "passed" if self.deployed => Kelas::Gold,
+            "passed" => Kelas::Silver,
+            _ => Kelas::Bronze,
+        }
+    }
+}
+
+enum Kelas {
+    Gold,
+    Silver,
+    Bronze,
+}
+
+/// Kesehatan repo: jumlah tiap kelas + skor terbobot untuk kartu dashboard.
+/// `silver` ikut dihitung walau pipeline Autore selalu deploy sebelum lulus —
+/// kalau ada Jenkinsfile tanpa tahap deploy, angkanya jujur, bukan nol palsu.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RepositoryHealth {
+    pub score_percent: u32,
+    pub total_repos: u32,
+    pub gold: u32,
+    pub silver: u32,
+    pub bronze: u32,
+}
+
+/// Skor = (gold * 100 + silver * 50) / total, dibulatkan ke bawah.
+/// Total nol = skor nol (tanpa pembagian nol).
+pub fn hitungan_kesehatan(apps: &[Application]) -> RepositoryHealth {
+    let mut h = RepositoryHealth {
+        total_repos: apps.len() as u32,
+        ..RepositoryHealth::default()
+    };
+    for a in apps {
+        match a.kelas() {
+            Kelas::Gold => h.gold += 1,
+            Kelas::Silver => h.silver += 1,
+            Kelas::Bronze => h.bronze += 1,
+        }
+    }
+    // Skor = (gold * 100 + silver * 50) / total, dibulatkan ke bawah.
+    // Total nol = skor nol (tanpa pembagian nol).
+    h.score_percent = (h.gold * 100 + h.silver * 50)
+        .checked_div(h.total_repos)
+        .unwrap_or(0);
+    h
 }
 
 /// Waktu satu tahap selesai (pipeline memanggil `record` di akhir tiap tahap).
@@ -84,6 +166,9 @@ pub struct Snapshot {
     pub system_status: String,
     pub infra: Infra,
     pub stats: Stats,
+    /// Ringkasan kesehatan repo; dihitung ulang tiap `build()`.
+    #[serde(default)]
+    pub repository_health: RepositoryHealth,
     pub applications: Vec<Application>,
     pub latest_pipeline: Pipeline,
 }
@@ -100,6 +185,7 @@ impl Default for Snapshot {
                 total_apps: 0,
                 running_containers: 0,
             },
+            repository_health: RepositoryHealth::default(),
             applications: Vec::new(),
             latest_pipeline: Pipeline {
                 status: "idle".to_string(),
@@ -200,17 +286,11 @@ pub fn build(workspace: &Path) -> Snapshot {
                 .iter()
                 .find(|a| a.name == p.nama)
                 .cloned()
-                .unwrap_or(Application {
-                    id: p.nama.clone(),
-                    name: p.nama.clone(),
-                    status: UNKNOWN.to_string(),
-                    last_build: String::new(),
-                    commit_sha: String::new(),
-                    security_issues: 0,
-                })
+                .unwrap_or_else(|| Application::baru(&p.nama))
         })
         .collect();
     snap.stats.total_apps = snap.applications.len();
+    snap.repository_health = hitungan_kesehatan(&snap.applications);
 
     let hidup = crate::serve::container_jalan();
     snap.infra = Infra {
@@ -345,6 +425,7 @@ mod tests {
             last_build: "2026-11-03T10:00:00Z".to_string(),
             commit_sha: "a1b2c3d4e5f6".to_string(),
             security_issues: 0,
+            deployed: false,
         });
         snap.latest_pipeline.status = "passed".to_string();
         snap.system_status = "passed".to_string();

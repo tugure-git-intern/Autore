@@ -23,11 +23,20 @@ export type StatusValue =
   | "pending"
   | "skipped";
 
+export type RepositoryHealth = {
+  score_percent: number;
+  total_repos: number;
+  gold: number;
+  silver: number;
+  bronze: number;
+};
+
 /** Mirrors `autore status --json`. Text that is unavailable is "" — never null. */
 export interface DashboardStatus {
   system_status: StatusValue;
   infra: { jenkins: "active" | "inactive" | "unknown"; nexus: "active" | "inactive" | "unknown" };
   stats: { total_apps: number; running_containers: number };
+  repository_health: RepositoryHealth;
   applications: Array<{
     id: string;
     name: string;
@@ -35,6 +44,8 @@ export interface DashboardStatus {
     last_build: string;
     commit_sha: string;
     security_issues: number;
+    /** Snapshot lama dari CLI sebelum Phase 6 tidak membawa field ini. */
+    deployed?: boolean;
   }>;
   latest_pipeline: {
     status: StatusValue;
@@ -93,7 +104,16 @@ function parseDashboardStatus(stdout: string): DashboardStatus {
 }
 
 function isDashboardStatus(value: unknown): value is DashboardStatus {
-  if (!hasKeys(value, ["system_status", "infra", "stats", "applications", "latest_pipeline"])) {
+  if (
+    !hasKeys(value, [
+      "system_status",
+      "infra",
+      "stats",
+      "repository_health",
+      "applications",
+      "latest_pipeline",
+    ])
+  ) {
     return false;
   }
 
@@ -101,9 +121,21 @@ function isDashboardStatus(value: unknown): value is DashboardStatus {
     isStatus(value.system_status) &&
     isInfra(value.infra) &&
     isStats(value.stats) &&
+    isRepositoryHealth(value.repository_health) &&
     Array.isArray(value.applications) &&
     value.applications.every(isApplication) &&
     isPipeline(value.latest_pipeline)
+  );
+}
+
+function isRepositoryHealth(value: unknown): value is RepositoryHealth {
+  return (
+    hasKeys(value, ["score_percent", "total_repos", "gold", "silver", "bronze"]) &&
+    isCount(value.score_percent) &&
+    isCount(value.total_repos) &&
+    isCount(value.gold) &&
+    isCount(value.silver) &&
+    isCount(value.bronze)
   );
 }
 
@@ -125,20 +157,18 @@ function isStats(value: unknown): value is DashboardStatus["stats"] {
 
 function isApplication(value: unknown): value is DashboardStatus["applications"][number] {
   return (
-    hasKeys(value, [
-      "id",
-      "name",
-      "status",
-      "last_build",
-      "commit_sha",
-      "security_issues",
-    ]) &&
+    hasKeys(
+      value,
+      ["id", "name", "status", "last_build", "commit_sha", "security_issues"],
+      ["deployed"],
+    ) &&
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     isStatus(value.status) &&
     isString(value.last_build) &&
     isString(value.commit_sha) &&
-    isCount(value.security_issues)
+    isCount(value.security_issues) &&
+    isAbsentOr<boolean>(value.deployed, (v): v is boolean => typeof v === "boolean")
   );
 }
 

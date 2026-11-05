@@ -43,6 +43,7 @@ const STATUS = {
   system_status: "idle",
   infra: { jenkins: "active", nexus: "active" },
   stats: { total_apps: 1, running_containers: 0 },
+  repository_health: { score_percent: 100, total_repos: 1, gold: 1, silver: 0, bronze: 0 },
   applications: [
     {
       id: "tes-web",
@@ -190,7 +191,9 @@ test("Overview menampilkan section Active Pipelines beserta hitungannya", async 
   );
 
   expect(await screen.findByRole("heading", { name: "Active Pipelines" })).toBeInTheDocument();
-  expect(screen.getByText("1 berjalan atau menunggu")).toBeInTheDocument();
+  // `findByText`, bukan `getByText`: judul section tampil sebelum /api/active
+  // selesai, jadi assertion sinkron di sini balapan dengan respons fetch.
+  expect(await screen.findByText("1 berjalan atau menunggu")).toBeInTheDocument();
   expect(await screen.findByTestId("pipeline-card")).toBeInTheDocument();
 });
 

@@ -21,6 +21,7 @@ function status(jenkins: "active" | "inactive" | "unknown", stale = false): ApiS
       system_status: "idle",
       infra: { jenkins, nexus: "active" },
       stats: { total_apps: 0, running_containers: 0 },
+      repository_health: { score_percent: 0, total_repos: 0, gold: 0, silver: 0, bronze: 0 },
       applications: [],
       latest_pipeline: {
         status: "idle",

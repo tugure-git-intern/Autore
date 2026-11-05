@@ -8,6 +8,7 @@ const fixture: DashboardStatus = {
   system_status: "idle",
   infra: { jenkins: "unknown", nexus: "unknown" },
   stats: { total_apps: 0, running_containers: 0 },
+  repository_health: { score_percent: 0, total_repos: 0, gold: 0, silver: 0, bronze: 0 },
   applications: [],
   latest_pipeline: {
     status: "idle",
@@ -106,6 +107,96 @@ describe("loadDashboardStatus", () => {
         throw new Error("timeout");
       }),
     ).resolves.toEqual({ data: fixture, stale: true });
+  });
+});
+
+describe("repository_health", () => {
+  it("meneruskan angka apa adanya ke web", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const sehat = {
+      ...fixture,
+      repository_health: { score_percent: 10, total_repos: 10, gold: 1, silver: 0, bronze: 9 },
+    };
+
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify(sehat)),
+    ).resolves.toEqual({ data: sehat, stale: false });
+  });
+
+  it("menolak kunci yang hilang, nilai pecahan, dan kunci asing", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const cases: unknown[] = [
+      { ...fixture, repository_health: undefined },
+      { ...fixture, repository_health: { total_repos: 0, gold: 0, silver: 0, bronze: 0 } },
+      {
+        ...fixture,
+        repository_health: { score_percent: 10, total_repos: 10, gold: 1, silver: 0 },
+      },
+      {
+        ...fixture,
+        repository_health: { score_percent: 10, total_repos: 10, gold: 1.5, silver: 0, bronze: 8 },
+      },
+      {
+        ...fixture,
+        repository_health: { score_percent: -1, total_repos: 10, gold: 0, silver: 0, bronze: 10 },
+      },
+      {
+        ...fixture,
+        repository_health: {
+          score_percent: 10,
+          total_repos: 10,
+          gold: 1,
+          silver: 0,
+          bronze: 9,
+          platinum: 0,
+        },
+      },
+    ];
+
+    for (const payload of cases) {
+      await expect(loadDashboardStatus(async () => JSON.stringify(payload))).rejects.toThrow(
+        "invalid Autore status JSON",
+      );
+    }
+  });
+
+  it("menerima `deployed` boolean dan aplikasi lama tanpa field itu", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const app = {
+      id: "tes-web",
+      name: "tes-web",
+      status: "passed" as const,
+      last_build: "2026-11-05T06:02:40Z",
+      commit_sha: "feff447",
+      security_issues: 0,
+    };
+    const baru = { ...fixture, applications: [{ ...app, deployed: true }] };
+    const lama = { ...fixture, applications: [app] };
+
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify(baru)),
+    ).resolves.toEqual({ data: baru, stale: false });
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify(lama)),
+    ).resolves.toEqual({ data: lama, stale: false });
+  });
+
+  it("menolak `deployed` yang bukan boolean", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    const app = {
+      id: "tes-web",
+      name: "tes-web",
+      status: "passed" as const,
+      last_build: "",
+      commit_sha: "",
+      security_issues: 0,
+    };
+
+    await expect(
+      loadDashboardStatus(async () =>
+        JSON.stringify({ ...fixture, applications: [{ ...app, deployed: "ya" }] }),
+      ),
+    ).rejects.toThrow("invalid Autore status JSON");
   });
 });
 

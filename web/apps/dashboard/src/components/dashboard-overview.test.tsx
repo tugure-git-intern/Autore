@@ -16,6 +16,7 @@ const base: DashboardStatus = {
   system_status: "idle",
   infra: { jenkins: "active", nexus: "active" },
   stats: { total_apps: 1, running_containers: 2 },
+  repository_health: { score_percent: 10, total_repos: 10, gold: 1, silver: 0, bronze: 9 },
   applications: [
     {
       id: "app-portal-klaim",
@@ -102,6 +103,16 @@ describe("DashboardOverview", () => {
     expect(screen.getByText("Container Berjalan")).toBeVisible();
     expect(screen.getByText("Jenkins & Nexus")).toBeVisible();
     expect(screen.getByText("Status Pipeline")).toBeVisible();
+    expect(screen.getByText("Repository Health")).toBeVisible();
+    expect(screen.getByText("10%")).toBeVisible();
+    expect(screen.getByText("10 repos · 1 gold · 0 silver · 9 bronze")).toBeVisible();
+    // Kartu kesehatan ditaruh paling kanan: setelah Status Pipeline.
+    const statistik = screen.getByRole("region", { name: "Statistik" });
+    expect(
+      within(statistik).getByText("Status Pipeline").compareDocumentPosition(
+        within(statistik).getByText("Repository Health"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText("a1b2c3d4e5f6")).toHaveClass("font-mono");
     const baris = screen.getByText("Portal Klaim").closest("tr") as HTMLElement;
     expect(within(baris).getByText("Lulus")).toBeVisible();

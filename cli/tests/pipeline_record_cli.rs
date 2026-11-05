@@ -60,6 +60,7 @@ fn bantuan_menampilkan_seluruh_flag_kontrak() {
         "--log",
         "--reset",
         "--json",
+        "--app",
     ] {
         assert!(
             teks.contains(flag),
@@ -398,3 +399,113 @@ fn simpanan_lama_tanpa_field_baru_tetap_dimuat() {
         "data lama tetap utuh"
     );
 }
+
+/// Daftar aplikasi dari simpanan (dibaca apa adanya, tanpa `status --json`).
+fn aplikasi(ws: &Path) -> Vec<Value> {
+    simpanan(ws)["applications"]
+        .as_array()
+        .expect("applications harus array")
+        .clone()
+}
+
+fn app(ws: &Path, nama: &str) -> Value {
+    aplikasi(ws)
+        .into_iter()
+        .find(|a| a["name"] == nama)
+        .unwrap_or_else(|| panic!("aplikasi {nama} tidak ada di simpanan"))
+}
+
+#[test]
+fn app_hanya_ditulis_pada_hasil_akhir() {
+    let tmp = TempDir::new().unwrap();
+    let ws = tmp.path();
+
+    rekam(
+        ws,
+        &[
+            "--app",
+            "tes-web",
+            "--reset",
+            "--status",
+            "running",
+            "--stage",
+            "checkout",
+            "--commit",
+            "abc123",
+        ],
+    );
+    // Build masih jalan: aplikasi belum boleh mengklaim apa pun.
+    assert_eq!(
+        app(ws, "tes-web")["status"],
+        "unknown",
+        "status running tidak boleh menimpa hasil akhir"
+    );
+
+    rekam(ws, &["--app", "tes-web", "--status", "passed"]);
+
+    let a = app(ws, "tes-web");
+    assert_eq!(a["status"], "passed");
+    assert_eq!(a["commit_sha"], "abc123", "commit dari panggilan sebelumnya");
+    assert_eq!(a["deployed"], false, "belum lewat tahap deploy");
+    assert_eq!(a["id"], "tes-web");
+}
+
+#[test]
+fn tahap_deploy_menandai_deployed_dan_tahan_lintas_build() {
+    let tmp = TempDir::new().unwrap();
+    let ws = tmp.path();
+
+    rekam(
+        ws,
+        &["--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout"],
+    );
+    rekam(
+        ws,
+        &["--app", "tes-web", "--status", "running", "--stage", "periksa"],
+    );
+    assert_eq!(
+        app(ws, "tes-web")["deployed"],
+        true,
+        "tahap 9 (periksa) = sudah deploy"
+    );
+    assert_eq!(
+        app(ws, "tes-web")["status"],
+        "unknown",
+        "deploy saja belum hasil akhir"
+    );
+
+    // Build baru: `--reset` tidak menghapus fakta "pernah deploy".
+    rekam(
+        ws,
+        &["--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout"],
+    );
+    assert_eq!(app(ws, "tes-web")["deployed"], true);
+
+    // Build yang gagal tetap "pernah deploy".
+    rekam(
+        ws,
+        &["--app", "tes-web", "--status", "failed", "--message", "Gagal di tahap: 5. Build"],
+    );
+    let a = app(ws, "tes-web");
+    assert_eq!(a["status"], "failed");
+    assert_eq!(a["deployed"], true);
+}
+
+#[test]
+fn tanpa_app_perintah_lama_tidak_menyentuh_aplikasi() {
+    let tmp = TempDir::new().unwrap();
+    let ws = tmp.path();
+
+    rekam(
+        ws,
+        &["--reset", "--status", "running", "--stage", "checkout"],
+    );
+    rekam(ws, &["--status", "passed", "--summary", "9/9 gerbang lolos"]);
+
+    assert!(
+        aplikasi(ws).is_empty(),
+        "panggilan tanpa --app tidak boleh mengarang aplikasi: {:?}",
+        aplikasi(ws)
+    );
+}
+

@@ -4,7 +4,7 @@
 //! kontrak tetap satu tempat: modul ini cuma *merge* peristiwa, `status::save`
 //! yang menyimpan (atomik: tulis `*.tmp` lalu rename).
 
-use crate::status::{Snapshot, StageTime};
+use crate::status::{Application, Snapshot, StageTime};
 use clap::Args;
 
 /// Satu peristiwa pipeline. Field `Option`/`Vec` kosong = "jangan sentuh".
@@ -41,6 +41,11 @@ pub struct Rekaman {
     /// Kosongkan tahap, log, dan ringkasan build sebelumnya (panggilan pertama tiap build)
     #[arg(long)]
     pub reset: bool,
+
+    /// Nama aplikasi (baris `registry.tsv`) yang build-nya direkam; menandai
+    /// status aplikasi supaya kartu Repository Health punya data.
+    #[arg(long, value_name = "NAMA")]
+    pub app: Option<String>,
 
     /// Cetak dokumen kontrak hasil rekaman ke stdout
     #[arg(long)]
@@ -124,6 +129,28 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
     snap.latest_pipeline
         .raw_log
         .extend(rekaman.log.iter().cloned());
+
+    // Status aplikasi: jalur yang sama dengan `serve::simpan_status` supaya
+    // kartu Repository Health punya data dari build Jenkins, bukan cuma dari
+    // build yang dijalankan dashboard. Dipanggil di akhir: `commit_sha` sudah
+    // terbarui oleh blok `commit` di atas.
+    if let Some(nama) = rekaman.app.as_deref().filter(|n| !n.is_empty()) {
+        let lewat_deploy = rekaman.stage.iter().any(|t| t == crate::status::TAHAP_DEPLOY);
+        if !snap.applications.iter().any(|a| a.name == nama) {
+            snap.applications.push(Application::baru(nama));
+        }
+        if let Some(entri) = snap.applications.iter_mut().find(|a| a.name == nama) {
+            if lewat_deploy {
+                entri.deployed = true;
+            }
+            // Sama seperti `serve`: hanya hasil akhir yang menulis status.
+            if let Some(status) = &rekaman.status {
+                if status == "passed" || status == "failed" {
+                    entri.tuntaskan(status, &snap.latest_pipeline.commit_sha, lewat_deploy);
+                }
+            }
+        }
+    }
 }
 
 /// Jalankan `autore pipeline record`; balik exit code proses.

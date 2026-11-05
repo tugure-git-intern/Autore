@@ -14,6 +14,10 @@ def call(Map config = [:]) {
     def nexusRegistry = config.nexusRegistry ?: '127.0.0.1:5000'
     def workspace = config.workspace ?: '/home/tugure/autore-workspace'
     def autoreBin = config.autoreBin ?: '/usr/local/bin/autore'
+    // Status per-aplikasi hanya dicatat kalau Jenkinsfile menyebut appName.
+    // Pipeline Autore sendiri memanggil `autorePipeline()` tanpa argumen; tanpa
+    // penjaga ini ia akan mengaku sebagai aplikasi dan menggembungkan registry.
+    def appReported = config.appName ?: ''
 
     // Kutip satu argumen shell dengan aman: author/pesan commit bisa berisi spasi, <, >, dan apostrof.
     def q = { String v -> "'" + (v ?: '').replace("'", "'\\''") + "'" }
@@ -23,6 +27,7 @@ def call(Map config = [:]) {
     // Hanya preflight di stage 1 yang mem-fail-kan build (binary belum dipasang).
     def record = { Map m ->
         def parts = ["AUTORE_WORKSPACE=${q(workspace)}", autoreBin, 'pipeline', 'record', '--status', m.status]
+        if (appReported) { parts += ['--app', q(appReported)] }
         if (m.reset) { parts << '--reset' }
         (m.stages ?: []).each { s -> parts += ['--stage', s] }
         if (m.commit) { parts += ['--commit', q(m.commit)] }

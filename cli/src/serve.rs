@@ -448,17 +448,16 @@ impl Server {
         // Hanya hasil akhir yang menulis status aplikasi: `passed`/`failed`.
         // Saat masih berjalan aplikasi tetap `unknown` supaya web tidak mengklaim sukses.
         if !nama.is_empty() && (status == "passed" || status == "failed") {
-            let catatan = crate::status::Application {
-                id: nama.clone(),
-                name: nama.clone(),
-                status: status.to_string(),
-                last_build: crate::status::now_iso8601(),
-                commit_sha: snap.latest_pipeline.commit_sha.clone(),
-                security_issues: 0,
-            };
-            match snap.applications.iter_mut().find(|a| a.name == nama) {
-                Some(lama) => *lama = catatan,
-                None => snap.applications.push(catatan),
+            let lewat_deploy = snap
+                .latest_pipeline
+                .stages
+                .iter()
+                .any(|t| t == crate::status::TAHAP_DEPLOY);
+            if !snap.applications.iter().any(|a| a.name == nama) {
+                snap.applications.push(crate::status::Application::baru(&nama));
+            }
+            if let Some(catatan) = snap.applications.iter_mut().find(|a| a.name == nama) {
+                catatan.tuntaskan(status, &snap.latest_pipeline.commit_sha, lewat_deploy);
             }
         }
 

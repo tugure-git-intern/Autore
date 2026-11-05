@@ -16,6 +16,13 @@ function statusJson(apps: string[]): string {
     system_status: "idle",
     infra: { jenkins: "active", nexus: "active" },
     stats: { total_apps: apps.length, running_containers: 0 },
+    repository_health: {
+      score_percent: 0,
+      total_repos: apps.length,
+      gold: 0,
+      silver: 0,
+      bronze: apps.length,
+    },
     applications: apps.map((id) => ({
       id,
       name: id,

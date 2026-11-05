@@ -19,6 +19,7 @@ const status = {
   system_status: "passed",
   infra: { jenkins: "active", nexus: "active" },
   stats: { total_apps: 1, running_containers: 1 },
+  repository_health: { score_percent: 0, total_repos: 1, gold: 0, silver: 0, bronze: 1 },
   applications: [
     {
       id: "portal-klaim",

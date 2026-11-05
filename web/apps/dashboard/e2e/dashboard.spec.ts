@@ -243,6 +243,116 @@ test.describe("section Active Pipelines", () => {
   });
 });
 
+test.describe("kartu Repository Health", () => {
+  type Health = { score_percent: number; total_repos: number; gold: number; silver: number; bronze: number };
+
+  const paksaStatus = (
+    page: import("@playwright/test").Page,
+    health: Health,
+  ) =>
+    page.route("**/api/status", (route) =>
+      route.fulfill({
+        json: {
+          data: {
+            system_status: "idle",
+            infra: { jenkins: "active", nexus: "active" },
+            stats: { total_apps: health.total_repos, running_containers: 2 },
+            repository_health: health,
+            applications: [
+              {
+                id: "tes-web",
+                name: "tes-web",
+                status: "passed",
+                last_build: "2026-11-05T06:02:40Z",
+                commit_sha: "feff447",
+                security_issues: 0,
+                deployed: true,
+              },
+            ],
+            latest_pipeline: {
+              status: "idle",
+              failure_reason: "",
+              stages: [],
+              security_summary: "",
+              commit_sha: "",
+              author: "",
+              raw_log: [],
+            },
+          },
+          stale: false,
+        },
+      }),
+    );
+
+  test("kartu ke-5 tampil paling kanan, sebaris dengan Status Pipeline", async ({ page }) => {
+    await paksaStatus(page, { score_percent: 10, total_repos: 10, gold: 1, silver: 0, bronze: 9 });
+    await page.goto("/");
+
+    const statistik = page.locator('section[aria-label="Statistik"]');
+    await expect(statistik.locator("> *")).toHaveCount(5);
+    await expect(statistik.getByText("Repository Health", { exact: true })).toBeVisible();
+    await expect(statistik.getByText("10%", { exact: true })).toBeVisible();
+    await expect(statistik.getByText("10 repos · 1 gold · 0 silver · 9 bronze")).toBeVisible();
+
+    const judul = (await statistik.getByText("Repository Health", { exact: true }).boundingBox())!;
+    const tetangga = (await statistik.getByText("Status Pipeline", { exact: true }).boundingBox())!;
+    expect(judul.x).toBeGreaterThan(tetangga.x);
+    // Sebaris, bukan turun ke baris kedua: grid 5 kolom di 1280px.
+    expect(Math.abs(judul.y - tetangga.y)).toBeLessThan(8);
+    expect(judul.x + judul.width).toBeLessThanOrEqual(1280);
+  });
+
+  test("ikon medali, dan nol repo tampil 0% bukan NaN", async ({ page }) => {
+    await paksaStatus(page, { score_percent: 0, total_repos: 0, gold: 0, silver: 0, bronze: 0 });
+    await page.goto("/");
+
+    const statistik = page.locator('section[aria-label="Statistik"]');
+    await expect(statistik.locator("svg.lucide-medal")).toHaveCount(1);
+    await expect(statistik.getByText("0 repos · 0 gold · 0 silver · 0 bronze")).toBeVisible();
+    await expect(statistik.getByText("NaN")).toHaveCount(0);
+  });
+
+  test("data nyata: rincian kelas menjumlah ke total repo dan skor cocok rumusnya", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const statistik = page.locator('section[aria-label="Statistik"]');
+    const rincian = statistik.getByText(/\d+ repos · \d+ gold · \d+ silver · \d+ bronze/);
+    await expect(rincian).toBeVisible();
+
+    const [total, gold, silver, bronze] = (await rincian.textContent())!.match(/\d+/g)!.map(Number);
+    expect(gold + silver + bronze).toBe(total);
+
+    const skor = Number(
+      (await statistik.getByText(/^\d+%$/).textContent())!.replace("%", ""),
+    );
+    expect(skor).toBe(total === 0 ? 0 : Math.floor((gold * 100 + silver * 50) / total));
+  });
+});
+
+test.describe("tanpa sesi — /api/status membawa repository_health", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("kontrak kesehatan repo ada di payload nyata", async ({ request }) => {
+    const respons = await request.get("/api/status");
+
+    expect(respons.status()).toBe(200);
+    const body = await respons.json();
+    expect(Object.keys(body.data.repository_health).sort()).toEqual([
+      "bronze",
+      "gold",
+      "score_percent",
+      "silver",
+      "total_repos",
+    ]);
+    for (const nilai of Object.values(body.data.repository_health) as number[]) {
+      expect(Number.isInteger(nilai)).toBe(true);
+      expect(nilai).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
 test.describe("tanpa sesi — /api/active", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 

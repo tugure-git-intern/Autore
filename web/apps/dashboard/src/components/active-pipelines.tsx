@@ -70,12 +70,14 @@ export function ActivePipelines({
                     {shortSha(p.commit_sha)}
                   </a>
 
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-600">
-                      {inisial(p.author)}
-                    </span>
-                    <span className="truncate text-xs text-gray-600">{dash(p.author)}</span>
-                  </div>
+                  {p.author ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-600">
+                        {inisial(p.author)}
+                      </span>
+                      <span className="truncate text-xs text-gray-600">{dash(p.author)}</span>
+                    </div>
+                  ) : null}
 
                   <div>
                     <Badge tone={tone}>{label}</Badge>

@@ -6,6 +6,7 @@ import { dash } from "@/lib/contracts";
 import { useStatus } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
 import { OverviewAnalytics } from "./overview-analytics";
+import { RepositoryHealthCard } from "./repository-health-card";
 import { StatCard } from "./stat-card";
 import { StatusBadge, type AppStatus } from "./status-badge";
 import { Button } from "./ui/button";
@@ -82,7 +83,7 @@ export function DashboardOverview() {
 
       <section
         aria-label="Statistik"
-        className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5"
       >
         <StatCard label="Total Terdaftar" value={data.stats.total_apps} icon={Boxes} tone="blue" />
         <StatCard
@@ -103,6 +104,7 @@ export function DashboardOverview() {
           icon={Workflow}
           tone="amber"
         />
+        <RepositoryHealthCard health={data.repository_health} />
       </section>
 
       <OverviewAnalytics />

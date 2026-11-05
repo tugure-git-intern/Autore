@@ -138,10 +138,11 @@ describe("Navbar", () => {
 });
 
 describe("AppShell", () => {
-  it("refetches only /api/status when the navbar Sync button is pressed", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, status: 200, json: async () => status("active") } as unknown as Response);
+  // Pengganti tes lama "refetches only /api/status": Sync sekarang menarik tiga
+  // sumber sekaligus. Perilaku lengkapnya (toast, disabled, klik beruntun) ada
+  // di app-shell.test.tsx; di sini cukup membuktikan cakupannya tiga endpoint.
+  it("Sync menarik /api/status, /api/runs dan /api/active, bukan cuma status", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => status("active") }) as unknown as Response);
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -150,11 +151,17 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const jalurTerpakai = () =>
+      new Set(fetchMock.mock.calls.map((c) => c[0] as string));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(jalurTerpakai()).toEqual(new Set(["/api/status", "/api/runs", "/api/active"]));
+
     fireEvent.click(screen.getByRole("button", { name: "Sync" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/status");
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+    for (const url of ["/api/status", "/api/runs", "/api/active"]) {
+      expect(fetchMock.mock.calls.filter((c) => c[0] === url)).toHaveLength(2);
+    }
   });
 });

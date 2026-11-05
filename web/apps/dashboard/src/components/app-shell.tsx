@@ -16,16 +16,27 @@ import { fetchDashboardStatus } from "@/lib/status-client";
 import { connectionStatus, Navbar } from "./navbar";
 import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
+import { Toast, type JenisToast } from "./toast";
+import { useActivePipelines, type HasilActive } from "./use-active-pipelines";
+import { useRuns, type HasilRuns } from "./use-runs";
+
+const COPY_SUKSES = "Data berhasil disinkronkan.";
+const COPY_GAGAL = "Gagal menyinkronkan data.";
 
 export type StatusState = {
   state: ApiStatusResponse | null;
   loading: boolean;
   failed: boolean;
+  /** Sync sedang berjalan; tombol topbar memakainya untuk spinner + disabled. */
   refreshing: boolean;
-  /** Background refetch wired to the navbar Sync button. */
-  refresh: () => void;
+  /** Tarik status, runs dan active sekaligus. true = ketiganya membawa data. */
+  sync: () => Promise<boolean>;
   /** Foreground retry for error states. */
   reload: () => void;
+  runs: HasilRuns;
+  aktif: HasilActive;
+  toast: { pesan: string; jenis: JenisToast } | null;
+  tutupToast: () => void;
 };
 
 const StatusContext = createContext<StatusState | null>(null);
@@ -37,48 +48,99 @@ export function useStatus(): StatusState {
 }
 
 /**
- * Single owner of `/api/status`. The navbar and every page read the same
- * payload, so one Sync refreshes both the indicator and the content.
+ * Single owner of `/api/status`, plus the two other things the topbar Sync
+ * button has to move: `/api/runs` and `/api/active`. Keeping all three here is
+ * what lets one click repaint the indicator, the charts and the active cards —
+ * and lets `sync()` wait for the slowest of them before releasing the button.
  */
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ApiStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [toast, setToast] = useState<{ pesan: string; jenis: JenisToast } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
-  const load = useCallback(async (background: boolean) => {
+  const runs = useRuns();
+  const aktif = useActivePipelines();
+  const refreshRuns = runs.refresh;
+  const refreshAktif = aktif.refresh;
+
+  /**
+   * Satu tarikan status. `true` hanya kalau payload baru benar-benar masuk —
+   * permintaan yang dibatalkan permintaan berikutnya menjawab `false`, supaya
+   * Sync tidak mengaku sukses atas data yang tidak pernah dipasang.
+   */
+  const load = useCallback(async (): Promise<boolean> => {
     controller.current?.abort();
     const next = new AbortController();
     controller.current = next;
-    if (background) setRefreshing(true);
-    else setLoading(true);
     try {
       const result = await fetchDashboardStatus(next.signal);
-      if (!next.signal.aborted) {
-        setState(result);
-        setFailed(false);
-      }
+      if (next.signal.aborted) return false;
+      setState(result);
+      setFailed(false);
+      return true;
     } catch (error) {
-      if (!next.signal.aborted && (error as Error)?.name !== "AbortError") setFailed(true);
-    } finally {
-      if (!next.signal.aborted) {
-        if (background) setRefreshing(false);
-        else setLoading(false);
-      }
+      if (next.signal.aborted || (error as Error)?.name === "AbortError") return false;
+      setFailed(true);
+      return false;
     }
   }, []);
 
   useEffect(() => {
-    void load(false);
-    return () => controller.current?.abort();
+    let hidup = true;
+    void load().finally(() => {
+      if (hidup) setLoading(false);
+    });
+    return () => {
+      hidup = false;
+      controller.current?.abort();
+    };
   }, [load]);
 
-  const refresh = useCallback(() => void load(true), [load]);
-  const reload = useCallback(() => void load(false), [load]);
+  const reload = useCallback(() => {
+    setLoading(true);
+    void load().finally(() => setLoading(false));
+  }, [load]);
+
+  /**
+   * Ketiga penarik tidak pernah melempar (mereka menjawab boolean), jadi
+   * `Promise.all` di sini menunggu yang paling lambat tanpa membatalkan data
+   * yang sudah tiba. Satu gagal = toast gagal, tapi status/runs/active yang
+   * sukses tetap terpasang di layar.
+   */
+  const sync = useCallback(async (): Promise<boolean> => {
+    setRefreshing(true);
+    try {
+      const hasil = await Promise.all([load(), refreshRuns(), refreshAktif()]);
+      const sukses = hasil.every(Boolean);
+      setToast(
+        sukses ? { pesan: COPY_SUKSES, jenis: "sukses" } : { pesan: COPY_GAGAL, jenis: "gagal" },
+      );
+      return sukses;
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, refreshRuns, refreshAktif]);
+
+  const tutupToast = useCallback(() => setToast(null), []);
 
   return (
-    <StatusContext.Provider value={{ state, loading, failed, refreshing, refresh, reload }}>
+    <StatusContext.Provider
+      value={{
+        state,
+        loading,
+        failed,
+        refreshing,
+        sync,
+        reload,
+        runs,
+        aktif,
+        toast,
+        tutupToast,
+      }}
+    >
       {children}
     </StatusContext.Provider>
   );
@@ -101,12 +163,19 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
         <Navbar
           title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}
-          onSync={status.refresh}
+          onSync={status.sync}
           refreshing={status.refreshing}
           user={user}
         />
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 lg:px-6">{children}</main>
       </div>
+      {status.toast ? (
+        <Toast
+          pesan={status.toast.pesan}
+          jenis={status.toast.jenis}
+          onTutup={status.tutupToast}
+        />
+      ) : null}
     </div>
   );
 }

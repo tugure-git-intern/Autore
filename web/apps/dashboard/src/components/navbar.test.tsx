@@ -135,6 +135,29 @@ describe("Navbar", () => {
     expect(screen.queryByRole("button", { name: /keluar/i })).toBeNull();
     expect(screen.queryByText(/^@/)).toBeNull();
   });
+
+  it("berputar dan terkunci selama sync, kembali normal setelah selesai", () => {
+    const props = {
+      title: "Dashboard",
+      connection: { tone: "green" as const, label: "Sistem Siap" },
+      onSync: () => {},
+      user: USER,
+    };
+
+    const { rerender } = render(<Navbar {...props} refreshing />);
+    const berjalan = screen.getByRole("button", { name: "Sync" });
+    expect(berjalan).toBeDisabled();
+    expect(berjalan).toHaveAttribute("aria-busy", "true");
+    expect(berjalan.querySelector("svg")?.getAttribute("class")).toContain(
+      "motion-safe:animate-spin",
+    );
+
+    rerender(<Navbar {...props} />);
+    const diam = screen.getByRole("button", { name: "Sync" });
+    expect(diam).toBeEnabled();
+    expect(diam).not.toHaveAttribute("aria-busy");
+    expect(diam.querySelector("svg")?.getAttribute("class")).not.toContain("animate-spin");
+  });
 });
 
 describe("AppShell", () => {

@@ -76,8 +76,11 @@ export function Navbar({
               {connection.label}
             </span>
           </span>
-          <Button onClick={onSync} disabled={refreshing}>
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          <Button onClick={onSync} disabled={refreshing} aria-busy={refreshing ? "true" : undefined}>
+            <RefreshCw
+              className={refreshing ? "h-4 w-4 motion-safe:animate-spin" : "h-4 w-4"}
+              aria-hidden="true"
+            />
             Sync
           </Button>
           {user.login ? <UserMenu user={user} /> : null}

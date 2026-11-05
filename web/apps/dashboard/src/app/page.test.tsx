@@ -96,6 +96,12 @@ function stubApi(runs: () => Promise<Response>) {
       const url = String(input);
       if (url === "/api/status") return ok({ data: STATUS, stale: false });
       if (url === "/api/runs") return runs();
+      if (url === "/api/active") {
+        return ok({
+          data: { generated_at: "", active: [], counts: { running: 0, queued: 0 } },
+          stale: false,
+        });
+      }
       throw new Error(`permintaan tidak terduga: ${url}`);
     }),
   );
@@ -143,6 +149,49 @@ test("menandai data terakhir saat /api/runs menjawab stale", async () => {
   );
 
   expect(await screen.findByText("data terakhir")).toBeInTheDocument();
+});
+
+test("Overview menampilkan section Active Pipelines beserta hitungannya", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/status") return ok({ data: STATUS, stale: false });
+      if (url === "/api/runs") return ok({ data: RUNS, stale: false });
+      if (url === "/api/active") {
+        return ok({
+          data: {
+            generated_at: "2026-11-05T03:40:00Z",
+            active: [
+              {
+                app: "tes-web",
+                number: 42,
+                status: "running",
+                branch: "main",
+                commit_sha: "3878d9307475eb84316edde4e77f63fd0b98ae4e",
+                author: "Alif Fadlan <alif@example.test>",
+                started_at: "2026-11-05T03:23:08Z",
+                url: "http://100.80.3.14:8080/job/tes-web/42",
+              },
+            ],
+            counts: { running: 1, queued: 0 },
+          },
+          stale: false,
+        });
+      }
+      throw new Error(`permintaan tidak terduga: ${url}`);
+    }),
+  );
+
+  render(
+    <StatusProvider>
+      <DashboardPage />
+    </StatusProvider>,
+  );
+
+  expect(await screen.findByRole("heading", { name: "Active Pipelines" })).toBeInTheDocument();
+  expect(screen.getByText("1 berjalan atau menunggu")).toBeInTheDocument();
+  expect(await screen.findByTestId("pipeline-card")).toBeInTheDocument();
 });
 
 test("menaruh tombol Deploy Sekarang di pojok kanan atas dengan peringatan commit dan push", async () => {

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ActivePipelines } from "./active-pipelines";
 import { RunDistribution } from "./charts/run-distribution";
 import { RunTrends } from "./charts/run-trends";
 import { RecentRuns } from "./recent-runs";
+import { useActivePipelines } from "./use-active-pipelines";
 import { ChartCard } from "./ui/chart-card";
 import { Skeleton } from "./ui/skeleton";
 import type { ApiRunsResponse } from "@/lib/contracts";
@@ -12,12 +14,14 @@ import { fetchRuns } from "@/lib/runs-client";
 const TOTALS_KOSONG = { passed: 0, failed: 0, running: 0 };
 
 /**
- * Grafik + Recent Runs. Kalau `/api/runs` gagal, bagian ini yang kosong —
- * kartu status di atasnya tetap tampil, jadi Jenkins diam bukan halaman blank.
+ * Pipeline aktif + grafik + Recent Runs. Dua sumber dipisah: `/api/active` gagal
+ * tidak mengosongkan grafik, dan `/api/runs` gagal tidak mengosongkan kartu
+ * pipeline — Jenkins diam bukan halaman blank.
  */
 export function OverviewAnalytics() {
   const [hasil, setHasil] = useState<ApiRunsResponse | null>(null);
   const [gagal, setGagal] = useState(false);
+  const aktif = useActivePipelines();
 
   useEffect(() => {
     const kontrol = new AbortController();
@@ -38,7 +42,11 @@ export function OverviewAnalytics() {
 
   return (
     <>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6">
+        <ActivePipelines active={aktif.active} counts={aktif.counts} stale={aktif.stale} />
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2">
           <ChartCard title="Tren 7 Hari" subtitle="Build lulus dan gagal per hari">
             {memuat ? <Skeleton className="h-[220px]" /> : <RunTrends daily={daily} />}

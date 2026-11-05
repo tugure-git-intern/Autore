@@ -51,6 +51,12 @@ function mockStatus(body: unknown, ok = true) {
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     if (String(input) === "/api/runs") return respond({ data: RUNS_KOSONG, stale: false });
+    if (String(input) === "/api/active") {
+      return respond({
+        data: { generated_at: "", active: [], counts: { running: 0, queued: 0 } },
+        stale: false,
+      });
+    }
     return respond(body, ok);
   });
   vi.stubGlobal("fetch", fetchMock);

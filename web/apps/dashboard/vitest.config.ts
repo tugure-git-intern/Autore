@@ -14,5 +14,9 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     passWithNoTests: true,
+    // next-auth mengimpor "next/server" tanpa ekstensi; Node 18 menolaknya
+    // (paket `next` tidak punya peta `exports`). Di-inline supaya resolver vite
+    // yang menyelesaikannya, sehingga middleware bisa diuji apa adanya.
+    server: { deps: { inline: ["next-auth", "@auth/core"] } },
   },
 });

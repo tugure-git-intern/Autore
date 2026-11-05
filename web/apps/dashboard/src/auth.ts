@@ -1,17 +1,11 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { authConfig } from "./auth.config";
-
-const rahasia = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
-
-if (!rahasia) {
-  // Fail closed: tanpa rahasia, tidak ada cookie yang bisa diverifikasi.
-  throw new Error("AUTH_SECRET/NEXTAUTH_SECRET belum di-set (lihat web/.env.example)");
-}
+import { authSecret } from "./lib/auth-secret";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  secret: rahasia,
+  secret: authSecret(),
   trustHost: true,
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
   // Kredensial diisi eksplisit: provider GitHub di Auth.js tidak membaca env

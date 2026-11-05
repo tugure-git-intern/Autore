@@ -20,12 +20,21 @@ export function signInAllowed(params: { profile?: unknown }, list: readonly stri
   return isAllowed(githubLogin(params.profile), list);
 }
 
-/** Token tanpa login menyimpan "" supaya middleware menolaknya, bukan meloloskannya. */
+/**
+ * Token tanpa login menyimpan "" supaya middleware menolaknya, bukan meloloskannya.
+ *
+ * Auth.js memanggil callback `jwt` lagi setiap kali sesi dibaca (tanpa `profile`),
+ * jadi login yang sudah ada harus dipertahankan — kalau tidak, user yang sah
+ * kehilangan identitasnya di request kedua dan dilempar ke /login.
+ */
 export function stampLogin<T extends object>(params: {
   token: T;
   profile?: unknown;
 }): T & { login: string } {
-  return { ...params.token, login: githubLogin(params.profile) };
+  const dariProfil = githubLogin(params.profile);
+  const lama = (params.token as { login?: unknown }).login;
+  const login = dariProfil || (typeof lama === "string" ? lama : "");
+  return { ...params.token, login };
 }
 
 export function exposeLogin<S extends { user?: unknown }, T extends object>(params: {

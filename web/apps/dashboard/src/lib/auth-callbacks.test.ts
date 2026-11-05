@@ -54,6 +54,19 @@ describe("stampLogin", () => {
       login: "alif",
     });
   });
+
+  it("mempertahankan login saat callback jalan tanpa profil (pembacaan sesi)", () => {
+    // Auth.js memanggil callback jwt lagi setiap sesi dibaca, dan saat itu
+    // `profile` tidak dikirim. Tanpa penjagaan ini login akan terhapus dan
+    // setiap user yang sah langsung dilempar ke /login.
+    const token = { login: "alif", sub: "1" };
+    expect(stampLogin({ token })).toMatchObject({ login: "alif", sub: "1" });
+  });
+
+  it("memakai string kosong saat token belum punya login dan tidak ada profil", () => {
+    expect(stampLogin({ token: {} }).login).toBe("");
+    expect(stampLogin({ token: { login: 42 } }).login).toBe("");
+  });
 });
 
 describe("exposeLogin", () => {

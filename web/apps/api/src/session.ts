@@ -39,13 +39,23 @@ const bersih = (nilai: unknown): string =>
  * Terjemahkan token Auth.js jadi identitas commit. Nama kosong jatuh ke login dan
  * email privat GitHub (`null`) jatuh ke alamat noreply resmi, supaya author tidak
  * pernah kosong. Tanpa login tidak ada identitas sama sekali (`null`).
+ *
+ * Login dipakai **apa adanya** (tanpa `toLowerCase`): casing GitHub itulah yang
+ * ditampilkan di UI dan dicatat di `.git/config`. Normalisasi tetap ada, tapi
+ * hanya untuk dua hal: perbandingan whitelist dan alamat noreply (huruf kecil
+ * adalah aturan GitHub untuk `@users.noreply.github.com`).
  */
 export function identitasDariToken(token: unknown): Identitas | null {
   const t = (token ?? {}) as { login?: unknown; name?: unknown; email?: unknown };
   const login = typeof t.login === "string" ? t.login.trim() : "";
   if (!login) return null;
 
-  const nama = bersih(t.name).slice(0, NAMA_MAKS) || login;
+  const namaTampilan = bersih(t.name).slice(0, NAMA_MAKS);
+  // Nama tampilan yang hanya beda casing dari login tidak membawa informasi baru
+  // (profil GitHub `MAliffadlan` mengisi field Name dengan "maliffadlan"), jadi
+  // login yang dipakai supaya audit trail tidak kehilangan casing akunnya.
+  const nama =
+    namaTampilan && namaTampilan.toLowerCase() !== login.toLowerCase() ? namaTampilan : login;
   const email = bersih(t.email);
   return {
     login,

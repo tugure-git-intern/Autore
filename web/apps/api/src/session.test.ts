@@ -112,6 +112,27 @@ describe("identitasDariToken", () => {
     expect(identitasDariToken({ login: "MAliffadlan", name: "   ", email: null }).nama).toBe("MAliffadlan");
   });
 
+  it("nama tampilan yang hanya beda casing dari login tidak menutupi login", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    // Kasus nyata: profil GitHub `MAliffadlan` mengisi Name dengan "maliffadlan".
+    // Nama itu tidak membawa informasi baru, sedangkan login menunjuk akunnya.
+    expect(identitasDariToken({ login: "MAliffadlan", name: "maliffadlan", email: null }).nama).toBe(
+      "MAliffadlan",
+    );
+    expect(identitasDariToken({ login: "MAliffadlan", name: "  MALIFFADLAN ", email: null }).nama).toBe(
+      "MAliffadlan",
+    );
+  });
+
+  it("nama tampilan yang membawa informasi lain tetap dipakai apa adanya", async () => {
+    const { identitasDariToken } = await import("./session");
+
+    expect(
+      identitasDariToken({ login: "MAliffadlan", name: "Muhammad Alif Fadlan", email: null }).nama,
+    ).toBe("Muhammad Alif Fadlan");
+  });
+
   it("membuang karakter kontrol dan memotong nama yang kepanjangan", async () => {
     const { identitasDariToken } = await import("./session");
     const hasil = identitasDariToken({

@@ -82,6 +82,19 @@ describe("ActivePipelines", () => {
     expect(ekor.className).not.toEqual(depan.className);
   });
 
+  it("reduced motion: pita hilang, tapinya tetap solid selebar kartu", () => {
+    const { kartu } = gambar([pipeline()]);
+
+    const isi = within(kartu()[0]);
+    const track = isi.getByTestId("progress-indeterminate");
+
+    // jsdom tidak mengevaluasi media query, jadi di sini yang dikunci kelasnya saja;
+    // perilaku aslinya dibuktikan di e2e lewat `emulateMedia({ reducedMotion })`.
+    expect(track.className).toContain("motion-reduce:bg-blue-500");
+    expect(isi.getByTestId("progress-band-depan").className).toContain("motion-reduce:hidden");
+    expect(isi.getByTestId("progress-band-belakang").className).toContain("motion-reduce:hidden");
+  });
+
   it("kartu menunggu memakai badge kuning tanpa bar", () => {
     const { kartu } = gambar([antre()]);
 

@@ -12,11 +12,12 @@ WorkingDirectory=/home/tugure/Autore/web
 # tidak mematikan service.
 EnvironmentFile=-/home/tugure/Autore/web/.env
 Environment=NODE_ENV=production
-# Aksi (deploy/scan) memakai tiga variabel ini; tanpa workspace dan target deploy
-# endpoint-nya menolak dengan 503, bukan menebak direktori.
+# Aksi (deploy/scan) memakai dua variabel ini; tanpa workspace endpoint-nya
+# menolak dengan 503, bukan menebak direktori. Target deploy tidak di sini:
+# id aplikasi datang dari body request, karena tombol di dashboard selalu
+# menunjuk aplikasi yang sedang dibuka.
 Environment=AUTORE_BIN=/home/tugure/Autore/cli/target/release/autore
 Environment=AUTORE_WORKSPACE=/home/tugure/autore-workspace
-Environment=AUTORE_DEPLOY_APP=tes-web
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:api
 Restart=on-failure

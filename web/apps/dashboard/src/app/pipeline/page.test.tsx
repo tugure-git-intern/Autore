@@ -54,6 +54,8 @@ const failing = {
   },
 };
 
+const appUji = (id: string) => ({ ...status.applications[0], id, name: id });
+
 function mockFetch(data: unknown, stale = false) {
   const kosong = {
     data: { generated_at: "", window_days: 7, runs: [], daily: [], totals: { passed: 0, failed: 0, running: 0 } },
@@ -284,4 +286,33 @@ test("menyediakan Jalankan Ulang yang memperingatkan commit dan push sebelum mem
   await waitFor(() =>
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/deploy"),
   );
+});
+
+/** Klik Jalankan Ulang untuk id tertentu, lalu kembalikan body POST-nya. */
+async function bodyDeployUntuk(id: string, fetchMock: ReturnType<typeof mockFetch>) {
+  nav.params = new URLSearchParams(`app=${id}`);
+  renderPage();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Jalankan Ulang" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ya, jalankan ulang" }));
+
+  const panggilan = await vi.waitFor(() => {
+    const ketemu = fetchMock.mock.calls.find(([input]) => String(input) === "/api/actions/deploy");
+    expect(ketemu).toBeTruthy();
+    return ketemu;
+  });
+  const [, init] = panggilan as unknown as [string, RequestInit];
+  return JSON.parse(String(init.body));
+}
+
+test("Jalankan Ulang mengirim aplikasi yang sedang dibuka (audit-uji3)", async () => {
+  const fetchMock = mockFetch({ ...status, applications: [appUji("audit-uji3"), appUji("tes-web")] });
+
+  expect(await bodyDeployUntuk("audit-uji3", fetchMock)).toEqual({ app: "audit-uji3" });
+});
+
+test("Jalankan Ulang mengikuti aplikasi kedua, jadi targetnya bukan hardcode", async () => {
+  const fetchMock = mockFetch({ ...status, applications: [appUji("audit-uji3"), appUji("tes-web")] });
+
+  expect(await bodyDeployUntuk("tes-web", fetchMock)).toEqual({ app: "tes-web" });
 });

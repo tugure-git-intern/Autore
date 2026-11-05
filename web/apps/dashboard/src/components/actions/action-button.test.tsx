@@ -40,7 +40,7 @@ afterEach(() => {
 
 test("menampilkan modal dulu dan tidak memanggil API saat dibatalkan", async () => {
   const fetchMock = mockFetch(() => ({}));
-  render(<ActionButton label="Deploy Sekarang" action="deploy" confirm={DEPLOY_CONFIRM} />);
+  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" confirm={DEPLOY_CONFIRM} />);
   const dialog = () => screen.getByText("Yakin mau deploy?").closest("dialog") as HTMLDialogElement;
 
   // Modal terpasang tapi belum terbuka: klik pertama hanya membuka konfirmasi.
@@ -60,16 +60,16 @@ test("menampilkan modal dulu dan tidak memanggil API saat dibatalkan", async () 
 
 test("memanggil endpoint aksi setelah dikonfirmasi", async () => {
   const fetchMock = mockFetch(() => ({ body: { ok: true, action: "deploy", target: "tes-web" } }));
-  render(<ActionButton label="Deploy Sekarang" action="deploy" confirm={DEPLOY_CONFIRM} />);
+  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" confirm={DEPLOY_CONFIRM} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
   fireEvent.click(screen.getByRole("button", { name: "Ya, deploy" }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe("/api/actions/deploy");
   expect(init.method).toBe("POST");
-  expect(init.body).toBeUndefined();
+  expect(JSON.parse(String(init.body))).toEqual({ app: "tes-web" });
 });
 
 test("tanpa modal, klik langsung menjalankan aksi", async () => {
@@ -112,7 +112,7 @@ test("tombol jadi spinner dan memberi tahu aksi sedang berjalan", async () => {
 test("toast sukses muncul lalu hilang sendiri", async () => {
   vi.useFakeTimers();
   mockFetch(() => ({ body: { ok: true, action: "deploy", target: "tes-web" } }));
-  render(<ActionButton label="Deploy Sekarang" action="deploy" />);
+  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" />);
 
   fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
 
@@ -163,7 +163,7 @@ test("kegagalan jaringan tetap dilaporkan, bukan diam", async () => {
       throw new Error("offline");
     }),
   );
-  render(<ActionButton label="Deploy Sekarang" action="deploy" />);
+  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" />);
 
   fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
 
@@ -177,7 +177,7 @@ test("sesi ditolak: pesan tampil lalu halaman pindah ke /login", async () => {
     body: { ok: false, status: 401, error: "Session tidak sah. Login ulang di dashboard." },
   }));
   vi.mocked(goToLogin).mockClear();
-  render(<ActionButton label="Deploy Sekarang" action="deploy" confirm={DEPLOY_CONFIRM} />);
+  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" confirm={DEPLOY_CONFIRM} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
   fireEvent.click(screen.getByRole("button", { name: "Ya, deploy" }));

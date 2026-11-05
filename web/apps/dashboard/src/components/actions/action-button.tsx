@@ -15,8 +15,9 @@ export interface ActionConfirmation {
 interface ActionButtonProps {
   label: string;
   action: ActionKind;
-  /** Hanya untuk scan: aplikasi yang diperiksa. Deploy memakai target dari server. */
-  app?: string;
+  /** Aplikasi yang jadi sasaran aksi. Deploy & scan sama-sama butuh ini: server
+   *  tidak punya target cadangan, dan aksi tanpa id dijawab 400. */
+  app: string;
   variant?: "green" | "secondary";
   confirm?: ActionConfirmation;
   onDone?: () => void;

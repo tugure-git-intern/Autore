@@ -27,13 +27,15 @@ export function firstLine(text: string): string {
  * tampil. Nama aksi dan id aplikasi tetap di sini — frontend tidak pernah
  * mengirim perintah, hanya memilih salah satu aksi yang sudah dikenal.
  */
-export async function runAction(action: ActionKind, app?: string): Promise<ActionOutcome> {
+export async function runAction(action: ActionKind, app: string): Promise<ActionOutcome> {
   let response: Response;
   try {
     response = await fetch(`/api/actions/${action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: action === "scan" ? JSON.stringify({ app }) : undefined,
+      // Id aplikasi selalu ikut di body: server tidak punya target cadangan, jadi
+      // aksi tanpa app akan dijawab 400, bukan menjalankan aplikasi lain.
+      body: JSON.stringify({ app }),
     });
   } catch {
     return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };

@@ -94,7 +94,13 @@ export function AppDetail({
             </p>
           </div>
         </div>
-        <ActionButton label="Jalankan Ulang" action="deploy" confirm={RERUN_CONFIRM} onDone={onSelesai} />
+        <ActionButton
+          label="Jalankan Ulang"
+          action="deploy"
+          app={app.id}
+          confirm={RERUN_CONFIRM}
+          onDone={onSelesai}
+        />
       </div>
 
       {sedangAktif.length > 0 ? (

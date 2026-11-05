@@ -119,12 +119,10 @@ export function hatchActions(deps: {
   workspace: string;
   run: RunAutore;
   spawn: SpawnAction;
-  deployApp: string;
   bin?: string;
 }) {
   const bin = deps.bin || process.env.AUTORE_BIN || "autore";
   const workspace = deps.workspace.trim();
-  const deployApp = deps.deployApp.trim();
   // Satu lock untuk semua aksi: dua git push/deploy bersamaan ke repo yang sama
   // bukan sesuatu yang bisa diselamatkan di sisi klien.
   let busy: ActionKind | null = null;
@@ -172,11 +170,16 @@ export function hatchActions(deps: {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
 
-    const id = kind === "deploy" ? deployApp : (appId ?? "").trim();
+    // Target selalu dari permintaan: tidak ada aplikasi yang ditentukan server, karena
+    // tombol di dashboard selalu menunjuk aplikasi yang sedang dibuka.
+    const id = (appId ?? "").trim();
     if (!id) {
-      return kind === "deploy"
-        ? failed(503, "target deploy belum dikonfigurasi (AUTORE_DEPLOY_APP)")
-        : failed(400, "body harus memuat app id aplikasi yang akan dipindai");
+      return failed(
+        400,
+        kind === "deploy"
+          ? "body harus memuat app id aplikasi yang akan di-deploy"
+          : "body harus memuat app id aplikasi yang akan dipindai",
+      );
     }
     if (busy) {
       return failed(409, `aksi ${busy} masih berjalan, tunggu sampai selesai`);

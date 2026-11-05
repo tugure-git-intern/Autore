@@ -59,31 +59,41 @@ async function workspace(apps: string[]) {
 
 function make(
   dir: string,
-  options: { spawn?: SpawnAction; listed?: string[]; deployApp?: string } = {},
+  options: { spawn?: SpawnAction; listed?: string[] } = {},
 ) {
   const spawn = options.spawn ?? vi.fn(async () => result());
   const actions = hatchActions({
     workspace: dir,
     run: async () => statusJson(options.listed ?? ["tes-web", "ui-demo"]),
     spawn,
-    deployApp: options.deployApp ?? "tes-web",
   });
   return { actions, spawn: spawn as unknown as ReturnType<typeof vi.fn> };
 }
 
 describe("hatchActions", () => {
-  it("deploy memanggil argv tetap: tanpa shell, tanpa input user di argv", async () => {
-    const dir = await workspace(["tes-web"]);
-    const { actions, spawn } = make(dir);
+  it("deploy menjalankan argv untuk aplikasi yang diminta, bukan aplikasi lain", async () => {
+    const dir = await workspace(["tes-web", "audit-uji3"]);
+    const { actions, spawn } = make(dir, { listed: ["tes-web", "audit-uji3"] });
 
-    const out = await actions.run("deploy");
+    const out = await actions.run("deploy", "audit-uji3");
 
-    expect(out).toMatchObject({ ok: true, status: 200, action: "deploy", target: "tes-web" });
+    expect(out).toMatchObject({ ok: true, status: 200, action: "deploy", target: "audit-uji3" });
     expect(spawn).toHaveBeenCalledTimes(1);
     const [file, args, opts] = spawn.mock.calls[0] as [string, string[], { shell: boolean }];
     expect(file).toBe(process.env.AUTORE_BIN || "autore");
-    expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
+    expect(args).toEqual(["deploy", "--path", join(dir, "audit-uji3")]);
+    expect(args.join(" ")).not.toContain("tes-web");
     expect(opts.shell).toBe(false);
+  });
+
+  it("deploy mengikuti id yang diminta, bukan aplikasi lain", async () => {
+    const dir = await workspace(["tes-web", "audit-uji3"]);
+    const { actions, spawn } = make(dir, { listed: ["tes-web", "audit-uji3"] });
+
+    await actions.run("deploy", "tes-web");
+
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
   });
 
   it("scan memakai --no-docker dan path aplikasi yang diminta", async () => {
@@ -135,21 +145,21 @@ describe("hatchActions", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("deploy tanpa target terkonfigurasi ditolak 503, bukan menebak", async () => {
+  it("deploy tanpa app id ditolak 400, bukan menjalankan target lama dari server", async () => {
     const dir = await workspace(["tes-web"]);
-    const { actions, spawn } = make(dir, { deployApp: "" });
+    const { actions, spawn } = make(dir);
 
     const out = await actions.run("deploy");
 
-    expect(out).toMatchObject({ ok: false, status: 503 });
-    expect((out as { error: string }).error).toContain("AUTORE_DEPLOY_APP");
+    expect(out).toMatchObject({ ok: false, status: 400 });
+    expect((out as { error: string }).error).not.toContain("AUTORE_DEPLOY_APP");
     expect(spawn).not.toHaveBeenCalled();
   });
 
   it("workspace belum diset ditolak 503", async () => {
     const { actions, spawn } = make("");
 
-    await expect(actions.run("deploy")).resolves.toMatchObject({ ok: false, status: 503 });
+    await expect(actions.run("deploy", "tes-web")).resolves.toMatchObject({ ok: false, status: 503 });
     expect(spawn).not.toHaveBeenCalled();
   });
 
@@ -183,7 +193,7 @@ describe("hatchActions", () => {
     });
     const { actions } = make(dir, { spawn });
 
-    const first = actions.run("deploy");
+    const first = actions.run("deploy", "tes-web");
     await spawnStarted; // tunggu sampai proses pertama benar-benar berjalan
     const second = await actions.run("scan", "tes-web");
 
@@ -224,7 +234,7 @@ describe("hatchActions", () => {
     });
     const { actions } = make(dir, { spawn });
 
-    await expect(actions.run("deploy")).resolves.toMatchObject({ ok: false, status: 503 });
+    await expect(actions.run("deploy", "tes-web")).resolves.toMatchObject({ ok: false, status: 503 });
   });
 
   it("output dipotong supaya toast tidak membawa ratusan kilobyte", async () => {
@@ -247,7 +257,6 @@ describe("hatchActions", () => {
         throw new Error("autore tidak bisa dipanggil");
       },
       spawn: vi.fn(async () => result()),
-      deployApp: "tes-web",
     });
 
     await expect(actions.run("scan", "tes-web")).resolves.toMatchObject({ ok: false, status: 503 });
@@ -350,7 +359,7 @@ describe("quick-start", () => {
     const spawn = vi.fn(() => new Promise<SpawnResult>((resolve) => { lepas = resolve; }));
     const { actions } = make(dir, { spawn });
 
-    const berjalan = actions.run("deploy");
+    const berjalan = actions.run("deploy", "tes-web");
     // Lock dipegang setelah spawn dipanggil: menunggu spawn membuat urutannya pasti,
     // bukan bergantung pada berapa kali event loop sempat berputar.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
@@ -400,7 +409,6 @@ describe("quick-start", () => {
       workspace: "   ",
       run: async () => statusJson(["tes-web"]),
       spawn: vi.fn(async () => result()),
-      deployApp: "tes-web",
     });
 
     expect(await kosong.quickStart(INPUT)).toMatchObject({ ok: false, status: 503 });

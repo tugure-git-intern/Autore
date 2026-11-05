@@ -117,30 +117,32 @@ curl -fsS http://127.0.0.1:9120/ | grep -q Dashboard && echo dashboard ok
 
 ## Aksi dari dashboard (deploy & scan)
 
-Dashboard tidak lagi read-only. Tiga tombol memanggil dua endpoint:
+Dashboard tidak lagi read-only. Dua tombol memanggil dua endpoint:
 
 | Tombol | Halaman | Endpoint | Perintah yang dijalankan |
 | --- | --- | --- | --- |
-| Deploy Sekarang | `/` (pojok kanan header) | `POST /api/actions/deploy` | `autore deploy --path <workspace>/<AUTORE_DEPLOY_APP>` |
-| Jalankan Ulang | `/pipeline?app=<id>` | `POST /api/actions/deploy` | sama dengan di atas |
-| Scan Keamanan | `/applications` (tiap baris) | `POST /api/actions/scan` | `autore scan --no-docker --path <workspace>/<id>` |
+| Jalankan Ulang | `/pipeline?app=<id>` | `POST /api/actions/deploy` | `autore deploy --path <workspace>/<id dari body>` |
+| Scan Keamanan | `/applications` (tiap baris) | `POST /api/actions/scan` | `autore scan --no-docker --path <workspace>/<id dari body>` |
+
+Tidak ada tombol deploy di header `/`: tanpa aplikasi terpilih, deploy cuma
+menebak target, jadi aksinya hanya ada di tempat yang punya konteks aplikasi.
 
 Deploy bukan sekadar "build": CLI menjalankan `git add`/`git commit` di
 direktori aplikasi, push ke remote, lalu memicu build Jenkins. Karena itu tombol
 deploy dan jalankan-ulang selalu lewat modal konfirmasi yang menyebut
 commit+push.
 
-`POST /api/actions/scan` menerima tepat satu kunci `{"app":"<id>"}`. Id harus
-terdaftar di `registry.tsv`; bentuknya dibatasi `^[A-Za-z0-9._-]{1,64}$` dan
-path hasil gabungan wajib satu tingkat di bawah workspace. `deploy` tidak
-membaca body sama sekali: targetnya milik unit, bukan milik pemanggil.
+`POST /api/actions/scan` dan `POST /api/actions/deploy` sama-sama menerima tepat
+satu kunci `{"app":"<id>"}`. Id harus terdaftar di `registry.tsv`; bentuknya
+dibatasi `^[A-Za-z0-9._-]{1,64}$` dan path hasil gabungan wajib satu tingkat di
+bawah workspace. Tanpa `app`, deploy dijawab `400` — tidak ada target cadangan
+di server, karena target milik pemanggil.
 
 Konfigurasi unit API — bukan body request:
 
 | Variabel | Wajib | Arti | Kalau kosong |
 | --- | --- | --- | --- |
 | `AUTORE_WORKSPACE` | ya | akar direktori aplikasi | semua aksi 503 |
-| `AUTORE_DEPLOY_APP` | untuk deploy | aplikasi target tombol Deploy | deploy 503 |
 | `AUTORE_BIN` | tidak | path binary `autore` | pakai `autore` dari `PATH` |
 
 Balasan: `200` sukses · `400` body/id tidak sah · `404` id tidak terdaftar atau

@@ -1,19 +1,11 @@
 "use client";
 
-import { ActionButton } from "@/components/actions/action-button";
-import { useCurrentUser, useStatus } from "@/components/app-shell";
+import { useCurrentUser } from "@/components/app-shell";
 import { DashboardOverview } from "@/components/dashboard-overview";
 
-// Deploy = commit + push lokal lalu trigger Jenkins: pengguna harus tahu itu dulu.
-const DEPLOY_CONFIRM = {
-  title: "Yakin mau deploy?",
-  warning:
-    "Tindakan ini akan melakukan commit dan push kode lokal Anda ke repository, lalu memicu build Jenkins.",
-  confirmLabel: "Ya, deploy sekarang",
-};
-
+// Deploy sengaja tidak ada di sini: tanpa aplikasi terpilih, deploy cuma menebak
+// target. Jalankan Ulang di /pipeline (atau detail aplikasi) yang punya konteks.
 export default function DashboardPage() {
-  const { reload } = useStatus();
   const { login } = useCurrentUser();
 
   return (
@@ -25,13 +17,6 @@ export default function DashboardPage() {
             {login ? `Selamat datang, ${login}. ` : ""}Ringkasan status CI/CD Autore.
           </p>
         </div>
-        <ActionButton
-          label="Deploy Sekarang"
-          action="deploy"
-          variant="green"
-          confirm={DEPLOY_CONFIRM}
-          onDone={reload}
-        />
       </div>
       <DashboardOverview />
     </div>

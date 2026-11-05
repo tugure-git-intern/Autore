@@ -54,6 +54,17 @@ const STATUS = JSON.stringify({
 
 const ok = (): SpawnResult => ({ exitCode: 0, stdout: "lulus", stderr: "" });
 
+/** Satu baris `applications[]` seperti yang ditulis `autore status --json`. */
+const appJson = (id: string) => ({
+  id,
+  name: id,
+  status: "unknown",
+  last_build: "",
+  commit_sha: "",
+  security_issues: 0,
+  deployed: false,
+});
+
 /** Satu kartu berjalan + satu menunggu, seperti kontrak `autore active --json`. */
 const ACTIVE: ActivePayload = {
   generated_at: "2026-11-05T03:40:00Z",
@@ -142,7 +153,6 @@ async function testApp(
     workspace: dir,
     run: async () => status,
     spawn,
-    deployApp: "tes-web",
     bin: "autore",
   }), runs, { secret: TEST_SECRET }, active);
 }
@@ -185,7 +195,6 @@ describe("GET /api/sbom/:app", () => {
         workspace: dir,
         run: async () => STATUS,
         spawn: vi.fn(async () => ok()),
-        deployApp: "tes-web",
         bin: "autore",
       }),
       async () => ({ data: RUNS, stale: false }),
@@ -361,7 +370,7 @@ describe("POST /api/actions/scan", () => {
 
     const first = post(app, "/api/actions/scan", { app: "tes-web" });
     await spawnStarted;
-    const second = await post(app, "/api/actions/deploy");
+    const second = await post(app, "/api/actions/deploy", { app: "tes-web" });
 
     expect(second.status).toBe(409);
     expect((await second.json()).error).toContain("masih berjalan");
@@ -386,33 +395,62 @@ describe("POST /api/actions/scan", () => {
 });
 
 describe("POST /api/actions/deploy", () => {
-  it("memakai target dari konfigurasi server, bukan dari body", async () => {
-    const app = await testApp();
+  /** Dua aplikasi nyata di workspace uji, supaya target bisa dibuktikan per id. */
+  async function appDuaAplikasi(spawn = vi.fn(async () => ok())) {
+    const { createApp } = await freshApp();
+    const { hatchActions } = await import("./actions");
+    const dir = await mkdtemp(join(tmpdir(), "autore-api-deploy-"));
+    for (const id of ["tes-web", "audit-uji3"]) await mkdir(join(dir, id), { recursive: true });
+    const status = JSON.stringify({
+      ...JSON.parse(STATUS),
+      stats: { total_apps: 2, running_containers: 0 },
+      repository_health: { score_percent: 0, total_repos: 2, gold: 0, silver: 0, bronze: 2 },
+      applications: [appJson("tes-web"), appJson("audit-uji3")],
+    });
+    const app = createApp(
+      async () => status,
+      hatchActions({ workspace: dir, run: async () => status, spawn, bin: "autore" }),
+      undefined,
+      { secret: TEST_SECRET },
+    );
+    return { app, dir, spawn };
+  }
 
-    const response = await post(app, "/api/actions/deploy", undefined, "{ini bukan json}");
+  it("men-deploy aplikasi dari body, bukan aplikasi yang dipaku di server", async () => {
+    const { app, dir, spawn } = await appDuaAplikasi();
+
+    const response = await post(app, "/api/actions/deploy", { app: "audit-uji3" });
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({ ok: true, action: "deploy", target: "tes-web" });
+    expect(body).toMatchObject({ ok: true, action: "deploy", target: "audit-uji3" });
+    expect(body.target).not.toBe("tes-web");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(["deploy", "--path", join(dir, "audit-uji3")]);
   });
 
-  it("menjawab 503 kalau target deploy belum dikonfigurasi", async () => {
-    const { createApp } = await freshApp();
-    const { hatchActions } = await import("./actions");
-    const dir = await workspace();
-    const app = createApp(async () => STATUS, hatchActions({
-      workspace: dir,
-      run: async () => STATUS,
-      spawn: vi.fn(async () => ok()),
-      deployApp: "",
-      bin: "autore",
-    }), undefined, { secret: TEST_SECRET });
+  it("mengikuti id lain di body, jadi targetnya benar-benar dari permintaan", async () => {
+    const { app, dir, spawn } = await appDuaAplikasi();
 
-    const response = await post(app, "/api/actions/deploy");
+    const response = await post(app, "/api/actions/deploy", { app: "tes-web" });
 
-    expect(response.status).toBe(503);
-    expect((await response.json()).error).toContain("AUTORE_DEPLOY_APP");
+    expect((await response.json()).target).toBe("tes-web");
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
+  });
+
+  it("menolak body tanpa app, body berkunci lain, dan body yang bukan JSON", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const tanpa = await post(app, "/api/actions/deploy", undefined);
+    const asing = await post(app, "/api/actions/deploy", { app: "tes-web", path: "/etc" });
+    const bukanJson = await post(app, "/api/actions/deploy", undefined, "{ini bukan json}");
+
+    expect([tanpa.status, asing.status, bukanJson.status]).toEqual([400, 400, 400]);
+    expect((await tanpa.json()).error).toContain("app");
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it("menjawab 503 kalau AUTORE_WORKSPACE belum diset", async () => {
@@ -422,17 +460,15 @@ describe("POST /api/actions/deploy", () => {
       workspace: "",
       run: async () => STATUS,
       spawn: vi.fn(async () => ok()),
-      deployApp: "tes-web",
       bin: "autore",
     }), undefined, { secret: TEST_SECRET });
 
-    const response = await post(app, "/api/actions/deploy");
+    const response = await post(app, "/api/actions/deploy", { app: "tes-web" });
 
     expect(response.status).toBe(503);
     expect((await response.json()).error).toContain("AUTORE_WORKSPACE");
   });
 });
-
 
 describe("POST /api/actions/quick-start", () => {
   const BODY = { nama: "coba-web", stack: "python", kode: "contoh" };

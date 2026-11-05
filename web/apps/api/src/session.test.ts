@@ -38,7 +38,7 @@ async function app(name: string, auth: { secret?: string; allowed?: string[] }) 
   );
   const app = createApp(
     async () => STATUS,
-    hatchActions({ workspace: dir, run: async () => STATUS, spawn, deployApp: "tes-web", bin: "autore" }),
+    hatchActions({ workspace: dir, run: async () => STATUS, spawn, bin: "autore" }),
     () => ({ data: RUNS, stale: false }),
     auth,
   );
@@ -83,7 +83,9 @@ const sesiGithub = (nama: string | null, email: string | null) =>
 const aksi = (aplikasi: { request: (input: string, init?: RequestInit) => Promise<Response> }, cookie?: string) =>
   aplikasi.request("http://localhost/api/actions/deploy", {
     method: "POST",
-    headers: cookie ? { cookie } : {},
+    // Deploy selalu menunjuk aplikasi yang diminta, jadi helper sesi pun mengirim body.
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    body: JSON.stringify({ app: "tes-web" }),
   });
 
 describe("identitasDariToken", () => {

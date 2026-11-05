@@ -197,15 +197,14 @@ test("Overview menampilkan section Active Pipelines beserta hitungannya", async 
   expect(await screen.findByTestId("pipeline-card")).toBeInTheDocument();
 });
 
-test("menaruh tombol Deploy Sekarang di pojok kanan atas dengan peringatan commit dan push", async () => {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const body =
-      String(input) === "/api/status"
-        ? { data: STATUS, stale: false }
-        : { ok: true, action: "deploy", target: "tes-web" };
-    return { ok: true, status: 200, json: async () => body } as unknown as Response;
-  });
-  vi.stubGlobal("fetch", fetchMock);
+test("Overview tidak lagi punya tombol deploy tanpa konteks aplikasi", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const body = String(input) === "/api/status" ? { data: STATUS, stale: false } : { data: null, stale: false };
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
+    }),
+  );
 
   render(
     <StatusProvider>
@@ -213,21 +212,8 @@ test("menaruh tombol Deploy Sekarang di pojok kanan atas dengan peringatan commi
     </StatusProvider>,
   );
 
-  const button = await screen.findByRole("button", { name: "Deploy Sekarang" });
-  expect(button.className).toContain("bg-green-600");
-
-  fireEvent.click(button);
-
-  expect(
-    screen.getByText(/akan melakukan commit dan push kode lokal Anda ke repository/),
-  ).toBeInTheDocument();
-  expect(fetchMock.mock.calls.map(([input]) => String(input))).not.toContain("/api/actions/deploy");
-
-  fireEvent.click(screen.getByRole("button", { name: "Ya, deploy sekarang" }));
-
-  await waitFor(() =>
-    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/deploy"),
-  );
+  expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Deploy Sekarang/ })).toBeNull();
 });
 
 test("Sync menukar angka di layar ke payload baru, tanpa reload", async () => {

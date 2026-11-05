@@ -431,6 +431,26 @@ describe("registry aplikasi", () => {
     expect(Number(deploy) % 10).toBe(3);
   });
 
+  it("memakai deployPort dari Jenkinsfile hasil scaffold, bukan alokasi sendiri", async () => {
+    const dir = await workspace(["tes-web"]);
+    await writeFile(join(dir, "registry.tsv"), "tes-web\t8000\t8003\n");
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => {
+        await mkdir(join(dir, "coba-web"), { recursive: true });
+        await writeFile(
+          join(dir, "coba-web", "Jenkinsfile"),
+          "autorePipeline(appName: 'coba-web', appPort: 8000, deployPort: 8084)\n",
+        );
+        return result();
+      }),
+    });
+
+    await actions.quickStart(INPUT);
+
+    const baris = (await readFile(join(dir, "registry.tsv"), "utf8")).trimEnd().split("\n");
+    expect(baris[1]).toBe("coba-web\t8000\t8084");
+  });
+
   it("tetap mencatat aplikasi yang build pertamanya gagal, karena aplikasinya nyata", async () => {
     const dir = await workspace(["tes-web"]);
     await writeFile(join(dir, "registry.tsv"), "");

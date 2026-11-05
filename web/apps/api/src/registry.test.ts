@@ -3,7 +3,13 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { bacaRegistry, catatAplikasi, portBebas, portDeployBerikut } from "./registry";
+import {
+  bacaRegistry,
+  catatAplikasi,
+  portBebas,
+  portDariJenkinsfile,
+  portDeployBerikut,
+} from "./registry";
 
 async function workspace(isi?: string) {
   const dir = await mkdtemp(join(tmpdir(), "autore-registry-"));
@@ -118,5 +124,54 @@ describe("catatAplikasi", () => {
 
     expect(port).toBe(8023);
     expect(await isi(dir)).toBe("tes-web\t8000\t8003\napp-baru\t8000\t8023\n");
+  });
+});
+
+describe("portDariJenkinsfile", () => {
+  it("membaca deployPort yang dipilih CLI saat scaffold", () => {
+    const jenkinsfile = [
+      "@Library('autore') _",
+      "autorePipeline(",
+      "    appName: 'magang-python',",
+      "    appPort: 8000,",
+      "    deployPort: 8084",
+      ")",
+      "",
+    ].join("\n");
+
+    expect(portDariJenkinsfile(jenkinsfile)).toBe(8084);
+  });
+
+  it("null kalau Jenkinsfile tidak menyebut deployPort (format lama)", () => {
+    expect(portDariJenkinsfile("@Library('autore') _\nautorePipeline()\n")).toBeNull();
+    expect(portDariJenkinsfile("")).toBeNull();
+  });
+});
+
+describe("catatAplikasi memakai port dari Jenkinsfile", () => {
+  it("mencatat port yang benar-benar dipakai pipeline, bukan port tebakan", async () => {
+    const dir = await workspace("tes-web\t8000\t8003\n");
+    await writeFile(
+      join(dir, "Jenkinsfile"),
+      "autorePipeline(appName: 'magang-python', appPort: 8000, deployPort: 8084)\n",
+    );
+
+    // 8084 yang dipakai pipeline, jadi registry harus bilang 8084 walau alokasi
+    // bebas berikutnya 8013 - kalau tidak, dashboard memeriksa port kosong.
+    const port = await catatAplikasi(dir, "magang-python", {
+      dir,
+      bebas: () => true,
+    });
+
+    expect(port).toBe(8084);
+    expect(await isi(dir)).toBe("tes-web\t8000\t8003\nmagang-python\t8000\t8084\n");
+  });
+
+  it("mengalokasikan sendiri kalau folder belum punya Jenkinsfile", async () => {
+    const dir = await workspace("tes-web\t8000\t8003\n");
+
+    const port = await catatAplikasi(dir, "app-baru", { dir, bebas: () => true });
+
+    expect(port).toBe(8013);
   });
 });

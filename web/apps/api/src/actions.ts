@@ -108,7 +108,7 @@ async function folderAda(dir: string): Promise<boolean> {
 async function catatKeRegistry(workspace: string, dir: string, nama: string): Promise<string> {
   if (!(await folderAda(dir))) return "";
   try {
-    return `terdaftar di registry (port ${await catatAplikasi(workspace, nama)})`;
+    return `terdaftar di registry (port ${await catatAplikasi(workspace, nama, { dir })})`;
   } catch (error) {
     return `gagal menambah "${nama}" ke registry.tsv: ${String(error)}`;
   }

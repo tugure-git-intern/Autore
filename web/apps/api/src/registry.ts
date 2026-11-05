@@ -63,24 +63,52 @@ export function portBebas(port: number): Promise<boolean> {
 }
 
 /**
+ * Port deploy yang dipilih CLI saat scaffold (`deployPort:` di Jenkinsfile).
+ * Pipeline Jenkins memakai port itu, jadi registry harus menyalinnya; port yang
+ * dialokasikan sendiri oleh API bisa berbeda dan dashboard lalu memeriksa port kosong.
+ */
+export function portDariJenkinsfile(isi: string): number | null {
+  const cocok = isi.match(/deployPort\s*:\s*(\d+)/);
+  if (!cocok) return null;
+  const port = Number(cocok[1]);
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
+}
+
+async function bacaJenkinsfile(dir: string): Promise<string> {
+  return readFile(join(dir, "Jenkinsfile"), "utf8").catch(() => "");
+}
+
+async function portDeployBebas(
+  baris: BarisRegistry[],
+  bebas?: (port: number) => boolean | Promise<boolean>,
+): Promise<number> {
+  const cekBebas = bebas ?? portBebas;
+  const terpakai = baris.map((item) => item.deploy);
+  let deploy = portDeployBerikut(terpakai, () => true);
+  while (deploy < DEPLOY_AKHIR && !(await cekBebas(deploy))) deploy += LANGKAH;
+  return deploy;
+}
+
+/**
  * Tambahkan aplikasi ke `registry.tsv` sekali saja dan kembalikan port deploy-nya.
  * Dipanggil sesudah aplikasinya nyata (folder ada), jadi barisnya tidak pernah
- * menunjuk aplikasi hantu.
+ * menunjuk aplikasi hantu. `opsi.dir` = folder aplikasi, tempat Jenkinsfile hasil
+ * scaffold dibaca kalau ada.
  */
 export async function catatAplikasi(
   workspace: string,
   nama: string,
-  opsi: { bebas?: (port: number) => boolean | Promise<boolean> } = {},
+  opsi: { dir?: string; bebas?: (port: number) => boolean | Promise<boolean> } = {},
 ): Promise<number> {
   const path = join(workspace, "registry.tsv");
   const isi = await readFile(path, "utf8").catch(() => "");
-  const terdaftar = bacaRegistry(isi).find((baris) => baris.nama === nama);
+  const baris = bacaRegistry(isi);
+  const terdaftar = baris.find((item) => item.nama === nama);
   if (terdaftar) return terdaftar.deploy;
 
-  const cekBebas = opsi.bebas ?? portBebas;
-  const terpakai = bacaRegistry(isi).map((baris) => baris.deploy);
-  let deploy = portDeployBerikut(terpakai, () => true);
-  while (deploy < DEPLOY_AKHIR && !(await cekBebas(deploy))) deploy += LANGKAH;
+  const deploy =
+    (opsi.dir ? portDariJenkinsfile(await bacaJenkinsfile(opsi.dir)) : null) ??
+    (await portDeployBebas(baris, opsi.bebas));
 
   const penutup = isi === "" || isi.endsWith("\n") ? "" : "\n";
   await appendFile(path, `${penutup}${nama}\t${APP_PORT}\t${deploy}\n`, "utf8");

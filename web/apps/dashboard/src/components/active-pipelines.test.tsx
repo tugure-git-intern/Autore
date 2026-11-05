@@ -55,6 +55,33 @@ describe("ActivePipelines", () => {
     expect(isi.getByTestId("progress-indeterminate")).toBeInTheDocument();
   });
 
+  it("bar indeterminate memenuhi lebar kartu dengan dua pita yang bergerak", () => {
+    const { kartu } = gambar([pipeline()]);
+
+    const isi = within(kartu()[0]);
+    const track = isi.getByTestId("progress-indeterminate");
+    expect(track.className).toContain("absolute");
+    expect(track.className).toContain("inset-x-0");
+    expect(track.className).toContain("overflow-hidden");
+    expect(track.className).toContain("bg-blue-500/15");
+
+    const depan = isi.getByTestId("progress-band-depan");
+    const ekor = isi.getByTestId("progress-band-belakang");
+    for (const pita of [depan, ekor]) {
+      expect(pita.className).toContain("w-1/3");
+      expect(pita.className).toContain("rounded-full");
+      expect(pita.className).toMatch(/motion-safe:animate-\[geser_/);
+    }
+
+    // Dua pita bergerak sinkron tapi beda fasa: yang depan solid tanpa delay, ekornya
+    // transparan dan ditunda supaya menempel di belakang (efek ekor komet).
+    expect(depan.className).toContain("bg-blue-500 ");
+    expect(depan.className).not.toContain("animation-delay");
+    expect(ekor.className).toContain("bg-blue-400/50");
+    expect(ekor.className).toMatch(/\[animation-delay:-\d/);
+    expect(ekor.className).not.toEqual(depan.className);
+  });
+
   it("kartu menunggu memakai badge kuning tanpa bar", () => {
     const { kartu } = gambar([antre()]);
 

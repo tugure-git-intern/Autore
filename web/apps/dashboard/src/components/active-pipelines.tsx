@@ -86,8 +86,20 @@ export function ActivePipelines({
                   {p.status === "running" ? (
                     <div
                       data-testid="progress-indeterminate"
-                      className="absolute bottom-0 left-0 h-0.5 w-1/3 bg-blue-500/70 motion-safe:animate-[geser_1.4s_ease-in-out_infinite]"
-                    />
+                      aria-hidden="true"
+                      className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-blue-500/15 motion-reduce:bg-blue-500"
+                    >
+                      {/* Dua pita, lebar sama, fasa digeser (delay negatif = ekor menempel
+                          di belakang kepala). Tanpa gradien: kontrak anti-gradien dijaga. */}
+                      <div
+                        data-testid="progress-band-belakang"
+                        className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-blue-400/50 [animation-delay:-1.2s] motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"
+                      />
+                      <div
+                        data-testid="progress-band-depan"
+                        className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-blue-500 motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"
+                      />
+                    </div>
                   ) : null}
                 </Card>
               </div>

@@ -2,9 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, expect, test, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ params: new URLSearchParams("app=portal-klaim") }));
+const router = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/pipeline",
   useSearchParams: () => nav.params,
+  useRouter: () => router,
 }));
 
 import { StatusProvider } from "@/components/app-shell";
@@ -12,6 +14,7 @@ import PipelinePage from "./page";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
   nav.params = new URLSearchParams("app=portal-klaim");
 });
 
@@ -52,8 +55,22 @@ const failing = {
 };
 
 function mockFetch(data: unknown, stale = false) {
+  const kosong = {
+    data: { generated_at: "", window_days: 7, runs: [], daily: [], totals: { passed: 0, failed: 0, running: 0 } },
+    stale: false,
+  };
+  const tanpaAktif = { data: { generated_at: "", active: [], counts: { running: 0, queued: 0 } }, stale: false };
+
   const mock = vi.fn(async (input: RequestInfo | URL) => {
-    const body = String(input) === "/api/status" ? { data, stale } : { ok: true, action: "deploy", target: "tes-web" };
+    const jalur = String(input);
+    const body =
+      jalur === "/api/status"
+        ? { data, stale }
+        : jalur === "/api/runs"
+          ? kosong
+          : jalur === "/api/active"
+            ? tanpaAktif
+            : { ok: true, action: "deploy", target: "tes-web" };
     return { ok: true, status: 200, json: async () => body } as unknown as Response;
   });
   vi.stubGlobal("fetch", mock);
@@ -98,7 +115,17 @@ test("names the selected application in the subtitle while data stays the global
 
   renderPage();
 
-  expect(await screen.findByText("Portal Klaim · data pipeline terakhir workspace")).toBeVisible();
+  expect(await screen.findByText("Portal Klaim · portal-klaim")).toBeVisible();
+});
+
+test("menyembunyikan tahapan pipeline saat commit-nya bukan milik aplikasi terpilih", async () => {
+  mockFetch({ ...status, latest_pipeline: { ...status.latest_pipeline, commit_sha: "deadbee" } });
+
+  renderPage();
+
+  expect(await screen.findByText(/bukan milik Portal Klaim/)).toBeVisible();
+  expect(screen.queryByRole("list", { name: "Tahapan pipeline" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Detail Log" })).toBeNull();
 });
 
 test("keeps the failure reason as an alert above the timeline", async () => {
@@ -184,13 +211,60 @@ test("stays neutral for an unknown app id", async () => {
   expect(screen.queryByRole("region", { name: "Detail Log" })).toBeNull();
 });
 
-test("asks for an application when none is selected", async () => {
+test("tanpa ?app= halaman langsung memilih aplikasi, bukan menyuruh user memilih", async () => {
   nav.params = new URLSearchParams();
   mockFetch(status);
 
   renderPage();
 
-  expect(await screen.findByText("Tidak ada aplikasi yang dipilih.")).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Detail Pipeline" })).toBeVisible();
+  expect(screen.queryByText("Tidak ada aplikasi yang dipilih.")).toBeNull();
+});
+
+test("tanpa ?app= yang diutamakan adalah aplikasi gagal, supaya yang rusak langsung terlihat", async () => {
+  nav.params = new URLSearchParams();
+  mockFetch({
+    ...status,
+    applications: [
+      status.applications[0],
+      { ...status.applications[0], id: "app-rusak", name: "App Rusak", status: "failed" },
+    ],
+  });
+
+  renderPage();
+
+  expect(await screen.findByText("App Rusak · app-rusak")).toBeVisible();
+});
+
+test("memilih aplikasi lain menulis ?app= lewat replace, bukan menumpuk riwayat", async () => {
+  nav.params = new URLSearchParams();
+  mockFetch({
+    ...status,
+    applications: [
+      status.applications[0],
+      { ...status.applications[0], id: "app-dua", name: "App Dua" },
+    ],
+  });
+
+  renderPage();
+
+  fireEvent.click(await screen.findByRole("button", { name: /App Dua/ }));
+
+  expect(router.replace).toHaveBeenCalledWith("/pipeline?app=app-dua", { scroll: false });
+  expect(router.push).not.toHaveBeenCalled();
+});
+
+test("menampilkan daftar aplikasi di sisi kiri dan menyembunyikannya saat detail dibuka di layar sempit", async () => {
+  mockFetch(status);
+
+  renderPage();
+
+  expect(await screen.findByRole("navigation", { name: "Daftar aplikasi" })).toBeVisible();
+  expect(screen.getByTestId("panel-daftar")).toHaveClass("hidden");
+
+  fireEvent.click(screen.getByRole("button", { name: /Daftar aplikasi/ }));
+
+  expect(screen.getByTestId("panel-daftar")).not.toHaveClass("hidden");
 });
 
 test("menyediakan Jalankan Ulang yang memperingatkan commit dan push sebelum memicu Jenkins", async () => {

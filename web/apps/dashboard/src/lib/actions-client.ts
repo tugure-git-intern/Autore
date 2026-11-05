@@ -3,6 +3,13 @@ export type ActionKind = "deploy" | "scan";
 export interface ActionOutcome {
   ok: boolean;
   message: string;
+  /** Diisi kalau server menolak karena sesi; pemanggil yang memindahkan halaman. */
+  redirectTo?: string;
+}
+
+/** Satu tempat yang tahu ke mana sesi yang ditolak harus pergi. */
+export function goToLogin(redirectTo: string): void {
+  window.location.assign(redirectTo);
 }
 
 const SUCCESS: Record<ActionKind, string> = {
@@ -32,6 +39,16 @@ export async function runAction(action: ActionKind, app?: string): Promise<Actio
   }
 
   if (response.ok) return { ok: true, message: SUCCESS[action] };
+
+  // 401/403 = identitas yang bermasalah, bukan aksi yang gagal: menampilkan
+  // pesan saja akan menyisakan UI yang terus gagal sampai halaman dimuat ulang.
+  if (response.status === 401 || response.status === 403) {
+    return {
+      ok: false,
+      message: "Sesi Anda sudah berakhir. Silakan login ulang.",
+      redirectTo: "/login",
+    };
+  }
 
   const payload = (await response.json().catch(() => null)) as
     | { error?: string; output?: string }

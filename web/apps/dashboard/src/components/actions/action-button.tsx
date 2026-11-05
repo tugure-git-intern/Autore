@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { runAction, type ActionKind } from "@/lib/actions-client";
+import { runAction, goToLogin, type ActionKind } from "@/lib/actions-client";
 
 export interface ActionConfirmation {
   title: string;
@@ -73,6 +73,8 @@ export function ActionButton({
     setPending(false);
     setToast({ tone: outcome.ok ? "ok" : "error", text: outcome.message });
     onDone?.();
+    // Pindah halaman setelah pesan tampil: user sempat melihat alasannya.
+    if (outcome.redirectTo) goToLogin(outcome.redirectTo);
   }
 
   const notice = pending

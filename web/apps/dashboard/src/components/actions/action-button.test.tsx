@@ -1,5 +1,14 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+
+// Hanya `goToLogin` yang dipalsukan: navigasi jsdom tidak bisa dites, sedangkan
+// `runAction` tetap asli supaya jalur 401 → redirect teruji end-to-end.
+vi.mock("@/lib/actions-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/actions-client")>();
+  return { ...actual, goToLogin: vi.fn() };
+});
+
+import { goToLogin } from "@/lib/actions-client";
 import { ActionButton } from "./action-button";
 
 const DEPLOY_CONFIRM = {
@@ -159,4 +168,22 @@ test("kegagalan jaringan tetap dilaporkan, bukan diam", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(/gagal/i);
+});
+
+test("sesi ditolak: pesan tampil lalu halaman pindah ke /login", async () => {
+  mockFetch(() => ({
+    ok: false,
+    status: 401,
+    body: { ok: false, status: 401, error: "Session tidak sah. Login ulang di dashboard." },
+  }));
+  vi.mocked(goToLogin).mockClear();
+  render(<ActionButton label="Deploy Sekarang" action="deploy" confirm={DEPLOY_CONFIRM} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Deploy Sekarang" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ya, deploy" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(/login ulang/i);
+  expect(alert).not.toHaveTextContent("Session tidak sah");
+  await waitFor(() => expect(vi.mocked(goToLogin)).toHaveBeenCalledWith("/login"));
 });

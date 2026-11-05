@@ -219,16 +219,76 @@ test.describe("section Active Pipelines", () => {
     await expect(menunggu.getByText("#")).toHaveCount(0);
   });
 
-  test("bar kemajuan benar-benar beranimasi (keyframes ada)", async ({ page }) => {
+  test("bar kemajuan benar-benar bergerak dan mengulang siklusnya", async ({ page }) => {
+    await paksaActive(page, [pipeline()], { running: 1, queued: 0 });
+
+    await page.goto("/");
+
+    const bar = page.getByTestId("progress-indeterminate");
+    const depan = page.getByTestId("progress-band-depan");
+    await expect(bar).toBeVisible();
+
+    // Komet = satu pembungkus rigid yang berisi kepala + ekor, jadi tepat satu animasi.
+    // Animasinya ada di anak (bukan di elemen track), jadi wajib `subtree: true` — tanpa itu
+    // hasilnya nol dan asersinya jadi bohong. Tanpa `@keyframes geser` di globals.css
+    // animasinya tidak pernah dibuat browser sehingga daftarnya kosong walau kelasnya ada.
+    expect(await bar.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(1);
+
+    const posisi = () => depan.evaluate((el) => el.getBoundingClientRect().x);
+
+    // Sampel ~2,2 detik (lebih dari satu putaran 1,6 s): kalau animasinya benar-benar
+    // mengulang tanpa henti, ada satu saat posisinya melompat balik ke kiri (wrap).
+    const jejak: number[] = [];
+    for (let i = 0; i < 22; i++) {
+      jejak.push(await posisi());
+      await page.waitForTimeout(100);
+    }
+
+    // Bukti bergerak: rentang posisi jauh lebih lebar dari lebar pita sendiri.
+    expect(Math.max(...jejak) - Math.min(...jejak)).toBeGreaterThan(50);
+    // Bukti berulang: satu lompatan balik ke kiri = satu putaran selesai, lalu lanjut lagi.
+    expect(jejak.findIndex((pos, i) => i > 0 && pos < jejak[i - 1] - 50)).toBeGreaterThan(-1);
+
+    // Ekor menempel tanpa celah di belakang kepala, dan tetap menempel di fase mana pun —
+    // inilah yang gagal waktu fasanya diatur `animation-delay`: begitu pita ekor wrap lebih
+    // dulu, pasangan itu pecah. Diukur di dua fase berbeda.
+    const sambungan = () =>
+      page.evaluate(() => {
+        const kepala = document.querySelector('[data-testid="progress-band-depan"]') as HTMLElement;
+        const ekor = document.querySelector('[data-testid="progress-band-belakang"]') as HTMLElement;
+        return {
+          celah: kepala.getBoundingClientRect().x - ekor.getBoundingClientRect().right,
+          lebarEkor: ekor.getBoundingClientRect().width,
+        };
+      });
+    for (let i = 0; i < 2; i++) {
+      const { celah, lebarEkor } = await sambungan();
+      expect(Math.abs(celah), "celah antara ekor dan kepala").toBeLessThanOrEqual(2);
+      expect(lebarEkor).toBeGreaterThan(20);
+      await page.waitForTimeout(400);
+    }
+  });
+
+  test("prefers-reduced-motion: bar berhenti bergerak tapi tetap selebar kartu", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await paksaActive(page, [pipeline()], { running: 1, queued: 0 });
 
     await page.goto("/");
 
     const bar = page.getByTestId("progress-indeterminate");
     await expect(bar).toBeVisible();
-    // Tanpa `@keyframes geser` di globals.css, animasi ini tidak pernah dibuat
-    // browser sehingga `getAnimations()` kosong walau kelasnya tetap terpasang.
-    expect(await bar.evaluate((el) => el.getAnimations().length)).toBeGreaterThan(0);
+    // Tidak ada animasi sama sekali (termasuk di pita): pita disembunyikan, tapinya jadi
+    // bar solid. Pasangannya: tes gerak di atas menghitung 2 di build yang sama — hanya
+    // media emulation yang beda, jadi 0 di sini bukan asersi kosong.
+    expect(await bar.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
+    await expect(page.getByTestId("progress-band-depan")).toBeHidden();
+
+    const ukur = await bar.evaluate((el) => {
+      const kartu = el.closest('[data-testid="pipeline-card"]') as HTMLElement;
+      return { bar: el.getBoundingClientRect().width, kartu: kartu.getBoundingClientRect().width };
+    });
+    // Masih terbaca sebagai bar yang memenuhi lebar kartu, bukan kotak kecil di kiri.
+    expect(ukur.bar).toBeGreaterThan(ukur.kartu * 0.8);
   });
 
   test("kosong: section tetap tampil dengan teks Semua pipeline selesai", async ({ page }) => {

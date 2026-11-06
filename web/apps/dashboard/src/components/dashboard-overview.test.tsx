@@ -168,4 +168,24 @@ describe("DashboardOverview", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Status Autore belum tersedia.");
   });
+
+  it("menyembunyikan kolom lebar di HP: sha dan 'Terakhir Diperbarui'", async () => {
+    mockStatus({ data: base, stale: false });
+
+    renderOverview();
+
+    expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+    // Tabel ini 625px di viewport 390px; sha mono 25 karakter adalah
+    // min-content yang memaksanya melebar.
+    expect(screen.getByText("Terakhir Diperbarui").className).toContain("hidden");
+    expect(screen.getByText("Terakhir Diperbarui").className).toContain("sm:table-cell");
+    expect(screen.getByText("a1b2c3d4e5f6").className).toContain("hidden");
+    expect(screen.getByText("a1b2c3d4e5f6").className).toContain("sm:block");
+
+    // Nama, status dan aksi tetap tampil: tiga kolom ini yang muat di HP.
+    expect(screen.getByText("Nama Aplikasi").className).not.toContain("hidden");
+    expect(screen.getByText("Status Keamanan").className).not.toContain("hidden");
+    expect(screen.getByText("Aksi").className).not.toContain("hidden");
+  });
 });

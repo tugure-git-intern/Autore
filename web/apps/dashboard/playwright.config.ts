@@ -33,5 +33,15 @@ export default defineConfig({
       args: ["--use-gl=swiftshader", "--disable-gpu", "--disable-software-rasterizer"],
     },
   },
-  projects: [{ name: "chromium" }],
+  // Dua project, dua ukuran layar: desktop 1280x720 (default `use`) dan HP
+  // 390x844. Spec mobile hanya jalan di project mobile — menjalankannya di
+  // 1280px akan mengukur tata letak yang salah.
+  projects: [
+    { name: "chromium", testIgnore: /mobile\.spec\.ts/ },
+    {
+      name: "mobile",
+      testMatch: /mobile\.spec\.ts/,
+      use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+  ],
 });

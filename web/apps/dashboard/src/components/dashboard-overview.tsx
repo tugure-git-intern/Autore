@@ -126,7 +126,9 @@ export function DashboardOverview() {
                   <th scope="col" className="px-5 py-3 font-medium">
                     Status Keamanan
                   </th>
-                  <th scope="col" className="px-5 py-3 font-medium">
+                  {/* Empat kolom = 625px; "Terakhir Diperbarui" menyusul di >= sm
+                      supaya tabelnya muat di 390px tanpa geser. */}
+                  <th scope="col" className="hidden px-5 py-3 font-medium sm:table-cell">
                     Terakhir Diperbarui
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
@@ -139,12 +141,18 @@ export function DashboardOverview() {
                   <tr key={app.id}>
                     <td className="px-5 py-4">
                       <p className="font-medium text-ink">{dash(app.name)}</p>
-                      <p className="font-mono text-xs text-muted">{dash(app.commit_sha)}</p>
+                      {/* sha 25 karakter = ~175px min-content: di HP ia yang
+                          memaksa tabel melebar, jadi tampil mulai sm saja. */}
+                      <p className="hidden font-mono text-xs text-muted sm:block">
+                        {dash(app.commit_sha)}
+                      </p>
                     </td>
                     <td className="px-5 py-4">
                       <StatusBadge status={toBadge(app.status)} />
                     </td>
-                    <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
+                    <td className="hidden px-5 py-4 text-muted sm:table-cell">
+                      {formatBuild(app.last_build)}
+                    </td>
                     <td className="px-5 py-4">
                       <a
                         href={`/pipeline?app=${encodeURIComponent(app.id)}`}

@@ -318,6 +318,25 @@ describe("POST /api/actions/* dengan sesi", () => {
     );
   });
 
+  it("meneruskan identitas sesi ke argv deploy (audit trail)", async () => {
+    const { app: api, spawn } = await app("identitas-deploy", { secret: SECRET });
+    const cookie = `authjs.session-token=${await sesiGithub("Alif Fadlan", "alif@example.com")}`;
+
+    const res = await aksi(api, cookie);
+    const args = spawn.mock.calls[0][1];
+
+    expect(res.status).toBe(200);
+    expect(args).toEqual(
+      expect.arrayContaining([
+        "deploy",
+        "--author-name",
+        "Alif Fadlan",
+        "--author-email",
+        "alif@example.com",
+      ]),
+    );
+  });
+
   it("menolak 400 body yang mencoba mengirim identitas sendiri", async () => {
     const { app: api, spawn } = await app("identitas-palsu", { secret: SECRET });
 

@@ -455,6 +455,8 @@ fn commands_for(index: usize) -> Commands {
             path: PathBuf::from("."),
             git_url: None,
             reconfigure: false,
+            author_name: None,
+            author_email: None,
         },
         5 => Commands::Hook {
             action: HookAction::Install {
@@ -701,6 +703,15 @@ enum Commands {
         /// Ubah kredensial Jenkins yang tersimpan di ~/.config/autore/jenkins.conf
         #[arg(long)]
         reconfigure: bool,
+
+        /// Identitas commit dari sesi dashboard: nama GitHub yang menekan tombol
+        /// (audit trail). Tanpa ini dipakai identitas bot `Autore CLI`.
+        #[arg(long)]
+        author_name: Option<String>,
+
+        /// Email identitas commit dari sesi dashboard (pasangan `--author-name`)
+        #[arg(long)]
+        author_email: Option<String>,
     },
 
     /// Alur 1-klik: buat file pipeline, buat repo GitHub, push, daftar ke Jenkins, trigger build
@@ -1332,6 +1343,8 @@ fn execute_command(
             path,
             git_url,
             reconfigure,
+            author_name,
+            author_email,
         } => {
             let target_dir = if interactive {
                 match pick_interactive_target_project(
@@ -1383,9 +1396,14 @@ fn execute_command(
                 job_name,
                 jk_cfg.url
             );
-            if let Err(e) =
-                jenkins::ensure_git_committed_and_remote(&target_dir, &resolved_git_url, None)
-            {
+            // Identitas author hanya ada kalau dipanggil dari dashboard (flag dari sesi);
+            // dipanggil langsung dari terminal = identitas bot seperti dulu.
+            let author = jenkins::validasi_author(author_name.as_deref(), author_email.as_deref());
+            if let Err(e) = jenkins::ensure_git_committed_and_remote(
+                &target_dir,
+                &resolved_git_url,
+                author.as_ref(),
+            ) {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
             }
@@ -1836,6 +1854,53 @@ fn execute_command(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    /// RED: identitas sesi dashboard harus bisa masuk lewat flag `deploy`, sama
+    /// seperti `quick-start`. Tanpa flag ini commit deploy selalu jatuh ke bot.
+    #[test]
+    fn deploy_menerima_identitas_author_dari_sesi_dashboard() {
+        use clap::Parser;
+        let cli = Cli::try_parse_from([
+            "autore",
+            "deploy",
+            "--path",
+            "/tmp/app",
+            "--author-name",
+            "Alif Fadlan",
+            "--author-email",
+            "alif@example.com",
+        ])
+        .unwrap();
+        match cli.command {
+            Some(Commands::Deploy {
+                author_name,
+                author_email,
+                ..
+            }) => {
+                assert_eq!(author_name.as_deref(), Some("Alif Fadlan"));
+                assert_eq!(author_email.as_deref(), Some("alif@example.com"));
+            }
+            _ => panic!("perintah yang diparse bukan Deploy"),
+        }
+    }
+
+    /// Dipanggil langsung dari terminal: tanpa flag, identitas bot tetap dipakai.
+    #[test]
+    fn deploy_tanpa_flag_tetap_tanpa_identitas_author() {
+        use clap::Parser;
+        let cli = Cli::try_parse_from(["autore", "deploy", "--path", "/tmp/app"]).unwrap();
+        match cli.command {
+            Some(Commands::Deploy {
+                author_name,
+                author_email,
+                ..
+            }) => {
+                assert!(author_name.is_none());
+                assert!(author_email.is_none());
+            }
+            _ => panic!("perintah yang diparse bukan Deploy"),
+        }
+    }
 
     #[test]
     fn project_aktif_awal_mengikuti_folder_saat_ini() {

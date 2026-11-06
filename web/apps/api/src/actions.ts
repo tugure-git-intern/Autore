@@ -115,6 +115,17 @@ async function catatKeRegistry(workspace: string, dir: string, nama: string): Pr
   }
 }
 
+/**
+ * Argv `deploy`: target selalu per-aplikasi (lihat `run`), dan identitas sesi —
+ * kalau ada — jadi author commit di repo aplikasi (audit trail). Tanpa identitas
+ * CLI memakai bot `Autore CLI` supaya pemakaian dari terminal tidak berubah.
+ */
+export function argvDeploy(dir: string, author?: Identitas): string[] {
+  const args = ["deploy", "--path", dir];
+  if (author) args.push("--author-name", author.nama, "--author-email", author.email);
+  return args;
+}
+
 export function hatchActions(deps: {
   workspace: string;
   run: RunAutore;
@@ -165,7 +176,11 @@ export function hatchActions(deps: {
     return { ok: true, dir };
   }
 
-  async function run(kind: ActionKind, appId?: string): Promise<ActionResult> {
+  async function run(
+    kind: ActionKind,
+    appId?: string,
+    author?: Identitas,
+  ): Promise<ActionResult> {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
@@ -192,7 +207,7 @@ export function hatchActions(deps: {
 
       const args =
         kind === "deploy"
-          ? ["deploy", "--path", target.dir]
+          ? argvDeploy(target.dir, author)
           : ["scan", "--no-docker", "--path", target.dir];
 
       let res: SpawnResult;

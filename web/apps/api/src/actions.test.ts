@@ -96,6 +96,38 @@ describe("hatchActions", () => {
     expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
   });
 
+  it("meneruskan identitas sesi ke argv deploy (audit trail commit)", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    await actions.run("deploy", "tes-web", {
+      login: "MAliffadlan",
+      nama: "Alif Fadlan",
+      email: "alif@example.com",
+    });
+
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual([
+      "deploy",
+      "--path",
+      join(dir, "tes-web"),
+      "--author-name",
+      "Alif Fadlan",
+      "--author-email",
+      "alif@example.com",
+    ]);
+  });
+
+  it("deploy tanpa identitas tidak menambah flag author apa pun", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    await actions.run("deploy", "tes-web");
+
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
+  });
+
   it("scan memakai --no-docker dan path aplikasi yang diminta", async () => {
     const dir = await workspace(["tes-web", "ui-demo"]);
     const { actions, spawn } = make(dir);

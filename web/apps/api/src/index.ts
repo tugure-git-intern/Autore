@@ -147,11 +147,14 @@ export function createApp(
 
   // Target deploy datang dari body, sama seperti scan: tombol di dashboard selalu
   // menunjuk aplikasi yang sedang dibuka, jadi server tidak boleh memilih sendiri.
+  // Identitas commit juga datang dari sesi, bukan body (audit trail).
   app.post("/api/actions/deploy", async (c) => {
     const body = await readAppBody(c.req.raw);
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
-    return reply(c, await actions.run("deploy", body.app));
+    // Identitas author dari sesi (bukan body): commit deploy harus atas nama orang
+    // yang menekan tombol, sama seperti quick-start.
+    return reply(c, await actions.run("deploy", body.app, c.get("sesi")));
   });
 
   app.post("/api/actions/scan", async (c) => {

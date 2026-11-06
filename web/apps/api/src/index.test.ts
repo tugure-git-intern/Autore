@@ -427,7 +427,16 @@ describe("POST /api/actions/deploy", () => {
     expect(body.target).not.toBe("tes-web");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const [, args] = spawn.mock.calls[0] as [string, string[]];
-    expect(args).toEqual(["deploy", "--path", join(dir, "audit-uji3")]);
+    // Target dari body; identitas commit dari sesi cookie() — bukan bot `Autore CLI`.
+    expect(args).toEqual([
+      "deploy",
+      "--path",
+      join(dir, "audit-uji3"),
+      "--author-name",
+      "alif",
+      "--author-email",
+      "alif@users.noreply.github.com",
+    ]);
   });
 
   it("mengikuti id lain di body, jadi targetnya benar-benar dari permintaan", async () => {
@@ -437,7 +446,15 @@ describe("POST /api/actions/deploy", () => {
 
     expect((await response.json()).target).toBe("tes-web");
     const [, args] = spawn.mock.calls[0] as [string, string[]];
-    expect(args).toEqual(["deploy", "--path", join(dir, "tes-web")]);
+    expect(args).toEqual([
+      "deploy",
+      "--path",
+      join(dir, "tes-web"),
+      "--author-name",
+      "alif",
+      "--author-email",
+      "alif@users.noreply.github.com",
+    ]);
   });
 
   it("menolak body tanpa app, body berkunci lain, dan body yang bukan JSON", async () => {

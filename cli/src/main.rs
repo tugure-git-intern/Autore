@@ -549,13 +549,6 @@ pub(crate) fn elevation_hint(target_exe: &std::path::Path) -> String {
     }
 }
 
-/// Port host bebas pertama mulai `start` — supaya alur 1-klik tidak bentrok port.
-fn pick_free_port(start: u16) -> u16 {
-    (start..=start.saturating_add(40))
-        .find(|p| std::net::TcpListener::bind(("0.0.0.0", *p)).is_ok())
-        .unwrap_or(start)
-}
-
 /// Push branch `main` ke `origin`. `false` = gagal (pemanggil yang memutuskan).
 fn git_push_main(dir: &std::path::Path) -> bool {
     std::process::Command::new("git")
@@ -986,24 +979,42 @@ fn execute_command(
                 },
             };
 
+            // Satu alokator untuk kedua jalur (CLI & dashboard): lihat registry
+            // (port yang sudah dikunci aplikasi lain) + port yang sedang hidup.
+            let workspace = serve::workspace_dir();
+            let saran_port = serve::pilih_port(&workspace, &resolved_name, None)
+                .map(|(_, deploy)| deploy)
+                .unwrap_or(8081);
             let resolved_deploy_port = match deploy_port {
                 Some(p) => {
                     if let Err(e) = validate_deploy_port(p) {
                         eprintln!("{} {}", "ERROR:".red().bold(), e);
                         return 1;
                     }
-                    p
+                    match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                        Ok((_, deploy)) => deploy,
+                        Err(e) => {
+                            eprintln!("{} {}", "ERROR:".red().bold(), e);
+                            return 1;
+                        }
+                    }
                 }
                 None if interactive => loop {
-                    match ui_ask_u16("Port deploy di server (host)", 8081) {
-                        Some(p) => match validate_deploy_port(p) {
-                            Ok(()) => break p,
-                            Err(e) => eprintln!("{} {e}", "ERROR:".red().bold()),
-                        },
+                    match ui_ask_u16("Port deploy di server (host)", saran_port) {
+                        Some(p) => {
+                            if let Err(e) = validate_deploy_port(p) {
+                                eprintln!("{} {e}", "ERROR:".red().bold());
+                                continue;
+                            }
+                            match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                                Ok((_, deploy)) => break deploy,
+                                Err(e) => eprintln!("{} {e}", "ERROR:".red().bold()),
+                            }
+                        }
                         None => return 1,
                     }
                 },
-                None => 8081,
+                None => saran_port,
             };
 
             let cfg = InitConfig {
@@ -1051,6 +1062,16 @@ fn execute_command(
                             println!("  • File pipeline  : {}", f.display());
                         }
                         println!("  • Satpam Git     : aktif ({})", hook_path.display());
+                        serve::catat_port(
+                            &workspace,
+                            &cfg.app_name,
+                            cfg.app_port,
+                            cfg.deploy_port,
+                        );
+                        println!(
+                            "  • Port deploy   : {} (dikunci di registry)",
+                            cfg.deploy_port
+                        );
                         0
                     }
                     Err(e) => {
@@ -1070,6 +1091,16 @@ fn execute_command(
                         for f in files {
                             println!("  • {}", f.display());
                         }
+                        serve::catat_port(
+                            &workspace,
+                            &cfg.app_name,
+                            cfg.app_port,
+                            cfg.deploy_port,
+                        );
+                        println!(
+                            "  • Port deploy : {} (dikunci di registry)",
+                            cfg.deploy_port
+                        );
                         peringatkan_folder_kosong(&output_dir);
                         0
                     }
@@ -1566,15 +1597,29 @@ fn execute_command(
             };
 
             let resolved_app_port = app_port.unwrap_or_else(|| resolved_stack.default_port());
+            // Alokator yang sama dengan init/dashboard: registry + port hidup.
+            let workspace = serve::workspace_dir();
             let resolved_deploy_port = match deploy_port {
                 Some(p) => {
                     if let Err(e) = validate_deploy_port(p) {
                         eprintln!("{} {}", "ERROR:".red().bold(), e);
                         return 1;
                     }
-                    p
+                    match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                        Ok((_, deploy)) => deploy,
+                        Err(e) => {
+                            eprintln!("{} {}", "ERROR:".red().bold(), e);
+                            return 1;
+                        }
+                    }
                 }
-                None => pick_free_port(8081),
+                None => match serve::pilih_port(&workspace, &resolved_name, None) {
+                    Ok((_, deploy)) => deploy,
+                    Err(e) => {
+                        eprintln!("{} {}", "ERROR:".red().bold(), e);
+                        return 1;
+                    }
+                },
             };
 
             let cfg = InitConfig {
@@ -1660,6 +1705,13 @@ fn execute_command(
             }
             let _ = std::env::set_current_dir(&target_dir);
             *active_project = Some(target_dir.clone());
+            // Port dikunci sebelum deploy jalan: aplikasi berikutnya tidak boleh
+            // diberi port ini walau container-nya belum naik.
+            serve::catat_port(&workspace, &cfg.app_name, cfg.app_port, cfg.deploy_port);
+            println!(
+                "  • Port deploy : {} (dikunci di registry)",
+                cfg.deploy_port
+            );
 
             let token = match github::resolve_token() {
                 Some(t) => t,
@@ -1980,6 +2032,95 @@ mod tests {
             1
         );
         assert!(act.is_none());
+    }
+
+    /// Workspace sementara untuk tes init: registry kosong/terisi + AUTORE_WORKSPACE.
+    fn ws_sementara(isi_registry: &str) -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("registry.tsv"), isi_registry).unwrap();
+        std::env::set_var("AUTORE_WORKSPACE", tmp.path());
+        tmp
+    }
+
+    fn init_ke(dir: &std::path::Path, nama: &str, deploy: Option<u16>) -> Commands {
+        Commands::Init {
+            app_name: Some(nama.to_string()),
+            stack: Some("python".to_string()),
+            app_port: Some(8000),
+            deploy_port: deploy,
+            output_dir: dir.to_path_buf(),
+            force: true,
+        }
+    }
+
+    #[test]
+    fn init_menulis_port_terpilih_ke_registry() {
+        let tmp = ws_sementara("");
+        let mut act = None;
+        let dir = tmp.path().join("app-satu");
+        assert_eq!(
+            execute_command(init_ke(&dir, "port-satu", None), false, &mut act),
+            0
+        );
+        let daftar = serve::baca_registry(tmp.path());
+        assert_eq!(daftar.len(), 1, "port harus langsung dikunci di registry");
+        assert_eq!(daftar[0].nama, "port-satu");
+        let jenkins = std::fs::read_to_string(dir.join("Jenkinsfile")).unwrap();
+        assert!(
+            jenkins.contains(&format!("deployPort: {}", daftar[0].deploy_port)),
+            "registry dan Jenkinsfile harus menunjuk port yang sama"
+        );
+        std::env::remove_var("AUTORE_WORKSPACE");
+    }
+
+    #[test]
+    fn init_tiga_kali_dapat_tiga_port_berbeda() {
+        let tmp = ws_sementara("");
+        let mut act = None;
+        for nama in ["port-test-1", "port-test-2", "port-test-3"] {
+            let dir = tmp.path().join(nama);
+            assert_eq!(
+                execute_command(init_ke(&dir, nama, None), false, &mut act),
+                0,
+                "{nama} gagal di-init"
+            );
+        }
+        let port: Vec<u16> = serve::baca_registry(tmp.path())
+            .iter()
+            .map(|p| p.deploy_port)
+            .collect();
+        assert_eq!(port.len(), 3);
+        let mut unik = port.clone();
+        unik.sort_unstable();
+        unik.dedup();
+        assert_eq!(
+            unik.len(),
+            3,
+            "tiga aplikasi baru harus dapat tiga port berbeda: {port:?}"
+        );
+        std::env::remove_var("AUTORE_WORKSPACE");
+    }
+
+    #[test]
+    fn init_menolak_port_eksplisit_yang_sudah_dipakai() {
+        let tmp = ws_sementara("lain\t8000\t8088\n");
+        let mut act = None;
+        let dir = tmp.path().join("app-baru");
+        assert_eq!(
+            execute_command(init_ke(&dir, "app-baru", Some(8088)), false, &mut act),
+            1,
+            "port yang sudah dipakai aplikasi lain harus ditolak"
+        );
+        assert!(
+            !dir.join("Jenkinsfile").exists(),
+            "init ditolak tidak boleh menulis Jenkinsfile"
+        );
+        assert_eq!(
+            serve::baca_registry(tmp.path()).len(),
+            1,
+            "registry tidak boleh ditambah saat ditolak"
+        );
+        std::env::remove_var("AUTORE_WORKSPACE");
     }
 
     #[test]

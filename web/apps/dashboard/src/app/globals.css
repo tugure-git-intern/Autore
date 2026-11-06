@@ -47,3 +47,32 @@
     transform: translateX(250%);
   }
 }
+
+/**
+ * Toast: naik dari bawah tepi layar, diam selama durasi tayang, lalu turun lagi
+ * keluar layar (`toast.tsx` memasang `motion-safe:animate-[...]`, jadi pengguna
+ * dengan `prefers-reduced-motion` tidak mendapat animasi sama sekali).
+ * Jarak tempuhnya `100% + 1.5rem` = tinggi toast + jarak `bottom-6`, jadi animasi
+ * selalu mulai dan berakhir persis di luar tepi bawah, berapa pun panjang pesannya.
+ */
+@keyframes toast-naik {
+  from {
+    opacity: 0;
+    transform: translateY(calc(100% + 1.5rem));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-turun {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(calc(100% + 1.5rem));
+  }
+}

@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export type JenisToast = "sukses" | "gagal";
+
+/**
+ * Satu pintu notifikasi untuk seluruh halaman. Default no-op (pola `UserContext`)
+ * supaya komponen aksi tetap bisa dirender tanpa kerangka — tes satuan, halaman
+ * auth — dengan pesan yang hilang alih-alih lempar.
+ */
+export const ToastSink = createContext<(pesan: string, jenis: JenisToast) => void>(() => {});
+
+export function useKirimToast() {
+  return useContext(ToastSink);
+}
 
 /** 4 detik: cukup dibaca, tidak menutupi topbar lebih lama dari perlu. */
 export const DURASI_TOAST_MS = 4_000;

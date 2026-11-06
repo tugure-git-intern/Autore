@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useKirimToast } from "@/components/toast";
 import { runAction, goToLogin, type ActionKind } from "@/lib/actions-client";
 
 export interface ActionConfirmation {
@@ -23,16 +24,6 @@ interface ActionButtonProps {
   onDone?: () => void;
 }
 
-const RUNNING: Record<ActionKind, string> = {
-  deploy: "Deploy sedang berjalan…",
-  scan: "Scan keamanan sedang berjalan…",
-};
-
-const TONE: Record<"ok" | "error", string> = {
-  ok: "border-gray-200 bg-white text-gray-700",
-  error: "border-red-200 bg-red-50 text-red-700",
-};
-
 export function ActionButton({
   label,
   action,
@@ -43,9 +34,9 @@ export function ActionButton({
 }: ActionButtonProps) {
   const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const kirimToast = useKirimToast();
 
   // showModal memberi jebakan fokus + Escape; jsdom belum punya, jadi atribut
   // `open` jadi jalur cadangannya (dan itu yang diuji).
@@ -61,28 +52,20 @@ export function ActionButton({
     }
   }, [open]);
 
-  useEffect(() => {
-    if (!toast || pending) return;
-    const timer = setTimeout(() => setToast(null), 6_000);
-    return () => clearTimeout(timer);
-  }, [toast, pending]);
-
+  /**
+   * Pesannya pergi ke toast global, bukan ke paragraf di dalam sel tabel: baris
+   * tabel tetap setinggi tombolnya, dan satu pesan gagal tidak mendorong layout.
+   * Kemajuan sudah diucapkan `aria-busy` + label tombol, jadi tidak perlu toast.
+   */
   async function dispatch() {
     setPending(true);
-    setToast(null);
     const outcome = await runAction(action, app);
     setPending(false);
-    setToast({ tone: outcome.ok ? "ok" : "error", text: outcome.message });
+    kirimToast(outcome.message, outcome.ok ? "sukses" : "gagal");
     onDone?.();
-    // Pindah halaman setelah pesan tampil: user sempat melihat alasannya.
+    // Pindah halaman setelah pesan terkirim: user sempat membaca alasannya.
     if (outcome.redirectTo) goToLogin(outcome.redirectTo);
   }
-
-  const notice = pending
-    ? { role: "status", text: RUNNING[action], tone: "ok" as const }
-    : toast
-      ? { role: toast.tone === "error" ? "alert" : "status", text: toast.text, tone: toast.tone }
-      : null;
 
   return (
     <span className="inline-flex flex-col items-end gap-2">
@@ -104,15 +87,6 @@ export function ActionButton({
           label
         )}
       </Button>
-
-      {notice ? (
-        <p
-          role={notice.role}
-          className={`max-w-xs rounded-md border px-3 py-2 text-xs ${TONE[notice.tone]}`}
-        >
-          {notice.text}
-        </p>
-      ) : null}
 
       {confirm ? (
         <dialog

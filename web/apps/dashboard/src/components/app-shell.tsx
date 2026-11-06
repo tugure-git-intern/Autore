@@ -16,7 +16,7 @@ import { fetchDashboardStatus } from "@/lib/status-client";
 import { connectionStatus, Navbar } from "./navbar";
 import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
-import { Toast, type JenisToast } from "./toast";
+import { Toast, ToastSink, type JenisToast } from "./toast";
 import { useActivePipelines, type HasilActive } from "./use-active-pipelines";
 import { useRuns, type HasilRuns } from "./use-runs";
 
@@ -138,23 +138,31 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
   const tutupToast = useCallback(() => setToast(null), []);
 
+  /** Pintu yang dipakai komponen mana pun (tombol aksi, dialog) untuk bercerita. */
+  const pesanToast = useCallback(
+    (pesan: string, jenis: JenisToast) => setToast({ pesan, jenis }),
+    [],
+  );
+
   return (
-    <StatusContext.Provider
-      value={{
-        state,
-        loading,
-        failed,
-        refreshing,
-        sync,
-        reload,
-        runs,
-        aktif,
-        toast,
-        tutupToast,
-      }}
-    >
-      {children}
-    </StatusContext.Provider>
+    <ToastSink.Provider value={pesanToast}>
+      <StatusContext.Provider
+        value={{
+          state,
+          loading,
+          failed,
+          refreshing,
+          sync,
+          reload,
+          runs,
+          aktif,
+          toast,
+          tutupToast,
+        }}
+      >
+        {children}
+      </StatusContext.Provider>
+    </ToastSink.Provider>
   );
 }
 

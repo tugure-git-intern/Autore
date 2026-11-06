@@ -9,6 +9,7 @@ vi.mock("next-auth/react", () => ({ signOut: vi.fn() }));
 import type { ActivePayload, ApiStatusResponse, RunsPayload } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
 import { AppShell } from "./app-shell";
+import { useKirimToast } from "./toast";
 
 const USER: SessionUser = { login: "tugure-git-intern", name: "Alif", image: "https://x/a.png" };
 
@@ -151,5 +152,68 @@ describe("AppShell — tombol Sync", () => {
     await act(async () => {
       lepas.forEach((r) => r());
     });
+  });
+});
+
+describe("AppShell — notifikasi global", () => {
+  it("pesan dari komponen anak muncul sebagai toast yang melayang, bukan di dalam tabel", async () => {
+    vi.stubGlobal("fetch", balas());
+
+    function PemakaiToast() {
+      const kirim = useKirimToast();
+      return (
+        <table>
+          <tbody>
+            <tr>
+              <td>
+                <button type="button" onClick={() => kirim("Scan keamanan selesai tanpa temuan.", "sukses")}>
+                  Scan Keamanan
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    render(
+      <AppShell user={USER}>
+        <PemakaiToast />
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan Keamanan" }));
+
+    const toast = await screen.findByTestId("toast");
+    expect(toast).toHaveTextContent("Scan keamanan selesai tanpa temuan.");
+    // Toast hidup di luar kerangka halaman, jadi tidak ada bagian tabel yang rusak.
+    expect(screen.getByRole("button", { name: "Scan Keamanan" }).closest("td")?.textContent).toBe(
+      "Scan Keamanan",
+    );
+  });
+
+  it("kegagalan aksi memakai toast merah (role alert)", async () => {
+    vi.stubGlobal("fetch", balas());
+
+    function PemakaiToast() {
+      const kirim = useKirimToast();
+      return (
+        <button type="button" onClick={() => kirim("Gagal menyinkronkan data.", "gagal")}>
+          Kirim
+        </button>
+      );
+    }
+
+    render(
+      <AppShell user={USER}>
+        <PemakaiToast />
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Kirim" }));
+
+    const toast = await screen.findByRole("alert");
+    expect(toast).toHaveTextContent("Gagal menyinkronkan data.");
+    expect(toast.className).toContain("motion-safe:animate-");
   });
 });

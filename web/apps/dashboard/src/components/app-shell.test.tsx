@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Shell membaca pathname App Router; rute ini yang dipakai tes.
@@ -215,5 +215,49 @@ describe("AppShell — notifikasi global", () => {
     const toast = await screen.findByRole("alert");
     expect(toast).toHaveTextContent("Gagal menyinkronkan data.");
     expect(toast.className).toContain("motion-safe:animate-");
+  });
+});
+
+describe("AppShell — kerangka mobile", () => {
+  it("memasang bar navigasi bawah dan menyisakan ruang bawah supaya konten tidak tertutup", async () => {
+    vi.stubGlobal("fetch", balas());
+
+    render(
+      <AppShell user={USER}>
+        <div />
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("navigation", { name: "Navigasi bawah" })).toBeInTheDocument();
+    // pb-24 = tinggi bar (64px) + jeda; tanpanya baris terakhir tabel tertutup bar.
+    expect(screen.getByRole("main").className).toContain("pb-24");
+    expect(screen.getByRole("main").className).toContain("pt-6");
+  });
+
+  it("halaman tanpa kerangka (login) tidak menampilkan bar bawah", async () => {
+    nav.pathname = "/login";
+    vi.stubGlobal("fetch", balas());
+
+    render(
+      <AppShell user={USER}>
+        <div />
+      </AppShell>,
+    );
+
+    expect(screen.queryByRole("navigation", { name: "Navigasi bawah" })).toBeNull();
+  });
+
+  it("topbar tidak lagi menampung navigasi: satu baris 64px saja", async () => {
+    vi.stubGlobal("fetch", balas());
+
+    render(
+      <AppShell user={USER}>
+        <div />
+      </AppShell>,
+    );
+
+    // Satu-satunya navigasi di luar sidebar adalah bar bawah — topbar bersih.
+    expect(within(screen.getByRole("banner")).queryByRole("navigation")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Navigasi bawah" })).toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ import type { ApiStatusResponse } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
 import { fetchDashboardStatus } from "@/lib/status-client";
 import { connectionStatus, Navbar } from "./navbar";
+import { NavBawah } from "./nav-bawah";
 import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
 import { Toast, ToastSink, type JenisToast } from "./toast";
@@ -187,8 +188,11 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
           refreshing={status.refreshing}
           user={user}
         />
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 lg:px-6">{children}</main>
+        {/* pb-24 = tinggi bar bawah + jeda; tanpa ini baris terakhir konten
+            (dan tombol aksinya) tersembunyi di balik bar di layar sempit. */}
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pt-6 pb-24 lg:px-6">{children}</main>
       </div>
+      <NavBawah />
       {status.toast ? (
         <Toast
           pesan={status.toast.pesan}

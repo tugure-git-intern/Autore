@@ -190,6 +190,15 @@ describe("Navbar", () => {
     expect(screen.queryByText(/^@/)).toBeNull();
   });
 
+  it("tidak lagi menampung navigasi: topbar cuma satu baris 64px", () => {
+    const { container } = renderNavbar(USER);
+
+    // Navigasi mobile pindah ke bar bawah; strip yang dulu menggeser horizontal
+    // di dalam topbar sudah hilang.
+    expect(within(screen.getByRole("banner")).queryByRole("navigation")).toBeNull();
+    expect(container.querySelector("header")?.className).not.toContain("overflow-x-auto");
+  });
+
   it("berputar dan terkunci selama sync, kembali normal setelah selesai", () => {
     const props = {
       title: "Dashboard",

@@ -1,10 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
-import { isActiveHref, navItems } from "./nav-items";
 import { Button } from "./ui/button";
 import { UserMenu } from "./user-menu";
 
@@ -60,12 +58,11 @@ export function Navbar({
   refreshing?: boolean;
   user: SessionUser;
 }) {
-  const pathname = usePathname() ?? "/";
-
-  // lg:h-16 matches the sidebar brand block: 64px each, dividers on one line.
+  // Satuan baris tetap 64px di semua ukuran: bar atas tidak pernah tumbuh dua
+  // tingkat lagi sejak navigasi mobile pindah ke bar bawah.
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white lg:h-16">
-      <div className="flex h-16 items-center justify-between gap-4 px-4 lg:h-full lg:px-6">
+    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+      <div className="flex h-16 items-center justify-between gap-3 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span role="status" className="flex shrink-0 items-center gap-2">
             <span
@@ -97,25 +94,6 @@ export function Navbar({
           {user.login ? <UserMenu user={user} /> : null}
         </div>
       </div>
-      {/* Below lg the sidebar is hidden, so navigation collapses into this row. */}
-      <nav aria-label="Navigasi utama" className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = isActiveHref(pathname, href);
-          return (
-            <a
-              key={href}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm ${
-                active ? "bg-gray-100 font-medium text-ink" : "text-muted hover:bg-gray-50 hover:text-ink"
-              }`}
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
-            </a>
-          );
-        })}
-      </nav>
     </header>
   );
 }

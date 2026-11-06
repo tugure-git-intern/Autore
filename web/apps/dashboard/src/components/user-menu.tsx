@@ -28,7 +28,9 @@ export function UserMenu({ user }: { user: SessionUser }) {
             {user.login.slice(0, 2).toUpperCase()}
           </span>
         )}
-        <span className="text-xs font-medium text-ink">{label}</span>
+        {/* Nama pengguna disembunyikan di layar sempit: avatar + aria-label sudah
+            cukup, dan topbar 64px harus muat bersama status + tombol Sync. */}
+        <span className="hidden text-xs font-medium text-ink sm:inline">{label}</span>
       </summary>
       <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-sm">
         <p className="px-2 py-1 text-xs text-muted">@{user.login}</p>

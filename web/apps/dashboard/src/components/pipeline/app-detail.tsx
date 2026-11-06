@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import type { ActivePipeline, ApplicationRecord, DashboardStatus, RunRecord } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
 import { formatDuration, relativeTime, shortSha } from "@/lib/format";
-import { cocokCommit } from "@/lib/pilih-app";
+import { cocokPipeline } from "@/lib/pilih-app";
 import { StatusBadge, type AppStatus } from "../status-badge";
 import { WorkspacePipeline } from "./workspace-pipeline";
 
@@ -49,6 +49,7 @@ export function AppDetail({
   pipeline,
   runs,
   aktif,
+  applications,
   onDaftar,
   onSelesai,
 }: {
@@ -56,14 +57,17 @@ export function AppDetail({
   pipeline: DashboardStatus["latest_pipeline"];
   runs: readonly RunRecord[];
   aktif: readonly ActivePipeline[];
+  /** Seluruh aplikasi: dipakai untuk mendeteksi sha pendek yang kembar antar repo. */
+  applications: readonly ApplicationRecord[];
   /** Layar sempit: detail menggantikan daftar, jadi butuh jalan kembali. */
   onDaftar?: () => void;
   onSelesai?: () => void;
 }) {
   const riwayat = runs.filter((run) => run.app === app.id).slice(0, MAKS_RUN);
   const sedangAktif = aktif.filter((baris) => baris.app === app.id);
-  const cocok = cocokCommit(pipeline.commit_sha, app.commit_sha);
+  const cocok = cocokPipeline(pipeline, app, applications);
   const jobUrl = riwayat[0]?.url ?? "";
+  const buildGagal = riwayat.find((run) => run.status === "failed");
 
   return (
     <div className="space-y-4">
@@ -173,6 +177,42 @@ export function AppDetail({
 
       {cocok ? (
         <WorkspacePipeline pipeline={pipeline} />
+      ) : app.status === "failed" ? (
+        // Aplikasi merah tidak boleh disuguhi timeline hijau milik aplikasi lain:
+        // itu inti bug "semua hijau padahal build gagal".
+        <Card className="p-5">
+          <div data-testid="detail-gagal">
+            <p role="alert" className="text-sm font-medium text-red-700">
+              Pipeline gagal, cek log Jenkins.
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Build terakhir <span className="font-medium">{app.name}</span> tidak lulus
+              {buildGagal ? ` (build #${buildGagal.number})` : ""}. Tahapan dan log workspace tidak
+              ditampilkan karena commit terakhir di workspace bukan milik aplikasi ini.
+            </p>
+            {buildGagal?.url ? (
+              <a
+                href={buildGagal.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Buka log build #{buildGagal.number} di Jenkins
+              </a>
+            ) : jobUrl ? (
+              <a
+                href={jobUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Buka job Jenkins {app.name}
+              </a>
+            ) : null}
+          </div>
+        </Card>
       ) : (
         <Card className="p-5">
           <p className="text-sm text-ink">

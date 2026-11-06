@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationRecord } from "./contracts";
-import { cocokCommit, pilihAwal } from "./pilih-app";
+import { cocokCommit, cocokPipeline, pilihAwal } from "./pilih-app";
 
 const app = (ubah: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
   id: "a",
@@ -50,5 +50,46 @@ describe("cocokCommit", () => {
 
   it("mengabaikan beda huruf besar-kecil pada sha", () => {
     expect(cocokCommit("405156B", "405156b1c2d3")).toBe(true);
+  });
+});
+
+/** Ringkasan yang cukup untuk guard: id, status, commit. */
+const ringkas = (id: string, status: ApplicationRecord["status"], commit_sha: string | null) => ({
+  id,
+  status,
+  commit_sha,
+});
+
+describe("cocokPipeline", () => {
+  it("menolak timeline hijau workspace saat aplikasi yang dipilih sedang gagal", () => {
+    // Kasus nyata: tes-java gagal di commit aab9fb4, autore-dummy sukses di sha pendek
+    // yang kebetulan sama. Record global tidak boleh diklaim sebagai milik tes-java.
+    const tesJava = ringkas("tes-java", "failed", "aab9fb4");
+    const dummy = ringkas("autore-dummy", "passed", "aab9fb4");
+
+    expect(cocokPipeline({ commit_sha: "aab9fb4", status: "passed" }, tesJava, [tesJava, dummy])).toBe(false);
+  });
+
+  it("menolak record global saat sha pendeknya kembar di dua aplikasi", () => {
+    const a = ringkas("tes-java", "passed", "aab9fb4");
+    const b = ringkas("autore-dummy", "passed", "aab9fb4c1d2");
+
+    expect(cocokPipeline({ commit_sha: "aab9fb4", status: "passed" }, a, [a, b])).toBe(false);
+  });
+
+  it("menerima saat commit dan status sejalan", () => {
+    const a = ringkas("tes-java", "failed", "aab9fb4c1d2e3f4");
+
+    expect(cocokPipeline({ commit_sha: "aab9fb4", status: "failed" }, a, [a])).toBe(true);
+  });
+
+  it("menerima saat aplikasi belum punya status final (masih berjalan)", () => {
+    const a = ringkas("tes-java", "running", "aab9fb4c1d2");
+
+    expect(cocokPipeline({ commit_sha: "aab9fb4", status: "passed" }, a, [a])).toBe(true);
+  });
+
+  it("tidak menerima sha pendek yang bukan bukti identitas", () => {
+    expect(cocokCommit("aab9fb", "aab9fb4")).toBe(false);
   });
 });

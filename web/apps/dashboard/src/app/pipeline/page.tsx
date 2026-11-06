@@ -136,6 +136,7 @@ function PipelineSplit() {
               pipeline={data.latest_pipeline}
               runs={runs.hasil?.data.runs ?? []}
               aktif={aktif.active}
+              applications={data.applications}
               onDaftar={() => setLihatDaftar(true)}
               onSelesai={reload}
             />

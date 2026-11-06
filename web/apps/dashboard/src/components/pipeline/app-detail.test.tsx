@@ -53,10 +53,20 @@ const aktif = (ubah: Partial<ActivePipeline> = {}): ActivePipeline => ({
 });
 
 const gambar = (ubah: Partial<Parameters<typeof AppDetail>[0]> = {}) =>
-  render(<AppDetail app={app} pipeline={pipelineMilikAppLain} runs={[]} aktif={[]} {...ubah} />);
+  render(
+    <AppDetail
+      app={app}
+      pipeline={pipelineMilikAppLain}
+      runs={[]}
+      aktif={[]}
+      applications={[app]}
+      {...ubah}
+    />,
+  );
 
 test("menampilkan fakta per aplikasi dan tidak mengklaim pipeline global sebagai miliknya", () => {
-  gambar();
+  const appLulus = { ...app, status: "passed" as const };
+  gambar({ app: appLulus, applications: [appLulus] });
 
   expect(screen.getByRole("heading", { name: "Detail Pipeline" })).toBeVisible();
   expect(screen.getByText("MAliffadlan <maliffadlan@users.noreply.github.com>")).toBeVisible();
@@ -68,11 +78,31 @@ test("menampilkan fakta per aplikasi dan tidak mengklaim pipeline global sebagai
 });
 
 test("memakai pipeline workspace begitu commit-nya cocok dengan aplikasi", () => {
-  gambar({ pipeline: pipelineCocok });
+  const appLulus = { ...app, status: "passed" as const };
+  gambar({ app: appLulus, applications: [appLulus], pipeline: pipelineCocok });
 
   expect(screen.getByRole("list", { name: "Tahapan pipeline" })).toBeVisible();
   expect(screen.getByRole("region", { name: "Detail Log" })).toBeVisible();
   expect(screen.queryByText(/bukan milik Portal Klaim/)).toBeNull();
+});
+
+test("aplikasi gagal tidak pernah menampilkan timeline hijau milik aplikasi lain", () => {
+  const dummy = { ...app, id: "autore-dummy", name: "autore-dummy", status: "passed" as const };
+  gambar({
+    applications: [app, dummy],
+    pipeline: pipelineCocok,
+    runs: [run({ number: 13, status: "failed", url: "https://jenkins.local:8080/job/portal-klaim/13/" })],
+  });
+
+  const kartu = screen.getByTestId("detail-gagal");
+  expect(within(kartu).getByText("Pipeline gagal, cek log Jenkins.")).toBeVisible();
+  expect(screen.queryByRole("list", { name: "Tahapan pipeline" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Detail Log" })).toBeNull();
+  expect(screen.queryByText("Pipeline selesai tanpa error.")).toBeNull();
+  expect(within(kartu).getByRole("link", { name: /Buka log build #13/ })).toHaveAttribute(
+    "href",
+    "https://jenkins.local:8080/job/portal-klaim/13/",
+  );
 });
 
 test("riwayat build hanya memuat aplikasi terpilih, dengan link Jenkins per build", () => {

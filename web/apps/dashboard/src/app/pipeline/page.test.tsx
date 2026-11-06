@@ -46,6 +46,8 @@ const status = {
 
 const failing = {
   ...status,
+  // Pipeline gagal hanya boleh tampil sebagai milik aplikasi yang memang gagal.
+  applications: [{ ...status.applications[0], status: "failed" }],
   latest_pipeline: {
     ...status.latest_pipeline,
     status: "failed",

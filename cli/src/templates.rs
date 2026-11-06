@@ -310,8 +310,19 @@ pub const CONTOH_PACKAGE_JSON: &str = include_str!("../../sandbox/dummy-app-node
 pub const CONTOH_APP_JS: &str = include_str!("../../sandbox/dummy-app-node/app.js");
 pub const CONTOH_TEST_JS: &str = include_str!("../../sandbox/dummy-app-node/test.js");
 
-/// Berkas contoh per stack. Python dan Node.js punya contoh yang langsung jalan
-/// (endpoint `/` + `/health`); stack lain belum punya contoh sama sekali.
+/// Contoh Java: satu berkas, tanpa Maven/Gradle, langsung menjawab `/` & `/health`.
+/// Dockerfile hasil generate punya cabang `Main.java` khusus untuk bentuk ini.
+pub const CONTOH_MAIN_JAVA: &str = include_str!("../../sandbox/dummy-app-java/Main.java");
+
+/// Contoh Go: `go.mod` bikin Dockerfile memakai cabang `go test ./...` + `go build .`,
+/// jadi tesnya benar-benar jalan sebelum image jadi.
+pub const CONTOH_GO_MOD: &str = include_str!("../../sandbox/dummy-app-go/go.mod");
+pub const CONTOH_MAIN_GO: &str = include_str!("../../sandbox/dummy-app-go/main.go");
+pub const CONTOH_MAIN_TEST_GO: &str = include_str!("../../sandbox/dummy-app-go/main_test.go");
+
+/// Berkas contoh per stack. Semua stack punya contoh yang langsung jalan (endpoint
+/// `/` + `/health` di port bawaan stack); tanpa itu, `--kode contoh` menulis folder
+/// kosong dan tahap deploy selalu ditolak.
 fn berkas_contoh(stack: TechStack) -> &'static [(&'static str, &'static str)] {
     match stack {
         TechStack::Python => &[("app.py", CONTOH_APP_PY), ("test_app.py", CONTOH_TEST_PY)],
@@ -320,7 +331,12 @@ fn berkas_contoh(stack: TechStack) -> &'static [(&'static str, &'static str)] {
             ("app.js", CONTOH_APP_JS),
             ("test.js", CONTOH_TEST_JS),
         ],
-        _ => &[],
+        TechStack::Java => &[("Main.java", CONTOH_MAIN_JAVA)],
+        TechStack::Go => &[
+            ("go.mod", CONTOH_GO_MOD),
+            ("main.go", CONTOH_MAIN_GO),
+            ("main_test.go", CONTOH_MAIN_TEST_GO),
+        ],
     }
 }
 
@@ -370,9 +386,58 @@ mod tests {
     }
 
     #[test]
-    fn kode_contoh_kosong_untuk_stack_tanpa_template() {
+    fn semua_stack_punya_kode_contoh() {
+        // Dulu tes ini menuntut stack "tanpa template" menghasilkan folder kosong, dan
+        // itulah bug-nya: `--kode contoh` di stack Java/Go menulis nol berkas, sehingga
+        // tahap deploy selalu ditolak ("folder belum berisi kode aplikasi").
+        for stack in TechStack::all() {
+            let tmp = TempDir::new().unwrap();
+            let dibuat = tulis_kode_contoh(tmp.path(), stack).unwrap();
+            assert!(
+                !dibuat.is_empty(),
+                "stack {stack:?} belum punya kode contoh sama sekali"
+            );
+        }
+    }
+
+    #[test]
+    fn kode_contoh_java_langsung_jalan_di_port_bawaan() {
         let tmp = TempDir::new().unwrap();
-        assert!(tulis_kode_contoh(tmp.path(), TechStack::Go).unwrap().is_empty());
+        let dibuat = tulis_kode_contoh(tmp.path(), TechStack::Java).unwrap();
+
+        assert_eq!(dibuat, vec!["Main.java"]);
+        let isi = fs::read_to_string(tmp.path().join("Main.java")).unwrap();
+        assert!(isi.contains("public static void main"), "butuh entrypoint:\n{isi}");
+        assert!(isi.contains("/health"), "health check deploy menembak /health");
+        // `scripts/ci-deploy-by-digest.sh` menjalankan container dan menembak port
+        // aplikasi, jadi contoh wajib mendengarkan port bawaan stack-nya.
+        assert!(
+            isi.contains(&TechStack::Java.default_port().to_string()),
+            "contoh harus mendengarkan port bawaan ({})",
+            TechStack::Java.default_port()
+        );
+    }
+
+    #[test]
+    fn kode_contoh_go_langsung_jalan_dengan_go_test() {
+        let tmp = TempDir::new().unwrap();
+        let dibuat = tulis_kode_contoh(tmp.path(), TechStack::Go).unwrap();
+
+        assert_eq!(dibuat, vec!["go.mod", "main.go", "main_test.go"]);
+        // Ada go.mod -> Dockerfile memakai cabang `go test ./...` + `go build .`.
+        assert!(fs::read_to_string(tmp.path().join("go.mod"))
+            .unwrap()
+            .contains("module "));
+        let main = fs::read_to_string(tmp.path().join("main.go")).unwrap();
+        assert!(main.contains("/health"), "health check deploy menembak /health");
+        assert!(
+            main.contains(&format!(":{}", TechStack::Go.default_port())),
+            "contoh harus mendengarkan port bawaan ({})",
+            TechStack::Go.default_port()
+        );
+        assert!(fs::read_to_string(tmp.path().join("main_test.go"))
+            .unwrap()
+            .contains("httptest"));
     }
 
     #[test]
@@ -441,6 +506,8 @@ mod tests {
             };
             let created = generate_project_files(&cfg, tmp.path()).unwrap();
             assert_eq!(created.len(), 3);
+            let contoh = tulis_kode_contoh(tmp.path(), stack).unwrap();
+            assert!(!contoh.is_empty(), "stack {stack:?} belum punya kode contoh");
 
             let report = scan_directory(tmp.path()).unwrap();
             assert!(

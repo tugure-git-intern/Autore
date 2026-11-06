@@ -150,3 +150,24 @@ test("meneruskan aksi kembali ke daftar untuk layar sempit", () => {
 
   expect(onDaftar).toHaveBeenCalled();
 });
+
+test("kartu gagal menyebut port yang bentrok, bukan cuma menyuruh buka log", () => {
+  const pipelinePortBentrok: Pipeline = {
+    ...pipelineCocok,
+    status: "failed",
+    failure_reason: "Build di Jenkins gagal (FAILURE). Buka detail teknis untuk melihat sebabnya.",
+    raw_log: [
+      "Menjalankan container kandidat pada port sementara 127.0.0.1:18088...",
+      "Bind for 127.0.0.1:8088 failed: port is already allocated",
+    ],
+  };
+  // Aplikasi & pipeline dua-duanya gagal: itu pasangan yang cocok, jadi detail
+  // pipeline-nya benar-benar dirender.
+  gambar({ app, applications: [app], pipeline: pipelinePortBentrok });
+
+  expect(
+    screen.getByText(
+      "Port 8088 sudah dipakai aplikasi lain. Ganti deployPort di Jenkinsfile ke port bebas, lalu deploy ulang.",
+    ),
+  ).toBeVisible();
+});

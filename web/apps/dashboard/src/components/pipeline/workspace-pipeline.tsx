@@ -5,6 +5,7 @@ import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
 import { StageMatrix } from "@/components/pipeline/stage-matrix";
 import type { DashboardStatus } from "@/lib/contracts";
 import { shortSha } from "@/lib/format";
+import { petunjukPortBentrok } from "@/lib/petunjuk-port";
 import { stageRows } from "@/lib/stages";
 
 /**
@@ -13,6 +14,7 @@ import { stageRows } from "@/lib/stages";
  * tahapan dan log tidak pernah tampil sebagai milik aplikasi lain.
  */
 export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["latest_pipeline"] }) {
+  const petunjukPort = petunjukPortBentrok(pipeline.raw_log);
   return (
     <div className="space-y-4">
       <p className="text-xs uppercase tracking-wide text-muted">
@@ -24,6 +26,15 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
       {pipeline.failure_reason.trim() ? (
         <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {pipeline.failure_reason}
+        </p>
+      ) : null}
+
+      {petunjukPort ? (
+        <p
+          role="alert"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          {petunjukPort}
         </p>
       ) : null}
 

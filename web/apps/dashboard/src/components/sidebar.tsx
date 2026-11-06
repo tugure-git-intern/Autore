@@ -11,10 +11,21 @@ export function Sidebar() {
       {/* h-16 + 1px divider == the topbar block, so both dividers meet at the corner. */}
       <div
         data-testid="sidebar-brand"
-        className="flex h-16 shrink-0 flex-col justify-center border-b border-gray-200 px-6"
+        className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 px-6"
       >
-        <p className="text-sm font-semibold tracking-tight text-ink">Autore</p>
-        <p className="text-xs text-muted">CI/CD Workspace</p>
+        {/* Mark Tugu Reasuransi (crop lockup: tagline tidak terbaca di ukuran sidebar).
+            h-10 + object-contain: garis halus di dasar ikon hilang kalau digambar 32 px. */}
+        <img
+          src="/tugure-logo.png"
+          alt="Tugu Reasuransi"
+          width={342}
+          height={160}
+          className="h-10 w-auto shrink-0 object-contain"
+        />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-tight text-ink">Autore</p>
+          <p className="text-xs text-muted">CI/CD Workspace</p>
+        </div>
       </div>
       <nav aria-label="Navigasi utama" className="flex flex-col gap-0.5 px-3 py-4">
         {navItems.map(({ href, label, icon: Icon }) => {

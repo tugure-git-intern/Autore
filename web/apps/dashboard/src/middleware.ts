@@ -35,5 +35,8 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Berkas statis dari public/ harus lolos tanpa sesi: middleware ini mengalihkan
+  // apa pun yang tidak dikecualikan ke /login, jadi logo sidebar dijawab 307 dan
+  // tampil rusak di halaman login.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|svg|webp|ico)$).*)"],
 };

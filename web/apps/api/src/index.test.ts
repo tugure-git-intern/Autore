@@ -154,6 +154,8 @@ async function testApp(
     run: async () => status,
     spawn,
     bin: "autore",
+    // Tes tidak boleh menulis ke audit log sungguhan milik mesin ini.
+    audit: vi.fn(),
   }), runs, { secret: TEST_SECRET }, active);
 }
 
@@ -407,13 +409,14 @@ describe("POST /api/actions/deploy", () => {
       repository_health: { score_percent: 0, total_repos: 2, gold: 0, silver: 0, bronze: 2 },
       applications: [appJson("tes-web"), appJson("audit-uji3")],
     });
+    const audit = vi.fn();
     const app = createApp(
       async () => status,
-      hatchActions({ workspace: dir, run: async () => status, spawn, bin: "autore" }),
+      hatchActions({ workspace: dir, run: async () => status, spawn, bin: "autore", audit }),
       undefined,
       { secret: TEST_SECRET },
     );
-    return { app, dir, spawn };
+    return { app, dir, spawn, audit };
   }
 
   it("men-deploy aplikasi dari body, bukan aplikasi yang dipaku di server", async () => {
@@ -484,6 +487,31 @@ describe("POST /api/actions/deploy", () => {
 
     expect(response.status).toBe(503);
     expect((await response.json()).error).toContain("AUTORE_WORKSPACE");
+  });
+
+  it("mencatat audit dengan identitas dari cookie sesi, bukan dari body", async () => {
+    const { app, audit } = await appDuaAplikasi();
+
+    const response = await post(app, "/api/actions/deploy", { app: "tes-web" });
+
+    expect(response.status).toBe(200);
+    expect(audit).toHaveBeenCalledTimes(1);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ login: "alif", action: "deploy", target: "tes-web" }),
+    );
+  });
+
+  it("tidak mencatat audit kalau sesi ditolak (401): tak ada aksi yang dijalankan", async () => {
+    const { app, audit } = await appDuaAplikasi();
+
+    const response = await app.request("http://localhost/api/actions/deploy", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ app: "tes-web" }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(audit).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { catatAudit, type PencatatAudit } from "./audit";
 import { catatAplikasi } from "./registry";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
@@ -131,9 +132,12 @@ export function hatchActions(deps: {
   run: RunAutore;
   spawn: SpawnAction;
   bin?: string;
+  /** Jejak aksi; default menulis JSONL ke `~/.local/state/autore/audit.log`. */
+  audit?: PencatatAudit;
 }) {
   const bin = deps.bin || process.env.AUTORE_BIN || "autore";
   const workspace = deps.workspace.trim();
+  const audit = deps.audit ?? catatAudit;
   // Satu lock untuk semua aksi: dua git push/deploy bersamaan ke repo yang sama
   // bukan sesuatu yang bisa diselamatkan di sisi klien.
   let busy: ActionKind | null = null;
@@ -227,6 +231,15 @@ export function hatchActions(deps: {
       }
 
       const output = capped([res.stdout.trim(), res.stderr.trim()].filter(Boolean).join("\n"));
+      // Dicatat sebelum hasil dikembalikan, termasuk saat gagal: "siapa menekan
+      // tombol" harus tetap ada walau deploy-nya berakhir 422.
+      await audit({
+        login: author?.login ?? "",
+        email: author?.email ?? "",
+        action: kind,
+        target: id,
+        exit: res.exitCode,
+      });
       return res.exitCode === 0
         ? { ok: true, status: 200, action: kind, target: id, output }
         : failed(422, `aksi ${kind} keluar dengan kode ${res.exitCode}`, output);
@@ -293,6 +306,13 @@ export function hatchActions(deps: {
       const output = capped(
         [res.stdout.trim(), res.stderr.trim(), catatan].filter(Boolean).join("\n"),
       );
+      await audit({
+        login: author?.login ?? "",
+        email: author?.email ?? "",
+        action: "quick-start",
+        target: input.nama,
+        exit: res.exitCode,
+      });
       return res.exitCode === 0
         ? {
             ok: true,

@@ -161,7 +161,9 @@ export function createApp(
     const body = await readAppBody(c.req.raw);
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
-    return reply(c, await actions.run("scan", body.app));
+    // Sesi ikut diteruskan walau scan tidak menulis commit: audit log tetap butuh
+    // tahu siapa yang menekan tombol.
+    return reply(c, await actions.run("scan", body.app, c.get("sesi")));
   });
 
   // Aksi paling berat: repo GitHub PUBLIK + job Jenkins + push. Konfirmasi ganda ada

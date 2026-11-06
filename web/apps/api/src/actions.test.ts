@@ -9,6 +9,7 @@ import {
   type SpawnAction,
   type SpawnResult,
 } from "./actions";
+import type { PencatatAudit } from "./audit";
 
 /** Status minimal yang lolos validator fail-closed di status.ts. */
 function statusJson(apps: string[]): string {
@@ -59,15 +60,21 @@ async function workspace(apps: string[]) {
 
 function make(
   dir: string,
-  options: { spawn?: SpawnAction; listed?: string[] } = {},
+  options: { spawn?: SpawnAction; listed?: string[]; audit?: PencatatAudit } = {},
 ) {
   const spawn = options.spawn ?? vi.fn(async () => result());
+  const audit = options.audit ?? vi.fn();
   const actions = hatchActions({
     workspace: dir,
     run: async () => statusJson(options.listed ?? ["tes-web", "ui-demo"]),
     spawn,
+    audit,
   });
-  return { actions, spawn: spawn as unknown as ReturnType<typeof vi.fn> };
+  return {
+    actions,
+    spawn: spawn as unknown as ReturnType<typeof vi.fn>,
+    audit: audit as unknown as ReturnType<typeof vi.fn>,
+  };
 }
 
 describe("hatchActions", () => {
@@ -530,5 +537,51 @@ describe("registry aplikasi", () => {
     await actions.quickStart(INPUT);
 
     expect(await readFile(join(dir, "registry.tsv"), "utf8")).toBe("");
+  });
+});
+
+describe("audit aksi (jejak siapa yang menekan tombol)", () => {
+  const SESI = {
+    login: "MAliffadlan",
+    nama: "Alif Fadlan",
+    email: "alif@example.com",
+  };
+
+  it("mencatat login, aksi, target, dan exit code saat deploy jalan", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir);
+
+    await actions.run("deploy", "tes-web", SESI);
+
+    expect(audit).toHaveBeenCalledTimes(1);
+    expect(audit).toHaveBeenCalledWith({
+      login: "MAliffadlan",
+      email: "alif@example.com",
+      action: "deploy",
+      target: "tes-web",
+      exit: 0,
+    });
+  });
+
+  it("tetap mencatat walau CLI keluar gagal — deploy yang gagal juga harus ada jejaknya", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir, {
+      spawn: vi.fn(async () => result({ exitCode: 1, stderr: "ERROR: bind port bentrok" })),
+    });
+
+    const out = await actions.run("deploy", "tes-web", SESI);
+
+    expect(out).toMatchObject({ ok: false, status: 422 });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "deploy", exit: 1 }));
+  });
+
+  it("tidak mencatat apa pun kalau aplikasi tidak terdaftar (tidak ada yang dijalankan)", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir);
+
+    const out = await actions.run("deploy", "bukan-app", SESI);
+
+    expect(out).toMatchObject({ status: 404 });
+    expect(audit).not.toHaveBeenCalled();
   });
 });

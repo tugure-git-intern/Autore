@@ -279,6 +279,13 @@ const NAMA_AUTHOR_MAKS: usize = 100;
 /// Pesan commit scaffold; identitasnya yang berbeda, isinya tidak.
 const PESAN_COMMIT_SCAFFOLD: &str = "chore: setup project for Jenkins CI/CD via Autore";
 
+/// Pesan commit saat `deploy`/`Jalankan Ulang` dijalankan tanpa perubahan file.
+/// Dibedakan dari pesan scaffold supaya history aplikasi terbaca: kapan dibuat,
+/// kapan diulang, dan oleh siapa.
+pub fn pesan_commit_ulang(nama: &str) -> String {
+    format!("chore(deploy): dijalankan ulang oleh {nama}")
+}
+
 /// Nilai tidak sah dibuang ke `None` (= identitas bot), bukan digagalkan: aplikasi
 /// tetap harus jadi walau nama GitHub-nya aneh. Karakter kontrol dibuang karena
 /// nilai ini ditulis ke `.git/config`.
@@ -392,6 +399,28 @@ pub fn ensure_git_committed_and_remote(
                 "--no-verify",
                 "-m",
                 PESAN_COMMIT_SCAFFOLD,
+            ])
+            .current_dir(project_dir)
+            .status();
+    } else if let Some(a) = author {
+        // Repo sudah bersih, tapi "Jalankan Ulang" tetap harus meninggalkan jejak.
+        // Dulu cabang ini cuma `git branch -M main` + push, jadi tidak ada satu pun
+        // record siapa yang menekan tombol — Jenkins hanya bisa menampilkan commit
+        // lama. Commit kosong atas nama penekan tombol menaruh jejaknya di history.
+        // Identitas dipasang per-commit (`-c`), bukan `git config`: config lokal
+        // adalah PEMBUAT aplikasi dan tidak boleh ditimpa oleh yang mengulang.
+        let _ = Command::new("git")
+            .args([
+                "-c",
+                &format!("user.name={}", a.nama),
+                "-c",
+                &format!("user.email={}", a.email),
+                "commit",
+                "-q",
+                "--allow-empty",
+                "--no-verify",
+                "-m",
+                &pesan_commit_ulang(&a.nama),
             ])
             .current_dir(project_dir)
             .status();
@@ -639,6 +668,53 @@ mod tests {
         // Config LOKAL tidak ditulis: identitas bot dipasang per-commit (`-c`),
         // jadi config global user tidak pernah tertimpa.
         assert!(!git(&repo, &["config", "--local", "--list"]).contains("user.name"));
+    }
+
+    #[test]
+    fn rerun_repo_bersih_dengan_author_bikin_commit_kosong() {
+        let (_tmp, repo) = repo_uji("ulang-author");
+        let pembuat = validasi_author(Some("Pembuat"), Some("pembuat@example.com")).unwrap();
+        ensure_git_committed_and_remote(&repo, "", Some(&pembuat)).unwrap();
+
+        let pengulang = validasi_author(Some("Alif Fadlan"), Some("alif@example.com")).unwrap();
+        ensure_git_committed_and_remote(&repo, "", Some(&pengulang)).unwrap();
+
+        assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "2");
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%an <%ae>"]),
+            "Alif Fadlan <alif@example.com>"
+        );
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%s"]),
+            "chore(deploy): dijalankan ulang oleh Alif Fadlan"
+        );
+        // Yang menempel di folder tetap PEMBUATNYA, bukan yang terakhir klik.
+        assert_eq!(git(&repo, &["config", "--get", "user.name"]), "Pembuat");
+    }
+
+    #[test]
+    fn rerun_repo_bersih_tanpa_author_tidak_bikin_commit() {
+        let (_tmp, repo) = repo_uji("ulang-tanpa-author");
+        ensure_git_committed_and_remote(&repo, "", None).unwrap();
+        assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "1");
+
+        ensure_git_committed_and_remote(&repo, "", None).unwrap();
+
+        // CLI dipanggil langsung (tanpa sesi dashboard): perilaku lama tidak berubah.
+        assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "1");
+    }
+
+    #[test]
+    fn rerun_repo_kotor_tetap_satu_commit_scaffold() {
+        let (_tmp, repo) = repo_uji("ulang-kotor");
+        let author = validasi_author(Some("Alif Fadlan"), Some("alif@example.com")).unwrap();
+        ensure_git_committed_and_remote(&repo, "", Some(&author)).unwrap();
+
+        fs::write(repo.join("app.py"), "print('berubah')\n").unwrap();
+        ensure_git_committed_and_remote(&repo, "", Some(&author)).unwrap();
+
+        assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "2");
+        assert_eq!(git(&repo, &["log", "-1", "--format=%s"]), PESAN_COMMIT_SCAFFOLD);
     }
 
     #[test]

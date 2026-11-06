@@ -15,9 +15,10 @@ export function isActiveHref(pathname: string, href: string): boolean {
 
 /**
  * Topbar context, from the same table as the sidebar active rule. The root has
- * no section of its own, so it shows the product instead of repeating the H1.
+ * no section of its own, so the topbar there carries only the connection
+ * indicator — the product name already sits in the sidebar brand block.
  */
-export function routeTitle(pathname: string): string {
+export function routeTitle(pathname: string): string | null {
   const section = navItems.find(({ href }) => href !== "/" && isActiveHref(pathname, href));
-  return section?.label ?? "Autore";
+  return section?.label ?? null;
 }

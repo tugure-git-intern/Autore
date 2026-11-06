@@ -24,7 +24,7 @@ test("renders Autore Dashboard heading", () => {
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
 });
 
-test("the topbar carries route context and never repeats the H1 word", () => {
+test("the topbar carries the connection indicator and never repeats the H1 word", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
   render(
@@ -33,11 +33,14 @@ test("the topbar carries route context and never repeats the H1 word", () => {
     </AppShell>,
   );
 
-  const h1 = screen.getByRole("heading", { name: "Dashboard" });
-  const topbar = within(screen.getByRole("banner")).getByText("Autore", { selector: "p" });
+  const banner = within(screen.getByRole("banner"));
 
-  expect(topbar.textContent).not.toBe(h1.textContent);
-  expect(topbar.textContent).not.toContain(h1.textContent ?? "");
+  // Root route punya indikator koneksi di kiri, bukan judul: nama produk ada di
+  // sidebar dan "Dashboard" adalah H1 — topbar tidak mengulang keduanya.
+  expect(banner.getByRole("status")).toBeVisible();
+  expect(banner.queryByRole("heading")).toBeNull();
+  expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
+  expect(banner.queryByText("Autore", { selector: "p" })).toBeNull();
 });
 const STATUS = {
   system_status: "idle",

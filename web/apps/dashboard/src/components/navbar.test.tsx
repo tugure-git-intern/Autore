@@ -54,23 +54,24 @@ describe("topbar route context", () => {
     );
   }
 
-  it.each([
-    ["/", "Autore"],
-    ["/applications", "Daftar Aplikasi"],
-    ["/pipeline", "Pipeline & Log"],
-  ])("titles the 64px topbar from the route (%s)", (pathname, expected) => {
-    renderShell(pathname);
+  it.each([["/applications", "Daftar Aplikasi"], ["/pipeline", "Pipeline & Log"]])(
+    "titles the 64px topbar from the route (%s)",
+    (pathname, expected) => {
+      renderShell(pathname);
 
-    const banner = within(screen.getByRole("banner"));
-    expect(banner.getByText(expected, { selector: "p" })).toBeVisible();
-  });
+      const banner = within(screen.getByRole("banner"));
+      expect(banner.getByText(expected, { selector: "p" })).toBeVisible();
+    },
+  );
 
-  it("never repeats the dashboard heading in the topbar", () => {
+  it("shows the connection indicator instead of the static 'Autore' on the dashboard", () => {
     renderShell("/");
 
     const banner = within(screen.getByRole("banner"));
-    expect(banner.getByText("Autore", { selector: "p" })).toBeVisible();
+    // Nama produk sudah ada di sidebar; topbar tidak mengulangnya lagi.
+    expect(banner.queryByText("Autore")).toBeNull();
     expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
+    expect(banner.getByRole("status")).toBeVisible();
   });
 
   it("drops the sidebar and topbar on the auth pages", () => {
@@ -85,7 +86,7 @@ describe("connectionStatus", () => {
   it("is green with the exact ready copy only for fresh, active Jenkins", () => {
     expect(connectionStatus(status("active"), false, false)).toEqual({
       tone: "green",
-      label: "Sistem Siap",
+      label: "Terhubung",
     });
   });
 
@@ -103,14 +104,13 @@ describe("connectionStatus", () => {
 });
 
 describe("Navbar", () => {
-  function renderNavbar(user: SessionUser) {
+  function renderNavbar(
+    user: SessionUser,
+    connection: Parameters<typeof Navbar>[0]["connection"] = { tone: "green", label: "Terhubung" },
+    title = "Dashboard",
+  ) {
     const hasil = render(
-      <Navbar
-        title="Dashboard"
-        connection={{ tone: "green", label: "Sistem Siap" }}
-        onSync={() => {}}
-        user={user}
-      />,
+      <Navbar title={title} connection={connection} onSync={() => {}} user={user} />,
     );
     // Isi <details> yang tertutup dianggap tidak terlihat oleh jsdom.
     const details = hasil.container.querySelector("details");
@@ -123,10 +123,64 @@ describe("Navbar", () => {
 
     expect(screen.queryByRole("heading")).toBeNull();
     expect(screen.getByText("Dashboard", { selector: "p" })).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("Sistem Siap");
+    expect(screen.getByRole("status")).toHaveTextContent("Terhubung");
     expect(screen.getByRole("button", { name: "Sync" })).toBeVisible();
     expect(screen.getByAltText("tugure-git-intern")).toBeVisible();
     expect(screen.getByRole("button", { name: /keluar/i })).toBeVisible();
+  });
+
+  it("memakai titik hijau berkedip berukuran kecil, gaya Snorlx", () => {
+    renderNavbar(USER);
+
+    const titik = screen.getByTestId("connection-dot");
+    expect(titik.className).toContain("bg-green-500");
+    expect(titik.className).toContain("rounded-full");
+    expect(titik.className).toContain("h-2");
+    expect(titik.className).toContain("w-2");
+    // Berkedip hanya saat koneksi benar-benar sehat.
+    expect(titik.className).toContain("animate-pulse");
+  });
+
+  it("berhenti berkedip kalau koneksi tidak sehat, warnanya ikut turun", () => {
+    renderNavbar(TAMU, { tone: "neutral", label: "Memuat status" });
+    let titik = screen.getByTestId("connection-dot");
+    expect(titik.className).toContain("bg-gray-400");
+    expect(titik.className).not.toContain("animate-pulse");
+    expect(screen.getByRole("status")).toHaveTextContent("Memuat status");
+
+    renderNavbar(TAMU, { tone: "red", label: "Koneksi bermasalah" }, "");
+    titik = screen.getAllByTestId("connection-dot")[1];
+    expect(titik.className).toContain("bg-red-500");
+    expect(titik.className).not.toContain("animate-pulse");
+  });
+
+  it("menaruh indikator di kiri, sejajar vertikal, sebelum judul halaman", () => {
+    const { container } = renderNavbar(USER, { tone: "green", label: "Terhubung" }, "Pipeline & Log");
+
+    const banner = within(screen.getByRole("banner"));
+    const indikator = banner.getByRole("status");
+    const judul = banner.getByText("Pipeline & Log", { selector: "p" });
+
+    // Satu indikator saja — tidak ada kembaran di pojok kanan.
+    expect(banner.getAllByRole("status")).toHaveLength(1);
+    // Indikator mendahului judul di dalam grup kiri.
+    expect(indikator.compareDocumentPosition(judul)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    const grupKiri = indikator.parentElement as HTMLElement;
+    expect(grupKiri.className).toContain("items-center");
+    const pembungkusIndikator = indikator as HTMLElement;
+    expect(pembungkusIndikator.className).toContain("flex");
+    expect(pembungkusIndikator.className).toContain("items-center");
+    expect(pembungkusIndikator.className).toContain("gap-2");
+    expect(container.querySelector("header")?.className).toContain("bg-white");
+  });
+
+  it("tanpa judul halaman, indikator tetap tampil sendiri", () => {
+    renderNavbar(USER, { tone: "green", label: "Terhubung" }, "");
+
+    const banner = within(screen.getByRole("banner"));
+    expect(banner.getByRole("status")).toHaveTextContent("Terhubung");
+    expect(banner.queryByText("", { selector: "p" })).toBeNull();
   });
 
   it("tidak menampilkan menu pengguna saat belum ada sesi", () => {
@@ -139,7 +193,7 @@ describe("Navbar", () => {
   it("berputar dan terkunci selama sync, kembali normal setelah selesai", () => {
     const props = {
       title: "Dashboard",
-      connection: { tone: "green" as const, label: "Sistem Siap" },
+      connection: { tone: "green" as const, label: "Terhubung" },
       onSync: () => {},
       user: USER,
     };

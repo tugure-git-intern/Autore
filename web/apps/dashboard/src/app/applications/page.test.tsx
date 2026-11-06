@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/applications",
@@ -69,6 +69,18 @@ function mockFetch(payload: unknown) {
   });
   vi.stubGlobal("fetch", mock);
   return mock;
+}
+
+/** Layar HP: satu-satunya cara halaman tahu lebarnya (jsdom tidak punya layout). */
+function pasangLayarSempit() {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
 }
 
 const renderPage = () =>
@@ -314,4 +326,67 @@ test("tidak mengarang 'Dibuat oleh' saat snapshot lama belum punya author", asyn
 
   expect(await screen.findByText("Portal Klaim")).toBeVisible();
   expect(screen.queryByText(/Dibuat oleh/)).toBeNull();
+});
+
+describe("ApplicationsPage di layar HP", () => {
+  test("mengganti tabel dengan kartu: satu kartu per aplikasi, tanpa tabel", async () => {
+    pasangLayarSempit();
+    mockFetch(TWO_APPS);
+
+    renderPage();
+
+    expect(await screen.findByText("Portal Klaim")).toBeVisible();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("columnheader")).toBeNull();
+
+    const kartu = screen.getAllByTestId("kartu-aplikasi");
+    expect(kartu).toHaveLength(2);
+
+    const kartuApi = kartu.find((k) => k.textContent?.includes("API Pegawai"))!;
+    expect(kartuApi.textContent).toContain("2 temuan");
+    expect(within(kartuApi).getByRole("alert")).toHaveTextContent("Gagal");
+    expect(kartuApi.textContent).toContain("Terakhir update");
+  });
+
+  test("kartu membawa aksi yang sama dengan tabel, targetnya 44px", async () => {
+    pasangLayarSempit();
+    const fetchMock = mockFetch(TWO_APPS);
+
+    renderPage();
+
+    expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+    const tautan = screen.getAllByRole("link", { name: "Detail" });
+    expect(tautan.map((t) => t.getAttribute("href"))).toEqual([
+      "/pipeline?app=portal-klaim",
+      "/pipeline?app=api-pegawai",
+    ]);
+    for (const t of tautan) expect(t.className).toContain("min-h-11");
+
+    const kartuApi = screen.getAllByTestId("kartu-aplikasi").find((k) => k.textContent?.includes("API Pegawai"))!;
+    fireEvent.click(within(kartuApi).getByRole("button", { name: "Scan Keamanan" }));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/actions/scan"),
+    );
+    const call = fetchMock.mock.calls.find(([input]) => String(input) === "/api/actions/scan") as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(String(call[1].body))).toEqual({ app: "api-pegawai" });
+  });
+
+  test("penyaring tetap menyaring daftar kartu", async () => {
+    pasangLayarSempit();
+    mockFetch(TIGA_APPS);
+
+    renderPage();
+
+    expect(await screen.findByText("Portal Klaim")).toBeVisible();
+
+    isiFilter("Cari aplikasi", "demo");
+
+    expect(screen.getAllByTestId("kartu-aplikasi")).toHaveLength(1);
+    expect(screen.getByText("Demo Lama")).toBeVisible();
+  });
 });

@@ -15,6 +15,7 @@ import { StatusBadge, type AppStatus } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLayarSempit } from "@/components/use-layar-sempit";
 
 const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
 
@@ -33,10 +34,35 @@ function findings(status: AppStatus, securityIssues: number): string {
   return `${securityIssues} temuan`;
 }
 
+/**
+ * Tiga aksi yang sama dipakai tabel (desktop) dan kartu (HP). Di kartu
+ * target sentuhnya dilebarkan ke 44px: tautan teks 14px terlalu kecil untuk
+ * jempol.
+ */
+function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void; sentuh?: boolean }) {
+  const kelasTautan = sentuh
+    ? "inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline"
+    : "text-blue-600 hover:underline";
+
+  return (
+    <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex items-center gap-3"}>
+      <a href={`/pipeline?app=${encodeURIComponent(app)}`} className={kelasTautan}>
+        Detail
+      </a>
+      <a href={`/applications/sbom?app=${encodeURIComponent(app)}`} className={kelasTautan}>
+        Lihat SBOM
+      </a>
+      <ActionButton label="Scan Keamanan" action="scan" app={app} onDone={onDone} />
+    </div>
+  );
+}
+
 export default function ApplicationsPage() {
   const { state, loading, failed, reload } = useStatus();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  // Empat kolom + tiga aksi butuh 727px; di HP barisnya jadi kartu.
+  const sempit = useLayarSempit();
 
   if (loading && !state) {
     return (
@@ -100,6 +126,31 @@ export default function ApplicationsPage() {
           <EmptyApplications />
         ) : tersaring.length === 0 ? (
           <p className="text-sm text-gray-500">Tidak ada aplikasi yang cocok</p>
+        ) : sempit ? (
+          <Card className="divide-y divide-gray-100">
+            {tersaring.map((app) => {
+              const badge = toBadge(app.status);
+              return (
+                <div key={app.id} data-testid="kartu-aplikasi" className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{dash(app.name)}</p>
+                      <p className="font-mono text-xs text-muted">{app.id}</p>
+                      {app.author ? (
+                        <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
+                      ) : null}
+                    </div>
+                    <StatusBadge status={badge} />
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
+                    {findings(badge, app.security_issues)} · Terakhir update{" "}
+                    {formatBuild(app.last_build)}
+                  </p>
+                  <AksiAplikasi app={app.id} onDone={reload} sentuh />
+                </div>
+              );
+            })}
+          </Card>
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
@@ -140,26 +191,7 @@ export default function ApplicationsPage() {
                         </td>
                         <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <a
-                              href={`/pipeline?app=${encodeURIComponent(app.id)}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Detail
-                            </a>
-                            <a
-                              href={`/applications/sbom?app=${encodeURIComponent(app.id)}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Lihat SBOM
-                            </a>
-                            <ActionButton
-                              label="Scan Keamanan"
-                              action="scan"
-                              app={app.id}
-                              onDone={reload}
-                            />
-                          </div>
+                          <AksiAplikasi app={app.id} onDone={reload} />
                         </td>
                       </tr>
                     );

@@ -78,7 +78,10 @@ export default function SecurityPage() {
         </p>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {/* Anak grid default-nya min-width:auto: min-content-nya yang menentukan
+          lebar track. sha256 di kartu kanan tidak punya spasi, jadi tanpa
+          min-w-0 grid melebar ~660px dan halaman menggeser di layar HP. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <ChartCard title="Skor Pipeline" subtitle="Lima sumbu terukur">
           <QualityRadar score={skor} />
         </ChartCard>
@@ -88,7 +91,7 @@ export default function SecurityPage() {
           <p className="mt-4 font-mono text-2xl font-semibold text-ink">
             {gerbang.gates_passed ?? 0}/{gerbang.gates_total ?? 0}
           </p>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 break-words text-sm text-muted">
             {dash(gerbang.security_summary) === "—"
               ? "Belum ada ringkasan keamanan yang tercatat."
               : gerbang.security_summary}

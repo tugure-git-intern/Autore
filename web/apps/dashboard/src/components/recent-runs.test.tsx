@@ -57,6 +57,30 @@ describe("RecentRuns", () => {
     expect(screen.getByText("data terakhir")).toBeInTheDocument();
   });
 
+  it("menyembunyikan kolom sekunder di layar HP: sisa Build, Status, Waktu", () => {
+    render(<RecentRuns runs={[run(9)]} />);
+
+    const tajuk = screen.getAllByRole("columnheader");
+    const kelasTajuk = (nama: string) => tajuk.find((th) => th.textContent === nama)!.className;
+
+    // Enam kolom butuh 745px; tiga kolom muat di 390px tanpa menggeser layar.
+    for (const nama of ["Commit", "Penulis", "Durasi"]) {
+      expect(kelasTajuk(nama)).toContain("hidden");
+      expect(kelasTajuk(nama)).toContain("sm:table-cell");
+    }
+    for (const nama of ["Build", "Status", "Waktu"]) {
+      expect(kelasTajuk(nama)).not.toContain("hidden");
+    }
+
+    // Sel harus patuh pada kolomnya, kalau tidak kolomnya meleset dari tajuknya.
+    const sel = within(rows()[0]).getAllByRole("cell");
+    expect(sel[1].className).toContain("sm:table-cell");
+    expect(sel[2].className).toContain("sm:table-cell");
+    expect(sel[4].className).toContain("sm:table-cell");
+    expect(sel[3].className).not.toContain("hidden");
+    expect(sel[5].className).not.toContain("hidden");
+  });
+
   it("empty state saat tidak ada run", () => {
     render(<RecentRuns runs={[]} />);
 

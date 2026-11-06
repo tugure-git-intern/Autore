@@ -6,7 +6,23 @@ import { ChartCard } from "./ui/chart-card";
 
 const MAKS_BARIS = 5;
 
-const HEADERS = ["Build", "Commit", "Penulis", "Status", "Durasi", "Waktu"];
+const KOLOM = ["Build", "Commit", "Penulis", "Status", "Durasi", "Waktu"] as const;
+
+/**
+ * Kolom yang tetap tampil di HP. Enam kolom butuh 745px sedangkan layar HP
+ * 390px, jadi Commit/Penulis/Durasi menyusul di >= sm (640px) dan sisanya
+ * (Build, Status, Waktu) sudah menjawab "apa yang terjadi, kapan".
+ */
+const TAMPIL_HP: Record<(typeof KOLOM)[number], boolean> = {
+  Build: true,
+  Commit: false,
+  Penulis: false,
+  Status: true,
+  Durasi: false,
+  Waktu: true,
+};
+
+const sembunyi = (nama: (typeof KOLOM)[number]) => (TAMPIL_HP[nama] ? "" : "hidden sm:table-cell");
 
 /** Lima run terakhir. Waktu relatif dihitung saat render — bukan disimpan di payload. */
 export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]; stale?: boolean }) {
@@ -27,8 +43,8 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                {HEADERS.map((judul) => (
-                  <th key={judul} scope="col" className="px-5 py-2 font-medium">
+                {KOLOM.map((judul) => (
+                  <th key={judul} scope="col" className={`px-5 py-2 font-medium ${sembunyi(judul)}`}>
                     {judul}
                   </th>
                 ))}
@@ -44,7 +60,7 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
                   <td className="px-5 py-3 font-medium text-gray-900">
                     {run.app} #{run.number}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className={`px-5 py-3 ${sembunyi("Commit")}`}>
                     <a
                       href={run.url}
                       target="_blank"
@@ -54,11 +70,15 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
                       {shortSha(run.commit_sha)}
                     </a>
                   </td>
-                  <td className="px-5 py-3 text-gray-600">{dash(run.author)}</td>
+                  <td className={`px-5 py-3 text-gray-600 ${sembunyi("Penulis")}`}>
+                    {dash(run.author)}
+                  </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={run.status as AppStatus} />
                   </td>
-                  <td className="px-5 py-3 text-gray-600">{formatDuration(run.duration_ms)}</td>
+                  <td className={`px-5 py-3 text-gray-600 ${sembunyi("Durasi")}`}>
+                    {formatDuration(run.duration_ms)}
+                  </td>
                   <td className="px-5 py-3 text-gray-600">
                     <time dateTime={run.started_at}>{relativeTime(run.started_at)}</time>
                   </td>

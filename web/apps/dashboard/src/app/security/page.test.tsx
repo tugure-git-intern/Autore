@@ -141,3 +141,21 @@ test("tanpa gerbang dan tanpa run, radar kosong bukan angka karangan", async () 
   expect(screen.getByText("Tidak ada temuan keamanan tercatat")).toBeVisible();
   expect(screen.queryByText("0/0")?.textContent).not.toContain("NaN");
 });
+
+test("kartu grid boleh menyusut di layar HP, dan hash panjang boleh membungkus", async () => {
+  mockApi(async () => ok(RUNS));
+
+  const { container } = renderPage();
+
+  expect(await screen.findByText("3/5")).toBeVisible();
+
+  // Anak grid default-nya min-width:auto, jadi min-content grid-nya yang jadi
+  // lebar track — 660px karena sha256 di kartu sebelah (halaman lalu menggeser
+  // 286px di HP). min-w-0 memaksa track mengikuti lebar layar.
+  const grid = container.querySelector("div.mt-4.grid");
+  expect(grid?.className).toContain("[&>*]:min-w-0");
+
+  // Baris sha256 tanpa spasi: tanpa break-words ia melebarkan kartu.
+  const ringkasan = screen.getByText("Gitleaks: 2 temuan.");
+  expect(ringkasan.className).toContain("break-words");
+});

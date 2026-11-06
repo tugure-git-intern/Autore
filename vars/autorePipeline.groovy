@@ -156,6 +156,7 @@ def call(Map config = [:]) {
                         if [ -f "cli/Cargo.toml" ]; then
                           /usr/local/lib/autore-ci/build-musl-release.sh
                         else
+                          echo 'Dilewati: bukan project Rust — tidak ada binary musl yang perlu dikompilasi (musl hanya untuk repo Autore CLI).'
                           mkdir -p dist
                         fi
                     """

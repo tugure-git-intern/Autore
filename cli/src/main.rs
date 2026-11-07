@@ -1,10 +1,12 @@
 mod active;
+mod admin;
 mod doctor;
 mod external;
 mod progress;
 mod github;
 mod hooks;
 mod jenkins;
+mod launcher;
 mod scanner;
 mod serve;
 mod status;
@@ -330,7 +332,7 @@ fn ui_ask_secret(label: &str) -> Option<String> {
 }
 
 /// Pilih satu dari `options`; hasil = index. `None` = batal.
-fn ui_ask_choose(label: &str, options: &[String]) -> Option<usize> {
+pub(crate) fn ui_ask_choose(label: &str, options: &[String]) -> Option<usize> {
     if tui_hidup() {
         tui::ask_choice(label, options)
     } else {
@@ -602,6 +604,7 @@ fn ensure_jenkins_config(
 #[derive(Subcommand)]
 enum Commands {
     /// Generate Dockerfile & Jenkinsfile standar kantor untuk aplikasi baru
+    #[command(visible_alias = "in")]
     Init {
         /// Nama aplikasi (jika dikosongkan, akan muncul prompt interaktif)
         #[arg(long)]
@@ -678,12 +681,34 @@ enum Commands {
     },
 
     /// Periksa kesehatan sistem Runner, Docker, Java, dan Jenkins
+    #[command(visible_alias = "doc")]
     Doctor,
 
     /// Update Autore ke versi rilis stabil terbaru di GitHub Releases
     Update,
 
+    /// Nyalakan layanan dashboard (autore-web-api + autore-web-dashboard)
+    Start,
+
+    /// Hentikan layanan dashboard
+    Stop,
+
+    /// Nyalakan ulang layanan dashboard
+    Restart,
+
+    /// Ikuti log layanan dashboard secara real-time (journalctl -f)
+    Logs {
+        /// Cetak log terakhir saja, tanpa mengikuti (untuk skrip/tes)
+        #[arg(long)]
+        no_follow: bool,
+
+        /// Jumlah baris terakhir yang ditampilkan sebelum mengikuti
+        #[arg(long, default_value_t = 50)]
+        lines: usize,
+    },
+
     /// Daftarkan project ke Jenkins CI/CD & langsung jalankan build otomatis
+    #[command(visible_alias = "dep")]
     Deploy {
         /// Direktori project yang akan dihubungkan ke Jenkins
         #[arg(long, default_value = ".")]
@@ -708,6 +733,7 @@ enum Commands {
     },
 
     /// Alur 1-klik: buat file pipeline, buat repo GitHub, push, daftar ke Jenkins, trigger build
+    #[command(visible_alias = "qs")]
     QuickStart {
         /// Direktori induk tempat project baru dibuat
         #[arg(long, default_value = ".")]
@@ -781,6 +807,7 @@ enum Commands {
     },
 
     /// Status sistem & pipeline terakhir dari simpanan pipeline (dipakai dashboard web)
+    #[command(visible_alias = "st")]
     Status {
         /// Cetak satu objek JSON kanonik sesuai kontrak dashboard
         #[arg(long)]
@@ -870,6 +897,21 @@ fn main() {
         return;
     }
 
+    // Tanpa subcommand: menu ramah (cli/src/launcher.rs). Menu hanya ditampilkan di terminal;
+    // stdout dipipe menghasilkan panduan singkat. `AUTORE_MENU_PILIHAN` melewati prompt (khusus tes).
+    match launcher::menu_awal() {
+        1 => process::exit(launcher::jalankan_web(
+            &launcher::SistemNyata,
+            &mut std::io::stdout(),
+        )),
+        2 => {}
+        4 => process::exit(admin::menu(
+            &launcher::SistemNyata,
+            &mut std::io::stdout(),
+        )),
+        _ => return,
+    }
+
     // Sudah berdiri di dalam folder project (.git/Dockerfile/Jenkinsfile)? Pakai sebagai project aktif,
     // jadi status bar tidak lagi bilang "(belum ada project)".
     let mut active_project: Option<PathBuf> = std::env::current_dir()
@@ -922,12 +964,24 @@ fn text_menu_loop(active_project: &mut Option<PathBuf>, last_note: &mut Option<S
     }
 }
 
+/// Handler subcommand admin: satu tempat supaya keempat cabang tidak menduplikasi argv.
+fn perintah_admin(aksi: admin::Aksi) -> i32 {
+    admin::jalankan(&launcher::SistemNyata, aksi, &mut std::io::stdout())
+}
+
 fn execute_command(
     command: Commands,
     interactive: bool,
     active_project: &mut Option<PathBuf>,
 ) -> i32 {
     match command {
+        Commands::Start => perintah_admin(admin::Aksi::Start),
+        Commands::Stop => perintah_admin(admin::Aksi::Stop),
+        Commands::Restart => perintah_admin(admin::Aksi::Restart),
+        Commands::Logs { no_follow, lines } => perintah_admin(admin::Aksi::Logs {
+            follow: !no_follow,
+            lines,
+        }),
         Commands::Init {
             app_name,
             stack,
@@ -2398,5 +2452,47 @@ mod tests {
             .clone();
         let bantuan = status.render_long_help().to_string();
         assert!(bantuan.contains("--json"), "{bantuan}");
+    }
+
+    #[test]
+    fn alias_singkat_terdaftar() {
+        use clap::CommandFactory;
+        let perintah = Cli::command();
+        for (nama, alias) in [
+            ("status", "st"),
+            ("deploy", "dep"),
+            ("quick-start", "qs"),
+            ("doctor", "doc"),
+            ("init", "in"),
+        ] {
+            let sub = perintah
+                .get_subcommands()
+                .find(|c| c.get_name() == nama)
+                .unwrap_or_else(|| panic!("subcommand {nama} ada"));
+            assert!(
+                sub.get_all_aliases().any(|a| a == alias),
+                "{nama} harus punya alias {alias}"
+            );
+        }
+    }
+
+    #[test]
+    fn subcommand_admin_terdaftar() {
+        use clap::CommandFactory;
+        let perintah = Cli::command();
+        for nama in ["start", "stop", "restart", "logs"] {
+            assert!(
+                perintah.get_subcommands().any(|c| c.get_name() == nama),
+                "subcommand {nama} belum ada"
+            );
+        }
+        let mut logs = perintah
+            .get_subcommands()
+            .find(|c| c.get_name() == "logs")
+            .expect("logs ada")
+            .clone();
+        let bantuan = logs.render_long_help().to_string();
+        assert!(bantuan.contains("--no-follow"), "{bantuan}");
+        assert!(bantuan.contains("--lines"), "{bantuan}");
     }
 }

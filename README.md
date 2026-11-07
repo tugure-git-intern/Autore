@@ -1,286 +1,244 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Autore" width="100%">
+# Autore - Enterprise DevSecOps CI/CD Platform
+
+**Autore** adalah platform CI/CD terstandarisasi untuk PT Tugu Reasuransi Indonesia. Arsitekturnya
+mengikuti satu prinsip: **CLI as the Brain, Web as the Interface** — seluruh logika (scaffolding,
+pemindaian keamanan, pendaftaran Jenkins, deploy, pencatatan status) hidup di satu binary Rust
+(`autore`); dashboard web adalah lapisan tampilan yang memanggil binary itu dan tidak pernah
+menduplikasi logikanya.
+
+<p>
+  <img src="https://img.shields.io/badge/Language-Rust-orange?style=flat-square&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Security-Fail--Closed-red?style=flat-square&logo=shield" alt="Security">
+  <img src="https://img.shields.io/badge/CI%2FCD-Jenkins%20Shared%20Library-blue?style=flat-square&logo=jenkins" alt="Jenkins">
+  <img src="https://img.shields.io/badge/Quality-SonarQube-4B9CD3?style=flat-square&logo=sonarqube" alt="SonarQube">
+  <img src="https://img.shields.io/badge/Registry-Nexus%20ALLOW__ONCE-blueviolet?style=flat-square&logo=sonatype" alt="Nexus">
 </p>
 
-# Autore 🛡️
-<p align="center">
-  <a href="#quick-start">Quick Start</a> • <a href="#arsitektur-utama">Arsitektur Utama</a> • <a href="#cli-reference-autore">CLI Reference</a> • <a href="#enterprise-cicd-pipeline-10-tahap-fail-closed">CI/CD Pipeline</a> • <a href="#lingkungan-sandbox--testing">Sandbox Guide</a>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Language-Rust-orange?style=for-the-badge&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/Security-Fail--Closed-red?style=for-the-badge&logo=shield" alt="Security">
-  <img src="https://img.shields.io/badge/CI%2FCD-Jenkins%20Shared%20Library-blue?style=for-the-badge&logo=jenkins" alt="Jenkins">
-  <img src="https://img.shields.io/badge/Quality-SonarQube-4B9CD3?style=for-the-badge&logo=sonarqube" alt="SonarQube">
-  <img src="https://img.shields.io/badge/Registry-Nexus%20ALLOW__ONCE-blueviolet?style=for-the-badge&logo=sonatype" alt="Nexus">
-  <img src="https://img.shields.io/badge/Scanners-Trivy%20%2B%20Gitleaks-brightgreen?style=for-the-badge" alt="Scanners">
-</p>
+---
 
-**Platform CI/CD terstandarisasi dan CLI developer tool berbasis Rust berkinerja tinggi untuk PT Tugu Reasuransi Indonesia.** Autore mengintegrasikan alur kerja lokal developer, pencegahan keamanan *fail-closed*, pengerasan container, verifikasi SonarQube SAST, penyimpanan artifact immutable Nexus, serta pelaporan audit deterministik ke Telegram ke dalam satu ekosistem CI/CD enterprise.
+## Arsitektur
 
-<table>
-<tr><td><b>Fail-Closed Security Gates</b></td><td>Pertahanan berlapis pra-build dan pasca-build: Static Byte Guard native, deteksi kebocoran kredensial Gitleaks, serta pemindaian CVE filesystem & image via Trivy (container terisolasi, digest ter-pin).</td></tr>
-<tr><td><b>Native Rust CLI Engine (<code>autore</code>)</b></td><td>Binary hasil kompilasi Rust mandiri tanpa dependensi runtime eksternal. Eksekusi sub-detik untuk penegakan git pre-commit, templating proyek, dan diagnostik runner.</td></tr>
-<tr><td><b>Admin-Controlled CI/CD Orchestrator</b></td><td>Jenkins Trusted Shared Library otoritatif dengan 10 tahapan fail-closed, immutabilitas git commit SHA 40-hex penuh, dan SonarQube Quality Gate dengan verifikasi metrik bahasa Rust.</td></tr>
-<tr><td><b>Immutable Registry & Artifact Store</b></td><td>Penyimpanan container Docker & binary release di Sonatype Nexus OSS dengan kebijakan <code>ALLOW_ONCE</code> (Disable redeploy), pembuatan SBOM CycloneDX, dan verifikasi digest <code>HEAD</code> terotentikasi.</td></tr>
-<tr><td><b>Automated Real-Time Audit Trail</b></td><td>Notifikasi audit deterministik ke Bot Telegram untuk setiap event build (baik SUKSES maupun DITOLAK), mencatat commit SHA, pembuat perubahan, branch, build ID, dan detail pelanggaran keamanan.</td></tr>
-</table>
+```mermaid
+flowchart LR
+    U["Pengguna (browser, laptop/kantor/HP)"] -->|"http://<tailnet>:9120"| D["Dashboard — Next.js<br/>(Auth.js GitHub OAuth + whitelist)"]
+    D -->|"proxy /api/* ke 127.0.0.1:9121"| A["API — Hono (loopback)"]
+    A -->|"spawn subprocess, stdout JSON"| C["Core — binary Rust 'autore'"]
+    C --> J["Jenkins (job pipeline)"]
+    C --> N["Nexus (image + rilis)"]
+    J --> S["SonarQube (Quality Gate)"]
+    C --> WS["Workspace: ~/autore-workspace<br/>registry.tsv + dashboard-status.json"]
+    A --> AU["Audit: ~/.local/state/autore/audit.log"]
+```
+
+| Lapisan | Teknologi | Peran |
+|---|---|---|
+| Frontend | Next.js (App Router), React, Tailwind, lucide-react | Tampilan operasional: status pipeline, aplikasi, SBOM, skor, aksi. Terang saja (light-only) dan responsif sampai lebar ponsel. |
+| API | Hono (Node.js), Auth.js v5 (JWT) | Sesi GitHub, whitelist, validasi body, pemetaan aksi ke argv CLI, jejak audit. Bind ke `127.0.0.1:9121` — tidak pernah terekspos ke LAN. |
+| Core | Rust (`cli/`), tanpa dependensi runtime | Satu-satunya pemilik logika: `init`, `deploy`, `quick-start`, `scan`, `scan-image`, `sbom`, `status`, admin layanan. Semua perintah web dijalankan sebagai subprocess binary ini. |
+| Integrasi | Jenkins Trusted Shared Library, Nexus OSS, SonarQube, Trivy, Gitleaks | Gerbang keamanan, registry immutable, kualitas kode, penyimpanan artefak. |
+| State | `~/.config/autore/` (kredensial), `~/.local/state/autore/` (audit + PID), `~/autore-workspace/` (`registry.tsv`, `dashboard-status.json`) | Semua keadaan operasional ada di berkas, bukan di memori proses — dashboard bisa direstart tanpa kehilangan data. |
+
+Prinsip yang tidak dilanggar:
+
+- **Dashboard tidak punya logika bisnis.** Setiap aksi tombol menjadi pemanggilan subcommand `autore`.
+- **API hanya di loopback.** Satu-satunya pintu dari jaringan adalah dashboard (`0.0.0.0:9120`), yang memverifikasi sesi GitHub lebih dulu.
+- **Fail-closed.** Kalau sebuah scanner tidak benar-benar berjalan, pipeline gagal — bukan dilewati diam-diam.
+
+---
+
+## Fitur Utama
+
+### Web Dashboard
+Halaman: `/` (ringkasan pipeline terakhir, progres tahap, aksi), `/pipeline` (riwayat build 7 hari + filter), `/applications` (daftar aplikasi dari workspace), `/applications/sbom` (komponen SBOM CycloneDX per aplikasi + filter), `/security` (Security Score), `/login`, `/403`.
+
+- **Light mode saja** — token warna operasional, tanpa alternatif gelap (`globals.css`: *light-only operational tokens, no dark alternatives exist by design*).
+- **Responsif/mobile** — grid turun ke satu kolom (`grid-cols-1`) dan tabel lebar bisa digeser mendatar (`overflow-x-auto`) alih-alih memotong isi; navigasi utama tetap utuh di lebar ponsel.
+- **Keadaan jujur** — data basi ditandai (`Gagal terhubung ke Jenkins. Menampilkan data terakhir.`), skeleton saat memuat, status `unknown` kalau data tidak ada.
+
+### GitHub OAuth + Whitelist
+Login GitHub via Auth.js (`GITHUB_ID`/`GITHUB_SECRET`/`NEXTAUTH_SECRET` di `web/.env`), lalu login diperiksa terhadap whitelist:
+
+- Sumber kebenaran: `web/allowed-users.json`.
+- Penimpa oleh operator: `AUTORE_ALLOWED_USERS` (dipisah koma, env tidak kosong menang).
+- Perbandingan case-insensitive (`Alif` = `alif`); login kosong selalu ditolak.
+- Login sah tapi tidak terdaftar diarahkan ke `/403` (halaman tolak dengan tombol keluar), bukan pesan error mentah.
+- Halaman baca (`/api/status`, `/api/runs`, `/api/sbom/*`, `/api/active`) terbuka untuk sesi sah; aksi tulis (`/api/actions/*`) wajib sesi beridentitas.
+
+### SBOM Viewer & Security Score
+- **SBOM Viewer** — `/applications/sbom` menampilkan daftar komponen (nama, versi, tipe, lisensi) hasil `sbom.cdx.json` dari build, dengan filter pencarian; malformed SBOM tampil sebagai keadaan kosong yang jelas, bukan crash.
+- **Security Score** — radar 5 sumbu di `/security`, semuanya dihitung dari data yang benar-benar ada (`lib/score.ts`): `security` (gerbang lolos dari total), `reliability` (build sukses dari total build), `speed` (median durasi build sukses terhadap target 2 menit), `freshness` (umur build terakhir, ≤24 jam), `coverage` (aplikasi yang pernah dibangun dari seluruh aplikasi). Sumbu tanpa data bernilai **null** dan tidak digambar — radar yang lebih kecil lebih jujur daripada sumbu bernilai nol karangan.
+
+### Audit Trail & Identity Propagation
+- Setiap aksi tulis dari dashboard dicatat satu baris JSONL ke `~/.local/state/autore/audit.log` (`AUTORE_AUDIT_LOG` bisa menimpanya): `ts`, `login`, `email`, `action`, `target`, `exit`. Baris ringkas juga masuk stdout sehingga ikut terbaca `autore logs`.
+- **Identitas menempel ke Git**: nama dan email dari sesi GitHub diteruskan ke CLI sebagai author commit di repo aplikasi (`user.name`/`user.email`), jadi `git log` menceritakan siapa menekan tombol — bukan akun bot. Tanpa sesi, CLI memakai identitas bawaan `Autore CLI <autore@tugu-re.com>`.
+- Audit adalah efek samping, bukan prasyarat: kegagalan menulis log tidak menggagalkan deploy, hanya muncul di journal.
+
+### Multi-Language Support
+`autore init` / `quick-start` menghasilkan `Dockerfile` + `Jenkinsfile` + `.dockerignore` untuk empat stack: **Python** (`python:3.12-slim`, non-root), **Node.js** (`node:20-alpine`, `USER node`), **Java** (`maven:3.9-eclipse-temurin-21` build → `eclipse-temurin:21-jre-jammy` runtime), **Go** (build statis). Setiap template punya tahap test di dalam image build dan entrypoint yang jelas gagalnya kalau artefak tidak ditemukan. `--deploy-port` memisahkan port host antar-project supaya tidak bentrok.
+
+### Friendly Launcher
+`autore` tanpa argumen tidak lagi langsung masuk TUI. Muncul menu tugas:
+
+```text
+Pilih tugas:
+  [1] Web Dashboard   - nyalakan layanan, cek kesehatan, cetak URL
+  [2] TUI Legacy      - antarmuka layar penuh lama (panel menu + command palette)
+  [3] Keluar
+  [4] Admin           - Start / Stop / Restart / Logs
+```
+
+- Bukan TTY (output dipipe) → mencetak panduan singkat lalu keluar, tidak menggantung.
+- Penjaga user: perintah layanan hanya jalan untuk user pemilik sesi systemd; user lain ditolak dengan pesan jelas sebelum `systemctl` dipanggil.
+
+### Admin Commands
+Wrapper systemd supaya tim IT tidak mengetik perintah panjang:
+
+| Perintah | Efek |
+|---|---|
+| `autore start` \| `stop` \| `restart` | Satu panggilan `systemctl --user start/stop/restart autore-web-api autore-web-dashboard`, lalu mencetak status kedua unit. |
+| `autore logs` | `journalctl --user -u autore-web-api -u autore-web-dashboard -f`. `--no-follow` mencetak 50 baris terakhir; `--lines N` mengubah jumlahnya. |
+| `autore` → `[4]` | Sub-menu Admin berputar sampai `[5] Kembali` — start, cek log, restart tanpa keluar-masuk menu. |
+
+Kalau `systemctl` tidak ada (macOS/container), Autore otomatis memakai jalur cadangan berbasis berkas PID (`~/.local/state/autore/api.pid`, `dashboard.pid`) dan tetap bisa `start`/`stop`.
 
 ---
 
 ## Quick Start
 
-### 1. Instalasi Cepat 1-Baris (Copy & Paste)
+### 1. Pasang CLI
 
-**Untuk Linux x86_64 / WSL (Terminal Bash):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.sh | bash
+# Windows PowerShell:
+# irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
 ```
 
-> Prasyarat: `autore scan` (mode penuh) butuh Docker daemon; `--no-docker` hanya static guard.
-
-**Untuk Windows (PowerShell):**
-```powershell
-irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
-```
-
-Setelah terpasang, cukup ketik **`autore`** dari folder mana saja untuk membuka TUI layar penuh:
-
-```text
-                    █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ███████╗
-                   ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
-                   ███████║██║   ██║   ██║   ██║   ██║██████╔╝█████╗
-                   ██╔══██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
-                   ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
-                   ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
-                          DevSecOps & CI/CD Platform  •  v0.5.1
-
-┌─────────────────────────────────────────────────┬────────────────────────────────────────────────┐
-│ ▸ Mulai Project Baru (1-Klik)                   │ Mulai Project Baru (1-Klik)                    │
-│   Buat Project Baru (Dockerfile & Jenkinsfile)  │                                                │
-│   Hapus Project                                 │ Alur otomatis paling gampang: tulis            │
-│   Scan Keamanan Kode (Static + Gitleaks + Trivy)│ Dockerfile & Jenkinsfile, buat repo GitHub,    │
-│   Deploy / Sambungkan Project ke Jenkins        │ push, daftar ke Jenkins, lalu trigger build    │
-│   Pasang Satpam Git (Pre-Commit Hook)           │ pertama.                                       │
-│   Copot Satpam Git (Uninstall Hook)             │                                                │
-│   Cek Kesehatan Sistem (Doctor)                 │ Butuh: token GitHub + akses Jenkins (ditanya   │
-│   Update Autore                                 │ sekali, lalu disimpan).                        │
-│                                                 │                                                │
-└─────────────────────────────────────────────────┴────────────────────────────────────────────────┘
-  ↑/↓ geser  •  Enter jalankan  •  q keluar
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│> Type a command... (Ctrl+K for menu)                                                             │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-(belum ada project)              siap                             autore v0.5.2
-```
-
-Banner **AUTORE** (FIGlet blok, gradasi oranye terakota) tampil di tengah atas. Panel kiri = menu,
-panel kanan = penjelasan item yang sedang disorot, baris bantuan = tombol pintas, baris input
-perintah (`>` + placeholder) = tempat mengetik, bar bawah = 3 segmen rapat: lokasi project (biru),
-status aksi terakhir (hijau kalau siap/sukses, merah kalau gagal), versi yang sedang jalan (putih).
-Kalau layar terlalu pendek, banner dan kotak perintah otomatis disembunyikan supaya menu tetap utuh.
-Saat sebuah aksi berjalan, Autore keluar sementara dari layar penuh
-supaya pertanyaan interaktif (nama project, token, password) tampil normal; setelah selesai
-tekan **Enter** untuk kembali ke menu atau **q** untuk keluar.
-
-Kalau output `autore` dipipe ke file (bukan terminal), menu otomatis jatuh ke mode teks biasa.
-
-**Paling gampang buat pemula — pilih `Mulai Project Baru (1-Klik)`.** Satu kali Enter, Autore
-mengerjakan 4 langkah sekaligus tanpa perlu paham Git/Jenkins:
-
-1. Bertanya nama project + teknologi, lalu menulis `Dockerfile`, `Jenkinsfile`, `.dockerignore`.
-2. Membuat repo GitHub (`<username>/<nama-project>`) dan nge-push kode ke sana.
-3. Mendaftarkan project ke Jenkins (job pipeline) memakai kredensial tersimpan.
-4. Memicu build pertama — hasilnya dikirim ke Telegram.
-
-Kalau token GitHub atau akses Jenkins belum ada, Autore menanyakannya sekali lalu menyimpannya
-(`~/.config/autore/github_token`, `~/.config/autore/jenkins.conf`) sehingga pilihan berikutnya
-langsung jalan otomatis.
-
-Saat memilih **`Buat Project Baru`** lewat menu interaktif, Autore otomatis menyiapkan:
-1. Folder project `./<nama-aplikasi>` (tidak bersarang kalau bikin project ke-2).
-2. `Dockerfile`, `Jenkinsfile` (lengkap dengan `deployPort`), dan `.dockerignore`.
-3. Starter minimal dengan endpoint `/health` (jika kode aplikasi belum ada; kode existing tidak disentuh).
-4. Inisialisasi `git init -b main` + pemasangan otomatis **Satpam Git** (`.git/hooks/pre-commit`).
-
-<details>
-<summary><b>Alternatif: Kompilasi manual dari Source (Rust)</b></summary>
+Kompilasi manual:
 
 ```bash
-# Kompilasi binary release berbasis Rust
 cargo build --release --manifest-path cli/Cargo.toml
-
-# Pasang binary global (butuh akses sudo/root)
-sudo cp cli/target/release/autore /usr/local/bin/autore
-sudo chmod 0755 /usr/local/bin/autore
+install -m755 cli/target/release/autore ~/.local/bin/autore
 ```
-</details>
 
-### 2. Perintah Cepat Harian Developer
+### 2. Jalankan dashboard
 
 ```bash
-# Periksa kesehatan lingkungan runner & perkakas sistem
-autore doctor
+autore          # pilih [1] Web Dashboard
+```
 
-# Update Autore ke rilis stabil terbaru di GitHub (verifikasi SHA-256 otomatis)
-autore update
+Pilihan `[1]` menyalakan/memeriksa layanan, menunggu sampai sehat, lalu mencetak URL. Ekuivalen CLI:
 
-# Pasang / cek / copot Satpam Pintu 1 (Git Pre-Commit Hook)
-autore hook install
-autore hook status
-autore hook uninstall
+```bash
+autore start    # systemctl --user start kedua unit
+autore status   # ringkasan cepat
+autore logs     # ikuti log (Ctrl-C untuk berhenti)
+```
 
-# Pindai keamanan lokal pra-commit tanpa docker (<1 detik)
-autore scan --no-docker --path .
+### 3. Buka dari browser
 
-# Generate scaffolding standar (Dockerfile, Jenkinsfile, .dockerignore)
+```
+http://100.80.3.14:9120        # lewat Tailscale (laptop kantor/rumah, HP)
+```
+
+Dashboard bind `0.0.0.0:9120`; API tetap `127.0.0.1:9121`. Port lain di sandbox: Jenkins `:8080`, Nexus `:8082`, SonarQube `:9000`, registry Docker `:5000`.
+
+Layanan berjalan sebagai unit **systemd user** (`deploy/autore-web-api.service`, `deploy/autore-web-dashboard.service`) dengan `linger` aktif, jadi tetap hidup setelah terminal ditutup.
+
+---
+
+## CLI Reference
+
+| Perintah | Alias | Deskripsi |
+|---|---|---|
+| `autore` | — | Menu interaktif (Web Dashboard / TUI Legacy / Keluar / Admin). Non-TTY: panduan singkat. |
+| `autore status` | `st` | Status sistem & pipeline terakhir dari `dashboard-status.json`. |
+| `autore runs` | — | Riwayat build Jenkins 7 hari terakhir (sumber grafik dashboard). |
+| `autore active` | — | Pipeline yang sedang berjalan atau menunggu di Jenkins. |
+| `autore deploy` | `dep` | Daftarkan project ke Jenkins CI/CD dan langsung trigger build. |
+| `autore quick-start` | `qs` | Alur 1-klik: file pipeline → repo GitHub → push → daftar Jenkins → trigger build. |
+| `autore init` | `in` | Generate `Dockerfile`, `Jenkinsfile`, `.dockerignore` untuk python/nodejs/java/go. |
+| `autore doctor` | `doc` | Kesehatan Runner, Docker, Java, Jenkins. |
+| `autore scan` | — | Gerbang keamanan pra-build: Static Guard + Gitleaks + Trivy (Docker). `--no-docker` untuk mode cepat tanpa kontainer. |
+| `autore scan-image` | — | Gerbang pasca-build pada image: UID non-root + Trivy image + SBOM CycloneDX. |
+| `autore hook install \| status \| uninstall` | — | Kelola Git pre-commit hook ("Satpam Pintu 1"). |
+| `autore sbom` | — | Daftar dependensi dari SBOM CycloneDX hasil build (dipakai dashboard). |
+| `autore pipeline record` | — | Catat satu peristiwa pipeline (tahap/status/log) ke `dashboard-status.json`; dipakai pipeline Jenkins. |
+| `autore serve` | — | Jalankan dashboard web (satu kotak "Buat" yang menjalankan alur 1-klik). |
+| `autore kemampuan` | — | Kemampuan mesin ini sebagai data (dipakai dashboard). |
+| `autore update` | — | Unduh rilis stabil terbaru dari GitHub Releases, verifikasi `SHA256SUMS`, ganti binary atomik. |
+| `autore start \| stop \| restart` | — | Kelola layanan dashboard via `systemctl --user`. |
+| `autore logs` | — | Ikuti log kedua layanan (`--no-follow`, `--lines N`). |
+
+Alias lengkap: **`st`, `dep`, `qs`, `doc`, `in`** — semuanya tampil di `autore --help`.
+
+```bash
+autore st                          # alias status
 autore init --app-name klaim-api --stack python --app-port 8000 --deploy-port 8083
-```
-
----
-
-## Arsitektur Utama
-
-Autore dirancang dengan prinsip **pemisahan tegas** antara orchestrator yang dikontrol admin dan repositori aplikasi yang diperlakukan sebagai *untrusted input*:
-
-```mermaid
-flowchart LR
-    DEV["Developer Workstation"] -->|"git commit (autore hook)"| HOOK["Pintu 1: Pre-Commit Hook"]
-    HOOK -->|"git push"| SCM["Git Repository (Untrusted)"]
-    SCM -->|"Webhook"| JNK["Jenkins Trusted Orchestrator"]
-    JNK -->|"vars/autorePipeline.groovy"| PIPE["10-Stage Fail-Closed Pipeline"]
-    PIPE -->|"Static Guard + Gitleaks + Trivy"| SEC["Security Gates"]
-    PIPE -->|"SAST & Clippy Report"| SQ["SonarQube (Quality Gate)"]
-    PIPE -->|"Immutable Push"| NX["Nexus OSS (ALLOW_ONCE)"]
-    PIPE -->|"Digest Pinning"| DEP["Production/Staging Deploy"]
-    PIPE -->|"Real-Time Alerts"| TG["Telegram Audit Trail"]
-```
-
-1. **Dedicated Jenkins Runner (`runner/`)**
-   - Memisahkan beban *build* dan eksekusi container dari Jenkins Controller (Controller dikonfigurasi dengan `0` executor).
-   - Berjalan sebagai service systemd (`jenkins-agent.service`) dengan koneksi WebSocket terisolasi.
-2. **Native Rust Developer CLI (`cli/`)**
-   - Binary native tanpa dependensi runtime interpreter (Python/Node).
-   - Eksekusi instan untuk standarisasi proyek, pemindaian statis, dan diagnostik sistem.
-3. **Admin-Controlled Jenkins Shared Library (`vars/` di root repo)**
-   - Pipeline CI/CD otoritatif (`vars/autorePipeline.groovy`) berada di repositori admin, bukan di repositori aplikasi.
-   - Menghalangi modifikasi tidak sah terhadap gerbang pengujian dan kebijakan deployment.
-4. **SonarQube SAST & Quality Gate (`scripts/ci-sonarqube-gate.sh`)**
-   - Mengintegrasikan hasil Clippy eksternal (`-Dsonar.rust.clippy.enabled=false`) tanpa eksekusi duplikat.
-   - Memvalidasi status Quality Gate berbasis `analysisId` serta memastikan metrik analisis Rust (`ncloc_language_distribution`) terverifikasi.
-5. **Nexus Artifact & Container Registry (`scripts/ci-nexus-publish.sh`)**
-   - Kebijakan penulisan `ALLOW_ONCE` (*Disable redeploy*) mencegah penimpaan tag container atau file binary yang sudah ada.
-   - Pengecekan digest via HTTP `HEAD` terotentikasi ke endpoint manifest Docker registry.
-6. **Pelaporan Audit Telegram Otomatis (`scripts/notify-telegram.sh`)**
-   - Mengirim ringkasan lengkap untuk build yang berhasil maupun yang diblokir oleh sistem keamanan.
-
----
-
-## CLI Reference (`autore`)
-
-CLI `autore` menyediakan perintah modular untuk mendukung siklus hidup pengembangan DevSecOps:
-
-| Perintah | Deskripsi | Mode Operasi |
-| :--- | :--- | :--- |
-| `autore` *(tanpa argumen)* | Membuka **TUI layar penuh**: panel menu (↑/↓, Enter, q), panel penjelasan item, baris input perintah (`>` + placeholder, Ctrl+K buka command palette berisi perintah yang sama dengan menu, Esc balik ke menu), dan bar status 3 segmen. Otomatis jatuh ke menu teks kalau output bukan terminal. | Interactive TUI |
-| `autore quick-start` | Alur 1-klik: buat file pipeline → buat repo GitHub + push → daftar ke Jenkins → trigger build. Tanya kredensial sekali, simpan, lalu `--path` bisa diarahkan ke mana saja (default: nama folder saat ini). | Interaktif / Non-interaktif (`--app-name`, `--stack`, `--app-port`, `--deploy-port`) |
-| `autore init` | Membuat `Dockerfile`, `Jenkinsfile`, dan `.dockerignore` standar untuk Python, Node.js, Java, atau Go (`--deploy-port` untuk isolasi port host multi-project, `--force` untuk menimpa). | Interaktif / Non-interaktif |
-| `autore scan` | Menjalankan Static Byte Guard native + Gitleaks secret scanner + Trivy vulnerability & misconfig scanner pada filesystem proyek, serta membersihkan `.security-gate-reason` lama saat lulus. | Authoritative (Full) / `--no-docker` (Pre-commit) |
-| `autore scan-image` | Memindai image container pasca-build: verifikasi UID non-root, pemindaian CVE (`HIGH,CRITICAL`), dan ekspor SBOM CycloneDX (`sbom.cdx.json`). | Container Image Scan |
-| `autore hook install \| uninstall \| status` | Memasang, mencopot (dengan pemulihan backup `.pre-commit.bak`), atau mengecek status pre-commit hook di `.git/hooks/pre-commit`. | Git Integration |
-| `autore doctor` | Mendiagnosis kesiapan sistem: Git, Java 21, Docker, Docker Compose, service systemd runner, lokasi binary `autore`, dan ruang disk. | System Diagnostics |
-| `autore deploy` | Menyimpan akses Jenkins sekali di `~/.config/autore/jenkins.conf`, menyiapkan commit & remote Git, membuat/memperbarui Job Pipeline di Jenkins, dan memicu `Build Now`. | Jenkins Onboarding |
-| `autore update` | Mengunduh rilis stabil terbaru dari GitHub Releases sesuai OS (`linux-x86_64-musl` / `windows-x86_64.exe`), memverifikasi `SHA256SUMS`, mengganti binary secara atomik, dan auto-restart. | Self-Updater |
-
-### Contoh Penggunaan CLI
-
-```bash
-# 1. Scaffolding aplikasi baru (custom port deploy agar tidak bentrok dengan service lain)
-autore init --app-name my-service --stack python --app-port 8000 --deploy-port 8083
-
-# 2. Pemindaian pra-commit lokal (cepat, tanpa kontainer)
-autore scan --no-docker --path .
-
-# 3. Pemindaian pra-build penuh pada CI
-autore scan --path .
-
-# 4. Pemindaian image container pasca-build
-autore scan-image --image 127.0.0.1:5000/my-service:build-1-commit-e77d5049f8a12b3c4d5e6f708192a3b4c5d6e7f8 \
-  --severity HIGH,CRITICAL \
+autore scan --no-docker --path .   # gerbang cepat pra-commit (<1 detik)
+autore scan-image --image 127.0.0.1:5000/klaim-api:build-42 --severity HIGH,CRITICAL \
   --sbom-output dist/sbom.cdx.json
-
-# 5. Update binary Autore ke rilis terbaru
-autore update
+autore logs --no-follow            # 50 baris terakhir lalu keluar
 ```
+
+**Catatan:** autentikasi CLI (`autore deploy`/`quick-start`) menanyakan kredensial sekali lalu menyimpannya di `~/.config/autore/` (`github_token`, `jenkins.conf`). Kredensial Jenkins/Nexus tidak pernah dicetak ke terminal atau log.
 
 ---
 
-## Enterprise CI/CD Pipeline (10 Tahap Fail-Closed)
+## Security Gates (9 Tahap Fail-Closed)
 
-Pipeline `autorePipeline.groovy` menjalankan 10 tahapan fail-closed secara sekuensial. Jika salah satu tahapan gagal, seluruh pipeline langsung berhenti (*abort*) dan memicu notifikasi audit:
+Pipeline otoritatif ada di repositori admin (`vars/autorePipeline.groovy`), bukan di repo aplikasi — pembuat PR tidak bisa melemahkan gerbangnya. Setiap tahap gagal = pipeline berhenti, tidak ada tahap yang dilewati diam-diam.
 
-```text
-[1. Checkout & Audit Metadata] (Tag 40-hex commit SHA, tolak SHORT_SHA / latest)
-               │
-               ▼
-[2. Autore Static Guard + Gitleaks] (Static checks + deteksi secret kredensial)
-               │
-               ▼
-[3. Trivy Source & Config Scan] (SCA lockfile & validasi Dockerfile, HIGH/CRITICAL)
-               │
-               ▼
-[4. Clippy + SonarQube SAST] (Ekspor clippy-report.json & sonar-scanner CLI)
-               │
-               ▼
-[5. SonarQube Quality Gate] (Poll CE task -> validasi analysisId & ncloc Rust)
-               │
-               ▼
-[6. Build Container & musl Binary] (Docker build immutable tag + Rust musl)
-               │
-               ▼
-[7. Trivy Final Image Scan] (Verifikasi non-root UID + CVE container HIGH/CRITICAL)
-               │
-               ▼
-[8. Generate SBOM & Checksums] (CycloneDX JSON + SHA256SUMS)
-               │
-               ▼
-[9. Push Nexus & Verify Digest] (ALLOW_ONCE repositori + authenticated HEAD digest)
-               │
-               ▼
-[10. Deploy by @sha256:<digest>] (Deploy zero-downtime berbasis digest SHA-256)
-               │
-               ▼
-[Post-Always: Telegram Audit & Cleanup] (Notifikasi deterministik + pembersihan)
-```
+| # | Tahap | Yang diperiksa |
+|---|---|---|
+| 1 | **Checkout & Audit Metadata** | Commit SHA 40-hex penuh (menolak `SHORT_SHA`/`latest`), menyiapkan metadata audit. |
+| 2 | **Autore Static Guard & Gitleaks** | Static Byte Guard native + deteksi kebocoran kredensial dengan Gitleaks. |
+| 3 | **Trivy Source & Config Scan** | Kerentanan dependensi (SCA) + salah konfigurasi Dockerfile, level HIGH/CRITICAL. |
+| 4 | **Clippy & SonarQube SAST Gate** | Ekspor Clippy + `sonar-scanner`; dilewati hanya kalau proyek memang bukan Rust (`cli/Cargo.toml` tidak ada). |
+| 5 | **Build Image & Static musl Binary** | `docker build` dengan tag immutable + binary Rust musl statis. |
+| 6 | **Trivy Final Image Scan & SBOM** | UID non-root + CVE image HIGH/CRITICAL + ekspor SBOM CycloneDX. |
+| 7 | **Verify Checksums** | `SHA256SUMS` untuk artefak rilis. |
+| 8 | **Push to Nexus & Verify Remote Digest** | Repositori `ALLOW_ONCE` (tanpa redeploy) + verifikasi digest lewat `HEAD` terotentikasi. |
+| 9 | **Deploy by Verified Digest** | Deploy memakai `@sha256:<digest>` yang sudah diverifikasi — bukan tag yang bisa bergeser. |
+
+Notifikasi hasil (lolos `9/9` atau gagal berikut nama tahapnya) dikirim ke Telegram oleh `scripts/notify-telegram.sh`. Di sisi developer, pintu pertama tetap lokal: `autore hook install` memasang pre-commit hook yang memanggil `autore scan`.
 
 ---
 
-## Lingkungan Sandbox & Testing
+## Troubleshooting
 
-Repositori ini menyediakan modul pengujian lokal mandiri di direktori `sandbox/services/`:
+**Port bentrok (`EADDRINUSE`) saat pilih `[1]` atau `autore start`**
+Dashboard memakai `9120` dan API `9121`. Cek pemakai port: `ss -ltnp | grep -E '9120|9121'`. Kalau yang menahan adalah layanan Autore yang basi: `autore restart`. Untuk aplikasi yang akan di-deploy, beri port host berbeda sejak awal: `autore init --deploy-port 8083`.
 
-### 1. Inisialisasi Layanan Lokal (SonarQube & Nexus)
+**Gagal login / diarahkan ke `/403`**
+Anda lolos GitHub tetapi tidak ada di whitelist. Tambahkan username (case-insensitive) ke `web/allowed-users.json`, atau set `AUTORE_ALLOWED_USERS="user1,user2"` di `web/.env` (env tidak kosong menimpa berkas). Setelah mengubah `.env`: `autore restart`. Kalau halaman login malah error, biasanya `GITHUB_ID`/`GITHUB_SECRET`/`NEXTAUTH_SECRET` belum terisi di `web/.env`.
 
-Skrip bootstrap mengotomatisasi seluruh persiapan lokal secara idempoten:
+**Audit log kosong**
+`~/.local/state/autore/audit.log` hanya ditulis oleh **aksi tulis** dari dashboard (`deploy`, `quick-start`, `scan`) — membuka halaman tidak menulis apa pun. Cek juga `AUTORE_AUDIT_LOG`/`XDG_STATE_HOME`: kalau salah satu diset di unit layanan, berkasnya berpindah ke sana. Baris ringkas juga bisa dibaca langsung: `autore logs`.
+
+**Dashboard menampilkan data lama**
+Artinya API atau Jenkins tidak terjangkau; kartu akan menandainya (`Gagal terhubung ke Jenkins. Menampilkan data terakhir.`). Cek `autore logs`, lalu `autore status`. Data yang tidak ada ditampilkan sebagai `unknown`/kosong, bukan angka karangan.
+
+**Layanan mati setelah terminal ditutup**
+Cek `loginctl show-user $USER -p Linger` harus `Linger=yes`; kalau tidak: `loginctl enable-linger $USER`. Sesudah itu `autore start`.
+
+**`autore` tidak bereaksi di skrip/CI**
+Output bukan TTY, jadi menu sengaja diganti panduan singkat. Pakai subcommand eksplisit (`autore status`, `autore runs`).
+
+**Ada tes CLI yang merah**
+`cli/tests/sbom_cli.rs` punya satu tes lama yang merah (perbedaan nama direktori workspace `autore-workspace` vs `.autore-workspace`), tidak berkaitan dengan fitur aplikasi. Sisanya hijau.
+
+---
+
+## Testing
 
 ```bash
-./sandbox/services/bootstrap-local-services.sh
-```
+# CLI Rust (dari cli/, butuh export PATH=$HOME/.cargo/bin:$PATH)
+cargo test --bin autore          # 284 lolos
+cargo test --test admin_cli      # 7 lolos
+cargo test --test launcher_cli   # 5 lolos
 
-Skrip di atas secara otomatis:
-- Mengekstrak `cacerts` dari image SonarQube dan menghapus sertifikat root CA eMudhra (`emSign`) yang terdampak advisory keamanan SonarSource.
-- Menjalankan container SonarQube Community (`127.0.0.1:9000` + `100.80.3.14:9000` via Tailscale) dan Sonatype Nexus OSS (`127.0.0.1:8082` untuk pipeline, `100.80.3.14:8082` via Tailscale, & Docker port `5000`).
-- Menyetujui EULA Nexus 3.96 Community Edition melalui REST API.
-- Membuat repositori `docker-hosted` (port `5000`) dan `autore-releases` (raw) dengan kebijakan `ALLOW_ONCE` (*Disable redeploy*).
-- Menonaktifkan *Anonymous Access* agar login Docker CLI menerima challenge `401 WWW-Authenticate`.
-
-### 2. Menjalankan Unit & Integration Tests
-
-```bash
-# Jalankan test suite Python
-python3 -m unittest sandbox/dummy-app/test_security_check.py
-
-# Jalankan test suite CLI Rust
-cargo test --manifest-path cli/Cargo.toml
+# Dashboard & API (dari web/)
+npm test                         # 506 tes / 57 berkas, semua lolos
 ```
 
 ---
@@ -289,45 +247,34 @@ cargo test --manifest-path cli/Cargo.toml
 
 ```text
 Autore/
-├── install.sh                  # One-line installer Linux x86_64 (static musl + SHA-256)
-├── install.ps1                 # One-line installer Windows PowerShell (x86_64 + SHA-256)
-├── Jenkinsfile                 # Pipeline CI/CD utama repositori Autore
-├── assets/                     # Visual branding (banner, badges)
-│   └── banner.png
-├── cli/                        # Source code CLI Rust (autore)
-│   ├── Cargo.toml
-│   ├── build.rs
-│   └── src/
-├── vars/                       # Jenkins Trusted Shared Library (Admin-controlled)
-│   └── autorePipeline.groovy
-├── runner/                     # Provisioning & systemd service Jenkins Agent
-│   ├── setup-agent.sh
-│   ├── install-agent-service.sh
-│   └── jenkins-agent.service
-├── scripts/                    # Skrip DevSecOps Gate, Publish, Deploy, & Telegram
-│   ├── ci-sonarqube-gate.sh
-│   ├── ci-nexus-publish.sh
-│   ├── ci-deploy-by-digest.sh
-│   ├── build-musl-release.sh
-│   ├── publish-release.sh
-│   ├── security-check.sh
-│   └── notify-telegram.sh
-├── sandbox/                    # Lingkungan uji coba sandbox & dummy application
-│   ├── services/               # Docker Compose SonarQube & Nexus + bootstrap
-│   ├── jenkins/                # Docker Compose Jenkins Controller
-│   └── dummy-app/              # Sample app & automated integration tests
-└── docs/                       # Desain arsitektur, spesifikasi, dan audit keamanan
-    ├── PRODUCTION-ISOLATION-DESIGN.md
-    └── superpowers/specs/
+├── install.sh / install.ps1      # Installer 1-baris (Linux musl / Windows), verifikasi SHA-256
+├── cli/                          # Core: binary Rust `autore` (semua logika)
+│   ├── src/                      # main.rs + admin.rs, launcher.rs, tui.rs, templates.rs, scanner.rs,
+│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, github.rs, doctor.rs, ...
+│   ├── tests/                    # Tes integrasi biner: admin_cli, launcher_cli, scan_cli, sbom_cli
+│   └── Cargo.toml
+├── web/                          # Interface: monorepo npm (workspaces)
+│   ├── apps/dashboard/           # Next.js — halaman /, /pipeline, /applications(+sbom), /security, /login, /403
+│   ├── apps/api/                 # Hono — sesi GitHub, whitelist, aksi, audit, status/runs/sbom/active
+│   ├── allowed-users.json        # Whitelist GitHub (sumber kebenaran)
+│   └── .env                      # Rahasia saja: GITHUB_ID, GITHUB_SECRET, NEXTAUTH_SECRET, AUTORE_ALLOWED_USERS
+├── deploy/                       # Unit systemd user: autore-web-api, autore-web-dashboard
+├── vars/autorePipeline.groovy    # Jenkins Trusted Shared Library — 9 gerbang fail-closed
+├── scripts/                      # ci-sonarqube-gate.sh, ci-nexus-publish.sh, ci-deploy-by-digest.sh,
+│                                 # build-musl-release.sh, publish-release.sh, notify-telegram.sh
+├── runner/                       # Provisioning + service Jenkins Agent (setup-agent.sh, jenkins-agent.service)
+├── sandbox/                      # Lingkungan uji: services/ (SonarQube, Nexus), jenkins/, dummy-app/
+├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md + plans/ (riwayat rencana fitur)
+├── assets/banner.png
+└── Jenkinsfile                   # Pipeline CI/CD repo Autore sendiri
 ```
 
 ---
 
-## Peringatan Keamanan Sandbox (C-1, C-2, & H-6)
+## Peringatan Keamanan Sandbox (C-1, C-2, H-6)
 
 > [!WARNING]
-> **STATUS ARSITEKTUR SANDBOX / POC VALIDATION:**
-> Konfigurasi runner (`runner/setup-agent.sh`) dan controller (`sandbox/jenkins/docker-compose.yml`) di repositori ini adalah **lingkungan uji coba (Sandbox)** dan **BELUM berstatus production-ready**:
-> 1. **C-1 (Keanggotaan Grup `docker` di Host):** User `jenkins` pada sandbox runner berada di dalam grup `docker` host (setara dengan akses `root`). Jangan menaruh kredensial produksi dan jangan menjalankan PR dari sumber luar yang tidak dipercaya. Untuk produksi kantor, runner wajib menggunakan container ephemeral + rootless builder sesuai [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
-> 2. **C-2 (Pipeline Otoritatif):** Pipeline build wajib dijalankan melalui *Jenkins Trusted Shared Library* yang dikontrol admin (`vars/autorePipeline.groovy`), bukan dari skrip yang dapat dimodifikasi oleh pembuat PR di repositori aplikasi.
-> 3. **H-6 (Akses Jaringan):** Semua service diikat ke **loopback + tailnet** (tidak ada yang terekspos ke `0.0.0.0`): Jenkins `127.0.0.1:8080` + `100.80.3.14:8080`, Nexus `127.0.0.1:8082` + `100.80.3.14:8082`, SonarQube `127.0.0.1:9000` + `100.80.3.14:9000`, registry Docker `127.0.0.1:5000`. Akses web dari laptop (kantor/rumah) via Tailscale: Jenkins `http://100.80.3.14:8080`, Nexus `http://100.80.3.14:8082`, SonarQube `http://100.80.3.14:9000`. Binding loopback dipertahankan karena agent runner lokal (`jenkins-agent.service`) terhubung lewat `127.0.0.1:8080`.
+> Konfigurasi di repositori ini adalah **lingkungan uji coba (sandbox)**, belum production-ready:
+> 1. **C-1 — Keanggotaan grup `docker` di host.** User runner berada di grup `docker` (setara akses root). Jangan menaruh kredensial produksi dan jangan menjalankan PR dari sumber tidak tepercaya. Untuk produksi, runner wajib memakai container ephemeral + rootless builder sesuai [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
+> 2. **C-2 — Pipeline otoritatif.** Build wajib lewat Jenkins Trusted Shared Library milik admin (`vars/autorePipeline.groovy`), bukan skrip yang bisa dimodifikasi pembuat PR. Repo aplikasi diperlakukan sebagai *untrusted input*.
+> 3. **H-6 — Akses jaringan.** Tidak ada layanan yang bind ke `0.0.0.0` kecuali dashboard (`9120`). API `127.0.0.1:9121`; Jenkins `127.0.0.1:8080` + tailnet `:8080`; Nexus loopback + tailnet `:8082`; SonarQube loopback + tailnet `:9000`; registry Docker `127.0.0.1:5000`. Akses dari luar hanya lewat Tailscale.

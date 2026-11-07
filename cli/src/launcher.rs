@@ -579,6 +579,9 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    /// Catatan `jalankan_latar`: (dir, perintah, log, pid_file).
+    type CatatanLatar = (String, Vec<String>, PathBuf, PathBuf);
+
     struct SistemPalsu {
         pengguna: String,
         systemctl_ada: bool,
@@ -594,7 +597,7 @@ mod tests {
         /// Meniru systemd: begitu unit di-start, portnya benar-benar terbuka.
         buka_saat_start: bool,
         /// Catatan `jalankan_latar`: (dir, perintah, log, pid_file).
-        latar: RefCell<Vec<(String, Vec<String>, PathBuf, PathBuf)>>,
+        latar: RefCell<Vec<CatatanLatar>>,
     }
 
     impl Sistem for SistemPalsu {
@@ -998,7 +1001,7 @@ mod tests {
         );
         assert_eq!(pilih_web_dir(None, &[dasar.join("bukan")]), None);
         assert_eq!(
-            pilih_web_dir(Some(dasar.join("bukan").display().to_string()), &[web.clone()]),
+            pilih_web_dir(Some(dasar.join("bukan").display().to_string()), std::slice::from_ref(&web)),
             None,
             "AUTORE_WEB_DIR salah tidak boleh diam-diam jatuh ke kandidat"
         );

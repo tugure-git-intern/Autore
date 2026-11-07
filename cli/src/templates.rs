@@ -781,8 +781,8 @@ mod tests {
         // terukur bersih untuk paket OS-nya.
         let runtime = df
             .lines()
-            .filter(|l| l.starts_with("FROM alpine:"))
-            .next_back()
+            .rev()
+            .find(|l| l.starts_with("FROM alpine:"))
             .expect("runtime Go ada");
         let minor_runtime: u32 = runtime
             .trim_start_matches("FROM alpine:3.")

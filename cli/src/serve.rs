@@ -886,7 +886,7 @@ fn saran_port_bebas(workspace: &std::path::Path, nama: &str) -> Option<u16> {
         .map(|proyek| proyek.deploy_port)
         .collect();
     let kelipatan_sepuluh = (PORT_AWAL..PORT_TENGAH).step_by(10);
-    let celah = (PORT_AWAL..=PORT_AKHIR).filter(|p| (p - PORT_AWAL) % 10 != 0);
+    let celah = (PORT_AWAL..=PORT_AKHIR).filter(|p| !(p - PORT_AWAL).is_multiple_of(10));
     kelipatan_sepuluh
         .chain(celah)
         .find(|p| !terkunci.contains(p) && port_bebas(*p))

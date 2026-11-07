@@ -287,6 +287,9 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
+    /// Catatan `jalankan_latar`: (dir, perintah, log, pid_file).
+    type CatatanLatar = (String, Vec<String>, PathBuf, PathBuf);
+
     struct Palsu {
         pengguna: String,
         systemctl_ada: bool,
@@ -296,7 +299,7 @@ mod tests {
         warisi: RefCell<Vec<(String, Vec<String>)>>,
         hentikan_gagal: Option<String>,
         hentikan: RefCell<Vec<u32>>,
-        latar: RefCell<Vec<(String, Vec<String>, PathBuf, PathBuf)>>,
+        latar: RefCell<Vec<CatatanLatar>>,
         dir: PathBuf,
     }
 

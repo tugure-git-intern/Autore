@@ -9,6 +9,7 @@
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard};
 
 fn tulis_shim(dir: &Path, nama: &str, isi: &str) {
     let jalur = dir.join(nama);
@@ -18,14 +19,20 @@ fn tulis_shim(dir: &Path, nama: &str, isi: &str) {
     std::fs::set_permissions(&jalur, izin).unwrap();
 }
 
+/// 9120/9121 hanya ada satu per mesin: tes yang memegang port harus berjalan bergantian,
+/// kalau tidak tes paralel saling menunggu port yang dipegang tes lain.
+static PORT: Mutex<()> = Mutex::new(());
+
 /// Direktori shim; isinya dihapus saat tes selesai.
 struct Shim {
     dir: PathBuf,
     _penjaga: Vec<TcpListener>,
+    _kunci: MutexGuard<'static, ()>,
 }
 
 impl Shim {
     fn baru(nama: &str) -> Shim {
+        let kunci = PORT.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!(
             "autore-tes-launcher-{}-{nama}",
             std::process::id()
@@ -51,7 +58,11 @@ impl Shim {
             .filter_map(|port| TcpListener::bind(("127.0.0.1", *port)).ok())
             .collect();
 
-        Shim { dir, _penjaga }
+        Shim {
+            dir,
+            _penjaga,
+            _kunci: kunci,
+        }
     }
 
     fn jalankan(&self, pilihan: Option<&str>, pengguna: &str) -> (i32, String) {

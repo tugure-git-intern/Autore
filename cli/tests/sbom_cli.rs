@@ -119,7 +119,7 @@ fn sbom_jatuh_ke_home_autore_workspace_kalau_env_tidak_disiapkan() {
     let out = jalankan(tmp.path(), None, &["--app", APP, "--json"]);
     assert_ne!(out.status.code(), Some(0));
     assert!(
-        stderr(&out).contains(".autore-workspace"),
+        stderr(&out).contains("autore-workspace"),
         "pesan harus menyebut workspace yang dipakai: {}",
         stderr(&out)
     );

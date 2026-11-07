@@ -1,17 +1,24 @@
-# Autore - Enterprise DevSecOps CI/CD Platform
+<p align="center">
+  <img src="assets/banner.png" alt="Autore - Automation Tugure" width="100%">
+</p>
 
-**Autore** adalah platform CI/CD terstandarisasi untuk PT Tugu Reasuransi Indonesia. Arsitekturnya
-mengikuti satu prinsip: **CLI as the Brain, Web as the Interface** — seluruh logika (scaffolding,
-pemindaian keamanan, pendaftaran Jenkins, deploy, pencatatan status) hidup di satu binary Rust
-(`autore`); dashboard web adalah lapisan tampilan yang memanggil binary itu dan tidak pernah
-menduplikasi logikanya.
+<h1 align="center">Autore - Automation Tugure</h1>
 
-<p>
-  <img src="https://img.shields.io/badge/Language-Rust-orange?style=flat-square&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/Security-Fail--Closed-red?style=flat-square&logo=shield" alt="Security">
-  <img src="https://img.shields.io/badge/CI%2FCD-Jenkins%20Shared%20Library-blue?style=flat-square&logo=jenkins" alt="Jenkins">
-  <img src="https://img.shields.io/badge/Quality-SonarQube-4B9CD3?style=flat-square&logo=sonarqube" alt="SonarQube">
-  <img src="https://img.shields.io/badge/Registry-Nexus%20ALLOW__ONCE-blueviolet?style=flat-square&logo=sonatype" alt="Nexus">
+<h3 align="center">CLI as the Brain, Web as the Interface</h3>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Language-Rust-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Security-Fail--Closed-red?style=for-the-badge&logo=shield" alt="Security">
+  <img src="https://img.shields.io/badge/CI%2FCD-Jenkins%20Shared%20Library-blue?style=for-the-badge&logo=jenkins" alt="Jenkins">
+  <img src="https://img.shields.io/badge/Quality-SonarQube-4B9CD3?style=for-the-badge&logo=sonarqube" alt="SonarQube">
+  <img src="https://img.shields.io/badge/Registry-Nexus%20ALLOW__ONCE-blueviolet?style=for-the-badge&logo=sonatype" alt="Nexus">
+  <img src="https://img.shields.io/badge/Scanners-Trivy%20%2B%20Gitleaks-brightgreen?style=for-the-badge" alt="Scanners">
+</p>
+
+<p align="center">
+  <b>Platform CI/CD terstandarisasi untuk PT Tugu Reasuransi Indonesia</b><br/>
+  Seluruh logika hidup di satu binary Rust <code>autore</code>; dashboard web hanya lapisan tampilan
+  yang memanggilnya dan tidak pernah menduplikasi logikanya.
 </p>
 
 ---

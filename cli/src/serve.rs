@@ -886,7 +886,9 @@ fn saran_port_bebas(workspace: &std::path::Path, nama: &str) -> Option<u16> {
         .map(|proyek| proyek.deploy_port)
         .collect();
     let kelipatan_sepuluh = (PORT_AWAL..PORT_TENGAH).step_by(10);
-    let celah = (PORT_AWAL..=PORT_AKHIR).filter(|p| !(p - PORT_AWAL).is_multiple_of(10));
+    // `is_multiple_of` baru stabil di Rust 1.87; builder musl rilis masih 1.85.
+    #[allow(clippy::manual_is_multiple_of)]
+    let celah = (PORT_AWAL..=PORT_AKHIR).filter(|p| (p - PORT_AWAL) % 10 != 0);
     kelipatan_sepuluh
         .chain(celah)
         .find(|p| !terkunci.contains(p) && port_bebas(*p))

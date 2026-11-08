@@ -8,10 +8,12 @@ import { getActive, type ActivePayload } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom, type SbomResult } from "./sbom";
 import { parseAllowed, requireSession, type Identitas } from "./session";
+import { bacaAudit, type BarisAuditLengkap } from "./audit";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
 export type SbomLoader = (app: string) => Promise<SbomResult>;
+export type AuditLoader = (max?: number) => Promise<BarisAuditLengkap[]>;
 
 /**
  * Aksi (deploy/scan) membaca konfigurasi unit. Tanpa `AUTORE_WORKSPACE` aksi
@@ -105,6 +107,7 @@ export function createApp(
   active: ActiveLoader = () => getActive(),
   sbom: SbomLoader = configuredSbom(run),
   clock: () => number = () => Date.now(),
+  audit: AuditLoader = (max = 100) => bacaAudit(max),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -144,6 +147,13 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     const hasil = await sbom(c.req.param("app"));
     return hasil.ok ? c.json(hasil.data, 200) : c.json({ error: hasil.error }, hasil.status);
+  });
+
+  // Jejak aksi audit trail: read-only, tanpa sesi (sama seperti GET /api/* lain)
+  app.get("/api/audit/log", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const data = await audit(100);
+    return c.json({ data, total: data.length });
   });
 
   // Target deploy datang dari body, sama seperti scan: tombol di dashboard selalu

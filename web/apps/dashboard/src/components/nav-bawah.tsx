@@ -12,6 +12,7 @@ const LABEL_PENDEK: Record<(typeof navItems)[number]["href"], string> = {
   "/applications": "Aplikasi",
   "/pipeline": "Pipeline",
   "/security": "Keamanan",
+  "/audit": "Audit",
 };
 
 /**
@@ -27,7 +28,7 @@ export function NavBawah() {
       aria-label="Navigasi bawah"
       className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         {navItems.map(({ href, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (

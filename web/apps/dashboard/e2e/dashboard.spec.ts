@@ -42,17 +42,17 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
     await expect(page.getByRole("button", { name: "Keluar" })).toBeVisible();
   });
 
-  test("sidebar exposes four destinations including Keamanan", async ({ page }) => {
+  test("sidebar exposes five destinations including Keamanan and Audit Log", async ({ page }) => {
     await page.goto("/");
     const sidebar = page.locator('aside nav[aria-label="Navigasi utama"]');
     await expect(sidebar).toBeVisible();
     // Sidebar copy is Indonesian (Ringkasan/Aplikasi/Pipeline/Keamanan); assert
     // by route so the destinations stay pinned to the real hrefs even if the
     // wording changes.
-    for (const href of ["/", "/applications", "/pipeline", "/security"]) {
+    for (const href of ["/", "/applications", "/pipeline", "/security", "/audit"]) {
       await expect(sidebar.locator(`a[href="${href}"]`)).toBeVisible();
     }
-    await expect(sidebar.locator("a")).toHaveCount(4);
+    await expect(sidebar.locator("a")).toHaveCount(5);
   });
 
   test("no gradient backgrounds and no shadow heavier than box-shadow-sm", async ({ page }) => {

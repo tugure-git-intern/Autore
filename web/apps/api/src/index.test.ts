@@ -605,3 +605,28 @@ describe("POST /api/actions/quick-start", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /api/audit/log", () => {
+  it("mengembalikan riwayat jejak audit dalam format JSON dan total", async () => {
+    const { createApp } = await freshApp();
+    const auditData = [
+      { ts: "2026-11-08T05:00:00.000Z", login: "MAliffadlan", email: "m@tugu.com", action: "deploy", target: "tes-web", exit: 0 },
+    ];
+    const app = createApp(
+      async () => ({ code: 0, stdout: "{}", stderr: "" }),
+      { run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web" }), quickStart: async () => ({ ok: true, status: 200, action: "quick-start", taaget: "x" }) },
+      async () => ({ data: RUNS, stale: false }),
+      {},
+      async () => ({ data: ACTIVE, stale: false }),
+      async () => ({ ok: true, data: { app: "x", generated_at: "", direct: 0, total: 0, packages: [] } }),
+      () => 0,
+      async () => auditData,
+    );
+
+    const res = await app.request("http://localhost/api/audit/log");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const json = await res.json();
+    expect(json).toEqual({ data: auditData, total: 1 });
+  });
+});

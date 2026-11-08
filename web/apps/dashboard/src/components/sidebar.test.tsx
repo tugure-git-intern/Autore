@@ -26,4 +26,10 @@ describe("Sidebar", () => {
 
     expect(screen.getByRole("link", { name: /pipeline/i })).toHaveAttribute("aria-current", "page");
   });
+
+  it("merender menu Audit Log di bawah Keamanan", () => {
+    render(<Sidebar />);
+    const auditLink = screen.getByRole("link", { name: /audit log/i });
+    expect(auditLink).toHaveAttribute("href", "/audit");
+  });
 });

@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
       { source: "/api/active", destination: `${API_ASAL}/api/active` },
       { source: "/api/actions/:path*", destination: `${API_ASAL}/api/actions/:path*` },
       { source: "/api/sbom/:app", destination: `${API_ASAL}/api/sbom/:app` },
+      { source: "/api/audit/log", destination: `${API_ASAL}/api/audit/log` },
     ];
   },
 };

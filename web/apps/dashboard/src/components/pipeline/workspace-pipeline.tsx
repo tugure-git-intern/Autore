@@ -39,7 +39,7 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
       ) : null}
 
       {/* Matriks selebar halaman: 5 kartu + panah tidak muat di kolom sempit. */}
-      <Card className="p-5">
+      <Card className="min-w-0 overflow-hidden p-5">
         <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
         <div className="mt-4">
           <StageMatrix

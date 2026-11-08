@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -14,6 +14,8 @@ export type BarisAudit = {
   target: string;
   exit: number;
 };
+
+export type BarisAuditLengkap = BarisAudit & { ts: string };
 
 export type PencatatAudit = (baris: BarisAudit) => void | Promise<void>;
 
@@ -43,4 +45,33 @@ export async function catatAudit(baris: BarisAudit, jalur = jalurAudit()): Promi
   console.log(
     `audit ${lengkap.ts} ${baris.action} ${baris.target} oleh ${baris.login || "tanpa-sesi"} exit=${baris.exit}`,
   );
+}
+
+/**
+ * Membaca audit log dari berkas JSONL, maksimal `max` baris, urut terbaru duluan (ts descending).
+ * Berkas tidak ada atau baris rusak tidak melempar error, melainkan ditangani dengan aman.
+ */
+export async function bacaAudit(max = 100, jalur = jalurAudit()): Promise<BarisAuditLengkap[]> {
+  try {
+    const raw = await readFile(jalur, "utf8");
+    const baris = raw.split("\n");
+    const hasil: BarisAuditLengkap[] = [];
+
+    for (let i = baris.length - 1; i >= 0; i--) {
+      const line = baris[i]?.trim();
+      if (!line) continue;
+      try {
+        const item = JSON.parse(line) as BarisAuditLengkap;
+        if (item && typeof item === "object" && item.ts && item.action) {
+          hasil.push(item);
+          if (hasil.length >= max) break;
+        }
+      } catch {
+        // Abaikan baris rusak
+      }
+    }
+    return hasil;
+  } catch {
+    return [];
+  }
 }

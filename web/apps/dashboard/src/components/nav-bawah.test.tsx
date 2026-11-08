@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("NavBawah", () => {
-  it("empat tujuan dengan label pendek, semuanya sasaran sentuh 44px", () => {
+  it("lima tujuan dengan label pendek, semuanya sasaran sentuh 44px", () => {
     render(<NavBawah />);
 
     const tautan = screen.getAllByRole("link");
@@ -21,6 +21,7 @@ describe("NavBawah", () => {
       "Aplikasi",
       "Pipeline",
       "Keamanan",
+      "Audit",
     ]);
     for (const t of tautan) expect(t.className).toContain("min-h-11");
     // "Daftar Aplikasi"/"Pipeline & Log" tidak muat di satu kolom 390px.
@@ -44,6 +45,6 @@ describe("NavBawah", () => {
     expect(bar.className).toContain("lg:hidden");
     expect(bar.className).toContain("pb-[env(safe-area-inset-bottom)]");
     // Empat kolom sama lebar: tidak ada tujuan yang terpotong.
-    expect(container.querySelector("nav > div")?.className).toContain("grid-cols-4");
+    expect(container.querySelector("nav > div")?.className).toContain("grid-cols-5");
   });
 });

@@ -69,18 +69,18 @@ export function StageMatrix({
   return (
     <ol
       aria-label="Tahapan pipeline"
-      className="flex items-stretch gap-2 overflow-x-auto pb-2"
+      className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:overflow-x-auto pb-2"
     >
       {isi.map((tahap, urutan) => (
-        <li key={`${tahap.id}-${urutan}`} className="flex items-stretch gap-2">
+        <li key={`${tahap.id}-${urutan}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
           {urutan > 0 ? (
-            <span data-testid="stage-arrow" aria-hidden="true" className="self-center text-gray-300">
+            <span data-testid="stage-arrow" aria-hidden="true" className="self-center text-gray-300 rotate-90 sm:rotate-0">
               →
             </span>
           ) : null}
           <div
             data-testid="stage-card"
-            className={`min-w-[168px] rounded-lg border p-4 ${WARNA[tahap.result]}`}
+            className={`w-full sm:min-w-[168px] rounded-lg border p-4 ${WARNA[tahap.result]}`}
           >
             <p className="text-[11px] text-gray-400">{urutan + 1}</p>
             <p className="mt-1 text-sm font-medium capitalize text-gray-900">

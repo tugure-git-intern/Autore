@@ -75,7 +75,7 @@ describe("Sidebar", () => {
   it("labels the PRD routes and highlights the active one in PRD green", () => {
     render(<Sidebar />);
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual(["/", "/applications", "/pipeline", "/security"]);
+    expect(hrefs).toEqual(["/", "/applications", "/pipeline", "/security", "/audit"]);
 
     // PRD: menu aktif memakai bg-green-50 text-green-700.
     const active = screen.getByRole("link", { name: "Dashboard" });

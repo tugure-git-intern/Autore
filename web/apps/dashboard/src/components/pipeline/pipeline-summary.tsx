@@ -18,7 +18,7 @@ export function PipelineSummary({ pipeline }: { pipeline: DashboardStatus["lates
   const securitySummary = pipeline.security_summary.trim();
 
   return (
-    <Card className="p-5">
+    <Card className="min-w-0 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-ink">Ringkasan Pipeline</h2>
         <Badge tone={status.tone}>{status.label}</Badge>
@@ -26,16 +26,16 @@ export function PipelineSummary({ pipeline }: { pipeline: DashboardStatus["lates
       <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs uppercase tracking-wide text-muted">Commit</dt>
-          <dd className="font-mono text-ink">{dash(pipeline.commit_sha)}</dd>
+          <dd className="break-all font-mono text-ink">{dash(pipeline.commit_sha)}</dd>
         </div>
         <div>
           <dt className="text-xs uppercase tracking-wide text-muted">Author</dt>
-          <dd className="font-mono text-ink">{dash(pipeline.author)}</dd>
+          <dd className="break-all font-mono text-ink">{dash(pipeline.author)}</dd>
         </div>
       </dl>
       <div className="mt-4 border-t border-gray-200 pt-4">
         <p className="text-xs uppercase tracking-wide text-muted">Hasil Security Scan</p>
-        <p className="mt-1 text-sm text-ink">
+        <p className="mt-1 break-all text-sm text-ink">
           {securitySummary || "Belum ada hasil scan"}
         </p>
       </div>

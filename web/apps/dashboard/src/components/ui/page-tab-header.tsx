@@ -10,7 +10,7 @@ export interface PageTabHeaderProps {
 
 /**
  * Secondary Tab Card / Breadcrumb Area ala Google Cloud Console.
- * Berlatar putih bersih, sudut melengkung atas (rounded-t-xl), dan border-b-0
+ * Berlatar putih bersih tanpa bingkai: sudut melengkung atas (rounded-t-xl) melebur ke kanvas
  * agar menyatu mulus dengan lembaran konten di bawahnya.
  */
 export function PageTabHeader({
@@ -23,7 +23,7 @@ export function PageTabHeader({
   return (
     <div
       data-testid="page-tab-header"
-      className={`rounded-t-xl sm:rounded-t-2xl border border-gray-200 border-b-0 bg-white p-5 sm:p-6 ${className}`}
+      className={`rounded-t-xl sm:rounded-t-2xl bg-white p-5 sm:p-6 ${className}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

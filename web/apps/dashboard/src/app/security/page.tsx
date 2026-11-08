@@ -79,7 +79,7 @@ export default function SecurityPage() {
           icon={ShieldCheck}
         />
 
-        <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-5 sm:p-6 pt-4 space-y-4">
+        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4">
           {/* Grid Skor & Gerbang */}
           <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
             <ChartCard title="Skor Pipeline" subtitle="Lima sumbu terukur">

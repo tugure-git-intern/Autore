@@ -98,7 +98,7 @@ function PipelineSplit() {
           icon={Workflow}
         />
 
-        <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-4 sm:p-6 pt-4">
+        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-4 sm:p-6 pt-4">
           <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
             <aside
               data-testid="panel-daftar"

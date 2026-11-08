@@ -90,6 +90,17 @@ const renderPage = () =>
     </StatusProvider>,
   );
 
+test("kartu isi tanpa bingkai: putihnya menyatu dengan kanvas", async () => {
+  mockFetch(EMPTY);
+
+  const { container } = renderPage();
+  await screen.findByText("Belum ada aplikasi yang didaftarkan.");
+
+  const kartu = container.querySelector("[class*='rounded-b-xl']") as HTMLElement;
+  expect(kartu).toBeTruthy();
+  expect(kartu.className).not.toContain("border");
+});
+
 test("states the empty fact once: the subtitle carries the count", async () => {
   mockFetch(EMPTY);
 

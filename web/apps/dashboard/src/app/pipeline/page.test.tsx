@@ -88,6 +88,18 @@ const renderPage = () =>
     </StatusProvider>,
   );
 
+
+test("kartu isi tanpa bingkai: putihnya menyatu dengan kanvas", async () => {
+  mockFetch(status);
+
+  const { container } = renderPage();
+  await screen.findByRole("heading", { name: "Detail Pipeline" });
+
+  const kartu = container.querySelector("[class*='rounded-b-xl']") as HTMLElement;
+  expect(kartu).toBeTruthy();
+  expect(kartu.className).not.toContain("border");
+});
+
 test("shows the live pipeline as a card matrix beside the detail log panel", async () => {
   mockFetch(status);
 

@@ -35,6 +35,16 @@ describe("AuditPage", () => {
     });
   });
 
+  it("kartu isi tanpa bingkai: putihnya menyatu dengan kanvas", async () => {
+    vi.spyOn(auditClient, "fetchAuditLog").mockResolvedValueOnce({ data: [], total: 0 });
+
+    const { container } = render(<AuditPage />);
+
+    const kartu = container.querySelector("[class*='rounded-b-xl']") as HTMLElement;
+    expect(kartu).toBeTruthy();
+    expect(kartu.className).not.toContain("border");
+  });
+
   it("menampilkan pesan error jika fetch gagal", async () => {
     vi.spyOn(auditClient, "fetchAuditLog").mockRejectedValueOnce(
       new Error("Gagal terhubung ke API")

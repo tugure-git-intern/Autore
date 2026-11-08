@@ -66,7 +66,7 @@ export default function AuditPage() {
       />
 
       {/* Lembaran Konten Putih yang menyatu tanpa celah */}
-      <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-5 sm:p-6 pt-4">
+      <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4">
         {/* State Error */}
         {error ? (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">

@@ -86,6 +86,18 @@ const renderPage = () =>
     </StatusProvider>,
   );
 
+
+test("kartu isi tanpa bingkai: putihnya menyatu dengan kanvas", async () => {
+  mockApi(async () => ok(RUNS));
+
+  const { container } = renderPage();
+  await screen.findByRole("heading", { name: "Keamanan" });
+
+  const kartu = container.querySelector("[class*='rounded-b-xl']") as HTMLElement;
+  expect(kartu).toBeTruthy();
+  expect(kartu.className).not.toContain("border");
+});
+
 test("menampilkan gerbang, temuan per aplikasi, dan catatan kaki yang jujur", async () => {
   mockApi(async () => ok(RUNS));
 

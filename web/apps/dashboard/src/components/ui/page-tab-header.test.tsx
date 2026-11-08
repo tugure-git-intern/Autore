@@ -4,7 +4,7 @@ import { History } from "lucide-react";
 import { PageTabHeader } from "./page-tab-header";
 
 describe("PageTabHeader", () => {
-  it("merender tab card dengan latar putih, sudut melengkung atas, dan border-b-0", () => {
+  it("merender tab card dengan latar putih dan sudut melengkung atas, tanpa bingkai", () => {
     const { container } = render(
       <PageTabHeader
         title="Audit Log"
@@ -18,8 +18,8 @@ describe("PageTabHeader", () => {
     expect(header).toBeTruthy();
     expect(header.className).toContain("bg-white");
     expect(header.className).toContain("rounded-t-xl");
-    expect(header.className).toContain("border");
-    expect(header.className).toContain("border-b-0");
+    // Kartu menyatu dengan kanvas putih: tidak ada garis tepi sama sekali.
+    expect(header.className).not.toContain("border");
 
     expect(screen.getByRole("heading", { name: "Audit Log" })).toBeVisible();
     expect(screen.getByText("Jejak audit aktivitas operasional")).toBeVisible();

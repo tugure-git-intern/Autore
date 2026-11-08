@@ -220,7 +220,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   return (
     <div className="flex min-h-screen bg-[#F0F5FE]">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE]">
+      <div className="flex min-w-0 flex-1 flex-col bg-white">
         <Navbar
           title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}

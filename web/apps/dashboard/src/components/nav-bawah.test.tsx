@@ -47,4 +47,25 @@ describe("NavBawah", () => {
     // Empat kolom sama lebar: tidak ada tujuan yang terpotong.
     expect(container.querySelector("nav > div")?.className).toContain("grid-cols-5");
   });
+
+  it("memakai latar GCP Console #F0F5FE agar menyatu dengan topbar dan kanvas", () => {
+    render(<NavBawah />);
+
+    const bar = screen.getByRole("navigation", { name: "Navigasi bawah" });
+    expect(bar.className).toContain("bg-[#F0F5FE]");
+    expect(bar.className).not.toContain("bg-white");
+    expect(bar.className).toContain("border-t");
+    expect(bar.className).toContain("border-gray-200");
+  });
+
+  it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {
+    nav.pathname = "/pipeline";
+    render(<NavBawah />);
+
+    expect(screen.getByRole("link", { name: "Pipeline" }).className).toContain("text-green-700");
+
+    const nonAktif = screen.getByRole("link", { name: "Keamanan" });
+    expect(nonAktif.className).toContain("text-[#545F72]");
+    expect(nonAktif.className).not.toContain("text-muted");
+  });
 });

@@ -32,4 +32,26 @@ describe("Sidebar", () => {
     const auditLink = screen.getByRole("link", { name: /audit log/i });
     expect(auditLink).toHaveAttribute("href", "/audit");
   });
+
+  it("memakai latar GCP Console #F0F5FE agar menyatu dengan topbar dan kanvas", () => {
+    const { container } = render(<Sidebar />);
+    const aside = container.querySelector("aside") as HTMLElement;
+
+    expect(aside.className).toContain("bg-[#F0F5FE]");
+    expect(aside.className).not.toContain("bg-white");
+    // Garis pemisah tetap ada supaya batas sidebar terbaca.
+    expect(aside.className).toContain("border-r");
+    expect(aside.className).toContain("border-gray-200");
+  });
+
+  it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {
+    render(<Sidebar />);
+
+    const aktif = screen.getByRole("link", { name: /pipeline/i });
+    expect(aktif.className).toContain("text-green-700");
+
+    const nonAktif = screen.getByRole("link", { name: /daftar aplikasi/i });
+    expect(nonAktif.className).toContain("text-[#545F72]");
+    expect(nonAktif.className).not.toContain("text-muted");
+  });
 });

@@ -26,7 +26,7 @@ export function NavBawah() {
   return (
     <nav
       aria-label="Navigasi bawah"
-      className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-[#F0F5FE] pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <div className="grid grid-cols-5">
         {navItems.map(({ href, icon: Icon }) => {
@@ -37,7 +37,7 @@ export function NavBawah() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-xs ${
-                active ? "bg-green-50 font-medium text-green-700" : "text-muted"
+                active ? "bg-green-50 font-medium text-green-700" : "text-[#545F72]"
               }`}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />

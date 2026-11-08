@@ -7,7 +7,7 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-gray-200 bg-[#F0F5FE] lg:flex">
       {/* h-16 + 1px divider == the topbar block, so both dividers meet at the corner. */}
       <div
         data-testid="sidebar-brand"
@@ -38,7 +38,7 @@ export function Sidebar() {
               className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
                 active
                   ? "bg-green-50 font-medium text-green-700"
-                  : "text-muted hover:bg-gray-50 hover:text-ink"
+                  : "text-[#545F72] hover:bg-white/60 hover:text-gray-900"
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />

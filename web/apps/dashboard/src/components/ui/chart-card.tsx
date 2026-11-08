@@ -14,7 +14,9 @@ export function ChartCard({
 }) {
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5">
-      <header className="flex items-start justify-between gap-3">
+      <header
+        className={`flex ${subtitle ? "items-start" : "items-center"} justify-between gap-3`}
+      >
         <div>
           <h2 className="text-sm font-medium text-gray-900">{title}</h2>
           {subtitle ? <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p> : null}

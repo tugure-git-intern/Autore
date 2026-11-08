@@ -31,7 +31,6 @@ export function ActivePipelines({
   return (
     <ChartCard
       title="Active Pipelines"
-      subtitle="Pipeline yang sedang berjalan atau menunggu"
       action={
         <div className="flex items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 text-green-700">
@@ -63,14 +62,6 @@ export function ActivePipelines({
             Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya
             akan muncul di sini secara real-time.
           </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="mt-6 inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900"
-          >
-            <RefreshCw className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-            <span>Refresh</span>
-          </button>
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

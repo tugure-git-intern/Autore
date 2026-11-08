@@ -13,9 +13,9 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-ink">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted">
-            {login ? `Selamat datang, ${login}. ` : ""}Ringkasan status CI/CD Autore.
-          </p>
+          {login ? (
+            <p className="mt-1 text-sm text-muted">Selamat datang, {login}.</p>
+          ) : null}
         </div>
       </div>
       <DashboardOverview />

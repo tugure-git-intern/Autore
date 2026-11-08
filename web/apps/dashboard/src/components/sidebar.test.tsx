@@ -39,9 +39,14 @@ describe("Sidebar", () => {
 
     expect(aside.className).toContain("bg-[#F0F5FE]");
     expect(aside.className).not.toContain("bg-white");
-    // Garis pemisah tetap ada supaya batas sidebar terbaca.
-    expect(aside.className).toContain("border-r");
+    // Panel terpisah yang mengambang: sudut membulat, bukan menempel penuh ke tepi.
+    expect(aside.className).toContain("rounded-xl");
+    expect(aside.className).toContain("border");
     expect(aside.className).toContain("border-gray-200");
+    expect(aside.className).not.toContain("border-r");
+    // Ada celah kanvas di tepi kiri/atas/bawah supaya lengkungannya terbaca.
+    expect(aside.className).toContain("m-3");
+    expect(aside.className).toContain("h-[calc(100vh-1.5rem)]");
   });
 
   it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {

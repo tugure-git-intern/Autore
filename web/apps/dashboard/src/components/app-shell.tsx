@@ -218,7 +218,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   if (TANPA_KERANGKA.has(pathname)) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-[#F0F5FE]">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE]">
         <Navbar

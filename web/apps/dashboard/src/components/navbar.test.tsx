@@ -77,6 +77,13 @@ describe("topbar route context", () => {
     expect(banner.getByRole("status")).toBeVisible();
   });
 
+  it("mengecat kanvas kerangka #F0F5FE supaya celah di luar panel ikut biru muda", () => {
+    const { container } = renderShell("/applications");
+
+    const kerangka = container.querySelector("div.flex.min-h-screen") as HTMLElement;
+    expect(kerangka.className).toContain("bg-[#F0F5FE]");
+  });
+
   it("drops the sidebar and topbar on the auth pages", () => {
     renderShell("/login");
 
@@ -188,6 +195,8 @@ describe("Navbar", () => {
 
     const header = container.querySelector("header") as HTMLElement;
     expect(header.className).toContain("rounded-xl");
+    expect(header.className).toContain("mx-3");
+    expect(header.className).toContain("mt-3");
     expect(header.className).toContain("bg-[#F0F5FE]");
     expect(header.className).toContain("border");
     expect(header.className).toContain("border-gray-200");

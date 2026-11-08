@@ -92,8 +92,9 @@ describe("topbar route context", () => {
     // punya latar biru yang kelihatan sebagai lengkungan.
     expect(kolom.className).toContain("bg-[#F0F5FE]");
     expect(kolom.className).not.toContain("bg-white");
-    // Jarak kiri & kanan sama sempitnya dan tetap 8px di semua lebar viewport.
-    expect(kolom.className).toContain("lg:mx-2");
+    // Jarak tetap di semua lebar viewport: kiri 12px (biar tidak mepet menu), kanan 8px.
+    expect(kolom.className).toContain("lg:ml-3");
+    expect(kolom.className).toContain("lg:mr-2");
 
     const main = container.querySelector("main") as HTMLElement;
     expect(main.className).toContain("bg-white");

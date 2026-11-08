@@ -6,13 +6,14 @@ import { test, expect } from "@playwright/test";
 // panelnya selebar kolom, batas 1440px pindah ke pembungkus isi.
 const LEBAR_LAYAR = [1920, 2560];
 
-// 250px sidebar + 8px jarak kiri + 8px jarak kanan.
-const JARAK = 8;
+// 250px sidebar + 12px jarak kiri + 8px jarak kanan.
+const JARAK_KIRI = 12;
+const JARAK_KANAN = 8;
 const SIDEBAR = 250;
 
 test.describe("jarak panel konten di layar lebar", () => {
   for (const lebar of LEBAR_LAYAR) {
-    test(`viewport ${lebar}px: jarak kiri & kanan tetap ${JARAK}px, panel selebar kolom`, async ({ page }) => {
+    test(`viewport ${lebar}px: jarak kiri ${JARAK_KIRI}px & kanan ${JARAK_KANAN}px, panel selebar kolom`, async ({ page }) => {
       await page.setViewportSize({ width: lebar, height: 1080 });
       await page.goto("/");
 
@@ -21,8 +22,8 @@ test.describe("jarak panel konten di layar lebar", () => {
       expect(Math.round(sidebar.width)).toBe(SIDEBAR);
 
       const main = (await page.locator("main").boundingBox())!;
-      expect(Math.round(main.x)).toBe(SIDEBAR + JARAK);
-      expect(Math.round(main.width)).toBe(lebar - SIDEBAR - JARAK * 2);
+      expect(Math.round(main.x)).toBe(SIDEBAR + JARAK_KIRI);
+      expect(Math.round(main.width)).toBe(lebar - SIDEBAR - JARAK_KIRI - JARAK_KANAN);
 
       // Isi tetap dibatasi 1440px dan ditengahkan di dalam panel putih.
       const isi = (await page.locator("main > div").boundingBox())!;
@@ -36,7 +37,7 @@ test.describe("jarak panel konten di layar lebar", () => {
             const el = document.elementFromPoint(titik, 400);
             return el ? getComputedStyle(el).backgroundColor : "";
           }),
-        [SIDEBAR + JARAK / 2, SIDEBAR + JARAK * 4, lebar - JARAK / 2],
+        [SIDEBAR + JARAK_KIRI / 2, SIDEBAR + JARAK_KIRI + 4, lebar - JARAK_KANAN / 2],
       );
       expect(warna[0]).toBe("rgb(240, 245, 254)");
       expect(warna[1]).toBe("rgb(255, 255, 255)");

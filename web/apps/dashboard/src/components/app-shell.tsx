@@ -220,7 +220,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   return (
     <div className="flex min-h-screen bg-[#F0F5FE]">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col bg-white lg:ml-3">
+      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] lg:ml-3">
         <Navbar
           title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}
@@ -230,7 +230,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
         />
         {/* pb-24 = tinggi bar bawah + jeda; tanpa ini baris terakhir konten
             (dan tombol aksinya) tersembunyi di balik bar di layar sempit. */}
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-3 pt-4 pb-24 sm:px-6 sm:pt-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] flex-1 bg-white px-3 pt-4 pb-24 sm:px-6 sm:pt-6 lg:rounded-tl-xl">{children}</main>
       </div>
       <NavBawah />
       {status.toast ? (

@@ -134,3 +134,36 @@ describe("AuditTimeline — QA audit log", () => {
     expect(screen.getByText(/tidak ada aktivitas yang cocok/i)).toBeTruthy();
   });
 });
+
+describe("AuditTimeline — garis timeline", () => {
+  it("satu garis kontinu dari kartu pertama sampai kartu terakhir", () => {
+    const { container } = render(<AuditTimeline entries={ENTRIES} />);
+
+    const rail = container.querySelector("[data-testid='audit-rail']") as HTMLElement;
+    expect(rail).toBeTruthy();
+    // Panjang penuh: dulu berhenti 24px sebelum kartu (top-6/bottom-6).
+    expect(rail.className).toContain("top-0");
+    expect(rail.className).toContain("bottom-0");
+    expect(rail.className).not.toContain("top-6");
+    // Garis ada di pembungkus feed, bukan di dalam kartu: saudara dari <ol>.
+    expect(rail.parentElement?.querySelector("ol")).toBeTruthy();
+    expect(rail.closest("li")).toBeNull();
+    // Di atas kartu putih, supaya celah antar kartu tidak memutus garis.
+    expect(rail.className).toContain("z-10");
+  });
+
+  it("avatar menimpa garis: latar solid dan lapisan lebih tinggi", () => {
+    const { container } = render(<AuditTimeline entries={ENTRIES} />);
+
+    const avatar = container.querySelector("[data-testid='audit-avatar']") as HTMLElement;
+    expect(avatar).toBeTruthy();
+    // Slot avatar lebih tinggi dari garis (z-10), jadi lingkarannya menutup garis.
+    expect(avatar.className).toContain("z-20");
+
+    const lingkaran = avatar.querySelector(".rounded-full") as HTMLElement;
+    expect(lingkaran).toBeTruthy();
+    expect(lingkaran.className).toContain("rounded-full");
+    // Latar solid, bukan transparan: garis terlihat masuk ke dalam avatar lalu berhenti.
+    expect(lingkaran.className).toMatch(/bg-(white|emerald-50)/);
+  });
+});

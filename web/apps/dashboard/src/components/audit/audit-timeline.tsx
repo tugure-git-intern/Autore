@@ -158,10 +158,13 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
         </div>
       ) : (
         <div className="relative">
-          {/* Vertical connecting rail */}
+          {/* Satu tarikan dari kartu pertama ke kartu terakhir. Diletakkan di pembungkus
+              feed (bukan di dalam kartu) dan diberi lapisan di atas kartu putih, jadi
+              celah antar kartu tidak memutus garis. Avatarlah yang menimpanya. */}
           <div
             aria-hidden="true"
-            className="absolute bottom-6 left-5 top-6 w-0.5 -translate-x-1/2 bg-gray-200 sm:left-6"
+            data-testid="audit-rail"
+            className="absolute bottom-0 left-9 top-0 z-10 w-0.5 -translate-x-1/2 bg-gray-200 sm:left-10"
           />
 
           <ol className="relative space-y-4">
@@ -176,7 +179,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                   className="relative flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50/60 sm:gap-4 sm:p-5"
                 >
                   {/* User Avatar + Action Pin */}
-                  <div className="relative z-10 shrink-0">
+                  <div data-testid="audit-avatar" className="relative z-20 shrink-0">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800">
                       {inisial(item.login || "?")}
                     </div>

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { ActiveCounts, ActivePipeline } from "@/lib/contracts";
 import { ActivePipelines } from "./active-pipelines";
 
@@ -32,18 +32,9 @@ const counts = (active: readonly ActivePipeline[]): ActiveCounts => ({
   queued: active.filter((p) => p.status === "queued").length,
 });
 
-const gambar = (
-  active: readonly ActivePipeline[],
-  stale = false,
-  onRefresh?: () => void,
-) => {
+const gambar = (active: readonly ActivePipeline[], stale = false) => {
   const hasil = render(
-    <ActivePipelines
-      active={active}
-      counts={counts(active)}
-      stale={stale}
-      onRefresh={onRefresh}
-    />,
+    <ActivePipelines active={active} counts={counts(active)} stale={stale} />,
   );
   return { ...hasil, kartu: () => screen.queryAllByTestId("pipeline-card") };
 };
@@ -64,14 +55,10 @@ describe("ActivePipelines", () => {
     expect(hitungan.className).toContain("text-green-700");
   });
 
-  it("header memuat tombol refresh yang memanggil onRefresh saat diklik", () => {
-    const onRefresh = vi.fn();
-    gambar([pipeline()], false, onRefresh);
+  it("tidak menampilkan tombol refresh lokal karena sudah ada tombol Sync di topbar", () => {
+    gambar([pipeline()]);
 
-    const tombolRefresh = screen.getByRole("button", { name: "Refresh" });
-    expect(tombolRefresh).toBeInTheDocument();
-    fireEvent.click(tombolRefresh);
-    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
   it("kartu berjalan memakai badge biru dan bar indeterminate", () => {
@@ -183,9 +170,8 @@ describe("ActivePipelines", () => {
     expect(container.querySelector("span.rounded-full")).not.toBeNull();
   });
 
-  it("empty state berdesain Snorlx: ikon CheckCircle2, teks judul, deskripsi, dan tanpa tombol refresh redundan", () => {
-    const onRefresh = vi.fn();
-    const { kartu } = gambar([], false, onRefresh);
+  it("empty state berdesain Snorlx: ikon CheckCircle2, teks judul, deskripsi, dan tanpa tombol apapun", () => {
+    const { kartu } = gambar([]);
 
     expect(screen.getByText("0 berjalan atau menunggu")).toBeInTheDocument();
     expect(kartu()).toHaveLength(0);
@@ -228,13 +214,8 @@ describe("ActivePipelines", () => {
     expect(deskripsi.className).toContain("mx-auto");
     expect(deskripsi.className).toContain("mt-2");
 
-    // Tombol refresh tidak ada di dalam empty state (hanya di pojok header)
-    expect(within(emptyWrapper).queryByRole("button")).toBeNull();
-
-    // Tombol refresh header tetap berfungsi
-    const tombolHeader = screen.getByRole("button", { name: "Refresh" });
-    fireEvent.click(tombolHeader);
-    expect(onRefresh).toHaveBeenCalledTimes(1);
+    // Tombol refresh tidak ada
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
   it("menandai data terakhir saat payload basi", () => {

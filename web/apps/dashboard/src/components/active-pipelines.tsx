@@ -4,7 +4,7 @@ import { inisial, shortSha } from "@/lib/format";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { ChartCard } from "./ui/chart-card";
-import { CheckCircle2, GitBranch, RefreshCw, Zap } from "lucide-react";
+import { CheckCircle2, GitBranch, Zap } from "lucide-react";
 
 const STATUS: Record<ActivePipeline["status"], { label: string; tone: "blue" | "yellow" }> = {
   running: { label: "Berjalan", tone: "blue" },
@@ -19,12 +19,10 @@ export function ActivePipelines({
   active,
   counts,
   stale = false,
-  onRefresh,
 }: {
   active: readonly ActivePipeline[];
   counts: ActiveCounts;
   stale?: boolean;
-  onRefresh?: () => void;
 }) {
   const total = counts.running + counts.queued;
 
@@ -38,14 +36,6 @@ export function ActivePipelines({
             {total} berjalan atau menunggu
           </span>
           {stale ? <span className="text-amber-600">data terakhir</span> : null}
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-          >
-            <RefreshCw className="h-3 w-3 text-gray-500" aria-hidden="true" />
-            <span>Refresh</span>
-          </button>
         </div>
       }
     >

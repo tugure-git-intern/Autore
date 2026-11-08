@@ -92,11 +92,19 @@ describe("topbar route context", () => {
     // punya latar biru yang kelihatan sebagai lengkungan.
     expect(kolom.className).toContain("bg-[#F0F5FE]");
     expect(kolom.className).not.toContain("bg-white");
-    expect(kolom.className).toContain("lg:ml-3");
+    // Jarak kiri & kanan sama sempitnya dan tetap 8px di semua lebar viewport.
+    expect(kolom.className).toContain("lg:mx-2");
 
     const main = container.querySelector("main") as HTMLElement;
     expect(main.className).toContain("bg-white");
-    expect(main.className).toContain("lg:rounded-tl-xl");
+    expect(main.className).toContain("lg:rounded-t-xl");
+    // Panel putih selebar kolom: batas lebar tidak boleh dipasang di sini, karena
+    // sisa lebar viewport jadi latar biru yang makin lebar saat di-zoom out.
+    expect(main.className).not.toContain("max-w-[");
+
+    const isi = main.firstElementChild as HTMLElement;
+    expect(isi.className).toContain("max-w-[1440px]");
+    expect(isi.className).toContain("mx-auto");
 
     // Chrome tetap biru muda: cuma kanvas isi yang jadi putih.
     expect((container.querySelector("header") as HTMLElement).className).toContain("bg-[#F0F5FE]");

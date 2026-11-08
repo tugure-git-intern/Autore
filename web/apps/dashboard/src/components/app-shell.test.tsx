@@ -231,8 +231,10 @@ describe("AppShell — kerangka mobile", () => {
 
     expect(screen.getByRole("navigation", { name: "Navigasi bawah" })).toBeInTheDocument();
     // pb-24 = tinggi bar (64px) + jeda; tanpanya baris terakhir tabel tertutup bar.
-    expect(screen.getByRole("main").className).toContain("pb-24");
-    expect(screen.getByRole("main").className).toContain("pt-6");
+    // Padding ada di pembungkus isi, bukan di <main>: latar putih main selebar kolom.
+    const isi = screen.getByRole("main").firstElementChild as HTMLElement;
+    expect(isi.className).toContain("pb-24");
+    expect(isi.className).toContain("pt-6");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 

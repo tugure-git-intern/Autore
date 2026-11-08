@@ -10,13 +10,20 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Dashboard</h1>
-          {login ? (
-            <p className="mt-1 text-sm text-muted">Selamat datang, {login}.</p>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Dashboard</h1>
+        {login ? (
+          <>
+            <span
+              data-testid="header-separator"
+              aria-hidden="true"
+              className="hidden text-gray-300 sm:inline"
+            >
+              |
+            </span>
+            <p className="text-sm text-gray-500 sm:text-base">Selamat datang, {login}.</p>
+          </>
+        ) : null}
       </div>
       <DashboardOverview />
     </div>

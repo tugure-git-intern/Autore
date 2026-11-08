@@ -41,7 +41,11 @@ describe("Sidebar", () => {
     expect(aside.className).not.toContain("bg-white");
     // Mepet ke tepi jendela: sisi kiri tetap siku, sudut kanan yang membulat.
     // Sudut kanan membulat tegas (24px / 3xl) agar lengkungan terbaca jelas di layar lebar.
-    expect(aside.className).toContain("rounded-r-3xl");
+    // Sudut kanan-atas siku agar header 64px menyatu lurus dengan topbar,
+    // sudut kanan-bawah membulat tegas (24px / 3xl) agar menu tetap mengambang.
+    expect(aside.className).toContain("rounded-br-3xl");
+    expect(aside.className).not.toContain("rounded-r-3xl");
+    expect(aside.className).not.toContain("rounded-tr");
     expect(aside.className).not.toContain("rounded-l");
     expect(aside.className).not.toContain("rounded-xl");
     expect(aside.className).not.toContain("m-3");

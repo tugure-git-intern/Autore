@@ -4,7 +4,8 @@ export interface AuditEntry {
   email: string;
   action: string;
   target: string;
-  exit: number;
+  /** null = baris tidak mencatat kode keluar; UI tidak boleh mengarang Sukses/Gagal. */
+  exit: number | null;
 }
 
 export interface AuditResponse {

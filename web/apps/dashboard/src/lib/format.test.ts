@@ -125,3 +125,11 @@ describe("inisial", () => {
     expect(inisial("<only@email.test>")).toBe("?");
   });
 });
+
+describe("relativeTime — umur log seminggu", () => {
+  it("tetap dihitung dalam hari, bukan pindah ke minggu", () => {
+    expect(relativeTime("2026-10-28T10:00:00Z", SEKARANG)).toBe("7 hari lalu");
+    expect(relativeTime("2026-10-21T10:00:00Z", SEKARANG)).toBe("14 hari lalu");
+    expect(relativeTime("2026-10-04T10:00:00Z", SEKARANG)).toBe("31 hari lalu");
+  });
+});

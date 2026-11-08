@@ -15,7 +15,22 @@ export type BarisAudit = {
   exit: number;
 };
 
-export type BarisAuditLengkap = BarisAudit & { ts: string };
+/**
+ * Baris hasil baca berkas. Field yang hilang dinormalkan (string kosong, exit null)
+ * karena berkas JSONL bisa disunting tangan atau ditulis versi lama: UI tidak boleh
+ * pernah menerima undefined.
+ */
+export type BarisAuditLengkap = {
+  ts: string;
+  login: string;
+  email: string;
+  action: string;
+  target: string;
+  exit: number | null;
+};
+
+/** Nilai yang bukan string jadi string kosong, bukan "[object Object]" atau undefined. */
+const teks = (nilai: unknown): string => (typeof nilai === "string" ? nilai : "");
 
 export type PencatatAudit = (baris: BarisAudit) => void | Promise<void>;
 
@@ -61,9 +76,16 @@ export async function bacaAudit(max = 100, jalur = jalurAudit()): Promise<BarisA
       const line = baris[i]?.trim();
       if (!line) continue;
       try {
-        const item = JSON.parse(line) as BarisAuditLengkap;
+        const item = JSON.parse(line) as Partial<Record<keyof BarisAuditLengkap, unknown>>;
         if (item && typeof item === "object" && item.ts && item.action) {
-          hasil.push(item);
+          hasil.push({
+            ts: String(item.ts),
+            action: String(item.action),
+            login: teks(item.login),
+            email: teks(item.email),
+            target: teks(item.target),
+            exit: typeof item.exit === "number" ? item.exit : null,
+          });
           if (hasil.length >= max) break;
         }
       } catch {

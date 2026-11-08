@@ -43,6 +43,9 @@ function getActionInfo(action: string) {
 }
 
 export function AuditTimeline({ entries }: AuditTimelineProps) {
+  // Beda antara "log belum pernah diisi" dan "filter tidak menemukan apa pun":
+  // pesan filter di log kosong menyesatkan.
+  const kosong = entries.length === 0;
   const [query, setQuery] = useState("");
   const [filterAksi, setFilterAksi] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -52,9 +55,11 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
       // Query filter
       if (query.trim()) {
         const q = query.toLowerCase();
-        const matchUser = item.login.toLowerCase().includes(q);
-        const matchEmail = (item.email || "").toLowerCase().includes(q);
-        const matchTarget = item.target.toLowerCase().includes(q);
+        // Baris lama atau hasil sunting tangan bisa kehilangan field: jangan sampai
+        // mengetik di kotak pencarian melempar TypeError dan memutihkan halaman.
+        const matchUser = (item.login ?? "").toLowerCase().includes(q);
+        const matchEmail = (item.email ?? "").toLowerCase().includes(q);
+        const matchTarget = (item.target ?? "").toLowerCase().includes(q);
         if (!matchUser && !matchEmail && !matchTarget) return false;
       }
 
@@ -133,17 +138,23 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
           <div className="mb-3 rounded-full bg-gray-50 p-3 text-gray-400">
             <SearchX className="h-6 w-6" />
           </div>
-          <p className="text-sm font-semibold text-gray-900">Tidak ada aktivitas yang cocok</p>
-          <p className="mt-1 text-xs text-gray-500">
-            Coba ubah kata kunci pencarian atau reset filter.
+          <p className="text-sm font-semibold text-gray-900">
+            {kosong ? "Belum ada aktivitas" : "Tidak ada aktivitas yang cocok"}
           </p>
-          <button
-            type="button"
-            onClick={resetFilter}
-            className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Reset Filter
-          </button>
+          <p className="mt-1 text-xs text-gray-500">
+            {kosong
+              ? "Deploy, scan, dan quick-start akan tercatat di sini."
+              : "Coba ubah kata kunci pencarian atau reset filter."}
+          </p>
+          {kosong ? null : (
+            <button
+              type="button"
+              onClick={resetFilter}
+              className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Reset Filter
+            </button>
+          )}
         </div>
       ) : (
         <div className="relative">
@@ -157,6 +168,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             {filtered.map((item, idx) => {
               const { verb, icon: ActionIcon, iconTone } = getActionInfo(item.action);
               const isSuccess = item.exit === 0;
+              const tanpaStatus = typeof item.exit !== "number";
 
               return (
                 <li
@@ -190,12 +202,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                       {/* Status Badge */}
                       <span
                         className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                          isSuccess
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-rose-200 bg-rose-50 text-rose-700"
+                          tanpaStatus
+                            ? "border-gray-200 bg-gray-50 text-gray-600"
+                            : isSuccess
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-rose-200 bg-rose-50 text-rose-700"
                         }`}
                       >
-                        {isSuccess ? "Sukses" : `Gagal (${item.exit})`}
+                        {tanpaStatus ? "Tanpa status" : isSuccess ? "Sukses" : `Gagal (${item.exit})`}
                       </span>
                     </div>
 

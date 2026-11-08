@@ -132,3 +132,53 @@ describe("bacaAudit", () => {
     expect(hasil).toEqual([barisSah]);
   });
 });
+describe("bacaAudit — QA audit log", () => {
+  it("menjaga 10.000 baris tetap responsif: hanya 100 baris terbaru yang dihasilkan", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-besar-"));
+    const jalur = join(dir, "audit.log");
+    const baris: string[] = [];
+    for (let i = 1; i <= 10_000; i++) {
+      baris.push(
+        JSON.stringify({
+          ts: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+          login: `user${i}`,
+          email: `u${i}@tugu.com`,
+          action: "deploy",
+          target: `app${i}`,
+          exit: 0,
+        }),
+      );
+    }
+    await writeFile(jalur, `${baris.join("\n")}\n`, "utf8");
+
+    const mulai = Date.now();
+    const hasil = await bacaAudit(100, jalur);
+    const durasi = Date.now() - mulai;
+
+    expect(hasil).toHaveLength(100);
+    expect(hasil[0].target).toBe("app10000");
+    expect(hasil[99].target).toBe("app9901");
+    expect(durasi).toBeLessThan(1000);
+  });
+
+  it("melengkapi baris yang field-nya hilang: string kosong dan exit null, bukan undefined", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-kurang-"));
+    const jalur = join(dir, "audit.log");
+    await writeFile(
+      jalur,
+      `${JSON.stringify({ ts: "2026-11-08T10:00:00.000Z", action: "deploy" })}\n`,
+      "utf8",
+    );
+
+    const [baris] = await bacaAudit(100, jalur);
+
+    expect(baris).toEqual({
+      ts: "2026-11-08T10:00:00.000Z",
+      action: "deploy",
+      login: "",
+      email: "",
+      target: "",
+      exit: null,
+    });
+  });
+});

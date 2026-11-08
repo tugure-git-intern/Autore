@@ -97,3 +97,40 @@ describe("AuditTimeline", () => {
     expect(screen.getByText("tes-web")).toBeTruthy();
   });
 });
+
+describe("AuditTimeline — QA audit log", () => {
+  it("log benar-benar kosong: menyapa 'Belum ada aktivitas', bukan pesan filter", () => {
+    render(<AuditTimeline entries={[]} />);
+
+    expect(screen.getByText("Belum ada aktivitas")).toBeTruthy();
+    expect(screen.queryByText(/tidak ada aktivitas yang cocok/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /reset filter/i })).toBeNull();
+  });
+
+  it("baris tanpa login, email, target, dan exit tidak pernah mencetak undefined", () => {
+    const rusak = [
+      { ts: "2026-11-08T10:00:00.000Z", action: "deploy" },
+    ] as unknown as AuditEntry[];
+
+    render(<AuditTimeline entries={rusak} />);
+
+    expect(document.body.textContent).not.toMatch(/undefined|null/i);
+    expect(screen.getByText("Tanpa status")).toBeTruthy();
+    expect(screen.queryByText(/Gagal \(/)).toBeNull();
+    expect(screen.getByText("tanpa-sesi")).toBeTruthy();
+  });
+
+  it("pencarian tetap jalan walau login dan target hilang dari baris", () => {
+    const rusak = [
+      { ts: "2026-11-08T10:00:00.000Z", action: "deploy" },
+    ] as unknown as AuditEntry[];
+
+    render(<AuditTimeline entries={rusak} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/cari pengguna atau nama aplikasi/i), {
+      target: { value: "tidak-ada" },
+    });
+
+    expect(screen.getByText(/tidak ada aktivitas yang cocok/i)).toBeTruthy();
+  });
+});

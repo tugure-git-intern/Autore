@@ -46,8 +46,11 @@ describe("Sidebar", () => {
     expect(aside.className).not.toContain("m-3");
     expect(aside.className).toContain("h-screen");
     // Garis pemisah tetap ada di sisi kanan saja.
-    expect(aside.className).toContain("border-r");
-    expect(aside.className).toContain("border-gray-200");
+    // Garis pemisah diganti bayangan lembut ke arah kanan supaya panel terbaca mengambang.
+    // Blur 12px: e2e/dashboard.spec.ts memberi pengecualian khusus <aside>, lihat komentarnya.
+    expect(aside.className).not.toContain("border-r");
+    expect(aside.className).toMatch(/shadow-\[/);
+    expect(aside.className).toContain("z-10");
   });
 
   it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {

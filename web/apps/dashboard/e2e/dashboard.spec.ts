@@ -70,13 +70,19 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
       // setiap box-shadow; lapisan transparan itu bukan elevasi. Ambang 3px =
       // blur `shadow-sm` di Tailwind v4 (0 1px 3px); di atas itu elevasi lebih
       // berat (shadow-md ke atas) dan berarti desainnya menyimpang.
-      const isAtMostShadowSm = (value: string) => {
+      //
+      // Pengecualian: `<aside>` kerangka aplikasi memang mengambang, jadi
+      // bayangannya boleh menyebar sampai 12px supaya batas panel terbaca lembut.
+      // Karena panel menempel tepi kiri/atas/bawah viewport, hanya sisi kanannya
+      // yang terlihat. Semua elemen lain tetap dibatasi 3px.
+      const isAtMostShadowSm = (value: string, el: Element) => {
+        const maks = el.tagName === "ASIDE" ? 12 : 3;
         const layers = value.split(/,(?![^(]*\))/);
         return layers
           .filter((layer) => !/rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(layer))
           .every((layer) => {
             const px = layer.match(/-?\d+(?:\.\d+)?px/g) ?? [];
-            return px[2] === undefined || parseFloat(px[2]) <= 3;
+            return px[2] === undefined || parseFloat(px[2]) <= maks;
           });
       };
       const gradients: string[] = [];
@@ -85,7 +91,7 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
         const style = getComputedStyle(el);
         if (/gradient\(/i.test(style.backgroundImage)) gradients.push(describe(el));
         const shadow = style.boxShadow;
-        if (shadow && shadow !== "none" && !isAtMostShadowSm(shadow)) {
+        if (shadow && shadow !== "none" && !isAtMostShadowSm(shadow, el)) {
           heavyShadows.push(`${describe(el)} => ${shadow}`);
         }
       }

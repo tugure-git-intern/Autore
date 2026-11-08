@@ -299,7 +299,7 @@ test("Overview tidak mengarang sapaan saat tidak ada user (halaman auth)", async
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
 });
 
-test("header meletakkan judul dan sapaan sejajar secara horizontal dengan pemisah", async () => {
+test("header meletakkan judul dan sapaan sejajar secara horizontal dengan pemisah dan jarak proporsional", async () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
   render(
@@ -312,6 +312,8 @@ test("header meletakkan judul dan sapaan sejajar secara horizontal dengan pemisa
   const container = heading.parentElement;
   expect(container?.className).toContain("flex");
   expect(container?.className).toContain("items-center");
+  expect(container?.className).toMatch(/gap-(4|5)/);
+  expect(container?.className).toMatch(/mb-(6|8)/);
 
   const separator = screen.getByTestId("header-separator");
   expect(separator).toBeInTheDocument();

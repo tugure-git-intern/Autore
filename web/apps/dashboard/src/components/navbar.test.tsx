@@ -90,6 +90,8 @@ describe("topbar route context", () => {
     const kolom = container.querySelector("div.flex.min-w-0.flex-1") as HTMLElement;
     expect(kolom.className).toContain("bg-white");
     expect(kolom.className).not.toContain("bg-[#F0F5FE]");
+    // Jarak ke menu kiri diisi kanvas #F0F5FE, jadi kanvas konten tidak nempel sidebar.
+    expect(kolom.className).toContain("lg:ml-3");
 
     // Chrome tetap biru muda: cuma kanvas isi yang jadi putih.
     expect((container.querySelector("header") as HTMLElement).className).toContain("bg-[#F0F5FE]");

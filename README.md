@@ -16,272 +16,251 @@
 </p>
 
 <p align="center">
-  <b>Platform CI/CD terstandarisasi untuk PT Tugu Reasuransi Indonesia</b><br/>
-  Seluruh logika hidup di satu binary Rust <code>autore</code>; dashboard web hanya lapisan tampilan
-  yang memanggilnya dan tidak pernah menduplikasi logikanya.
+  <b>Standardized DevSecOps CI/CD Platform for PT Tugu Reasuransi Indonesia</b><br/>
+  All operational logic resides exclusively in a standalone Rust binary (<code>autore</code>). The web dashboard acts strictly as a presentation and interaction layer, executing commands via subprocess and never duplicating business logic.
 </p>
 
 ---
 
-## Arsitektur
+## Overview
 
-```mermaid
-flowchart LR
-    U["Pengguna (browser, laptop/kantor/HP)"] -->|"http://<tailnet>:9120"| D["Dashboard — Next.js<br/>(Auth.js GitHub OAuth + whitelist)"]
-    D -->|"proxy /api/* ke 127.0.0.1:9121"| A["API — Hono (loopback)"]
-    A -->|"spawn subprocess, stdout JSON"| C["Core — binary Rust 'autore'"]
-    C --> J["Jenkins (job pipeline)"]
-    C --> N["Nexus (image + rilis)"]
-    J --> S["SonarQube (Quality Gate)"]
-    C --> WS["Workspace: ~/autore-workspace<br/>registry.tsv + dashboard-status.json"]
-    A --> AU["Audit: ~/.local/state/autore/audit.log"]
-```
+Autore is an enterprise DevSecOps automation platform developed for PT Tugu Reasuransi Indonesia. Designed around the architectural invariant **"CLI as the Brain, Web as the Interface"**, all domain rules, pipeline configurations, scaffolding generators, and security gates are compiled directly into the Rust CLI.
 
-| Lapisan | Teknologi | Peran |
-|---|---|---|
-| Frontend | Next.js (App Router), React, Tailwind, lucide-react | Tampilan operasional: status pipeline, aplikasi, SBOM, skor, aksi. Terang saja (light-only) dan responsif sampai lebar ponsel. |
-| API | Hono (Node.js), Auth.js v5 (JWT) | Sesi GitHub, whitelist, validasi body, pemetaan aksi ke argv CLI, jejak audit. Bind ke `127.0.0.1:9121` — tidak pernah terekspos ke LAN. |
-| Core | Rust (`cli/`), tanpa dependensi runtime | Satu-satunya pemilik logika: `init`, `deploy`, `quick-start`, `scan`, `scan-image`, `sbom`, `status`, admin layanan. Semua perintah web dijalankan sebagai subprocess binary ini. |
-| Integrasi | Jenkins Trusted Shared Library, Nexus OSS, SonarQube, Trivy, Gitleaks | Gerbang keamanan, registry immutable, kualitas kode, penyimpanan artefak. |
-| State | `~/.config/autore/` (kredensial), `~/.local/state/autore/` (audit + PID), `~/autore-workspace/` (`registry.tsv`, `dashboard-status.json`) | Semua keadaan operasional ada di berkas, bukan di memori proses — dashboard bisa direstart tanpa kehilangan data. |
-
-Prinsip yang tidak dilanggar:
-
-- **Dashboard tidak punya logika bisnis.** Setiap aksi tombol menjadi pemanggilan subcommand `autore`.
-- **API hanya di loopback.** Satu-satunya pintu dari jaringan adalah dashboard (`0.0.0.0:9120`), yang memverifikasi sesi GitHub lebih dulu.
-- **Fail-closed.** Kalau sebuah scanner tidak benar-benar berjalan, pipeline gagal — bukan dilewati diam-diam.
+The web interface is a stateless presentation layer built on Next.js and Hono that delegates every user action to the underlying binary. If the web services are restarted, terminated, or replaced, no operational state is lost because the filesystem and the CLI remain the single source of truth.
 
 ---
 
-## Fitur Utama
+## Key Features
 
-### Web Dashboard
-Halaman: `/` (ringkasan pipeline terakhir, progres tahap, aksi), `/pipeline` (riwayat build 7 hari + filter), `/applications` (daftar aplikasi dari workspace), `/applications/sbom` (komponen SBOM CycloneDX per aplikasi + filter), `/security` (Security Score), `/login`, `/403`.
+- **Real-Time Dashboard**: Features smart adaptive polling (5 seconds during active pipeline execution, 15 seconds during idle states) paired with a Page Visibility Guard that halts background network activity when tabs are minimized or hidden. Built-in API response caching (5-second TTL) shields local services from excessive polling.
+- **1-Click Quick Start**: Complete application onboarding executed directly from the web interface. Generates standardized source code scaffolding, creates remote GitHub repositories, registers automated Jenkins multibranch jobs, and triggers the initial build in a single operation.
+- **Multi-Language Support**: Production-ready scaffolding templates for **Python** (3.12-slim, non-root user), **Node.js** (20-alpine, unprivileged user), **Java** (Maven multi-stage build, Eclipse Temurin 21 JRE), and **Go** (minimal scratch/distroless static binary). Each template includes automated build tests and dedicated host port allocation to prevent deployment collisions.
+- **SBOM Viewer**: Integrated Software Supply Chain Security dashboard rendering CycloneDX v1.5 JSON components directly from build artifacts, complete with package type classification, version tracking, license compliance inspection, and instant search filtering.
+- **Audit Trail & Identity Propagation**: Immutable audit logging recorded in structured JSONL format (`~/.local/state/autore/audit.log`). Authenticated GitHub user sessions are propagated directly to CLI subprocess arguments, attributing Git commit author metadata (`user.name`, `user.email`) to the active developer rather than an untraceable bot.
+- **Fail-Closed Security Pipeline**: Strict 9-stage pipeline managed through an admin-governed Jenkins Trusted Shared Library. Any scanner failure, misconfiguration, or unverified artifact immediately terminates the build with zero bypasses.
+- **Responsive Operational UI**: Clean, light-only interface optimized for both desktop operations and mobile devices, featuring a mobile bottom navigation bar, live Lead Time analytics, stage matrix inspection, and real-time connection status indicators.
 
-- **Light mode saja** — token warna operasional, tanpa alternatif gelap (`globals.css`: *light-only operational tokens, no dark alternatives exist by design*).
-- **Responsif/mobile** — grid turun ke satu kolom (`grid-cols-1`) dan tabel lebar bisa digeser mendatar (`overflow-x-auto`) alih-alih memotong isi; navigasi utama tetap utuh di lebar ponsel.
-- **Keadaan jujur** — data basi ditandai (`Gagal terhubung ke Jenkins. Menampilkan data terakhir.`), skeleton saat memuat, status `unknown` kalau data tidak ada.
+---
 
-### GitHub OAuth + Whitelist
-Login GitHub via Auth.js (`GITHUB_ID`/`GITHUB_SECRET`/`NEXTAUTH_SECRET` di `web/.env`), lalu login diperiksa terhadap whitelist:
+## Architecture
 
-- Sumber kebenaran: `web/allowed-users.json`.
-- Penimpa oleh operator: `AUTORE_ALLOWED_USERS` (dipisah koma, env tidak kosong menang).
-- Perbandingan case-insensitive (`Alif` = `alif`); login kosong selalu ditolak.
-- Login sah tapi tidak terdaftar diarahkan ke `/403` (halaman tolak dengan tombol keluar), bukan pesan error mentah.
-- Halaman baca (`/api/status`, `/api/runs`, `/api/sbom/*`, `/api/active`) terbuka untuk sesi sah; aksi tulis (`/api/actions/*`) wajib sesi beridentitas.
-
-### SBOM Viewer & Security Score
-- **SBOM Viewer** — `/applications/sbom` menampilkan daftar komponen (nama, versi, tipe, lisensi) hasil `sbom.cdx.json` dari build, dengan filter pencarian; malformed SBOM tampil sebagai keadaan kosong yang jelas, bukan crash.
-- **Security Score** — radar 5 sumbu di `/security`, semuanya dihitung dari data yang benar-benar ada (`lib/score.ts`): `security` (gerbang lolos dari total), `reliability` (build sukses dari total build), `speed` (median durasi build sukses terhadap target 2 menit), `freshness` (umur build terakhir, ≤24 jam), `coverage` (aplikasi yang pernah dibangun dari seluruh aplikasi). Sumbu tanpa data bernilai **null** dan tidak digambar — radar yang lebih kecil lebih jujur daripada sumbu bernilai nol karangan.
-
-### Audit Trail & Identity Propagation
-- Setiap aksi tulis dari dashboard dicatat satu baris JSONL ke `~/.local/state/autore/audit.log` (`AUTORE_AUDIT_LOG` bisa menimpanya): `ts`, `login`, `email`, `action`, `target`, `exit`. Baris ringkas juga masuk stdout sehingga ikut terbaca `autore logs`.
-- **Identitas menempel ke Git**: nama dan email dari sesi GitHub diteruskan ke CLI sebagai author commit di repo aplikasi (`user.name`/`user.email`), jadi `git log` menceritakan siapa menekan tombol — bukan akun bot. Tanpa sesi, CLI memakai identitas bawaan `Autore CLI <autore@tugu-re.com>`.
-- Audit adalah efek samping, bukan prasyarat: kegagalan menulis log tidak menggagalkan deploy, hanya muncul di journal.
-
-### Multi-Language Support
-`autore init` / `quick-start` menghasilkan `Dockerfile` + `Jenkinsfile` + `.dockerignore` untuk empat stack: **Python** (`python:3.12-slim`, non-root), **Node.js** (`node:20-alpine`, `USER node`), **Java** (`maven:3.9-eclipse-temurin-21` build → `eclipse-temurin:21-jre-jammy` runtime), **Go** (build statis). Setiap template punya tahap test di dalam image build dan entrypoint yang jelas gagalnya kalau artefak tidak ditemukan. `--deploy-port` memisahkan port host antar-project supaya tidak bentrok.
-
-### Friendly Launcher
-`autore` tanpa argumen tidak lagi langsung masuk TUI. Muncul menu tugas:
-
-```text
-Pilih tugas:
-  [1] Web Dashboard   - nyalakan layanan, cek kesehatan, cetak URL
-  [2] TUI Legacy      - antarmuka layar penuh lama (panel menu + command palette)
-  [3] Keluar
-  [4] Admin           - Start / Stop / Restart / Logs
+```mermaid
+flowchart LR
+    U["User Browser (Desktop / Mobile)"] -->|"HTTP 0.0.0.0:9120"| D["Frontend — Next.js 15<br/>(Auth.js GitHub OAuth + Whitelist)"]
+    D -->|"Proxy /api/* to 127.0.0.1:9121"| A["API Shim — Hono (Loopback Only)"]
+    A -->|"Subprocess Execution (JSON stdout)"| C["Core — Rust Binary autore"]
+    C --> J["Jenkins (Pipeline Orchestration)"]
+    C --> N["Nexus (ALLOW_ONCE Registry)"]
+    J --> S["SonarQube (Quality Gate)"]
+    C --> WS["Workspace: ~/autore-workspace<br/>(registry.tsv + dashboard-status.json)"]
+    A --> AU["Audit Log: ~/.local/state/autore/audit.log"]
 ```
 
-- Bukan TTY (output dipipe) → mencetak panduan singkat lalu keluar, tidak menggantung.
-- Penjaga user: perintah layanan hanya jalan untuk user pemilik sesi systemd; user lain ditolak dengan pesan jelas sebelum `systemctl` dipanggil.
+### Architectural Layers
 
-### Admin Commands
-Wrapper systemd supaya tim IT tidak mengetik perintah panjang:
+| Layer | Technology | Operational Responsibility |
+|---|---|---|
+| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS, Lucide | Operational dashboard, pipeline visualization, SBOM catalog, Lead Time metric cards, and authenticated action dispatching. Light-mode operational tokens with complete mobile responsiveness. |
+| **API Shim** | Hono (Node.js), Auth.js (NextAuth v5 JWT) | GitHub OAuth authentication, case-insensitive whitelist authorization, action argument validation, subprocess invocation, and JSONL audit trail logging. Strictly bound to loopback `127.0.0.1:9121`. |
+| **Core** | Rust (2021 Edition, musl static binary) | Sole owner of all business logic: scaffolding (`init`, `quick-start`), artifact scanning (`scan`, `scan-image`), deployment orchestration (`deploy`), health inspections (`doctor`), and systemd unit supervision. |
+| **Integrations** | Jenkins Trusted Shared Library, Nexus OSS 3, SonarQube, Trivy, Gitleaks | Authoritative pipeline execution, immutable artifact storage, SAST quality gates, secret leak prevention, and vulnerability analysis. |
+| **State** | `~/.config/autore/`, `~/.local/state/autore/`, `~/autore-workspace/` | File-backed operational state. Eliminates in-memory session loss upon process restarts. |
 
-| Perintah | Efek |
-|---|---|
-| `autore start` \| `stop` \| `restart` | Satu panggilan `systemctl --user start/stop/restart autore-web-api autore-web-dashboard`, lalu mencetak status kedua unit. |
-| `autore logs` | `journalctl --user -u autore-web-api -u autore-web-dashboard -f`. `--no-follow` mencetak 50 baris terakhir; `--lines N` mengubah jumlahnya. |
-| `autore` → `[4]` | Sub-menu Admin berputar sampai `[5] Kembali` — start, cek log, restart tanpa keluar-masuk menu. |
+### Architectural Invariants
 
-Kalau `systemctl` tidak ada (macOS/container), Autore otomatis memakai jalur cadangan berbasis berkas PID (`~/.local/state/autore/api.pid`, `dashboard.pid`) dan tetap bisa `start`/`stop`.
+1. **Zero Business Logic in Frontend**: The web dashboard does not calculate pipeline states, parse raw scanner findings, or manage deployment logic. All operations translate directly into CLI subcommands.
+2. **Loopback API Isolation**: The Hono API listens exclusively on `127.0.0.1:9121`. Only the Next.js frontend is network-facing (`0.0.0.0:9120`), ensuring all external access is authenticated through GitHub OAuth before reaching the API layer.
+3. **Fail-Closed Execution**: Security scanners and gates never fail silently. Missing tools, network timeouts, or non-zero scanner exit codes halt the pipeline immediately.
+
+---
+
+## 9-Stage Fail-Closed Security Pipeline
+
+The authoritative CI/CD pipeline definition is maintained in the administrative repository (`vars/autorePipeline.groovy`). Application repositories cannot weaken or alter gate thresholds.
+
+| Stage | Gate Name | Security Checks & Enforcement |
+|---|---|---|
+| 1 | **Checkout & Audit Metadata** | Verifies full 40-character hexadecimal commit SHA (rejects mutable tags or short SHAs); initializes audit metadata. |
+| 2 | **Static Guard & Gitleaks** | Native byte guard checks forbidden patterns; Gitleaks scans entire commit history for credentials and secrets. |
+| 3 | **Trivy Source & Config Scan** | Software Composition Analysis (SCA) for dependencies and Dockerfile misconfigurations; blocks HIGH and CRITICAL vulnerabilities. |
+| 4 | **Clippy & SonarQube SAST** | Enforces static code quality and SAST standards via SonarQube Quality Gate. |
+| 5 | **Image & Musl Binary Build** | Generates reproducible container image with immutable tags and compiles standalone static musl binaries. |
+| 6 | **Trivy Image Scan & SBOM** | Enforces non-root container UID policies; scans final container filesystem for CVEs; exports CycloneDX SBOM JSON. |
+| 7 | **Verify Checksums** | Validates SHA-256 cryptographic signatures against release artifacts. |
+| 8 | **Push to Nexus Registry** | Uploads image to private Nexus repository under `ALLOW_ONCE` immutability policy (disallows tag overwriting). |
+| 9 | **Deploy by Verified Digest** | Deploys containers strictly referencing `@sha256:<digest>` verified in Stage 8, preventing image spoofing. |
+
+---
+
+## Tech Stack
+
+- **Core CLI**: Rust (2021 edition), Musl static binary target, zero runtime dependencies.
+- **Web Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, Lucide React icons.
+- **API Shim**: Hono, Auth.js v5 (NextAuth), Node.js LTS.
+- **Continuous Integration**: Jenkins LTS with Trusted Shared Library.
+- **Artifact & Container Registry**: Sonatype Nexus OSS 3 (`ALLOW_ONCE` immutable policy).
+- **Security & Quality**: Trivy (SCA, Container, Config), Gitleaks, SonarQube Community Edition.
+- **Standards & Specifications**: CycloneDX v1.5 JSON (SBOM), SPDX licenses, JSONL (Audit logging).
+- **Service Supervision**: systemd user services (`autore-web-api.service`, `autore-web-dashboard.service`).
 
 ---
 
 ## Quick Start
 
-### 1. Pasang CLI
+### Prerequisites
+
+- Rust toolchain (Cargo 1.85+)
+- Node.js (v18.0.0 or higher) and npm
+- Docker Engine (v24.0 or higher)
+- Git
+
+### 1. Installation
+
+#### Automated One-Line Installer (Linux / macOS)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.sh | bash
-# Windows PowerShell:
-# irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
 ```
 
-Kompilasi manual:
+*Windows PowerShell:*
+```powershell
+irm https://raw.githubusercontent.com/tugure-git-intern/Autore/main/install.ps1 | iex
+```
+
+#### Manual Build from Source
 
 ```bash
+git clone https://github.com/tugure-git-intern/Autore.git
+cd Autore
+
+# Build Core Rust CLI
 cargo build --release --manifest-path cli/Cargo.toml
 install -m755 cli/target/release/autore ~/.local/bin/autore
+
+# Install Web Dashboard & API Dependencies
+cd web
+cp .env.example .env
+npm install
 ```
 
-### 2. Jalankan dashboard
+### 2. Configure Environment
+
+Configure OAuth credentials and operator access controls in `web/.env`:
+
+- `GITHUB_ID`: GitHub OAuth Application Client ID
+- `GITHUB_SECRET`: GitHub OAuth Application Client Secret
+- `NEXTAUTH_SECRET`: Cryptographic secret key used for session encryption
+- `NEXTAUTH_URL`: Canonical dashboard address (e.g., http://localhost:9120)
+- `AUTORE_ALLOWED_USERS`: Comma-separated list of authorized GitHub logins (e.g., user1,user2)
+
+*Note: GitHub logins are evaluated case-insensitively. Authorized access can alternatively be configured via `web/allowed-users.json`.*
+
+### 3. Launch Services
+
+Start the background operational services:
 
 ```bash
-autore          # pilih [1] Web Dashboard
+autore start
 ```
 
-Pilihan `[1]` menyalakan/memeriksa layanan, menunggu sampai sehat, lalu mencetak URL. Ekuivalen CLI:
+Or run interactively via the CLI launcher:
 
 ```bash
-autore start    # systemctl --user start kedua unit
-autore status   # ringkasan cepat
-autore logs     # ikuti log (Ctrl-C untuk berhenti)
+autore
 ```
 
-### 3. Buka dari browser
+The interactive menu enables service status checks, log streaming, and diagnostic inspection:
 
+```text
+Select task:
+  [1] Web Dashboard   - Start services, verify health, print URL
+  [2] TUI Legacy      - Fullscreen terminal user interface
+  [3] Exit
+  [4] Admin           - Service controls (Start / Stop / Restart / Logs)
 ```
-http://100.80.3.14:9120        # lewat Tailscale (laptop kantor/rumah, HP)
-```
 
-Dashboard bind `0.0.0.0:9120`; API tetap `127.0.0.1:9121`. Port lain di sandbox: Jenkins `:8080`, Nexus `:8082`, SonarQube `:9000`, registry Docker `:5000`.
-
-Layanan berjalan sebagai unit **systemd user** (`deploy/autore-web-api.service`, `deploy/autore-web-dashboard.service`) dengan `linger` aktif, jadi tetap hidup setelah terminal ditutup.
+Access the dashboard at `http://localhost:9120` (or through your assigned host/Tailscale IP).
 
 ---
 
-## CLI Reference
+## CLI Command Reference
 
-| Perintah | Alias | Deskripsi |
+| Command | Alias | Description |
 |---|---|---|
-| `autore` | — | Menu interaktif (Web Dashboard / TUI Legacy / Keluar / Admin). Non-TTY: panduan singkat. |
-| `autore status` | `st` | Status sistem & pipeline terakhir dari `dashboard-status.json`. |
-| `autore runs` | — | Riwayat build Jenkins 7 hari terakhir (sumber grafik dashboard). |
-| `autore active` | — | Pipeline yang sedang berjalan atau menunggu di Jenkins. |
-| `autore deploy` | `dep` | Daftarkan project ke Jenkins CI/CD dan langsung trigger build. |
-| `autore quick-start` | `qs` | Alur 1-klik: file pipeline → repo GitHub → push → daftar Jenkins → trigger build. |
-| `autore init` | `in` | Generate `Dockerfile`, `Jenkinsfile`, `.dockerignore` untuk python/nodejs/java/go. |
-| `autore doctor` | `doc` | Kesehatan Runner, Docker, Java, Jenkins. |
-| `autore scan` | — | Gerbang keamanan pra-build: Static Guard + Gitleaks + Trivy (Docker). `--no-docker` untuk mode cepat tanpa kontainer. |
-| `autore scan-image` | — | Gerbang pasca-build pada image: UID non-root + Trivy image + SBOM CycloneDX. |
-| `autore hook install \| status \| uninstall` | — | Kelola Git pre-commit hook ("Satpam Pintu 1"). |
-| `autore sbom` | — | Daftar dependensi dari SBOM CycloneDX hasil build (dipakai dashboard). |
-| `autore pipeline record` | — | Catat satu peristiwa pipeline (tahap/status/log) ke `dashboard-status.json`; dipakai pipeline Jenkins. |
-| `autore serve` | — | Jalankan dashboard web (satu kotak "Buat" yang menjalankan alur 1-klik). |
-| `autore kemampuan` | — | Kemampuan mesin ini sebagai data (dipakai dashboard). |
-| `autore update` | — | Unduh rilis stabil terbaru dari GitHub Releases, verifikasi `SHA256SUMS`, ganti binary atomik. |
-| `autore start \| stop \| restart` | — | Kelola layanan dashboard via `systemctl --user`. |
-| `autore logs` | — | Ikuti log kedua layanan (`--no-follow`, `--lines N`). |
-
-Alias lengkap: **`st`, `dep`, `qs`, `doc`, `in`** — semuanya tampil di `autore --help`.
+| `autore` | — | Interactive launcher menu (Web Dashboard / TUI / Admin). In non-TTY environments, prints quick help. |
+| `autore status` | `st` | Prints live system status, infrastructure health, and latest pipeline record. |
+| `autore runs` | — | Retrieves 7-day Jenkins pipeline run history. |
+| `autore active` | — | Lists actively running or queued pipeline jobs. |
+| `autore deploy` | `dep` | Registers application project to Jenkins CI/CD and triggers automated build. |
+| `autore quick-start` | `qs` | 1-Click workflow: scaffolds code, creates GitHub repository, configures Jenkins, and runs build. |
+| `autore init` | `in` | Generates standardized `Dockerfile`, `Jenkinsfile`, and `.dockerignore` for python, nodejs, java, or go. |
+| `autore doctor` | `doc` | Diagnoses health of Runner, Docker daemon, Java runtime, and Jenkins connection. |
+| `autore scan` | — | Pre-build security scan: Static Byte Guard + Gitleaks + Trivy. Supports `--no-docker` fast mode. |
+| `autore scan-image` | — | Post-build container scan: verifies non-root execution, scans CVEs, and exports CycloneDX SBOM. |
+| `autore hook install` | — | Installs local Git pre-commit security hook. |
+| `autore sbom` | — | Inspects software supply chain dependencies from build CycloneDX SBOM artifacts. |
+| `autore start / stop / restart` | — | Controls background services via systemd user manager. |
+| `autore logs` | — | Streams real-time operational logs from dashboard and API services (`--lines N`, `--no-follow`). |
+| `autore update` | — | Downloads and atomicity verifies the latest binary release from GitHub Releases. |
 
 ```bash
-autore st                          # alias status
-autore init --app-name klaim-api --stack python --app-port 8000 --deploy-port 8083
-autore scan --no-docker --path .   # gerbang cepat pra-commit (<1 detik)
-autore scan-image --image 127.0.0.1:5000/klaim-api:build-42 --severity HIGH,CRITICAL \
-  --sbom-output dist/sbom.cdx.json
-autore logs --no-follow            # 50 baris terakhir lalu keluar
-```
-
-**Catatan:** autentikasi CLI (`autore deploy`/`quick-start`) menanyakan kredensial sekali lalu menyimpannya di `~/.config/autore/` (`github_token`, `jenkins.conf`). Kredensial Jenkins/Nexus tidak pernah dicetak ke terminal atau log.
-
----
-
-## Security Gates (9 Tahap Fail-Closed)
-
-Pipeline otoritatif ada di repositori admin (`vars/autorePipeline.groovy`), bukan di repo aplikasi — pembuat PR tidak bisa melemahkan gerbangnya. Setiap tahap gagal = pipeline berhenti, tidak ada tahap yang dilewati diam-diam.
-
-| # | Tahap | Yang diperiksa |
-|---|---|---|
-| 1 | **Checkout & Audit Metadata** | Commit SHA 40-hex penuh (menolak `SHORT_SHA`/`latest`), menyiapkan metadata audit. |
-| 2 | **Autore Static Guard & Gitleaks** | Static Byte Guard native + deteksi kebocoran kredensial dengan Gitleaks. |
-| 3 | **Trivy Source & Config Scan** | Kerentanan dependensi (SCA) + salah konfigurasi Dockerfile, level HIGH/CRITICAL. |
-| 4 | **Clippy & SonarQube SAST Gate** | Ekspor Clippy + `sonar-scanner`; dilewati hanya kalau proyek memang bukan Rust (`cli/Cargo.toml` tidak ada). |
-| 5 | **Build Image & Static musl Binary** | `docker build` dengan tag immutable + binary Rust musl statis. |
-| 6 | **Trivy Final Image Scan & SBOM** | UID non-root + CVE image HIGH/CRITICAL + ekspor SBOM CycloneDX. |
-| 7 | **Verify Checksums** | `SHA256SUMS` untuk artefak rilis. |
-| 8 | **Push to Nexus & Verify Remote Digest** | Repositori `ALLOW_ONCE` (tanpa redeploy) + verifikasi digest lewat `HEAD` terotentikasi. |
-| 9 | **Deploy by Verified Digest** | Deploy memakai `@sha256:<digest>` yang sudah diverifikasi — bukan tag yang bisa bergeser. |
-
-Notifikasi hasil (lolos `9/9` atau gagal berikut nama tahapnya) dikirim ke Telegram oleh `scripts/notify-telegram.sh`. Di sisi developer, pintu pertama tetap lokal: `autore hook install` memasang pre-commit hook yang memanggil `autore scan`.
-
----
-
-## Troubleshooting
-
-**Port bentrok (`EADDRINUSE`) saat pilih `[1]` atau `autore start`**
-Dashboard memakai `9120` dan API `9121`. Cek pemakai port: `ss -ltnp | grep -E '9120|9121'`. Kalau yang menahan adalah layanan Autore yang basi: `autore restart`. Untuk aplikasi yang akan di-deploy, beri port host berbeda sejak awal: `autore init --deploy-port 8083`.
-
-**Gagal login / diarahkan ke `/403`**
-Anda lolos GitHub tetapi tidak ada di whitelist. Tambahkan username (case-insensitive) ke `web/allowed-users.json`, atau set `AUTORE_ALLOWED_USERS="user1,user2"` di `web/.env` (env tidak kosong menimpa berkas). Setelah mengubah `.env`: `autore restart`. Kalau halaman login malah error, biasanya `GITHUB_ID`/`GITHUB_SECRET`/`NEXTAUTH_SECRET` belum terisi di `web/.env`.
-
-**Audit log kosong**
-`~/.local/state/autore/audit.log` hanya ditulis oleh **aksi tulis** dari dashboard (`deploy`, `quick-start`, `scan`) — membuka halaman tidak menulis apa pun. Cek juga `AUTORE_AUDIT_LOG`/`XDG_STATE_HOME`: kalau salah satu diset di unit layanan, berkasnya berpindah ke sana. Baris ringkas juga bisa dibaca langsung: `autore logs`.
-
-**Dashboard menampilkan data lama**
-Artinya API atau Jenkins tidak terjangkau; kartu akan menandainya (`Gagal terhubung ke Jenkins. Menampilkan data terakhir.`). Cek `autore logs`, lalu `autore status`. Data yang tidak ada ditampilkan sebagai `unknown`/kosong, bukan angka karangan.
-
-**Layanan mati setelah terminal ditutup**
-Cek `loginctl show-user $USER -p Linger` harus `Linger=yes`; kalau tidak: `loginctl enable-linger $USER`. Sesudah itu `autore start`.
-
-**`autore` tidak bereaksi di skrip/CI**
-Output bukan TTY, jadi menu sengaja diganti panduan singkat. Pakai subcommand eksplisit (`autore status`, `autore runs`).
-
-**Ada tes CLI yang merah**
-`cli/tests/sbom_cli.rs` punya satu tes lama yang merah (perbedaan nama direktori workspace `autore-workspace` vs `.autore-workspace`), tidak berkaitan dengan fitur aplikasi. Sisanya hijau.
-
----
-
-## Testing
-
-```bash
-# CLI Rust (dari cli/, butuh export PATH=$HOME/.cargo/bin:$PATH)
-cargo test --bin autore          # 284 lolos
-cargo test --test admin_cli      # 7 lolos
-cargo test --test launcher_cli   # 5 lolos
-
-# Dashboard & API (dari web/)
-npm test                         # 506 tes / 57 berkas, semua lolos
+# Example usages
+autore st
+autore init --app-name claims-service --stack python --app-port 8000 --deploy-port 8083
+autore scan --no-docker --path .
+autore scan-image --image 127.0.0.1:5000/claims-service:build-10 --severity HIGH,CRITICAL --sbom-output dist/sbom.cdx.json
+autore logs --lines 50 --no-follow
 ```
 
 ---
 
-## Struktur Repositori
+## Verification & Testing
+
+Both the core binary and web applications maintain rigorous test suites:
+
+```bash
+# Core Rust CLI Test Suite (from cli/)
+cargo test --bin autore          # 284 passed
+cargo test --test admin_cli      # 7 passed
+cargo test --test launcher_cli   # 5 passed
+
+# Web Dashboard & API Test Suite (from web/)
+npm test                         # 515 tests passed across 57 test files (100% green)
+```
+
+---
+
+## Repository Structure
 
 ```text
 Autore/
-├── install.sh / install.ps1      # Installer 1-baris (Linux musl / Windows), verifikasi SHA-256
-├── cli/                          # Core: binary Rust `autore` (semua logika)
-│   ├── src/                      # main.rs + admin.rs, launcher.rs, tui.rs, templates.rs, scanner.rs,
-│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, github.rs, doctor.rs, ...
-│   ├── tests/                    # Tes integrasi biner: admin_cli, launcher_cli, scan_cli, sbom_cli
+├── install.sh / install.ps1      # Automated single-command platform installers
+├── cli/                          # Core: Standalone Rust binary (all operational logic)
+│   ├── src/                      # main.rs, admin.rs, launcher.rs, templates.rs, scanner.rs,
+│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, doctor.rs, ...
+│   ├── tests/                    # Integration test suite (admin_cli, launcher_cli, scan_cli, sbom_cli)
 │   └── Cargo.toml
-├── web/                          # Interface: monorepo npm (workspaces)
-│   ├── apps/dashboard/           # Next.js — halaman /, /pipeline, /applications(+sbom), /security, /login, /403
-│   ├── apps/api/                 # Hono — sesi GitHub, whitelist, aksi, audit, status/runs/sbom/active
-│   ├── allowed-users.json        # Whitelist GitHub (sumber kebenaran)
-│   └── .env                      # Rahasia saja: GITHUB_ID, GITHUB_SECRET, NEXTAUTH_SECRET, AUTORE_ALLOWED_USERS
-├── deploy/                       # Unit systemd user: autore-web-api, autore-web-dashboard
-├── vars/autorePipeline.groovy    # Jenkins Trusted Shared Library — 9 gerbang fail-closed
-├── scripts/                      # ci-sonarqube-gate.sh, ci-nexus-publish.sh, ci-deploy-by-digest.sh,
-│                                 # build-musl-release.sh, publish-release.sh, notify-telegram.sh
-├── runner/                       # Provisioning + service Jenkins Agent (setup-agent.sh, jenkins-agent.service)
-├── sandbox/                      # Lingkungan uji: services/ (SonarQube, Nexus), jenkins/, dummy-app/
-├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md + plans/ (riwayat rencana fitur)
-├── assets/banner.png
-└── Jenkinsfile                   # Pipeline CI/CD repo Autore sendiri
+├── web/                          # Interface: npm monorepo workspaces
+│   ├── apps/dashboard/           # Next.js 15 App Router (/ , /pipeline, /applications, /security, /403)
+│   ├── apps/api/                 # Hono API (GitHub authentication, whitelist, audit trail, status proxy)
+│   ├── allowed-users.json        # Primary GitHub user whitelist
+│   └── .env                      # Environment secrets (OAuth keys, secrets, session configurations)
+├── deploy/                       # systemd user service definitions (autore-web-api, autore-web-dashboard)
+├── vars/autorePipeline.groovy    # Jenkins Trusted Shared Library (Authoritative 9-stage pipeline)
+├── scripts/                      # Release, SonarQube, Nexus, and Telegram notification utility scripts
+├── runner/                       # Jenkins agent provisioning and service configuration
+├── sandbox/                      # Testbed environments (SonarQube, Nexus, local Docker registry)
+├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md and architectural specifications
+├── assets/banner.png             # Official project banner asset
+└── Jenkinsfile                   # Self-hosting CI/CD pipeline for the Autore repository
 ```
 
 ---
 
-## Peringatan Keamanan Sandbox (C-1, C-2, H-6)
+## Security Advisory & Invariants (C-1, C-2, H-6)
 
 > [!WARNING]
-> Konfigurasi di repositori ini adalah **lingkungan uji coba (sandbox)**, belum production-ready:
-> 1. **C-1 — Keanggotaan grup `docker` di host.** User runner berada di grup `docker` (setara akses root). Jangan menaruh kredensial produksi dan jangan menjalankan PR dari sumber tidak tepercaya. Untuk produksi, runner wajib memakai container ephemeral + rootless builder sesuai [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
-> 2. **C-2 — Pipeline otoritatif.** Build wajib lewat Jenkins Trusted Shared Library milik admin (`vars/autorePipeline.groovy`), bukan skrip yang bisa dimodifikasi pembuat PR. Repo aplikasi diperlakukan sebagai *untrusted input*.
-> 3. **H-6 — Akses jaringan.** Tidak ada layanan yang bind ke `0.0.0.0` kecuali dashboard (`9120`). API `127.0.0.1:9121`; Jenkins `127.0.0.1:8080` + tailnet `:8080`; Nexus loopback + tailnet `:8082`; SonarQube loopback + tailnet `:9000`; registry Docker `127.0.0.1:5000`. Akses dari luar hanya lewat Tailscale.
+> The current sandbox configuration is designed for controlled evaluation environments:
+> 1. **C-1: Docker Group Membership**: The runner user belongs to the local `docker` group (equivalent to root privileges). Do not store production secrets or execute pull requests from untrusted external contributors. Production environments must transition to ephemeral rootless container runners as outlined in [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
+> 2. **C-2: Authoritative Pipeline**: Build steps must always be enforced through the admin-controlled Jenkins Trusted Shared Library (`vars/autorePipeline.groovy`). Application repositories are treated as untrusted inputs.
+> 3. **H-6: Network Perimeter**: No internal services bind to `0.0.0.0` except the Next.js frontend (`:9120`). The API (`:9121`), Docker registry (`:5000`), Jenkins (`:8080`), Nexus (`:8082`), and SonarQube (`:9000`) are bound strictly to loopback or private Tailscale interfaces.

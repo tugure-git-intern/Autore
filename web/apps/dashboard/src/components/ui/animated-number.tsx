@@ -15,10 +15,17 @@ export function AnimatedNumber({
   format,
   className,
 }: AnimatedNumberProps) {
+  const isReducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const isAutomated =
+    (typeof process !== "undefined" && process.env.NODE_ENV === "test") ||
+    (typeof navigator !== "undefined" && Boolean(navigator.webdriver));
+
   const resolvedDuration =
     duration !== undefined
       ? duration
-      : typeof process !== "undefined" && process.env.NODE_ENV === "test"
+      : isReducedMotion || isAutomated
         ? 0
         : 800;
 

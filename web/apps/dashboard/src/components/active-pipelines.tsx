@@ -54,13 +54,13 @@ export function ActivePipelines({
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {active.map((p) => {
             const { label, tone } = STATUS[p.status] ?? STATUS.queued;
             return (
-              <div key={`${p.app}-${p.number}`} data-testid="pipeline-card">
-                <Card className="relative flex h-full flex-col gap-2 overflow-hidden p-4">
-                  <div className="flex items-center justify-between gap-2">
+              <div key={`${p.app}-${p.number}`} data-testid="pipeline-card" className="min-w-0">
+                <Card className="relative flex h-full min-w-0 flex-col gap-2 overflow-hidden p-4">
+                  <div className="flex min-w-0 items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium text-gray-900">{p.app}</span>
                     {p.number > 0 ? (
                       <span className="text-xs text-gray-500">#{p.number}</span>
@@ -82,7 +82,7 @@ export function ActivePipelines({
                   </a>
 
                   {p.author ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-600">
                         {inisial(p.author)}
                       </span>

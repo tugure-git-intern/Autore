@@ -57,7 +57,7 @@ test.describe("Autore dashboard mobile contract @390x844", () => {
     await expect(page.locator("aside")).toBeHidden();
 
     // Topbar satu baris 64px, bukan 117px seperti waktu nav masih di dalamnya.
-    const tinggiTopbar = await page.locator("header").evaluate((el) => el.getBoundingClientRect().height);
+    const tinggiTopbar = await page.locator("header").first().evaluate((el) => el.getBoundingClientRect().height);
     expect(tinggiTopbar).toBeLessThanOrEqual(72);
 
     // Empat tujuan, semuanya terlihat penuh (tidak ada yang terpotong di tepi).

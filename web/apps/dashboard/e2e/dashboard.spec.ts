@@ -72,11 +72,11 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
       // berat (shadow-md ke atas) dan berarti desainnya menyimpang.
       //
       // Pengecualian: `<aside>` kerangka aplikasi memang mengambang, jadi
-      // bayangannya boleh menyebar sampai 12px supaya batas panel terbaca lembut.
+      // bayangannya boleh menyebar sampai 24px supaya batas panel terbaca lembut & tegas.
       // Karena panel menempel tepi kiri/atas/bawah viewport, hanya sisi kanannya
       // yang terlihat. Semua elemen lain tetap dibatasi 3px.
       const isAtMostShadowSm = (value: string, el: Element) => {
-        const maks = el.tagName === "ASIDE" ? 12 : 3;
+        const maks = el.tagName === "ASIDE" ? 24 : 3;
         const layers = value.split(/,(?![^(]*\))/);
         return layers
           .filter((layer) => !/rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(layer))

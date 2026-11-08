@@ -3,7 +3,8 @@
 import { AlertTriangle, Boxes, Container, Timer, Workflow } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
-import { formatLeadTime } from "@/lib/format";
+import { parseLeadTime, type PipelineWaktu } from "@/lib/format";
+import { AnimatedNumber } from "./ui/animated-number";
 import { useStatus } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
 import { OverviewAnalytics } from "./overview-analytics";
@@ -41,6 +42,22 @@ export function formatBuild(value: string | null): string {
   if (!value || !value.trim()) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : buildTime.format(date);
+}
+
+function AnimatedLeadTime({ pipeline }: { pipeline?: PipelineWaktu | null }) {
+  const parsed = parseLeadTime(pipeline);
+  if (!parsed) return <>-</>;
+  const totalDetik = parsed.menit * 60 + parsed.detik;
+  return (
+    <AnimatedNumber
+      value={totalDetik}
+      format={(sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m}m ${s}s`;
+      }}
+    />
+  );
 }
 
 export function DashboardOverview() {
@@ -86,16 +103,21 @@ export function DashboardOverview() {
         aria-label="Statistik"
         className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5"
       >
-        <StatCard label="Total Terdaftar" value={data.stats.total_apps} icon={Boxes} tone="blue" />
+        <StatCard
+          label="Total Terdaftar"
+          value={<AnimatedNumber value={data.stats.total_apps} />}
+          icon={Boxes}
+          tone="blue"
+        />
         <StatCard
           label="Container Berjalan"
-          value={data.stats.running_containers}
+          value={<AnimatedNumber value={data.stats.running_containers} />}
           icon={Container}
           tone="green"
         />
         <StatCard
           label="Lead Time"
-          value={formatLeadTime(data.latest_pipeline)}
+          value={<AnimatedLeadTime pipeline={data.latest_pipeline} />}
           icon={Timer}
           tone="violet"
           hint="Waktu proses"

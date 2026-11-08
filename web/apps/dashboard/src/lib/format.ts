@@ -33,20 +33,29 @@ export type PipelineWaktu = {
  * Format: "Xm Ys" (misal "1m 45s"). Kosong / belum ada -> "-".
  * started_at fallback ke stage_times[0].at bila belum tersedia di level root.
  */
-export function formatLeadTime(pipeline?: PipelineWaktu | null): string {
-  if (!pipeline) return "-";
+export function parseLeadTime(
+  pipeline?: PipelineWaktu | null,
+): { menit: number; detik: number } | null {
+  if (!pipeline) return null;
   const mulai = pipeline.started_at ?? pipeline.stage_times?.[0]?.at;
   const selesai = pipeline.finished_at;
-  if (!mulai || !selesai) return "-";
+  if (!mulai || !selesai) return null;
 
   const awal = Date.parse(mulai);
   const akhir = Date.parse(selesai);
-  if (Number.isNaN(awal) || Number.isNaN(akhir) || akhir < awal) return "-";
+  if (Number.isNaN(awal) || Number.isNaN(akhir) || akhir < awal) return null;
 
   const detikTotal = Math.floor((akhir - awal) / 1000);
-  const menit = Math.floor(detikTotal / 60);
-  const detik = detikTotal % 60;
-  return `${menit}m ${detik}s`;
+  return {
+    menit: Math.floor(detikTotal / 60),
+    detik: detikTotal % 60,
+  };
+}
+
+export function formatLeadTime(pipeline?: PipelineWaktu | null): string {
+  const parsed = parseLeadTime(pipeline);
+  if (!parsed) return "-";
+  return `${parsed.menit}m ${parsed.detik}s`;
 }
 
 export function shortSha(sha: string): string {

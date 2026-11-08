@@ -1,5 +1,6 @@
 import { Medal } from "lucide-react";
 import type { RepositoryHealth } from "@/lib/contracts";
+import { AnimatedNumber } from "./ui/animated-number";
 
 /**
  * Kartu kesehatan repo. Sengaja bukan `StatCard`: rancangan Snorlx menaruh ikon
@@ -19,7 +20,7 @@ export function RepositoryHealthCard({ health }: { health: RepositoryHealth }) {
         </span>
       </div>
       <p className="mt-3 whitespace-nowrap text-xl font-semibold tabular-nums tracking-tight text-ink">
-        {health.score_percent}%
+        <AnimatedNumber value={health.score_percent} format={(n) => `${n}%`} />
       </p>
       <p className="mt-1 text-xs text-muted">
         {health.total_repos} repos · {health.gold} gold · {health.silver} silver · {health.bronze}{" "}

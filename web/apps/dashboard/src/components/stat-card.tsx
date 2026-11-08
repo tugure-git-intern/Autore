@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 export type StatTone = "blue" | "green" | "violet" | "amber";
@@ -11,7 +12,7 @@ const tones: Record<StatTone, string> = {
 
 export type StatCardProps = {
   label: string;
-  value: string | number;
+  value: ReactNode;
   icon: LucideIcon;
   tone?: StatTone;
   hint?: string;

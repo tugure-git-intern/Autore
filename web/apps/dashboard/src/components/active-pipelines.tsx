@@ -4,7 +4,7 @@ import { inisial, shortSha } from "@/lib/format";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { ChartCard } from "./ui/chart-card";
-import { GitBranch, Zap } from "lucide-react";
+import { CheckCircle2, GitBranch, RefreshCw, Zap } from "lucide-react";
 
 const STATUS: Record<ActivePipeline["status"], { label: string; tone: "blue" | "yellow" }> = {
   running: { label: "Berjalan", tone: "blue" },
@@ -19,10 +19,12 @@ export function ActivePipelines({
   active,
   counts,
   stale = false,
+  onRefresh,
 }: {
   active: readonly ActivePipeline[];
   counts: ActiveCounts;
   stale?: boolean;
+  onRefresh?: () => void;
 }) {
   const total = counts.running + counts.queued;
 
@@ -31,17 +33,45 @@ export function ActivePipelines({
       title="Active Pipelines"
       subtitle="Pipeline yang sedang berjalan atau menunggu"
       action={
-        <span className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 text-green-700">
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             {total} berjalan atau menunggu
           </span>
           {stale ? <span className="text-amber-600">data terakhir</span> : null}
-        </span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          >
+            <RefreshCw className="h-3 w-3 text-gray-500" aria-hidden="true" />
+            <span>Refresh</span>
+          </button>
+        </div>
       }
     >
       {active.length === 0 ? (
-        <p className="text-sm text-gray-500">Semua pipeline selesai</p>
+        <div
+          data-testid="active-pipelines-empty"
+          className="flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div className="mb-4 rounded-full bg-green-50 p-3">
+            <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Semua Pipeline Selesai</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+            Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya
+            akan muncul di sini secara real-time.
+          </p>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="mt-6 inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+            <span>Refresh</span>
+          </button>
+        </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {active.map((p) => {
@@ -89,10 +119,6 @@ export function ActivePipelines({
                       aria-hidden="true"
                       className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-blue-500/15 motion-reduce:bg-blue-500"
                     >
-                      {/* Satu komet rigid: pembungkus 2/3 lebar kartu berisi ekor (kiri, transparan)
-                          dan kepala (kanan, solid) yang menempel tanpa celah. Fasa tidak lagi
-                          diatur lewat `animation-delay`: hasil ukur di browser menunjukkan pita
-                          terpisah ~25% siklus saat salah satunya wrap lebih dulu. Tanpa gradien. */}
                       <div
                         data-testid="progress-comet"
                         className="absolute inset-y-0 left-0 flex w-2/3 motion-safe:animate-[geser_1.6s_linear_infinite] motion-reduce:hidden"

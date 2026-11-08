@@ -1,5 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { ActiveCounts, ActivePipeline } from "@/lib/contracts";
 import { ActivePipelines } from "./active-pipelines";
 
@@ -16,16 +16,34 @@ const pipeline = (extra: Partial<ActivePipeline> = {}): ActivePipeline => ({
 });
 
 const antre = (extra: Partial<ActivePipeline> = {}): ActivePipeline =>
-  pipeline({ app: "ui-demo", number: 0, status: "queued", branch: "", commit_sha: "", author: "", url: "http://100.80.3.14:8080/job/ui-demo", ...extra });
+  pipeline({
+    app: "ui-demo",
+    number: 0,
+    status: "queued",
+    branch: "",
+    commit_sha: "",
+    author: "",
+    url: "http://100.80.3.14:8080/job/ui-demo",
+    ...extra,
+  });
 
 const counts = (active: readonly ActivePipeline[]): ActiveCounts => ({
   running: active.filter((p) => p.status === "running").length,
   queued: active.filter((p) => p.status === "queued").length,
 });
 
-const gambar = (active: readonly ActivePipeline[], stale = false) => {
+const gambar = (
+  active: readonly ActivePipeline[],
+  stale = false,
+  onRefresh?: () => void,
+) => {
   const hasil = render(
-    <ActivePipelines active={active} counts={counts(active)} stale={stale} />,
+    <ActivePipelines
+      active={active}
+      counts={counts(active)}
+      stale={stale}
+      onRefresh={onRefresh}
+    />,
   );
   return { ...hasil, kartu: () => screen.queryAllByTestId("pipeline-card") };
 };
@@ -44,6 +62,16 @@ describe("ActivePipelines", () => {
     const hitungan = screen.getByText("1 berjalan atau menunggu");
     expect(hitungan.querySelector("svg")).not.toBeNull();
     expect(hitungan.className).toContain("text-green-700");
+  });
+
+  it("header memuat tombol refresh yang memanggil onRefresh saat diklik", () => {
+    const onRefresh = vi.fn();
+    gambar([pipeline()], false, onRefresh);
+
+    const tombolRefresh = screen.getByRole("button", { name: "Refresh" });
+    expect(tombolRefresh).toBeInTheDocument();
+    fireEvent.click(tombolRefresh);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("kartu berjalan memakai badge biru dan bar indeterminate", () => {
@@ -65,10 +93,6 @@ describe("ActivePipelines", () => {
     expect(track.className).toContain("overflow-hidden");
     expect(track.className).toContain("bg-blue-500/15");
 
-    // Komet = satu pembungkus rigid selebar 2/3 kartu; kepala dan ekornya masing-masing 1/3.
-    // Dulu dua pita dibedakan fasa lewat `animation-delay`, tapi hasil ukur di browser: begitu
-    // satu pita wrap ke kanan sementara yang lain belum, pasangan itu pecah ~25% siklus.
-    // Pembungkus rigid membuat keduanya selalu menempel, berapa pun fasenya.
     const komet = isi.getByTestId("progress-comet");
     expect(komet.className).toContain("w-2/3");
     expect(komet.className).toContain("flex");
@@ -82,7 +106,6 @@ describe("ActivePipelines", () => {
     }
     expect(depan.className).toContain("bg-blue-500");
     expect(ekor.className).toContain("bg-blue-400/50");
-    // Ujungnya dibulatkan hanya di sisi luar komet, supaya sambungannya tidak terlihat.
     expect(ekor.className).toContain("rounded-l-full");
     expect(depan.className).toContain("rounded-r-full");
     for (const pita of [depan, ekor]) {
@@ -97,8 +120,6 @@ describe("ActivePipelines", () => {
     const isi = within(kartu()[0]);
     const track = isi.getByTestId("progress-indeterminate");
 
-    // jsdom tidak mengevaluasi media query, jadi di sini yang dikunci kelasnya saja;
-    // perilaku aslinya dibuktikan di e2e lewat `emulateMedia({ reducedMotion })`.
     expect(track.className).toContain("motion-reduce:bg-blue-500");
     expect(isi.getByTestId("progress-comet").className).toContain("motion-reduce:hidden");
   });
@@ -119,7 +140,6 @@ describe("ActivePipelines", () => {
     expect(garis.className).toContain("bg-yellow-400");
     expect(garis.className).toContain("h-1");
     expect(garis.className).toContain("absolute");
-    // Belum jalan = tidak ada yang bergerak: tidak ada animasi, tidak ada komet.
     expect(garis.className).not.toContain("animate-");
     expect(isi.queryByTestId("progress-comet")).toBeNull();
     expect(isi.queryByTestId("progress-band-depan")).toBeNull();
@@ -149,7 +169,7 @@ describe("ActivePipelines", () => {
     const { kartu, container } = gambar([antre()]);
 
     const isi = within(kartu()[0]);
-    expect(isi.getAllByText("—")).toHaveLength(2); // cuma branch dan commit
+    expect(isi.getAllByText("—")).toHaveLength(2);
     expect(isi.queryByText("?")).toBeNull();
     expect(container.querySelector("span.rounded-full")).toBeNull();
   });
@@ -163,12 +183,59 @@ describe("ActivePipelines", () => {
     expect(container.querySelector("span.rounded-full")).not.toBeNull();
   });
 
-  it("empty state tetap tampil supaya fiturnya terlihat ada", () => {
-    const { kartu } = gambar([]);
+  it("empty state berdesain Snorlx: ikon CheckCircle2, teks judul, deskripsi, dan tombol refresh", () => {
+    const onRefresh = vi.fn();
+    const { kartu } = gambar([], false, onRefresh);
 
-    expect(screen.getByText("Semua pipeline selesai")).toBeInTheDocument();
     expect(screen.getByText("0 berjalan atau menunggu")).toBeInTheDocument();
     expect(kartu()).toHaveLength(0);
+
+    // Layout pembungkus empty state
+    const emptyWrapper = screen.getByTestId("active-pipelines-empty");
+    expect(emptyWrapper.className).toContain("flex");
+    expect(emptyWrapper.className).toContain("flex-col");
+    expect(emptyWrapper.className).toContain("items-center");
+    expect(emptyWrapper.className).toContain("justify-center");
+    expect(emptyWrapper.className).toContain("py-12");
+    expect(emptyWrapper.className).toContain("text-center");
+
+    // Ikon CheckCircle2 di dalam lingkaran hijau pastel
+    const iconContainer = emptyWrapper.querySelector("div");
+    expect(iconContainer?.className).toContain("bg-green-50");
+    expect(iconContainer?.className).toContain("rounded-full");
+    expect(iconContainer?.className).toContain("p-3");
+    expect(iconContainer?.className).toContain("mb-4");
+    const svg = iconContainer?.querySelector("svg");
+    expect(svg?.getAttribute("class")).toContain("h-12");
+    expect(svg?.getAttribute("class")).toContain("w-12");
+    expect(svg?.getAttribute("class")).toContain("text-green-500");
+
+    // Judul
+    const judul = screen.getByRole("heading", { name: "Semua Pipeline Selesai" });
+    expect(judul).toBeInTheDocument();
+    expect(judul.className).toContain("text-lg");
+    expect(judul.className).toContain("font-semibold");
+    expect(judul.className).toContain("text-gray-900");
+
+    // Deskripsi
+    const deskripsi = screen.getByText(
+      "Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya akan muncul di sini secara real-time.",
+    );
+    expect(deskripsi).toBeInTheDocument();
+    expect(deskripsi.className).toContain("text-sm");
+    expect(deskripsi.className).toContain("text-gray-500");
+    expect(deskripsi.className).toContain("max-w-md");
+    expect(deskripsi.className).toContain("mx-auto");
+    expect(deskripsi.className).toContain("mt-2");
+
+    // Tombol refresh di dalam empty state
+    const tombolRefresh = within(emptyWrapper).getByRole("button", { name: "Refresh" });
+    expect(tombolRefresh).toBeInTheDocument();
+    expect(tombolRefresh.className).toContain("mt-6");
+    expect(tombolRefresh.className).toContain("border");
+    expect(tombolRefresh.className).toContain("border-gray-200");
+    fireEvent.click(tombolRefresh);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("menandai data terakhir saat payload basi", () => {

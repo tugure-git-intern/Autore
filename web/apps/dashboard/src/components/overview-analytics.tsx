@@ -28,7 +28,7 @@ export function OverviewAnalytics() {
   return (
     <>
       <div className="mt-6">
-        <ActivePipelines active={aktif.active} counts={aktif.counts} stale={aktif.stale} />
+        <ActivePipelines active={aktif.active} counts={aktif.counts} stale={aktif.stale} onRefresh={aktif.refresh} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">

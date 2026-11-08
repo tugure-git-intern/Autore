@@ -199,8 +199,8 @@ describe("Navbar", () => {
     expect(header.className).not.toContain("mx-3");
     expect(header.className).not.toContain("mt-3");
     expect(header.className).toContain("bg-[#F0F5FE]");
-    expect(header.className).toContain("border-b");
-    expect(header.className).toContain("border-gray-200");
+    // Garis panjang di bawah topbar sudah dibuang: bar menyatu dengan kanvas.
+    expect(header.className).not.toContain("border");
 
     const banner = within(screen.getByRole("banner"));
     const teksStatus = banner.getByRole("status").querySelector("span.text-xs") as HTMLElement;

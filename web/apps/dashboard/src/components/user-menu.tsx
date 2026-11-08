@@ -11,7 +11,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
 
   return (
     <details className="relative">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 hover:bg-gray-50">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-[#545F72] hover:bg-white/60">
         {user.image ? (
           <img
             src={user.image}
@@ -23,14 +23,14 @@ export function UserMenu({ user }: { user: SessionUser }) {
         ) : (
           <span
             aria-hidden="true"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-ink"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-xs font-medium text-[#545F72]"
           >
             {user.login.slice(0, 2).toUpperCase()}
           </span>
         )}
         {/* Nama pengguna disembunyikan di layar sempit: avatar + aria-label sudah
             cukup, dan topbar 64px harus muat bersama status + tombol Sync. */}
-        <span className="hidden text-xs font-medium text-ink sm:inline">{label}</span>
+        <span className="hidden text-xs font-medium text-[#545F72] sm:inline">{label}</span>
       </summary>
       <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-sm">
         <p className="px-2 py-1 text-xs text-muted">@{user.login}</p>

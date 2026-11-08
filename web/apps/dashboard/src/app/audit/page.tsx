@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, History, RefreshCw } from "lucide-react";
 import { AuditTimeline } from "@/components/audit/audit-timeline";
+import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { fetchAuditLog, type AuditEntry } from "@/lib/audit-client";
 
 export default function AuditPage() {
@@ -45,40 +46,30 @@ export default function AuditPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-5xl space-y-6">
-        {/* Header Halaman */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm">
-              <History className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
-                Audit Log
-              </h1>
-              <p className="text-xs text-gray-500 sm:text-sm">
-                Jejak audit aktivitas operasional dan pipeline DevSecOps secara kronologis.
-              </p>
-            </div>
-          </div>
+    <div className="space-y-0">
+      {/* Header Tab Card ala Google Cloud Console */}
+      <PageTabHeader
+        title="Audit Log"
+        description="Jejak audit aktivitas operasional dan pipeline DevSecOps secara kronologis."
+        icon={History}
+        action={
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Muat Ulang
+          </button>
+        }
+      />
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Muat Ulang
-            </button>
-          </div>
-        </div>
-
+      {/* Lembaran Konten Putih yang menyatu tanpa celah */}
+      <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-5 sm:p-6 pt-4">
         {/* State Error */}
         {error ? (
-          <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
             <div className="text-sm">
               <p className="font-semibold">Gagal memuat data audit log</p>

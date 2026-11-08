@@ -41,4 +41,15 @@ test.describe("Audit Log Feature", () => {
     await expect(page).toHaveURL(/.*\/audit/);
     await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();
   });
+
+  test("nol scroll horizontal di /audit pada layar mobile", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/audit", { waitUntil: "networkidle" });
+
+    const lebar = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(lebar.scrollWidth).toBeLessThanOrEqual(lebar.clientWidth);
+  });
 });

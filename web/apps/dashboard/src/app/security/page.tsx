@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { useStatus } from "@/components/app-shell";
 import { QualityRadar } from "@/components/security/quality-radar";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
 import { Card } from "@/components/ui/card";
 import { ChartCard } from "@/components/ui/chart-card";
+import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RunsPayload, StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
@@ -71,78 +72,79 @@ export default function SecurityPage() {
         </div>
       ) : null}
 
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Keamanan</h1>
-        <p className="mt-1 text-sm text-muted">
-          Skor dan temuan dari data pipeline terakhir yang tercatat.
-        </p>
-      </div>
+      <div className="space-y-0">
+        <PageTabHeader
+          title="Keamanan"
+          description="Skor dan temuan dari data pipeline terakhir yang tercatat."
+          icon={ShieldCheck}
+        />
 
-      {/* Anak grid default-nya min-width:auto: min-content-nya yang menentukan
-          lebar track. sha256 di kartu kanan tidak punya spasi, jadi tanpa
-          min-w-0 grid melebar ~660px dan halaman menggeser di layar HP. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
-        <ChartCard title="Skor Pipeline" subtitle="Lima sumbu terukur">
-          <QualityRadar score={skor} />
-        </ChartCard>
+        <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-5 sm:p-6 pt-4 space-y-4">
+          {/* Grid Skor & Gerbang */}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+            <ChartCard title="Skor Pipeline" subtitle="Lima sumbu terukur">
+              <QualityRadar score={skor} />
+            </ChartCard>
 
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-ink">Gerbang Keamanan</h2>
-          <p className="mt-4 font-mono text-2xl font-semibold text-ink">
-            {gerbang.gates_passed ?? 0}/{gerbang.gates_total ?? 0}
-          </p>
-          <p className="mt-2 break-words text-sm text-muted">
-            {dash(gerbang.security_summary) === "—"
-              ? "Belum ada ringkasan keamanan yang tercatat."
-              : gerbang.security_summary}
-          </p>
-        </Card>
-      </div>
-
-      <Card className="mt-4 overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="text-sm font-semibold text-ink">Temuan per Aplikasi</h2>
-        </div>
-        {temuan.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-muted">Tidak ada temuan keamanan tercatat</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th scope="col" className="px-5 py-3 font-medium">
-                    Aplikasi
-                  </th>
-                  <th scope="col" className="px-5 py-3 font-medium">
-                    Temuan
-                  </th>
-                  <th scope="col" className="px-5 py-3 font-medium">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {temuan.map((app) => (
-                  <tr key={app.id}>
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-ink">{dash(app.name)}</p>
-                      <p className="font-mono text-xs text-muted">{app.id}</p>
-                    </td>
-                    <td className="px-5 py-4 text-muted">{app.security_issues} temuan</td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={keBadge(app.status)} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Card className="p-5">
+              <h2 className="text-sm font-semibold text-ink">Gerbang Keamanan</h2>
+              <p className="mt-4 font-mono text-2xl font-semibold text-ink">
+                {gerbang.gates_passed ?? 0}/{gerbang.gates_total ?? 0}
+              </p>
+              <p className="mt-2 break-words text-sm text-muted">
+                {dash(gerbang.security_summary) === "—"
+                  ? "Belum ada ringkasan keamanan yang tercatat."
+                  : gerbang.security_summary}
+              </p>
+            </Card>
           </div>
-        )}
-      </Card>
 
-      <p className="mt-4 text-xs text-muted">
-        Skor dihitung dari data pipeline yang ada; sumbu tanpa data tidak ditampilkan.
-      </p>
+          <Card className="overflow-hidden">
+            <div className="border-b border-gray-200 px-5 py-4">
+              <h2 className="text-sm font-semibold text-ink">Temuan per Aplikasi</h2>
+            </div>
+            {temuan.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted">Tidak ada temuan keamanan tercatat</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+                    <tr>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Aplikasi
+                      </th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Temuan
+                      </th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {temuan.map((app) => (
+                      <tr key={app.id}>
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-ink">{dash(app.name)}</p>
+                          <p className="font-mono text-xs text-muted">{app.id}</p>
+                        </td>
+                        <td className="px-5 py-4 text-muted">{app.security_issues} temuan</td>
+                        <td className="px-5 py-4">
+                          <StatusBadge status={keBadge(app.status)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          <p className="text-xs text-muted">
+            Skor dihitung dari data pipeline yang ada; sumbu tanpa data tidak ditampilkan.
+          </p>
+        </div>
+      </div>
     </>
   );
 }

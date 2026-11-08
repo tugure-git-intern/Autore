@@ -3,7 +3,6 @@
 import { RefreshCw } from "lucide-react";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
-import { Button } from "./ui/button";
 import { UserMenu } from "./user-menu";
 
 export type ConnectionTone = "green" | "neutral" | "red";
@@ -13,12 +12,6 @@ const dotTone: Record<ConnectionTone, string> = {
   green: "bg-green-500",
   neutral: "bg-gray-400",
   red: "bg-red-500",
-};
-
-const textTone: Record<ConnectionTone, string> = {
-  green: "text-green-700",
-  neutral: "text-muted",
-  red: "text-red-600",
 };
 
 /**
@@ -58,10 +51,8 @@ export function Navbar({
   refreshing?: boolean;
   user: SessionUser;
 }) {
-  // Satuan baris tetap 64px di semua ukuran: bar atas tidak pernah tumbuh dua
-  // tingkat lagi sejak navigasi mobile pindah ke bar bawah.
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+    <header className="sticky top-0 z-10 border-b border-gray-200 bg-[#F0F5FE]">
       <div className="flex h-16 items-center justify-between gap-3 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span role="status" className="flex shrink-0 items-center gap-2">
@@ -72,25 +63,34 @@ export function Navbar({
                 connection.tone === "green" ? "motion-safe:animate-pulse" : ""
               }`}
             />
-            <span className={`text-xs font-medium ${textTone[connection.tone]}`}>
+            <span className="text-xs font-medium text-[#545F72]">
               {connection.label}
             </span>
           </span>
           {title ? (
             <>
-              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-gray-200" />
-              <p className="truncate text-sm font-semibold tracking-tight text-ink">{title}</p>
+              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-gray-300" />
+              <p className="truncate text-sm font-semibold tracking-tight text-[#545F72]">
+                <span className="font-normal text-[#545F72]/80">Autore / </span>
+                {title}
+              </p>
             </>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <Button onClick={onSync} disabled={refreshing} aria-busy={refreshing ? "true" : undefined}>
+          <button
+            type="button"
+            onClick={onSync}
+            disabled={refreshing}
+            aria-busy={refreshing ? "true" : undefined}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-300/80 bg-white/80 px-3 py-2 text-sm font-medium text-[#545F72] transition-colors hover:bg-white hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <RefreshCw
-              className={refreshing ? "h-4 w-4 motion-safe:animate-spin" : "h-4 w-4"}
+              className={refreshing ? "h-4 w-4 motion-safe:animate-spin text-[#545F72]" : "h-4 w-4 text-[#545F72]"}
               aria-hidden="true"
             />
             Sync
-          </Button>
+          </button>
           {user.login ? <UserMenu user={user} /> : null}
         </div>
       </div>

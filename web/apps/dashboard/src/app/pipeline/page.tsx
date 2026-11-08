@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Search, Workflow } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
 import { EmptyApplications } from "@/components/empty-applications";
@@ -9,6 +9,7 @@ import { AppDetail } from "@/components/pipeline/app-detail";
 import { AppPicker } from "@/components/pipeline/app-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { filterApps } from "@/lib/filter-apps";
 import { pilihAwal } from "@/lib/pilih-app";
@@ -90,62 +91,72 @@ function PipelineSplit() {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside
-          data-testid="panel-daftar"
-          className={`min-w-0 space-y-3 ${adaTerpilih && !lihatDaftar ? "hidden lg:block" : ""}`}
-        >
-          {data.applications.length === 0 ? (
-            <Card className="p-2">
-              <EmptyApplications />
-            </Card>
-          ) : (
-            <>
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Cari aplikasi..."
-                  aria-label="Cari aplikasi"
-                  className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"
-                />
-              </div>
-              <Card className="max-h-[calc(100vh-15rem)] overflow-y-auto p-1">
-                {daftar.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-muted">Tidak ada aplikasi yang cocok.</p>
-                ) : (
-                  <AppPicker applications={daftar} terpilih={terpilih?.id} onPilih={pilih} />
-                )}
-              </Card>
-            </>
-          )}
-        </aside>
+      <div className="space-y-0">
+        <PageTabHeader
+          title="Pipeline & Log"
+          description="Status eksekusi tahapan CI/CD dan riwayat build."
+          icon={Workflow}
+        />
 
-        <section
-          data-testid="panel-detail"
-          className={`min-w-0 ${adaTerpilih && !lihatDaftar ? "" : "hidden lg:block"}`}
-        >
-          {terpilih ? (
-            <AppDetail
-              app={terpilih}
-              pipeline={data.latest_pipeline}
-              runs={runs.hasil?.data.runs ?? []}
-              aktif={aktif.active}
-              applications={data.applications}
-              onDaftar={() => setLihatDaftar(true)}
-              onSelesai={reload}
-            />
-          ) : appId ? null : (
-            <Card className="p-2">
-              <EmptyApplications />
-            </Card>
-          )}
-        </section>
+        <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-4 sm:p-6 pt-4">
+          <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <aside
+              data-testid="panel-daftar"
+              className={`min-w-0 space-y-3 ${adaTerpilih && !lihatDaftar ? "hidden lg:block" : ""}`}
+            >
+              {data.applications.length === 0 ? (
+                <Card className="p-2">
+                  <EmptyApplications />
+                </Card>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                      aria-hidden="true"
+                    />
+                    <input
+                      type="search"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Cari aplikasi..."
+                      aria-label="Cari aplikasi"
+                      className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                    />
+                  </div>
+                  <Card className="max-h-[calc(100vh-15rem)] overflow-y-auto p-1">
+                    {daftar.length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-muted">Tidak ada aplikasi yang cocok.</p>
+                    ) : (
+                      <AppPicker applications={daftar} terpilih={terpilih?.id} onPilih={pilih} />
+                    )}
+                  </Card>
+                </>
+              )}
+            </aside>
+
+            <section
+              data-testid="panel-detail"
+              className={`min-w-0 ${adaTerpilih && !lihatDaftar ? "" : "hidden lg:block"}`}
+            >
+              {terpilih ? (
+                <AppDetail
+                  app={terpilih}
+                  pipeline={data.latest_pipeline}
+                  runs={runs.hasil?.data.runs ?? []}
+                  aktif={aktif.active}
+                  applications={data.applications}
+                  onDaftar={() => setLihatDaftar(true)}
+                  onSelesai={reload}
+                />
+              ) : appId ? null : (
+                <Card className="p-2">
+                  <EmptyApplications />
+                </Card>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   );

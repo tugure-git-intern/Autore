@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Layers } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
 import { filterApps, type StatusFilter } from "@/lib/filter-apps";
@@ -14,6 +14,7 @@ import { EmptyApplications } from "@/components/empty-applications";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLayarSempit } from "@/components/use-layar-sempit";
 
@@ -102,58 +103,57 @@ export default function ApplicationsPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Aplikasi</h1>
-          <p className="mt-1 text-sm text-muted">{applications.length} aplikasi terdaftar.</p>
-        </div>
-        <QuickStartDialog onSelesai={reload} />
-      </div>
+      <div className="space-y-0">
+        <PageTabHeader
+          title="Daftar Aplikasi"
+          description={`${applications.length} aplikasi terdaftar dalam pipeline DevSecOps.`}
+          icon={Layers}
+          action={<QuickStartDialog onSelesai={reload} />}
+        />
 
-      <div className="mt-4 space-y-3">
-        {applications.length === 0 ? null : (
-          <ApplicationsFilter
-            query={query}
-            onQueryChange={setQuery}
-            status={status}
-            onStatusChange={setStatus}
-            total={applications.length}
-            shown={tersaring.length}
-          />
-        )}
+        <div className="rounded-b-xl sm:rounded-b-2xl border border-gray-200 border-t-0 bg-white p-5 sm:p-6 pt-4 space-y-4">
+          {applications.length === 0 ? null : (
+            <ApplicationsFilter
+              query={query}
+              onQueryChange={setQuery}
+              status={status}
+              onStatusChange={setStatus}
+              total={applications.length}
+              shown={tersaring.length}
+            />
+          )}
 
-        {applications.length === 0 ? (
-          <EmptyApplications />
-        ) : tersaring.length === 0 ? (
-          <p className="text-sm text-gray-500">Tidak ada aplikasi yang cocok</p>
-        ) : sempit ? (
-          <Card className="divide-y divide-gray-100">
-            {tersaring.map((app) => {
-              const badge = toBadge(app.status);
-              return (
-                <div key={app.id} data-testid="kartu-aplikasi" className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink">{dash(app.name)}</p>
-                      <p className="font-mono text-xs text-muted">{app.id}</p>
-                      {app.author ? (
-                        <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
-                      ) : null}
+          {applications.length === 0 ? (
+            <EmptyApplications />
+          ) : tersaring.length === 0 ? (
+            <p className="text-sm text-gray-500">Tidak ada aplikasi yang cocok</p>
+          ) : sempit ? (
+            <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+              {tersaring.map((app) => {
+                const badge = toBadge(app.status);
+                return (
+                  <div key={app.id} data-testid="kartu-aplikasi" className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink">{dash(app.name)}</p>
+                        <p className="font-mono text-xs text-muted">{app.id}</p>
+                        {app.author ? (
+                          <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
+                        ) : null}
+                      </div>
+                      <StatusBadge status={badge} />
                     </div>
-                    <StatusBadge status={badge} />
+                    <p className="mt-2 text-xs text-muted">
+                      {findings(badge, app.security_issues)} · Terakhir update{" "}
+                      {formatBuild(app.last_build)}
+                    </p>
+                    <AksiAplikasi app={app.id} onDone={reload} sentuh />
                   </div>
-                  <p className="mt-2 text-xs text-muted">
-                    {findings(badge, app.security_issues)} · Terakhir update{" "}
-                    {formatBuild(app.last_build)}
-                  </p>
-                  <AksiAplikasi app={app.id} onDone={reload} sentuh />
-                </div>
-              );
-            })}
-          </Card>
-        ) : (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
+                );
+              })}
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
                   <tr>
@@ -199,8 +199,8 @@ export default function ApplicationsPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
-        )}
+          )}
+        </div>
       </div>
     </>
   );

@@ -55,12 +55,15 @@ describe("topbar route context", () => {
   }
 
   it.each([["/applications", "Daftar Aplikasi"], ["/pipeline", "Pipeline & Log"]])(
-    "titles the 64px topbar from the route (%s)",
+    "titles the 64px topbar with GCP breadcrumb format Autore / <Judul> (%s)",
     (pathname, expected) => {
       renderShell(pathname);
 
       const banner = within(screen.getByRole("banner"));
-      expect(banner.getByText(expected, { selector: "p" })).toBeVisible();
+      const p = banner.getByText((content) => content.includes(expected), { selector: "p" });
+      expect(p).toBeVisible();
+      expect(p.textContent).toContain(`Autore / ${expected}`);
+      expect(p.className).toContain("text-[#545F72]");
     },
   );
 
@@ -68,7 +71,7 @@ describe("topbar route context", () => {
     renderShell("/");
 
     const banner = within(screen.getByRole("banner"));
-    // Nama produk sudah ada di sidebar; topbar tidak mengulangnya lagi.
+    // Nama produk sudah ada di sidebar; topbar tidak mengulangnya lagi saat title null.
     expect(banner.queryByText("Autore")).toBeNull();
     expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
     expect(banner.getByRole("status")).toBeVisible();
@@ -118,13 +121,18 @@ describe("Navbar", () => {
     return hasil;
   }
 
-  it("carries a non-heading title, the status dot, Sync and the signed-in user", () => {
+  it("carries GCP breadcrumb title, status dot, Sync in #545F72 and signed-in user", () => {
     renderNavbar(USER);
 
     expect(screen.queryByRole("heading")).toBeNull();
-    expect(screen.getByText("Dashboard", { selector: "p" })).toBeVisible();
+    const p = screen.getByText((c) => c.includes("Dashboard"), { selector: "p" });
+    expect(p).toBeVisible();
+    expect(p.textContent).toContain("Autore / Dashboard");
+    expect(p.className).toContain("text-[#545F72]");
     expect(screen.getByRole("status")).toHaveTextContent("Terhubung");
-    expect(screen.getByRole("button", { name: "Sync" })).toBeVisible();
+    const syncBtn = screen.getByRole("button", { name: "Sync" });
+    expect(syncBtn).toBeVisible();
+    expect(syncBtn.className).toContain("text-[#545F72]");
     expect(screen.getByAltText("tugure-git-intern")).toBeVisible();
     expect(screen.getByRole("button", { name: /keluar/i })).toBeVisible();
   });
@@ -154,12 +162,12 @@ describe("Navbar", () => {
     expect(titik.className).not.toContain("animate-pulse");
   });
 
-  it("menaruh indikator di kiri, sejajar vertikal, sebelum judul halaman", () => {
+  it("menaruh indikator di kiri, sejajar vertikal, sebelum judul halaman dengan tema GCP Console #F0F5FE", () => {
     const { container } = renderNavbar(USER, { tone: "green", label: "Terhubung" }, "Pipeline & Log");
 
     const banner = within(screen.getByRole("banner"));
     const indikator = banner.getByRole("status");
-    const judul = banner.getByText("Pipeline & Log", { selector: "p" });
+    const judul = banner.getByText((c) => c.includes("Pipeline & Log"), { selector: "p" });
 
     // Satu indikator saja — tidak ada kembaran di pojok kanan.
     expect(banner.getAllByRole("status")).toHaveLength(1);
@@ -172,7 +180,7 @@ describe("Navbar", () => {
     expect(pembungkusIndikator.className).toContain("flex");
     expect(pembungkusIndikator.className).toContain("items-center");
     expect(pembungkusIndikator.className).toContain("gap-2");
-    expect(container.querySelector("header")?.className).toContain("bg-white");
+    expect(container.querySelector("header")?.className).toContain("bg-[#F0F5FE]");
   });
 
   it("tanpa judul halaman, indikator tetap tampil sendiri", () => {
@@ -224,9 +232,6 @@ describe("Navbar", () => {
 });
 
 describe("AppShell", () => {
-  // Pengganti tes lama "refetches only /api/status": Sync sekarang menarik tiga
-  // sumber sekaligus. Perilaku lengkapnya (toast, disabled, klik beruntun) ada
-  // di app-shell.test.tsx; di sini cukup membuktikan cakupannya tiga endpoint.
   it("Sync menarik /api/status, /api/runs dan /api/active, bukan cuma status", async () => {
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL) =>

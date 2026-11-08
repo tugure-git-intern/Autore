@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, inisial, relativeTime, shortSha } from "./format";
+import { formatDuration, formatLeadTime, inisial, relativeTime, shortSha } from "./format";
 
 const SEKARANG = Date.parse("2026-11-04T10:00:00Z");
 
@@ -33,6 +33,68 @@ describe("formatDuration", () => {
     expect(formatDuration(0)).toBe("—");
     expect(formatDuration(-5)).toBe("—");
     expect(formatDuration(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatLeadTime", () => {
+  it("memformat selisih finished_at dan started_at ke Xm Ys", () => {
+    expect(
+      formatLeadTime({
+        started_at: "2026-11-04T10:00:00Z",
+        finished_at: "2026-11-04T10:01:45Z",
+      }),
+    ).toBe("1m 45s");
+    expect(
+      formatLeadTime({
+        started_at: "2026-11-04T10:00:00Z",
+        finished_at: "2026-11-04T10:00:46Z",
+      }),
+    ).toBe("0m 46s");
+    expect(
+      formatLeadTime({
+        started_at: "2026-11-04T10:00:00Z",
+        finished_at: "2026-11-04T10:00:00Z",
+      }),
+    ).toBe("0m 0s");
+  });
+
+  it("fallback ke stage_times[0].at bila started_at belum ada", () => {
+    expect(
+      formatLeadTime({
+        stage_times: [{ id: "checkout", at: "2026-11-04T10:00:00Z" }],
+        finished_at: "2026-11-04T10:01:45Z",
+      }),
+    ).toBe("1m 45s");
+  });
+
+  it("prioritaskan started_at bila keduanya tersedia", () => {
+    expect(
+      formatLeadTime({
+        started_at: "2026-11-04T10:00:00Z",
+        stage_times: [{ id: "checkout", at: "2026-11-04T10:00:10Z" }],
+        finished_at: "2026-11-04T10:01:45Z",
+      }),
+    ).toBe("1m 45s");
+  });
+
+  it("mengembalikan hyphen minus bila data kosong atau tidak valid", () => {
+    expect(formatLeadTime()).toBe("-");
+    expect(formatLeadTime(null)).toBe("-");
+    expect(formatLeadTime({})).toBe("-");
+    expect(formatLeadTime({ started_at: "2026-11-04T10:00:00Z" })).toBe("-");
+    expect(formatLeadTime({ finished_at: "2026-11-04T10:00:00Z" })).toBe("-");
+    expect(
+      formatLeadTime({
+        started_at: "bukan-tanggal",
+        finished_at: "2026-11-04T10:00:00Z",
+      }),
+    ).toBe("-");
+    expect(
+      formatLeadTime({
+        started_at: "2026-11-04T10:05:00Z",
+        finished_at: "2026-11-04T10:00:00Z",
+      }),
+    ).toBe("-");
   });
 });
 

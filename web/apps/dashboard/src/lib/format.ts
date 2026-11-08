@@ -22,6 +22,33 @@ export function formatDuration(ms: number): string {
   return `${menit}m ${Math.round(detik - menit * 60)}s`;
 }
 
+export type PipelineWaktu = {
+  started_at?: string;
+  finished_at?: string;
+  stage_times?: readonly { id: string; at: string }[];
+};
+
+/**
+ * Hitung selisih dari finished_at ke started_at di latest_pipeline.
+ * Format: "Xm Ys" (misal "1m 45s"). Kosong / belum ada -> "-".
+ * started_at fallback ke stage_times[0].at bila belum tersedia di level root.
+ */
+export function formatLeadTime(pipeline?: PipelineWaktu | null): string {
+  if (!pipeline) return "-";
+  const mulai = pipeline.started_at ?? pipeline.stage_times?.[0]?.at;
+  const selesai = pipeline.finished_at;
+  if (!mulai || !selesai) return "-";
+
+  const awal = Date.parse(mulai);
+  const akhir = Date.parse(selesai);
+  if (Number.isNaN(awal) || Number.isNaN(akhir) || akhir < awal) return "-";
+
+  const detikTotal = Math.floor((akhir - awal) / 1000);
+  const menit = Math.floor(detikTotal / 60);
+  const detik = detikTotal % 60;
+  return `${menit}m ${detik}s`;
+}
+
 export function shortSha(sha: string): string {
   const bersih = sha.trim();
   return bersih ? bersih.slice(0, 7) : "—";

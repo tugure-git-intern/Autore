@@ -104,6 +104,7 @@ export function createApp(
   auth: { secret?: string; allowed?: string[] } = {},
   active: ActiveLoader = () => getActive(),
   sbom: SbomLoader = configuredSbom(run),
+  clock: () => number = () => Date.now(),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -128,7 +129,7 @@ export function createApp(
 
   app.get("/api/status", async (c) => {
     try {
-      const status = await loadDashboardStatus(run);
+      const status = await loadDashboardStatus(run, clock);
       c.header("Cache-Control", "no-store");
       return c.json(status);
     } catch {

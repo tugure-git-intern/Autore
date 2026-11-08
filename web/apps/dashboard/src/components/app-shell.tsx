@@ -60,6 +60,9 @@ export function useCurrentUser(): SessionUser {
   return useContext(UserContext);
 }
 
+export const INTERVAL_POLLING_RUNNING_MS = 5_000;
+export const INTERVAL_POLLING_IDLE_MS = 15_000;
+
 /**
  * Single owner of `/api/status`, plus the two other things the topbar Sync
  * button has to move: `/api/runs` and `/api/active`. Keeping all three here is
@@ -111,6 +114,43 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       controller.current?.abort();
     };
   }, [load]);
+
+  // Polling adaptif: cepat saat ada pipeline jalan (5s), santai saat idle (15s).
+  // Berhenti total bila tab browser di-minimize atau switch tab (Page Visibility).
+  const sedangJalan =
+    state?.data?.latest_pipeline?.status === "running" ||
+    (typeof aktif?.counts?.running === "number" && aktif.counts.running > 0);
+  const intervalPollingMs = sedangJalan
+    ? INTERVAL_POLLING_RUNNING_MS
+    : INTERVAL_POLLING_IDLE_MS;
+
+  useEffect(() => {
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      void load();
+    };
+
+    const timer = setInterval(tick, intervalPollingMs);
+
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void load();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+    };
+  }, [intervalPollingMs, load]);
 
   const reload = useCallback(() => {
     setLoading(true);

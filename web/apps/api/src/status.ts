@@ -66,7 +66,17 @@ export interface DashboardStatus {
   };
 }
 
+let lastRunner: RunAutore | undefined;
 let lastGood: DashboardStatus | undefined;
+let lastGoodAt = 0;
+
+export const CACHE_STATUS_MS = 5_000;
+
+export function resetStatusCache(): void {
+  lastRunner = undefined;
+  lastGood = undefined;
+  lastGoodAt = 0;
+}
 
 export async function runAutore(): Promise<string> {
   const { stdout } = await execFileAsync(
@@ -84,10 +94,18 @@ export async function runAutore(): Promise<string> {
 
 export async function loadDashboardStatus(
   run: RunAutore = runAutore,
+  clock: () => number = () => Date.now(),
 ): Promise<{ data: DashboardStatus; stale: boolean }> {
+  const sekarang = clock();
+  if (run === lastRunner && lastGood && sekarang - lastGoodAt < CACHE_STATUS_MS) {
+    return { data: lastGood, stale: false };
+  }
+
   try {
     const data = parseDashboardStatus(await run());
+    lastRunner = run;
     lastGood = data;
+    lastGoodAt = sekarang;
     return { data, stale: false };
   } catch (error) {
     if (lastGood) return { data: lastGood, stale: true };
@@ -175,7 +193,13 @@ function isApplication(value: unknown): value is DashboardStatus["applications"]
   );
 }
 
-const PIPELINE_OPSIONAL = ["stage_times", "finished_at", "gates_passed", "gates_total"];
+const PIPELINE_OPSIONAL = [
+  "stage_times",
+  "finished_at",
+  "started_at",
+  "gates_passed",
+  "gates_total",
+];
 
 function isPipeline(value: unknown): value is DashboardStatus["latest_pipeline"] {
   return (
@@ -197,6 +221,7 @@ function isPipeline(value: unknown): value is DashboardStatus["latest_pipeline"]
     isStages(value.stages) &&
     isStageTimes(value.stage_times) &&
     isAbsentOr<string>(value.finished_at, isString) &&
+    isAbsentOr<string>(value.started_at, isString) &&
     isAbsentOr<number>(value.gates_passed, isCount) &&
     isAbsentOr<number>(value.gates_total, isCount) &&
     isString(value.security_summary) &&

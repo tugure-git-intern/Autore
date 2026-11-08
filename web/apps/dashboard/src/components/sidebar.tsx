@@ -13,13 +13,13 @@ export function Sidebar() {
         data-testid="sidebar-brand"
         className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 px-6"
       >
-        {/* Mark Tugu Reasuransi (crop lockup: tagline tidak terbaca di ukuran sidebar).
-            h-10 + object-contain: garis halus di dasar ikon hilang kalau digambar 32 px. */}
+        {/* Lockup asli Tugu Reasuransi (ikon + wordmark + tagline), latar transparan.
+            h-10 + object-contain: seluruh lockup diskalakan utuh, tidak ada yang dipotong. */}
         <img
-          src="/tugure-logo.png"
+          src="/tugure-logo-asli.png"
           alt="Tugu Reasuransi"
-          width={342}
-          height={160}
+          width={790}
+          height={601}
           className="h-10 w-auto shrink-0 object-contain"
         />
         <div className="min-w-0">

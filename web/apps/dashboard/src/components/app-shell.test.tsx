@@ -220,7 +220,8 @@ describe("AppShell — notifikasi global", () => {
 
 describe("AppShell — kerangka mobile", () => {
   it("memasang bar navigasi bawah dan menyisakan ruang bawah supaya konten tidak tertutup", async () => {
-    vi.stubGlobal("fetch", balas());
+    const fetchMock = balas();
+    vi.stubGlobal("fetch", fetchMock);
 
     render(
       <AppShell user={USER}>
@@ -232,11 +233,13 @@ describe("AppShell — kerangka mobile", () => {
     // pb-24 = tinggi bar (64px) + jeda; tanpanya baris terakhir tabel tertutup bar.
     expect(screen.getByRole("main").className).toContain("pb-24");
     expect(screen.getByRole("main").className).toContain("pt-6");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 
   it("halaman tanpa kerangka (login) tidak menampilkan bar bawah", async () => {
     nav.pathname = "/login";
-    vi.stubGlobal("fetch", balas());
+    const fetchMock = balas();
+    vi.stubGlobal("fetch", fetchMock);
 
     render(
       <AppShell user={USER}>
@@ -245,10 +248,12 @@ describe("AppShell — kerangka mobile", () => {
     );
 
     expect(screen.queryByRole("navigation", { name: "Navigasi bawah" })).toBeNull();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 
   it("topbar tidak lagi menampung navigasi: satu baris 64px saja", async () => {
-    vi.stubGlobal("fetch", balas());
+    const fetchMock = balas();
+    vi.stubGlobal("fetch", fetchMock);
 
     render(
       <AppShell user={USER}>
@@ -259,5 +264,120 @@ describe("AppShell — kerangka mobile", () => {
     // Satu-satunya navigasi di luar sidebar adalah bar bawah — topbar bersih.
     expect(within(screen.getByRole("banner")).queryByRole("navigation")).toBeNull();
     expect(screen.getByRole("navigation", { name: "Navigasi bawah" })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  });
+});
+
+describe("AppShell — Smart Adaptive Polling", () => {
+  it("melakukan polling otomatis setiap 15 detik saat idle tanpa memicu tombol Sync", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const fetchMock = balas();
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <AppShell user={USER}>
+          <div />
+        </AppShell>,
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(2));
+
+      // Polling background tidak mengunci atau menampilkan spinner pada tombol Sync
+      expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("beralih ke polling 5 detik saat pipeline sedang running", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const runningStatus: ApiStatusResponse = {
+        ...STATUS,
+        data: {
+          ...STATUS.data,
+          latest_pipeline: {
+            ...STATUS.data.latest_pipeline,
+            status: "running",
+          },
+        },
+      };
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url === "/api/status") return response(runningStatus);
+        if (url === "/api/runs") return response({ data: RUNS, stale: false });
+        if (url === "/api/active") return response({ data: ACTIVE, stale: false });
+        throw new Error(`unexpected ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <AppShell user={USER}>
+          <div />
+        </AppShell>,
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled());
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(2));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("menghentikan polling saat tab hidden dan langsung memuat ulang saat kembali visible", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const fetchMock = balas();
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <AppShell user={USER}>
+          <div />
+        </AppShell>,
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+      });
+      expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(1);
+
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(2));
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      vi.useRealTimers();
+    }
   });
 });

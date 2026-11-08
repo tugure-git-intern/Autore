@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, Boxes, Container, ServerCog, Workflow } from "lucide-react";
+import { AlertTriangle, Boxes, Container, Timer, Workflow } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/contracts";
+import { formatLeadTime } from "@/lib/format";
 import { useStatus } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
 import { OverviewAnalytics } from "./overview-analytics";
@@ -93,10 +94,11 @@ export function DashboardOverview() {
           tone="green"
         />
         <StatCard
-          label="Infrastruktur CI/CD"
-          value="Jenkins & Nexus"
-          icon={ServerCog}
+          label="Lead Time"
+          value={formatLeadTime(data.latest_pipeline)}
+          icon={Timer}
           tone="violet"
+          hint="Waktu proses"
         />
         <StatCard
           label="Status Pipeline"

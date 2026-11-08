@@ -49,6 +49,7 @@ export type DashboardStatus = {
     /** Waktu mulai tiap tahap. Belum ada pada snapshot yang ditulis CLI lama. */
     stage_times?: StageTime[];
     finished_at?: string;
+    started_at?: string;
     gates_passed?: number;
     gates_total?: number;
     security_summary: string;

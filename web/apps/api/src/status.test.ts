@@ -97,15 +97,22 @@ describe("loadDashboardStatus", () => {
 
   it("returns stale last-known data after CLI failure", async () => {
     const { loadDashboardStatus } = await freshStatus();
+    let sekarang = 1_000;
 
-    await expect(loadDashboardStatus(async () => JSON.stringify(fixture))).resolves.toEqual({
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify(fixture), () => sekarang),
+    ).resolves.toEqual({
       data: fixture,
       stale: false,
     });
+    sekarang += 5_000;
     await expect(
-      loadDashboardStatus(async () => {
-        throw new Error("timeout");
-      }),
+      loadDashboardStatus(
+        async () => {
+          throw new Error("timeout");
+        },
+        () => sekarang,
+      ),
     ).resolves.toEqual({ data: fixture, stale: true });
   });
 });
@@ -161,7 +168,7 @@ describe("repository_health", () => {
   });
 
   it("menerima `deployed` boolean dan aplikasi lama tanpa field itu", async () => {
-    const { loadDashboardStatus } = await freshStatus();
+    const { loadDashboardStatus, resetStatusCache } = await freshStatus();
     const app = {
       id: "tes-web",
       name: "tes-web",
@@ -176,6 +183,7 @@ describe("repository_health", () => {
     await expect(
       loadDashboardStatus(async () => JSON.stringify(baru)),
     ).resolves.toEqual({ data: baru, stale: false });
+    resetStatusCache();
     await expect(
       loadDashboardStatus(async () => JSON.stringify(lama)),
     ).resolves.toEqual({ data: lama, stale: false });
@@ -200,7 +208,7 @@ describe("repository_health", () => {
   });
 
   it("menerima `author` audit trail dan aplikasi lama tanpa field itu", async () => {
-    const { loadDashboardStatus } = await freshStatus();
+    const { loadDashboardStatus, resetStatusCache } = await freshStatus();
     const app = {
       id: "audit-uji",
       name: "audit-uji",
@@ -216,6 +224,7 @@ describe("repository_health", () => {
       data: baru,
       stale: false,
     });
+    resetStatusCache();
     await expect(loadDashboardStatus(async () => JSON.stringify(lama))).resolves.toEqual({
       data: lama,
       stale: false,
@@ -272,15 +281,26 @@ describe("status API", () => {
   it("serves stale cached data after failure following success", async () => {
     const { createApp } = await freshApp();
     let calls = 0;
-    const app = createApp(async () => {
-      calls += 1;
-      if (calls === 1) return JSON.stringify(fixture);
-      throw new Error("timeout");
-    });
+    let sekarang = 1_000;
+    const app = createApp(
+      async () => {
+        calls += 1;
+        if (calls === 1) return JSON.stringify(fixture);
+        throw new Error("timeout");
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => sekarang,
+    );
 
     const current = await app.request("http://localhost/api/status");
     await expect(current.json()).resolves.toEqual({ data: fixture, stale: false });
 
+    // Cache TTL 5 detik: majukan waktu agar request kedua memicu runner yang gagal.
+    sekarang += 5_000;
     const stale = await app.request("http://localhost/api/status");
     expect(stale.status).toBe(200);
     expect(stale.headers.get("Cache-Control")).toBe("no-store");
@@ -335,6 +355,24 @@ describe("runAutore", () => {
       if (previousWorkspace === undefined) delete process.env.AUTORE_WORKSPACE;
       else process.env.AUTORE_WORKSPACE = previousWorkspace;
     }
+  });
+
+  it("memakai cache lima detik supaya polling berulang tidak membebani proses autore", async () => {
+    const { loadDashboardStatus, resetStatusCache } = await freshStatus();
+    resetStatusCache();
+    const runner = vi.fn(async () => JSON.stringify(fixture));
+    let sekarang = 1_000;
+
+    await loadDashboardStatus(runner, () => sekarang);
+    sekarang += 4_999;
+    const kedua = await loadDashboardStatus(runner, () => sekarang);
+
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(kedua).toEqual({ data: fixture, stale: false });
+
+    sekarang += 1;
+    await loadDashboardStatus(runner, () => sekarang);
+    expect(runner).toHaveBeenCalledTimes(2);
   });
 
   it("never runs a shell, so AUTORE_BIN metacharacters cannot execute commands", async () => {

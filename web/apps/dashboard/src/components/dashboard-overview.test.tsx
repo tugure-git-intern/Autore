@@ -101,7 +101,9 @@ describe("DashboardOverview", () => {
     }
     expect(screen.getByText("Total Terdaftar")).toBeVisible();
     expect(screen.getByText("Container Berjalan")).toBeVisible();
-    expect(screen.getByText("Jenkins & Nexus")).toBeVisible();
+    expect(screen.getByText("Lead Time")).toBeVisible();
+    expect(screen.getByText("-")).toBeVisible();
+    expect(screen.getByText("Waktu proses")).toBeVisible();
     expect(screen.getByText("Status Pipeline")).toBeVisible();
     expect(screen.getByText("Repository Health")).toBeVisible();
     expect(screen.getByText("10%")).toBeVisible();
@@ -121,6 +123,26 @@ describe("DashboardOverview", () => {
       "href",
       "/pipeline?app=app-portal-klaim",
     );
+  });
+
+  it("renders lead time formatted when timestamps are present", async () => {
+    mockStatus({
+      data: {
+        ...base,
+        latest_pipeline: {
+          ...base.latest_pipeline,
+          started_at: "2026-11-04T10:00:00Z",
+          finished_at: "2026-11-04T10:01:45Z",
+        },
+      },
+      stale: false,
+    });
+
+    renderOverview();
+
+    expect(await screen.findByText("Lead Time")).toBeVisible();
+    expect(screen.getByText("1m 45s")).toBeVisible();
+    expect(screen.getByText("Waktu proses")).toBeVisible();
   });
 
   it("shows the exact stale alert while keeping the last data visible", async () => {

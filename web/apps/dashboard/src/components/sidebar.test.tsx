@@ -11,7 +11,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const logo = screen.getByRole("img", { name: "Tugu Reasuransi" });
-    expect(logo).toHaveAttribute("src", "/tugure-logo.png");
+    expect(logo).toHaveAttribute("src", "/tugure-logo-asli.png");
     expect(logo.className).toContain("h-10");
     expect(logo.className).toContain("w-auto");
     // object-contain + shrink-0: ikon tidak boleh dipotong atau digencet flex.

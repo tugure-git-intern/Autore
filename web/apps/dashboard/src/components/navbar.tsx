@@ -52,7 +52,7 @@ export function Navbar({
   user: SessionUser;
 }) {
   return (
-    <header className="sticky top-0 z-10 mx-3 mt-3 rounded-xl border border-gray-200 bg-[#F0F5FE]">
+    <header className="sticky top-0 z-10 border-b border-gray-200 bg-[#F0F5FE]">
       <div className="flex h-16 items-center justify-between gap-3 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span role="status" className="flex shrink-0 items-center gap-2">

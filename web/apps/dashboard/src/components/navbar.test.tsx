@@ -190,15 +190,16 @@ describe("Navbar", () => {
     expect(container.querySelector("header")?.className).toContain("bg-[#F0F5FE]");
   });
 
-  it("membulatkan sudut topbar dan mewarnai seluruh teksnya #545F72", () => {
+  it("menjaga topbar polos tanpa lengkungan, tetap #F0F5FE dengan teks #545F72", () => {
     const { container } = renderNavbar(USER, { tone: "green", label: "Terhubung" }, "Audit Log");
 
     const header = container.querySelector("header") as HTMLElement;
-    expect(header.className).toContain("rounded-xl");
-    expect(header.className).toContain("mx-3");
-    expect(header.className).toContain("mt-3");
+    // Bar biasa: menempel penuh, tanpa lengkungan dan tanpa celah kanvas.
+    expect(header.className).not.toContain("rounded");
+    expect(header.className).not.toContain("mx-3");
+    expect(header.className).not.toContain("mt-3");
     expect(header.className).toContain("bg-[#F0F5FE]");
-    expect(header.className).toContain("border");
+    expect(header.className).toContain("border-b");
     expect(header.className).toContain("border-gray-200");
 
     const banner = within(screen.getByRole("banner"));

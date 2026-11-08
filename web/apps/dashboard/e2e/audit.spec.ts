@@ -78,7 +78,9 @@ test.describe("Audit Log — garis timeline", () => {
 
     const x = kotakGaris.x + kotakGaris.width / 2;
     const sampel: number[] = [];
-    for (let y = kotakGaris.y + 2; y < kotakGaris.y + kotakGaris.height - 2; y += 8) {
+    // elementFromPoint hanya membaca titik di dalam viewport (height=900).
+    const batasBawah = Math.min(kotakGaris.y + kotakGaris.height - 2, 898);
+    for (let y = kotakGaris.y + 2; y < batasBawah; y += 8) {
       sampel.push(y);
     }
 

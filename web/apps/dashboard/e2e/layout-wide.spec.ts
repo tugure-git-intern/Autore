@@ -44,4 +44,34 @@ test.describe("jarak panel konten di layar lebar", () => {
       expect(warna[2]).toBe("rgb(240, 245, 254)");
     });
   }
+
+  test("saat digulir ke bawah, bingkai <main> dan sudut rounded tidak ketiban navbar", async ({
+    page,
+  }) => {
+    // Tinggi 500px supaya konten pasti melebihi tinggi panel dan bisa di-scroll.
+    await page.setViewportSize({ width: 1280, height: 500 });
+    await page.goto("/audit", { waitUntil: "networkidle" });
+
+    const hasil = await page.evaluate(() => {
+      const header = document.querySelector("header")!;
+      const main = document.querySelector("main")!;
+      main.scrollTop = 200;
+      window.scrollTo(0, 200);
+      const hRect = header.getBoundingClientRect();
+      const mRect = main.getBoundingClientRect();
+      return {
+        headerBottom: Math.round(hRect.bottom),
+        mainTop: Math.round(mRect.top),
+        mainScrollTop: main.scrollTop,
+        windowScrollY: window.scrollY,
+        overflowY: getComputedStyle(main).overflowY,
+      };
+    });
+
+    expect(hasil.overflowY).toBe("auto");
+    expect(hasil.mainScrollTop).toBeGreaterThan(0);
+    expect(hasil.windowScrollY).toBe(0);
+    // Tepi atas <main> wajib tetap di bawah <header>, tidak boleh masuk ke kolongnya.
+    expect(hasil.mainTop).toBe(hasil.headerBottom);
+  });
 });

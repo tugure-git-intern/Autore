@@ -218,9 +218,9 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   if (TANPA_KERANGKA.has(pathname)) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen bg-[#F0F5FE]">
+    <div className="flex min-h-screen bg-[#F0F5FE] lg:h-screen lg:overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] lg:ml-3 lg:mr-2">
+      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] lg:ml-3 lg:mr-2 lg:overflow-hidden">
         <Navbar
           title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}
@@ -229,8 +229,10 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
           user={user}
         />
         {/* pb-24 = tinggi bar bawah + jeda; tanpa ini baris terakhir konten
-            (dan tombol aksinya) tersembunyi di balik bar di layar sempit. */}
-        <main className="w-full flex-1 bg-white lg:rounded-t-xl">
+            (dan tombol aksinya) tersembunyi di balik bar di layar sempit.
+            lg:overflow-y-auto: di desktop scroll terjadi di dalam panel putih supaya
+            sudut rounded-t-xl tidak pernah naik ketiban navbar. */}
+        <main className="w-full flex-1 bg-white lg:overflow-y-auto lg:rounded-t-xl">
           <div className="mx-auto w-full max-w-[1440px] px-3 pt-4 pb-24 sm:px-6 sm:pt-6">{children}</div>
         </main>
       </div>

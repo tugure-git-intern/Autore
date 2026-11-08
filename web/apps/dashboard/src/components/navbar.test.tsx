@@ -99,6 +99,13 @@ describe("topbar route context", () => {
     const main = container.querySelector("main") as HTMLElement;
     expect(main.className).toContain("bg-white");
     expect(main.className).toContain("lg:rounded-t-xl");
+    // Scroll vertikal terjadi di dalam <main> pada desktop supaya sudut rounded
+    // tidak pernah ketiban <header> saat halaman digulir ke bawah.
+    const kerangka = container.querySelector("div.flex.min-h-screen") as HTMLElement;
+    expect(kerangka.className).toContain("lg:h-screen");
+    expect(kerangka.className).toContain("lg:overflow-hidden");
+    expect(kolom.className).toContain("lg:overflow-hidden");
+    expect(main.className).toContain("lg:overflow-y-auto");
     // Panel putih selebar kolom: batas lebar tidak boleh dipasang di sini, karena
     // sisa lebar viewport jadi latar biru yang makin lebar saat di-zoom out.
     expect(main.className).not.toContain("max-w-[");

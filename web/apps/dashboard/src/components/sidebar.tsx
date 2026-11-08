@@ -7,7 +7,7 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="sticky top-3 m-3 mr-0 hidden h-[calc(100vh-1.5rem)] w-[250px] shrink-0 flex-col rounded-xl border border-gray-200 bg-[#F0F5FE] lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-gray-200 bg-[#F0F5FE] lg:flex">
       {/* h-16 + 1px divider == the topbar block, so both dividers meet at the corner. */}
       <div
         data-testid="sidebar-brand"

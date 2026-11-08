@@ -39,8 +39,10 @@ describe("Sidebar", () => {
 
     expect(aside.className).toContain("bg-[#F0F5FE]");
     expect(aside.className).not.toContain("bg-white");
-    // Mepet ke tepi jendela dan tanpa lengkungan: bukan panel mengambang lagi.
-    expect(aside.className).not.toContain("rounded");
+    // Mepet ke tepi jendela: sisi kiri tetap siku, sudut kanan yang membulat.
+    expect(aside.className).toContain("rounded-r-xl");
+    expect(aside.className).not.toContain("rounded-l");
+    expect(aside.className).not.toContain("rounded-xl");
     expect(aside.className).not.toContain("m-3");
     expect(aside.className).toContain("h-screen");
     // Garis pemisah tetap ada di sisi kanan saja.

@@ -183,6 +183,25 @@ describe("Navbar", () => {
     expect(container.querySelector("header")?.className).toContain("bg-[#F0F5FE]");
   });
 
+  it("membulatkan sudut topbar dan mewarnai seluruh teksnya #545F72", () => {
+    const { container } = renderNavbar(USER, { tone: "green", label: "Terhubung" }, "Audit Log");
+
+    const header = container.querySelector("header") as HTMLElement;
+    expect(header.className).toContain("rounded-xl");
+    expect(header.className).toContain("bg-[#F0F5FE]");
+    expect(header.className).toContain("border");
+    expect(header.className).toContain("border-gray-200");
+
+    const banner = within(screen.getByRole("banner"));
+    const teksStatus = banner.getByRole("status").querySelector("span.text-xs") as HTMLElement;
+    expect(teksStatus.className).toContain("text-[#545F72]");
+    expect(
+      banner.getByText((c) => c.includes("Audit Log"), { selector: "p" }).className,
+    ).toContain("text-[#545F72]");
+    expect(banner.getByRole("button", { name: "Sync" }).className).toContain("text-[#545F72]");
+    expect(banner.getByText("Alif").className).toContain("text-[#545F72]");
+  });
+
   it("tanpa judul halaman, indikator tetap tampil sendiri", () => {
     renderNavbar(USER, { tone: "green", label: "Terhubung" }, "");
 

@@ -43,10 +43,11 @@ fi
 log "1/4 npm ci (pasang dari lockfile, node_modules bersih)"
 npm ci --no-audit --no-fund
 
-log "2/4 vitest run (suite dashboard + api)"
+log "2/4 vitest run (suite dashboard + api + paket kontrak)"
 npx vitest run || gagal "Tes web gagal. Jalankan dari web/: npx vitest run"
 
-log "3/4 tsc --noEmit (web/apps/api + web/apps/dashboard)"
+log "3/4 tsc --noEmit (web/packages/contracts + web/apps/api + web/apps/dashboard)"
+( cd packages/contracts && npx tsc --noEmit ) || gagal "Type check paket kontrak gagal. Jalankan: cd web/packages/contracts && npx tsc --noEmit"
 ( cd apps/api && npx tsc --noEmit ) || gagal "Type check API gagal. Jalankan: cd web/apps/api && npx tsc --noEmit"
 ( cd apps/dashboard && npx tsc --noEmit ) || gagal "Type check dashboard gagal. Jalankan: cd web/apps/dashboard && npx tsc --noEmit"
 

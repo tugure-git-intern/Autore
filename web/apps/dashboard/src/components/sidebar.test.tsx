@@ -56,13 +56,12 @@ describe("Sidebar", () => {
     expect(aside.className).not.toContain("rounded-br-");
     expect(aside.className).not.toContain("rounded-r-");
     expect(aside.className).not.toContain("rounded-l");
-    // Bidang putih + garis tipis: batas kartu dibaca dari border, bukan bayangan berat.
-    expect(aside.className).toContain("bg-white");
-    expect(aside.className).toContain("border");
-    expect(aside.className).toContain("border-gray-200");
+    // Nyatu dengan chrome: bidangnya sama dengan latar utama #F0F5FE dan garis
+    // pemisah dihapus, jadi batasnya cuma bayangan tipis.
+    expect(aside.className).toContain("bg-[#F0F5FE]");
+    expect(aside.className).not.toContain("bg-white");
+    expect(aside.className).not.toContain("border");
     expect(aside.className).toContain("shadow-sm");
-    expect(aside.className).not.toContain("border-r");
-    expect(aside.className).not.toContain("border-b");
   });
 
   it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {
@@ -70,6 +69,10 @@ describe("Sidebar", () => {
 
     const aktif = screen.getByRole("link", { name: /pipeline/i });
     expect(aktif.className).toContain("text-green-700");
+    // Latar sidebar kini chrome #F0F5FE; pil green-50 nyaris hilang di atasnya,
+    // jadi penanda menu aktif naik satu tingkat ke green-100.
+    expect(aktif.className).toContain("bg-green-100");
+    expect(aktif.className).not.toContain("bg-green-50");
 
     const nonAktif = screen.getByRole("link", { name: /daftar aplikasi/i });
     expect(nonAktif.className).toContain("text-[#545F72]");

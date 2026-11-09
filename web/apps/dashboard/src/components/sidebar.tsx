@@ -7,10 +7,10 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm lg:flex">
-      {/* Blok logo setinggi topbar (64px). Kartu melayang: tidak ada garis pemisah
-          yang bisa berhenti mendadak di tepi, dan menempel viewport hanya lewat
-          jarak 12px di kiri/atas/bawah. */}
+    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl bg-[#F0F5FE] shadow-sm lg:flex">
+      {/* Blok logo setinggi topbar (64px). Bingkainya memakai chrome yang sama
+          dengan latar utama, jadi tidak ada garis pemisah yang bisa berhenti
+          mendadak di tepi; batasnya cukup bayangan tipis 12px dari tepi layar. */}
       <div
         data-testid="sidebar-brand"
         className="flex h-16 shrink-0 items-center gap-3 px-6"
@@ -39,7 +39,7 @@ export function Sidebar() {
               aria-current={active ? "page" : undefined}
               className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
                 active
-                  ? "bg-green-50 font-medium text-green-700"
+                  ? "bg-green-100 font-medium text-green-700"
                   : "text-[#545F72] hover:bg-white/60 hover:text-gray-900"
               }`}
             >

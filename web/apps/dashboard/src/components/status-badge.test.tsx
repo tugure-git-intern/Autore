@@ -77,12 +77,12 @@ describe("Sidebar", () => {
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(["/", "/applications", "/pipeline", "/security", "/audit"]);
 
-    // PRD: menu aktif memakai bg-green-50 text-green-700.
+    // Menu aktif memakai hijau pastel yang tetap terbaca di latar chrome #F0F5FE.
     const active = screen.getByRole("link", { name: "Dashboard" });
-    expect(active).toHaveClass("bg-green-50", "text-green-700");
+    expect(active).toHaveClass("bg-green-100", "text-green-700");
     expect(active).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Daftar Aplikasi" })).not.toHaveClass("bg-green-50");
-    expect(screen.getByRole("link", { name: "Pipeline & Log" })).not.toHaveClass("bg-green-50");
+    expect(screen.getByRole("link", { name: "Daftar Aplikasi" })).not.toHaveClass("bg-green-100");
+    expect(screen.getByRole("link", { name: "Pipeline & Log" })).not.toHaveClass("bg-green-100");
 
     expect(screen.queryByText(/buat aplikasi|tambah aplikasi|aplikasi baru/i)).toBeNull();
   });

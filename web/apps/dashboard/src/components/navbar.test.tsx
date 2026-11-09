@@ -127,14 +127,15 @@ describe("topbar route context", () => {
     expect(isi.className).toContain("mx-auto");
 
     // Topbar biru muda selebar viewport, di layer belakang sidebar (z-20) supaya
-    // tidak pernah terlihat putus; sidebar dan kanvas isi putih.
+    // tidak pernah terlihat putus. Sidebar memakai chrome yang sama; hanya kartu
+    // konten yang putih.
     const header = container.querySelector("header") as HTMLElement;
     expect(header.className).toContain("bg-[#F0F5FE]");
     expect(header.className).toContain("w-full");
     expect(header.className).toContain("z-10");
     // Isi topbar digeser ke kanan supaya tidak tersembunyi di balik kartu sidebar.
     expect((header.firstElementChild as HTMLElement).className).toContain("lg:pl-[274px]");
-    expect((container.querySelector("aside") as HTMLElement).className).toContain("bg-white");
+    expect((container.querySelector("aside") as HTMLElement).className).toContain("bg-[#F0F5FE]");
   });
 
   it("drops the sidebar and topbar on the auth pages", () => {

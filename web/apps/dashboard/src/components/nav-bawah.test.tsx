@@ -62,7 +62,11 @@ describe("NavBawah", () => {
     nav.pathname = "/pipeline";
     render(<NavBawah />);
 
-    expect(screen.getByRole("link", { name: "Pipeline" }).className).toContain("text-green-700");
+    const aktif = screen.getByRole("link", { name: "Pipeline" });
+    expect(aktif.className).toContain("text-green-700");
+    // Bar bawah memakai chrome yang sama; penandanya juga harus green-100.
+    expect(aktif.className).toContain("bg-green-100");
+    expect(aktif.className).not.toContain("bg-green-50");
 
     const nonAktif = screen.getByRole("link", { name: "Keamanan" });
     expect(nonAktif.className).toContain("text-[#545F72]");

@@ -54,6 +54,19 @@ test.describe("kerangka melayang di layar lebar", () => {
       expect(Math.round(sidebar.width)).toBe(SIDEBAR);
       expect(Math.round(sidebar.height)).toBe(1080 - 24);
 
+      // Sidebar menyatu dengan chrome: warna sama dengan latar utama dan tanpa border.
+      const gayaSidebar = await page.evaluate(() => {
+        const cs = getComputedStyle(document.querySelector("aside")!);
+        return {
+          latar: cs.backgroundColor,
+          borderAtas: cs.borderTopWidth,
+          borderKanan: cs.borderRightWidth,
+        };
+      });
+      expect(gayaSidebar.latar).toBe("rgb(240, 245, 254)");
+      expect(gayaSidebar.borderAtas).toBe("0px");
+      expect(gayaSidebar.borderKanan).toBe("0px");
+
       const main = (await page.locator("main").boundingBox())!;
       expect(Math.round(main.x)).toBe(KONTEN_X);
       expect(Math.round(main.y)).toBe(TINGGI_TOPBAR + 12);

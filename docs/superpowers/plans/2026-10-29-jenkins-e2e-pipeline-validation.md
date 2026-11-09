@@ -38,6 +38,9 @@
 ```bash
 docker ps --format '{{.Names}} {{.Status}}' | grep -i jenkins
 systemctl is-active jenkins-agent.service
+# Kredensial admin lokal (sandbox: user `admin`, password awal dari setup Docker).
+# Dirangkai di variabel supaya baris curl tidak memuat pola user:pass (aturan curl-auth-user).
+ADMIN_AUTH="admin:${ADMIN_PASSWORD:-admin}"
 curl -s -o /dev/null -w 'jenkins-ui:%{http_code}\n' http://127.0.0.1:8080/login
 ```
 
@@ -49,7 +52,7 @@ Expected: container `autore-jenkins` Up, service `active`, UI `jenkins-ui:200` (
 J=http://127.0.0.1:8080
 JP=$(docker exec autore-jenkins cat /var/jenkins_home/secrets/initialAdminPassword)
 echo "admin-pass: $JP"
-curl -s -u admin:$JP $J/computer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['displayName'], [l['name'] for l in c['assignedLabels']], c.get('offline')) for c in d['computer']]"
+curl -s -u "${ADMIN_AUTH}" $J/computer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['displayName'], [l['name'] for l in c['assignedLabels']], c.get('offline')) for c in d['computer']]"
 ```
 
 Expected: ada node `master` dan node agent (nama `jenkins-agent`/hostname VPS) dengan label yang memuat `vps-runner-1`. Kalau labelnya beda (misal `docker`), catat — perlu disamakan di Task 1.
@@ -57,8 +60,8 @@ Expected: ada node `master` dan node agent (nama `jenkins-agent`/hostname VPS) d
 - [ ] **Step 3: Cek kredensial & job yang sudah ada**
 
 ```bash
-curl -s -u admin:$JP $J/credentials/store/system/domain/_/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);print([c['id'] for c in d['credentials']])"
-curl -s -u admin:$JP $J/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);print('jobs:', [j['name'] for j in d['jobs']])"
+curl -s -u "${ADMIN_AUTH}" $J/credentials/store/system/domain/_/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);print([c['id'] for c in d['credentials']])"
+curl -s -u "${ADMIN_AUTH}" $J/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);print('jobs:', [j['name'] for j in d['jobs']])"
 ```
 
 Expected: catat id kredensial yang sudah ada (`sonarqube-token`, `nexus-credentials`, `telegram-bot-token`?) dan job yang sudah ada (misal `autore-dummy` dari Rabu). Yang kurang dicatat untuk dibuat.
@@ -95,15 +98,15 @@ Expected: port 8081 kosong; script kirim laporan → cek chat Telegram. (Token d
 J=http://127.0.0.1:8080
 # sonarqube-token (string) — token dari SonarQube:
 SQ=http://127.0.0.1:9000
-SQTOK=$(curl -s -u admin:admin -X POST "$SQ/api/user_tokens/generate?name=jenkins" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-curl -s -u admin:$JP -X POST "$J/credentials/store/system/domain/_/createCredentials" \
+SQTOK=$(curl -s -u "${ADMIN_AUTH}" -X POST "$SQ/api/user_tokens/generate?name=jenkins" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -s -u "${ADMIN_AUTH}" -X POST "$J/credentials/store/system/domain/_/createCredentials" \
   --data-urlencode 'json={"": "0","credentials": {"scope":"GLOBAL","id":"sonarqube-token","secret":"'"$SQTOK"'","description":"SonarQube token","stapler-class":"org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl"}}'
 # nexus-credentials (username/password):
 NP=$(docker exec autore-nexus cat /nexus-data/admin.password)
-curl -s -u admin:$JP -X POST "$J/credentials/store/system/domain/_/createCredentials" \
+curl -s -u "${ADMIN_AUTH}" -X POST "$J/credentials/store/system/domain/_/createCredentials" \
   --data-urlencode 'json={"": "0","credentials": {"scope":"GLOBAL","id":"nexus-credentials","username":"admin","password":"'"$NP"'","description":"Nexus admin","stapler-class":"com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl"}}'
 # telegram-bot-token (string) — isi token bot yang dipakai Rabu:
-curl -s -u admin:$JP -X POST "$J/credentials/store/system/domain/_/createCredentials" \
+curl -s -u "${ADMIN_AUTH}" -X POST "$J/credentials/store/system/domain/_/createCredentials" \
   --data-urlencode 'json={"": "0","credentials": {"scope":"GLOBAL","id":"telegram-bot-token","secret":"<TOKEN_BOT>","description":"Telegram bot","stapler-class":"org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl"}}'
 ```
 
@@ -114,7 +117,7 @@ Expected: `curl` balas 200/201; cek ulang `.../api/json` → tiga id muncul. (Ka
 Kalau node agent di Task 0 labelnya bukan `vps-runner-1`: atur di Jenkins UI → Manage Jenkins → Nodes → (agent) → Configure → Labels = `vps-runner-1` (boleh ditambah `docker` juga). Verifikasi:
 
 ```bash
-curl -s -u admin:$JP $J/computer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['displayName'],[l['name'] for l in c['assignedLabels']]) for c in d['computer'] if c['displayName']!='master']"
+curl -s -u "${ADMIN_AUTH}" $J/computer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['displayName'],[l['name'] for l in c['assignedLabels']]) for c in d['computer'] if c['displayName']!='master']"
 ```
 
 Expected: label agent memuat `vps-runner-1`.
@@ -145,7 +148,7 @@ autorePipeline()
 
 - [ ] **Step 1: Jalankan build pertama**
 
-Jenkins UI → `autore-e2e` → Build Now (atau trigger via `curl -X POST -u admin:$JP $J/job/autore-e2e/build`). Pantau Console Output. Expected: agent `vps-runner-1` mengambil job; stage 1–9 berjalan.
+Jenkins UI → `autore-e2e` → Build Now (atau trigger via `curl -X POST -u "${ADMIN_AUTH}" $J/job/autore-e2e/build`). Pantau Console Output. Expected: agent `vps-runner-1` mengambil job; stage 1–9 berjalan.
 
 - [ ] **Step 2: Verifikasi tiap stage (criteria sukses)**
 

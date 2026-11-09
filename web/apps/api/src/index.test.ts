@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { encode } from "@auth/core/jwt";
 import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
-import { emptyRuns, type RunsPayload } from "./runs";
-import { emptyActive, type ActivePayload } from "./active";
-import type { SbomResult } from "./sbom";
+import type { ActivePayload, RunsPayload, SbomResult } from "@autore/contracts";
+import { emptyRuns } from "./runs";
+import { emptyActive } from "./active";
 
 /**
  * Aksi sekarang butuh sesi. Cookie-nya asli (JWE dari @auth/core) supaya tes

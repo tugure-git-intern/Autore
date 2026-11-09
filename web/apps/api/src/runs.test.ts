@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { RUNS_ARGS, validateRuns, emptyRuns } from "./runs";
+import { validateRuns } from "@autore/contracts";
+import { RUNS_ARGS, emptyRuns } from "./runs";
 
 const PAYLOAD = {
   generated_at: "2026-11-04T10:00:00Z",

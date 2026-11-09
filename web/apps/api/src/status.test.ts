@@ -2,7 +2,8 @@ import { mkdtemp, readFile, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { DashboardStatus, RunAutore } from "./status";
+import type { DashboardStatus } from "@autore/contracts";
+import type { RunAutore } from "./status";
 
 const fixture: DashboardStatus = {
   system_status: "idle",

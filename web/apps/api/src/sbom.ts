@@ -1,20 +1,6 @@
+import { type SbomPayload, type SbomResult, isSbomPayload } from "@autore/contracts";
 import type { SpawnAction, SpawnResult } from "./actions";
 import { loadDashboardStatus, type RunAutore } from "./status";
-
-export type SbomPackage = { name: string; version: string; type: "os" | "language" };
-
-/** Mirrors `autore sbom --json`. Teks yang tidak tersedia adalah "". */
-export type SbomPayload = {
-  app: string;
-  generated_at: string;
-  source: string;
-  total: number;
-  packages: SbomPackage[];
-};
-
-export type SbomResult =
-  | { ok: true; status: 200; data: SbomPayload }
-  | { ok: false; status: 400 | 404 | 422 | 503 | 504; error: string };
 
 export type SbomLoader = (app: string) => Promise<SbomResult>;
 
@@ -111,30 +97,3 @@ export function hatchSbom(deps: {
 
 export type Sbom = ReturnType<typeof hatchSbom>;
 
-function isSbomPayload(value: unknown): value is SbomPayload {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  const kunci = Object.keys(record).sort();
-  if (kunci.join(",") !== "app,generated_at,packages,source,total") return false;
-  return (
-    typeof record.app === "string" &&
-    typeof record.generated_at === "string" &&
-    typeof record.source === "string" &&
-    typeof record.total === "number" &&
-    Array.isArray(record.packages) &&
-    record.packages.every(isPaket) &&
-    record.total === record.packages.length
-  );
-}
-
-function isPaket(value: unknown): value is SbomPackage {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  const kunci = Object.keys(record).sort();
-  return (
-    kunci.join(",") === "name,type,version" &&
-    typeof record.name === "string" &&
-    typeof record.version === "string" &&
-    (record.type === "os" || record.type === "language")
-  );
-}

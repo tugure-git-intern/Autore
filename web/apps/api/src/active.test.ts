@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ACTIVE_ARGS, emptyActive, validateActive } from "./active";
+import { validateActive } from "@autore/contracts";
+import { ACTIVE_ARGS, emptyActive } from "./active";
 
 const PAYLOAD = {
   generated_at: "2026-11-05T03:40:00Z",

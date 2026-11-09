@@ -1,3 +1,4 @@
+import { type RunsPayload, validateRuns } from "@autore/contracts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -9,43 +10,8 @@ export const RUNS_ARGS = ["runs", "--json", "--days", "7", "--limit", "5"] as co
 const CACHE_MS = 60_000;
 const HARI_MS = 86_400_000;
 
-export type RunStatus = "passed" | "failed" | "running";
-
-export interface RunRecord {
-  app: string;
-  number: number;
-  status: RunStatus;
-  duration_ms: number;
-  started_at: string;
-  commit_sha: string;
-  author: string;
-  url: string;
-}
-
-/** Mirrors `autore runs --json`. Numbers are integers; text is "" when unavailable. */
-export interface RunsPayload {
-  generated_at: string;
-  window_days: number;
-  runs: RunRecord[];
-  daily: Array<{ date: string; passed: number; failed: number }>;
-  totals: { passed: number; failed: number; running: number };
-}
-
 /** Runner menerima argv, bukan perintah bebas — pengujian bisa menyuntiknya tanpa proses nyata. */
 export type RunRuns = (argv: readonly string[]) => Promise<string>;
-
-const runStatuses = new Set<string>(["passed", "failed", "running"]);
-const RUN_KEYS = [
-  "app",
-  "number",
-  "status",
-  "duration_ms",
-  "started_at",
-  "commit_sha",
-  "author",
-  "url",
-];
-const PAYLOAD_KEYS = ["generated_at", "window_days", "runs", "daily", "totals"];
 
 let lastGood: RunsPayload | undefined;
 let lastGoodAt = 0;
@@ -80,23 +46,6 @@ export function emptyRuns(now: number = Date.now()): RunsPayload {
   };
 }
 
-export function validateRuns(raw: unknown): RunsPayload {
-  if (!hasKeys(raw, PAYLOAD_KEYS)) throw new Error("invalid runs payload");
-  if (typeof raw.generated_at !== "string") throw new Error("invalid runs payload");
-  if (!isCount(raw.window_days)) throw new Error("invalid runs payload");
-  if (!Array.isArray(raw.runs) || !raw.runs.every(isRun)) throw new Error("invalid runs payload");
-  if (!Array.isArray(raw.daily) || !raw.daily.every(isDaily)) throw new Error("invalid runs payload");
-  if (!hasKeys(raw.totals, ["passed", "failed", "running"])) throw new Error("invalid runs payload");
-  if (
-    !isCount(raw.totals.passed) ||
-    !isCount(raw.totals.failed) ||
-    !isCount(raw.totals.running)
-  ) {
-    throw new Error("invalid runs payload");
-  }
-  return raw as unknown as RunsPayload;
-}
-
 /**
  * Cache 60 detik: Jenkins dipanggil paling banyak sekali per menit walau ada
  * beberapa tab terbuka. CLI gagal → data terakhir yang baik ditandai `stale`;
@@ -120,40 +69,4 @@ export async function getRuns(
   }
 }
 
-function isRun(value: unknown): value is RunRecord {
-  return (
-    hasKeys(value, RUN_KEYS) &&
-    typeof value.app === "string" &&
-    isCount(value.number) &&
-    typeof value.status === "string" &&
-    runStatuses.has(value.status) &&
-    isCount(value.duration_ms) &&
-    typeof value.started_at === "string" &&
-    typeof value.commit_sha === "string" &&
-    typeof value.author === "string" &&
-    typeof value.url === "string"
-  );
-}
 
-function isDaily(value: unknown): value is RunsPayload["daily"][number] {
-  return (
-    hasKeys(value, ["date", "passed", "failed"]) &&
-    typeof value.date === "string" &&
-    isCount(value.passed) &&
-    isCount(value.failed)
-  );
-}
-
-function hasKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === keys.length &&
-    keys.every((key) => Object.hasOwn(value, key))
-  );
-}
-
-function isCount(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}

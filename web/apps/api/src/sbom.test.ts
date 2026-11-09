@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { SpawnAction, SpawnResult } from "./actions";
-import { hatchSbom, type SbomPayload } from "./sbom";
+import type { SbomPayload } from "@autore/contracts";
+import { hatchSbom } from "./sbom";
 
 const APP = "tes-web";
 

@@ -3,10 +3,11 @@ import { Hono, type Context } from "hono";
 import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
-import { getRuns, type RunsPayload } from "./runs";
-import { getActive, type ActivePayload } from "./active";
+import type { ActivePayload, RunsPayload, SbomResult } from "@autore/contracts";
+import { getRuns } from "./runs";
+import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
-import { hatchSbom, type SbomResult } from "./sbom";
+import { hatchSbom } from "./sbom";
 import { parseAllowed, requireSession, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
 

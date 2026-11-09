@@ -23,7 +23,7 @@ log() { printf '\n==> [Security Gate] %s\n' "$*"; }
 fail_gate() {
   local reason="$1"
   printf '%s\n' "${reason}" > "${REASON_FILE}"
-  printf '\n🚫 [SECURITY GATE BLOCKED] %s\n' "${reason}" >&2
+  printf '\n[SECURITY GATE BLOCKED] %s\n' "${reason}" >&2
   exit 1
 }
 

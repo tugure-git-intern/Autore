@@ -404,8 +404,8 @@ const MENU: &[tui::Item] = &[
     },
     tui::Item {
         label: "Pasang Satpam Git (Pre-Commit Hook)",
-        desc: "Memasang hook pre-commit di .git/hooks/pre-commit supaya kode diperiksa sebelum commit.",
-        hints: "Otomatis dipasang juga saat project baru dibuat.",
+        desc: "Memasang hook pre-commit: static guard + Gitleaks native pada file yang di-stage (tanpa Docker).",
+        hints: "Darurat saja: AUTORE_HOOK_SKIP=1 git commit. Trivy CVE tetap di Jenkins.",
     },
     tui::Item {
         label: "Copot Satpam Git (Uninstall Hook)",
@@ -866,7 +866,7 @@ pub(crate) fn kemampuan_json() -> String {
 
 #[derive(Subcommand)]
 enum HookAction {
-    /// Pasang pre-commit hook otomatis pada repositori Git
+    /// Pasang pre-commit hook (static guard + Gitleaks native pada file staged)
     Install {
         #[arg(long, default_value = ".")]
         repo: PathBuf,

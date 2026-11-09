@@ -67,8 +67,9 @@ pub fn scan_directory_with(root: &Path, opts: &ScanOptions) -> Result<ScanReport
         ),
     ];
 
+    // (?i): kunci kredensial sering ditulis huruf kecil (db_password, api_key).
     let secret_regex = Regex::new(concat!(
-        r#"(gh"#,
+        r#"(?i)(gh"#,
         r#"p_[A-Za-z0-9]{20,}|AK"#,
         r#"IA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----|(PASS"#,
         r#"WORD|SEC"#,
@@ -252,7 +253,28 @@ fn visit_dir(
 }
 
 fn is_comment_line(trimmed: &[u8]) -> bool {
-    trimmed.starts_with(b"#") || trimmed.starts_with(b"//")
+    trimmed.starts_with(b"#")
+        || trimmed.starts_with(b"//")
+        // Berkas contoh (.env.example, config.sample.json) memang berisi nama kunci kosong;
+        // bukan kredensial nyata, jadi tidak ikut dipindai.
+        || matches!(trim_ascii_name(trimmed), Some(nama) if EXAMPLE_NAMA.contains(&nama))
+}
+
+const EXAMPLE_NAMA: &[&str] = &[
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+    ".env.dist",
+    "config.sample.json",
+    "config.example.json",
+];
+
+/// Nama berkas dari potongan baris yang kebetulan dibaca; hanya untuk pengecualian
+/// berkas contoh, jadi kegagalan mencocokkan berarti tetap dipindai (fail-closed).
+fn trim_ascii_name(trimmed: &[u8]) -> Option<&str> {
+    let text = std::str::from_utf8(trimmed).ok()?;
+    let nama = text.split(['/', '\\']).next_back()?.trim_start_matches('#').trim();
+    EXAMPLE_NAMA.contains(&nama).then_some(nama)
 }
 
 fn trim_ascii(mut s: &[u8]) -> &[u8] {
@@ -458,6 +480,40 @@ mod tests {
         let report = scan_directory(tmp.path()).unwrap();
         assert!(!report.is_clean());
         assert_eq!(report.violations[0].rule, "hardcoded-secret");
+    }
+
+    #[test]
+    fn hardcoded_secret_lowercase_is_caught() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("config.py"),
+            concat!("db_", "password = \"Sup3rRahasia123\"\n"),
+        )
+        .unwrap();
+
+        let report = scan_directory(tmp.path()).unwrap();
+        assert!(
+            rules(&report).contains(&"hardcoded-secret".to_string()),
+            "kunci secret huruf kecil lolos: {:?}",
+            report.violations
+        );
+    }
+
+    #[test]
+    fn env_example_file_is_not_flagged_as_secret() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join(".env.example"),
+            "# contoh konfigurasi, isi asli diisi tiap mesin\ndb_password = \nAPI_KEY =\n",
+        )
+        .unwrap();
+
+        let report = scan_directory(tmp.path()).unwrap();
+        assert!(
+            rules(&report).is_empty(),
+            "berkas contoh tidak boleh dianggap bocor: {:?}",
+            report.violations
+        );
     }
 
     #[test]

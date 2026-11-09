@@ -197,7 +197,7 @@ Access the dashboard at `http://localhost:9120` (or through your assigned host/T
 | `autore doctor` | `doc` | Diagnoses health of Runner, Docker daemon, Java runtime, and Jenkins connection. |
 | `autore scan` | — | Pre-build security scan: Static Byte Guard + Gitleaks + Trivy. Supports `--no-docker` fast mode. |
 | `autore scan-image` | — | Post-build container scan: verifies non-root execution, scans CVEs, and exports CycloneDX SBOM. |
-| `autore hook install` | — | Installs local Git pre-commit security hook. |
+| `autore hook install` | — | Installs the local Git pre-commit gate: static guard + native Gitleaks on staged files (no Docker). |
 | `autore sbom` | — | Inspects software supply chain dependencies from build CycloneDX SBOM artifacts. |
 | `autore start / stop / restart` | — | Controls background services via systemd user manager. |
 | `autore logs` | — | Streams real-time operational logs from dashboard and API services (`--lines N`, `--no-follow`). |
@@ -210,6 +210,33 @@ autore init --app-name claims-service --stack python --app-port 8000 --deploy-po
 autore scan --no-docker --path .
 autore scan-image --image 127.0.0.1:5000/claims-service:build-10 --severity HIGH,CRITICAL --sbom-output dist/sbom.cdx.json
 autore logs --lines 50 --no-follow
+```
+
+### Pre-commit security gate
+
+`autore hook install` writes `.git/hooks/pre-commit` with two layers that run before every commit:
+
+| Layer | Tool | Scope | Typical cost |
+|---|---|---|---|
+| Static guard | `autore scan --no-docker` | whole working tree | ~40 ms |
+| Secret detection | native `gitleaks` (`git --staged`) | staged files only | ~20 ms |
+
+The gate is fail-closed: if `gitleaks` is missing from the machine or exits with any non-zero code,
+the commit is blocked and the install command for the pinned version (v8.21.2, same as the CI image)
+is printed. Container CVE scanning (Trivy) stays in Jenkins, where the vulnerability database is
+always fresh; running it per commit would add more than a minute to every commit.
+
+Emergency bypass (single commit, never as a habit):
+
+```bash
+AUTORE_HOOK_SKIP=1 git commit -m "hotfix"
+```
+
+Install the native scanner once per developer machine:
+
+```bash
+curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+  | tar -xz -C "$HOME/.local/bin" gitleaks
 ```
 
 ---

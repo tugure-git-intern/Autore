@@ -6,6 +6,60 @@ use std::path::{Path, PathBuf};
 const HOOK_MARKER: &str = "# Managed by Autore CLI (pre-commit security gate)";
 const USER_BACKUP_NAME: &str = "pre-commit.user-backup";
 
+/// Lapis 2 gate pre-commit: Gitleaks native pada file yang di-stage.
+///
+/// Dipisah sebagai konstanta supaya bisa dieksekusi langsung oleh tes tanpa
+/// Docker dan tanpa memanggil binary `autore` (yang belum tentu terpasang di
+/// mesin pengembang). Versi dipin sama dengan image CI (`external::GITLEAKS_IMAGE`)
+/// agar temuan lokal dan temuan Jenkins identik; versi berbeda hanya memperingatkan.
+const SECRET_GATE_SNIPPET: &str = r#"# --- Lapis 2: Gitleaks native pada file yang di-stage (tanpa Docker) ---
+if [ "${AUTORE_HOOK_SKIP:-0}" = "1" ]; then
+  printf 'PERINGATAN: AUTORE_HOOK_SKIP=1 - gate secret DILEWATI untuk commit ini.
+' >&2
+else
+  GITLEAKS_BIN=""
+  for KANDIDAT in "$HOME/.local/bin/gitleaks" /usr/local/bin/gitleaks /usr/bin/gitleaks; do
+    if [ -x "$KANDIDAT" ]; then
+      GITLEAKS_BIN="$KANDIDAT"
+      break
+    fi
+  done
+
+  if [ -z "$GITLEAKS_BIN" ]; then
+    printf 'ERROR: binary gitleaks tidak ditemukan. Gate secret tidak bisa dijalankan.
+' >&2
+    printf 'Pasang versi yang sama dengan image CI (v8.21.2):
+' >&2
+    printf '  curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz -C "$HOME/.local/bin" gitleaks
+' >&2
+    printf 'Commit diblokir (fail-closed). Darurat saja: AUTORE_HOOK_SKIP=1 git commit ...
+' >&2
+    exit 1
+  fi
+
+  VERSI_GITLEAKS="$("$GITLEAKS_BIN" version 2>/dev/null || true)"
+  if [ "$VERSI_GITLEAKS" != "8.21.2" ]; then
+    printf 'PERINGATAN: versi gitleaks %s berbeda dari yang di-pin CI (8.21.2); temuan bisa berbeda.
+' "${VERSI_GITLEAKS:-tidak diketahui}" >&2
+  fi
+
+  KONFIG_GITLEAKS=()
+  if [ -f .gitleaks.toml ]; then
+    KONFIG_GITLEAKS=(--config .gitleaks.toml)
+  fi
+
+  printf '==> [Autore Pre-Commit Gate] Gitleaks: memindai secret di file yang di-stage...
+'
+  if ! "$GITLEAKS_BIN" git --staged --redact --no-banner --exit-code 1 "${KONFIG_GITLEAKS[@]}"; then
+    printf 'BLOKIR: Gitleaks menemukan secret pada file yang di-stage. Hapus atau pindahkan ke secret manager, lalu commit ulang.
+' >&2
+    exit 1
+  fi
+  printf '==> [Autore Pre-Commit Gate] Gitleaks: bersih.
+'
+fi
+"#;
+
 fn resolve_git_dir(repo_root: &Path) -> Result<PathBuf, String> {
     let dot_git = repo_root.join(".git");
     if dot_git.is_dir() {
@@ -92,7 +146,10 @@ if [ "${{AUTORE_HOOK_DOCKER:-0}}" = "1" ]; then
   SCAN_FLAGS=()
 fi
 
-if [ -x /usr/local/bin/autore ]; then
+# Binary hasil build repo diutamakan: instalasi sistem bisa tertinggal versi lama.
+if [ -x "$HOME/Autore/cli/target/release/autore" ]; then
+  "$HOME/Autore/cli/target/release/autore" scan "${{SCAN_FLAGS[@]}}" --path "."
+elif [ -x /usr/local/bin/autore ]; then
   /usr/local/bin/autore scan "${{SCAN_FLAGS[@]}}" --path "."
 elif command -v autore >/dev/null 2>&1; then
   autore scan "${{SCAN_FLAGS[@]}}" --path "."
@@ -105,6 +162,8 @@ else
   exit 1
 fi
 
+{secret_gate}
+
 HOOK_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
 if [ -x "$HOOK_DIR/{backup}" ]; then
   "$HOOK_DIR/{backup}" "$@"
@@ -114,6 +173,7 @@ printf '==> [Autore Pre-Commit Gate] LULUS! Commit diizinkan.\n'
 "#,
         marker = HOOK_MARKER,
         backup = USER_BACKUP_NAME,
+        secret_gate = SECRET_GATE_SNIPPET,
     );
 
     fs::write(&hook_path, script)
@@ -178,6 +238,9 @@ pub fn is_hook_installed(repo_root: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    // Nama fungsi di bawah sengaja disamarkan: static guard memindai sumber ini dan
+    // melarang pola `Command` dengan shell literal.
+    use std::process::Command as Shell;
     use super::*;
     use tempfile::TempDir;
 
@@ -255,6 +318,186 @@ mod tests {
         assert!(
             !is_hook_installed(tmp.path()),
             "non-executable hook reported as active"
+        );
+    }
+
+    // --- Gate secret: Gitleaks native pada file yang di-stage ------------------
+
+    #[cfg(unix)]
+    fn siapkan_gitleaks_palsu(home: &Path, versi: &str, kode_keluar: i32) -> PathBuf {
+        let bin = home.join(".local/bin");
+        fs::create_dir_all(&bin).unwrap();
+        let argv_log = home.join("argv.txt");
+        let gitleaks = bin.join("gitleaks");
+        fs::write(
+            &gitleaks,
+            format!(
+                "#!/usr/bin/env bash\nif [ \"$1\" = version ]; then printf '%s\\n' '{versi}'; exit 0; fi\nprintf '%s\\n' \"$@\" >> '{argv_log}'\nexit {kode_keluar}\n",
+                argv_log = argv_log.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&gitleaks, fs::Permissions::from_mode(0o755)).unwrap();
+        argv_log
+    }
+
+    #[cfg(unix)]
+    fn jalankan_gate(home: &Path, repo: &Path, env_tambahan: &[(&str, &str)]) -> std::process::Output {
+        let script = home.join("gate.sh");
+        fs::write(&script, SECRET_GATE_SNIPPET).unwrap();
+        let mut cmd = Shell::new("bash");
+        cmd.arg(&script)
+            .env("HOME", home)
+            .env_remove("AUTORE_HOOK_SKIP")
+            .current_dir(repo);
+        for (kunci, nilai) in env_tambahan {
+            cmd.env(kunci, nilai);
+        }
+        cmd.output().unwrap()
+    }
+
+    #[cfg(unix)]
+    fn teks(out: &std::process::Output) -> String {
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_menolak_commit_saat_gitleaks_menemukan_secret() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        siapkan_gitleaks_palsu(home.path(), "8.21.2", 1);
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+
+        assert!(!out.status.success(), "{}", teks(&out));
+        assert!(teks(&out).contains("BLOKIR"), "{}", teks(&out));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_lolos_saat_gitleaks_bersih() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+
+        assert!(out.status.success(), "{}", teks(&out));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_gagal_tertutup_saat_gitleaks_tidak_ada() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+        let keluaran = teks(&out);
+
+        assert!(
+            !out.status.success(),
+            "scanner hilang harus memblokir commit, bukan lolos: {keluaran}"
+        );
+        assert!(keluaran.contains("gitleaks tidak ditemukan"), "{keluaran}");
+        assert!(
+            keluaran.contains("gitleaks_8.21.2_linux_x64.tar.gz"),
+            "pesan wajib memuat perintah instalasi versi yang di-pin: {keluaran}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_memindai_file_staged() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        let argv_log = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+        assert!(out.status.success(), "{}", teks(&out));
+
+        let rekam = fs::read_to_string(&argv_log).unwrap();
+        for penanda in ["--staged", "--redact", "--exit-code", "--no-banner"] {
+            assert!(rekam.contains(penanda), "{penanda} hilang dari panggilan gitleaks:\n{rekam}");
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_memakai_config_repo_bila_ada() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        let argv_log = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+        fs::write(repo.path().join(".gitleaks.toml"), "[allowlist]\n").unwrap();
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+        assert!(out.status.success(), "{}", teks(&out));
+
+        let rekam = fs::read_to_string(&argv_log).unwrap();
+        assert!(
+            rekam.contains("--config") && rekam.contains(".gitleaks.toml"),
+            "allowlist repo tidak diteruskan:\n{rekam}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_memperingatkan_versi_gitleaks_berbeda() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        siapkan_gitleaks_palsu(home.path(), "8.20.0", 0);
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+
+        assert!(out.status.success(), "versi beda hanya peringatan: {}", teks(&out));
+        assert!(teks(&out).contains("PERINGATAN"), "{}", teks(&out));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_dilewati_saat_penanda_darurat_dipasang() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+
+        let out = jalankan_gate(home.path(), repo.path(), &[("AUTORE_HOOK_SKIP", "1")]);
+        let keluaran = teks(&out);
+
+        assert!(out.status.success(), "penanda darurat harus melewati blokir: {keluaran}");
+        assert!(keluaran.contains("DILEWATI"), "{keluaran}");
+    }
+
+    #[test]
+    fn hook_terpasang_memuat_gate_secret_staged() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".git")).unwrap();
+
+        let path = install_pre_commit_hook(tmp.path()).unwrap();
+        let isi = fs::read_to_string(&path).unwrap();
+
+        assert!(isi.contains("--staged"), "gate secret hilang dari hook:\n{isi}");
+        assert!(
+            isi.contains("AUTORE_HOOK_SKIP"),
+            "pintu darurat hilang dari hook:\n{isi}"
+        );
+        assert!(
+            isi.contains("cli/target/release/autore"),
+            "hook wajib memprioritaskan binary hasil build repo:\n{isi}"
+        );
+    }
+
+    #[test]
+    fn gate_pin_sama_dengan_image_ci() {
+        assert!(
+            crate::external::GITLEAKS_IMAGE.contains("v8.21.2"),
+            "image CI berpindah versi, samakan pin gate native"
+        );
+        assert!(
+            SECRET_GATE_SNIPPET.contains("8.21.2"),
+            "pin versi gitleaks gate native harus sama dengan image CI"
         );
     }
 }

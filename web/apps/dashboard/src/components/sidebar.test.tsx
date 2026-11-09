@@ -18,6 +18,10 @@ describe("Sidebar", () => {
     expect(logo.className).toContain("object-contain");
     expect(logo.className).toContain("shrink-0");
     expect(screen.getByTestId("sidebar-brand").className).toContain("items-center gap-3");
+    // Garis abu-abu di bawah logo dihapus agar tidak terputus di tengah jalan
+    // saat menu dan navbar terpisah oleh celah 12px.
+    expect(screen.getByTestId("sidebar-brand").className).not.toContain("border");
+    expect(screen.getByTestId("sidebar-brand").className).not.toContain("border-b");
     expect(screen.getByText("Autore")).toBeTruthy();
   });
 

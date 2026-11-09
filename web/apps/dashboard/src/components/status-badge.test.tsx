@@ -87,9 +87,10 @@ describe("Sidebar", () => {
     expect(screen.queryByText(/buat aplikasi|tambah aplikasi|aplikasi baru/i)).toBeNull();
   });
 
-  it("sizes the brand block to the 64px topbar so the two dividers meet", () => {
+  it("sizes the brand block to the 64px topbar without orphaned border line", () => {
     render(<Sidebar />);
-    expect(screen.getByTestId("sidebar-brand")).toHaveClass("h-16", "border-b");
+    expect(screen.getByTestId("sidebar-brand")).toHaveClass("h-16");
+    expect(screen.getByTestId("sidebar-brand").className).not.toContain("border");
   });
 
   it("insets active and inactive nav pills identically", () => {

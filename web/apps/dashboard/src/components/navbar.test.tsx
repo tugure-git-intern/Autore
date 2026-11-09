@@ -92,16 +92,15 @@ describe("topbar route context", () => {
     // punya latar biru yang kelihatan sebagai lengkungan.
     expect(kolom.className).toContain("bg-[#F0F5FE]");
     expect(kolom.className).not.toContain("bg-white");
-    // Kolom menyatu dengan sidebar agar header 64px menempel penuh tanpa terpotong.
-    expect(kolom.className).not.toContain("lg:ml-3");
-    expect(kolom.className).not.toContain("lg:mr-2");
+    // Kolom terpisah dari sidebar: jarak kiri 12px, jarak kanan 8px.
+    expect(kolom.className).toContain("lg:ml-3");
+    expect(kolom.className).toContain("lg:mr-2");
 
     const main = container.querySelector("main") as HTMLElement;
     expect(main.className).toContain("bg-white");
     expect(main.className).toContain("lg:rounded-t-xl");
-    // Jarak tetap di semua lebar viewport: kiri 12px (biar tidak mepet menu), kanan 8px.
-    expect(main.className).toContain("lg:ml-3");
-    expect(main.className).toContain("lg:mr-2");
+    expect(main.className).not.toContain("lg:ml-3");
+    expect(main.className).not.toContain("lg:mr-2");
     // Scroll vertikal terjadi di dalam <main> pada desktop supaya sudut rounded
     // tidak pernah ketiban <header> saat halaman digulir ke bawah.
     const kerangka = container.querySelector("div.flex.min-h-screen") as HTMLElement;

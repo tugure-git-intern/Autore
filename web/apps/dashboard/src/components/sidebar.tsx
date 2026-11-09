@@ -11,7 +11,7 @@ export function Sidebar() {
       {/* h-16 + 1px divider == the topbar block, so both dividers meet at the corner. */}
       <div
         data-testid="sidebar-brand"
-        className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 px-6"
+        className="flex h-16 shrink-0 items-center gap-3 px-6"
       >
         {/* Lockup asli Tugu Reasuransi (ikon + wordmark + tagline), latar transparan.
             h-10 + object-contain: seluruh lockup diskalakan utuh, tidak ada yang dipotong. */}

@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toast } from "./toast";
 
@@ -93,13 +93,15 @@ describe("Toast", () => {
     rerender(<Toast pesan="Gagal menyinkronkan data." jenis="gagal" onTutup={onTutup} />);
 
     expect(screen.getByTestId("toast").dataset.keluar).toBe("false");
+
+    // Hitungan penuh sejak pesan baru, lalu fase turun sesudahnya.
     act(() => {
-      vi.advanceTimersByTime(4_100);
+      vi.advanceTimersByTime(4_000);
     });
     expect(onTutup).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(140);
+      vi.advanceTimersByTime(240);
     });
     expect(onTutup).toHaveBeenCalledTimes(1);
   });
@@ -115,14 +117,15 @@ describe("Toast", () => {
       vi.advanceTimersByTime(3000);
     });
     rerender(<Toast pesan="Gagal menyinkronkan data." jenis="gagal" onTutup={onTutup} />);
+    // 4 detik tayang penuh sejak pesan baru, bukan sisa waktu pesan lama.
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(4_000);
     });
     expect(onTutup).not.toHaveBeenCalled();
 
-    // 4 detik tayang penuh sejak pesan baru + 240 ms animasi turun.
+    // 240 ms animasi turun setelahnya.
     act(() => {
-      vi.advanceTimersByTime(1240);
+      vi.advanceTimersByTime(240);
     });
     expect(onTutup).toHaveBeenCalledTimes(1);
   });
@@ -139,6 +142,60 @@ describe("Toast", () => {
       vi.advanceTimersByTime(5000);
     });
     expect(onTutup).not.toHaveBeenCalled();
+  });
+
+  it("jeda tayang saat kursor di atas toast, lalu lanjut dari sisa waktunya", () => {
+    vi.useFakeTimers();
+    const onTutup = vi.fn();
+
+    render(<Toast pesan="Data berhasil disinkronkan." jenis="sukses" onTutup={onTutup} />);
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    act(() => {
+      fireEvent.mouseEnter(screen.getByTestId("toast"));
+    });
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    // Sedang dibaca: tidak boleh menutup walau jauh melewati 4 detik.
+    expect(onTutup).not.toHaveBeenCalled();
+    expect(screen.getByTestId("toast").dataset.keluar).toBe("false");
+
+    act(() => {
+      fireEvent.mouseLeave(screen.getByTestId("toast"));
+    });
+    // Lanjut dari sisa 1 detik, bukan mengulang 4 detik dari awal.
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(onTutup).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    expect(onTutup).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape menutup lebih awal, tetap lewat animasi turun", () => {
+    vi.useFakeTimers();
+    const onTutup = vi.fn();
+
+    render(<Toast pesan="Data berhasil disinkronkan." jenis="sukses" onTutup={onTutup} />);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(screen.getByTestId("toast").dataset.keluar).toBe("true");
+    expect(onTutup).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    expect(onTutup).toHaveBeenCalledTimes(1);
   });
 
   it("permukaan navy gelap ala Google Cloud: teks terang, ikon bertinta jenis", () => {

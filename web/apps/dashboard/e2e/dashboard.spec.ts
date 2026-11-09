@@ -501,5 +501,22 @@ test.describe("tombol Sync", () => {
 
     await expect(toast).toBeHidden({ timeout: 6000 });
   });
+
+  test("toast bertahan selama kursor menempel di atasnya", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sync" }).click();
+
+    const toast = page.getByTestId("toast");
+    await expect(toast).toBeVisible();
+    await toast.hover();
+
+    // 4 detik tayang sudah lewat, tapi kursor masih di atas toast.
+    await page.waitForTimeout(5_000);
+    await expect(toast).toBeVisible();
+
+    await page.mouse.move(0, 0);
+    // Lanjut dari sisa waktu (bisa sampai 4 detik), bukan langsung hilang.
+    await expect(toast).toBeHidden({ timeout: 5_000 });
+  });
 });
 

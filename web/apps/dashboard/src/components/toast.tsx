@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export type JenisToast = "sukses" | "gagal";
@@ -47,6 +47,10 @@ const JENIS = {
  *
  * Tayang 4 detik, lalu turun keluar layar, baru `onTutup` dipanggil — pesan
  * tidak pernah berkedip hilang tanpa penutup.
+ *
+ * Kursor yang berhenti di atas toast menjeda hitungan (sisa waktunya disimpan,
+ * bukan diulang dari nol), dan Escape melewati sisa waktu tayang. Keduanya
+ * tetap menempuh animasi turun supaya `onTutup` tidak dipanggil mendadak.
  */
 export function Toast({
   pesan,
@@ -61,16 +65,47 @@ export function Toast({
 }) {
   const { Ikon, kelas, ikon, peran } = JENIS[jenis];
   const [keluar, setKeluar] = useState(false);
+  const [terjeda, setTerjeda] = useState(false);
 
+  // Sisa waktu tayang disimpan supaya jeda melanjutkan dari titik berhenti,
+  // bukan mengulang durasi penuh.
+  const sisaMs = useRef(durasiMs);
+  const mulaiTayang = useRef(0);
+
+  // Pesan baru mengulang hitungan dari nol, termasuk saat sedang dijeda.
   useEffect(() => {
+    sisaMs.current = durasiMs;
+    mulaiTayang.current = Date.now();
     setKeluar(false);
-    const mulaiTurun = setTimeout(() => setKeluar(true), durasiMs);
-    const lepas = setTimeout(onTutup, durasiMs + ANIMASI_TOAST_MS);
-    return () => {
-      clearTimeout(mulaiTurun);
-      clearTimeout(lepas);
+  }, [durasiMs, pesan]);
+
+  // Fase tayang. Dijeda = timer dilepas tanpa memakan sisa waktu.
+  useEffect(() => {
+    if (keluar) return;
+    if (terjeda) {
+      sisaMs.current = Math.max(0, sisaMs.current - (Date.now() - mulaiTayang.current));
+      return;
+    }
+    mulaiTayang.current = Date.now();
+    const t = setTimeout(() => setKeluar(true), sisaMs.current);
+    return () => clearTimeout(t);
+  }, [keluar, terjeda, pesan, durasiMs]);
+
+  // Fase turun: animasi selalu diselesaikan dulu, termasuk saat ditutup Escape.
+  useEffect(() => {
+    if (!keluar) return;
+    const t = setTimeout(onTutup, ANIMASI_TOAST_MS);
+    return () => clearTimeout(t);
+  }, [keluar, onTutup]);
+
+  // Escape melewati sisa waktu tayang.
+  useEffect(() => {
+    const padaTombol = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setKeluar(true);
     };
-  }, [onTutup, durasiMs, pesan]);
+    window.addEventListener("keydown", padaTombol);
+    return () => window.removeEventListener("keydown", padaTombol);
+  }, []);
 
   // Wajib sepasang dengan keyframes `globals.css`, termasuk easing-nya: naik
   // pakai cubic-bezier yang melambat di ujung, turun pakai ease-in.
@@ -83,6 +118,9 @@ export function Toast({
       role={peran}
       data-testid="toast"
       data-keluar={keluar}
+      data-terjeda={terjeda}
+      onMouseEnter={() => setTerjeda(true)}
+      onMouseLeave={() => setTerjeda(false)}
       className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
     >
       <Ikon className={`h-4 w-4 ${ikon}`} aria-hidden="true" />

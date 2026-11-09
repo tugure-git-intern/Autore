@@ -39,7 +39,7 @@ async function app(name: string, auth: { secret?: string; allowed?: string[] }) 
   const app = createApp(
     async () => STATUS,
     hatchActions({ workspace: dir, run: async () => STATUS, spawn, bin: "autore" }),
-    () => ({ data: RUNS, stale: false }),
+    async () => ({ data: RUNS, stale: false }),
     auth,
   );
   return { app, spawn };
@@ -80,7 +80,10 @@ const sesiGithub = (nama: string | null, email: string | null) =>
     salt: "authjs.session-token",
   });
 
-const aksi = (aplikasi: { request: (input: string, init?: RequestInit) => Promise<Response> }, cookie?: string) =>
+const aksi = async (
+  aplikasi: { request: (input: string, init?: RequestInit) => Response | Promise<Response> },
+  cookie?: string,
+) =>
   aplikasi.request("http://localhost/api/actions/deploy", {
     method: "POST",
     // Deploy selalu menunjuk aplikasi yang diminta, jadi helper sesi pun mengirim body.
@@ -100,10 +103,10 @@ describe("identitasDariToken", () => {
   it("email null (privat di GitHub) jatuh ke noreply login", async () => {
     const { identitasDariToken } = await import("./session");
 
-    expect(identitasDariToken({ login: "MAliffadlan", name: "Alif Fadlan", email: null }).email).toBe(
+    expect(identitasDariToken({ login: "MAliffadlan", name: "Alif Fadlan", email: null })?.email).toBe(
       "maliffadlan@users.noreply.github.com",
     );
-    expect(identitasDariToken({ login: "MAliffadlan", name: null, email: "" }).email).toBe(
+    expect(identitasDariToken({ login: "MAliffadlan", name: null, email: "" })?.email).toBe(
       "maliffadlan@users.noreply.github.com",
     );
   });
@@ -111,7 +114,7 @@ describe("identitasDariToken", () => {
   it("nama kosong jatuh ke login, jadi author tidak pernah kosong", async () => {
     const { identitasDariToken } = await import("./session");
 
-    expect(identitasDariToken({ login: "MAliffadlan", name: "   ", email: null }).nama).toBe("MAliffadlan");
+    expect(identitasDariToken({ login: "MAliffadlan", name: "   ", email: null })?.nama).toBe("MAliffadlan");
   });
 
   it("nama tampilan yang hanya beda casing dari login tidak menutupi login", async () => {
@@ -119,10 +122,10 @@ describe("identitasDariToken", () => {
 
     // Kasus nyata: profil GitHub `MAliffadlan` mengisi Name dengan "maliffadlan".
     // Nama itu tidak membawa informasi baru, sedangkan login menunjuk akunnya.
-    expect(identitasDariToken({ login: "MAliffadlan", name: "maliffadlan", email: null }).nama).toBe(
+    expect(identitasDariToken({ login: "MAliffadlan", name: "maliffadlan", email: null })?.nama).toBe(
       "MAliffadlan",
     );
-    expect(identitasDariToken({ login: "MAliffadlan", name: "  MALIFFADLAN ", email: null }).nama).toBe(
+    expect(identitasDariToken({ login: "MAliffadlan", name: "  MALIFFADLAN ", email: null })?.nama).toBe(
       "MAliffadlan",
     );
   });
@@ -131,7 +134,7 @@ describe("identitasDariToken", () => {
     const { identitasDariToken } = await import("./session");
 
     expect(
-      identitasDariToken({ login: "MAliffadlan", name: "Muhammad Alif Fadlan", email: null }).nama,
+      identitasDariToken({ login: "MAliffadlan", name: "Muhammad Alif Fadlan", email: null })?.nama,
     ).toBe("Muhammad Alif Fadlan");
   });
 
@@ -143,6 +146,7 @@ describe("identitasDariToken", () => {
       email: null,
     });
 
+    if (!hasil) throw new Error("token dengan login valid harus menghasilkan identitas");
     expect(hasil.nama).not.toContain("\n");
     expect(hasil.nama.split("").every((c) => c.codePointAt(0)! >= 32)).toBe(true);
     expect(hasil.nama.length).toBeLessThanOrEqual(100);
@@ -152,7 +156,7 @@ describe("identitasDariToken", () => {
     const { identitasDariToken } = await import("./session");
 
     for (const jahat of ["bukan-email", "a@b c", "x@y<z>", "a@@b.com"]) {
-      expect(identitasDariToken({ login: "alif", name: "Alif", email: jahat }).email).toBe(
+      expect(identitasDariToken({ login: "alif", name: "Alif", email: jahat })?.email).toBe(
         "alif@users.noreply.github.com",
       );
     }

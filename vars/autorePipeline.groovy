@@ -70,7 +70,8 @@ def call(Map config = [:]) {
                         // Repo yang dipindai tidak boleh menyediakan kode yang menentukan lulus/gagal.
                         def trusted = '/usr/local/lib/autore-ci'
                         def needed = ['ci-sonarqube-gate.sh', 'build-musl-release.sh',
-                                      'ci-nexus-publish.sh', 'ci-deploy-by-digest.sh', 'notify-telegram.sh']
+                                      'ci-nexus-publish.sh', 'ci-deploy-by-digest.sh', 'notify-telegram.sh',
+                                      'ci-web-tests.sh']
                         def missing = needed.findAll { name ->
                             sh(script: "test -x '${trusted}/${name}' && echo yes || echo no", returnStdout: true).trim() != 'yes'
                         }
@@ -143,9 +144,25 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('5. Build Image & Static musl Binary') {
+            stage('5. Web Quality Gate (vitest, tsc, build)') {
                 steps {
-                    script { env.FAILED_STAGE = '5. Build Image & Static musl Binary' }
+                    script {
+                        // Gerbang web hanya untuk repo yang punya web/package.json.
+                        // Project Python/Go/Java dilewati terang-terangan (bukan laporan
+                        // dummy) supaya pipeline aplikasi non-web tidak gagal palsu.
+                        if (fileExists('web/package.json')) {
+                            env.FAILED_STAGE = '5. Web Quality Gate (vitest, tsc, build)'
+                            sh '/usr/local/lib/autore-ci/ci-web-tests.sh'
+                        } else {
+                            echo "Dilewati: web/package.json tidak ada — project non-web, gerbang vitest/tsc/build tidak berlaku."
+                        }
+                    }
+                }
+            }
+
+            stage('6. Build Image & Static musl Binary') {
+                steps {
+                    script { env.FAILED_STAGE = '6. Build Image & Static musl Binary' }
                     sh """
                         target_dir="\${DOCKERFILE_DIR}"
                         if [ ! -f "\${target_dir}/Dockerfile" ] && [ -f "sandbox/dummy-app/Dockerfile" ]; then
@@ -167,9 +184,9 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('6. Trivy Final Image Scan & SBOM') {
+            stage('7. Trivy Final Image Scan & SBOM') {
                 steps {
-                    script { env.FAILED_STAGE = '6. Trivy Final Image Scan & SBOM' }
+                    script { env.FAILED_STAGE = '7. Trivy Final Image Scan & SBOM' }
                     sh """
                         mkdir -p dist
                         /usr/local/bin/autore scan-image \
@@ -189,16 +206,16 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('7. Verify Checksums') {
+            stage('8. Verify Checksums') {
                 steps {
-                    script { env.FAILED_STAGE = '7. Verify Checksums' }
+                    script { env.FAILED_STAGE = '8. Verify Checksums' }
                     sh 'cd dist && sha256sum -c SHA256SUMS'
                 }
             }
 
-            stage('8. Push to Nexus & Verify Remote Digest') {
+            stage('9. Push to Nexus & Verify Remote Digest') {
                 steps {
-                    script { env.FAILED_STAGE = '8. Push to Nexus & Verify Remote Digest' }
+                    script { env.FAILED_STAGE = '9. Push to Nexus & Verify Remote Digest' }
                     withCredentials([usernamePassword(credentialsId: nexusCreds, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
                             export APP_NAME="${APP_NAME}"
@@ -216,9 +233,9 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('9. Deploy by Verified Digest') {
+            stage('10. Deploy by Verified Digest') {
                 steps {
-                    script { env.FAILED_STAGE = '9. Deploy by Verified Digest' }
+                    script { env.FAILED_STAGE = '10. Deploy by Verified Digest' }
                     sh '''
                         verified_digest="$(cat .verified-image-digest)"
                         deploy_cmd="/usr/local/lib/autore-ci/ci-deploy-by-digest.sh"

@@ -37,7 +37,7 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 - **Multi-Language Support**: Production-ready scaffolding templates for **Python** (3.12-slim, non-root user), **Node.js** (20-alpine, unprivileged user), **Java** (Maven multi-stage build, Eclipse Temurin 21 JRE), and **Go** (minimal scratch/distroless static binary). Each template includes automated build tests and dedicated host port allocation to prevent deployment collisions.
 - **SBOM Viewer**: Integrated Software Supply Chain Security dashboard rendering CycloneDX v1.5 JSON components directly from build artifacts, complete with package type classification, version tracking, license compliance inspection, and instant search filtering.
 - **Audit Trail & Identity Propagation**: Immutable audit logging recorded in structured JSONL format (`~/.local/state/autore/audit.log`). Authenticated GitHub user sessions are propagated directly to CLI subprocess arguments, attributing Git commit author metadata (`user.name`, `user.email`) to the active developer rather than an untraceable bot.
-- **Fail-Closed Security Pipeline**: Strict 9-stage pipeline managed through an admin-governed Jenkins Trusted Shared Library. Any scanner failure, misconfiguration, or unverified artifact immediately terminates the build with zero bypasses.
+- **Fail-Closed Security Pipeline**: Strict 10-stage pipeline managed through an admin-governed Jenkins Trusted Shared Library. Any scanner failure, misconfiguration, or unverified artifact immediately terminates the build with zero bypasses.
 - **Responsive Operational UI**: Clean, light-only interface optimized for both desktop operations and mobile devices, featuring a mobile bottom navigation bar, live Lead Time analytics, stage matrix inspection, and real-time connection status indicators.
 
 ---
@@ -74,7 +74,7 @@ flowchart LR
 
 ---
 
-## 9-Stage Fail-Closed Security Pipeline
+## 10-Stage Fail-Closed Security Pipeline
 
 The authoritative CI/CD pipeline definition is maintained in the administrative repository (`vars/autorePipeline.groovy`). Application repositories cannot weaken or alter gate thresholds.
 
@@ -84,11 +84,12 @@ The authoritative CI/CD pipeline definition is maintained in the administrative 
 | 2 | **Static Guard & Gitleaks** | Native byte guard checks forbidden patterns; Gitleaks scans entire commit history for credentials and secrets. |
 | 3 | **Trivy Source & Config Scan** | Software Composition Analysis (SCA) for dependencies and Dockerfile misconfigurations; blocks HIGH and CRITICAL vulnerabilities. |
 | 4 | **Clippy & SonarQube SAST** | Enforces static code quality and SAST standards via SonarQube Quality Gate. |
-| 5 | **Image & Musl Binary Build** | Generates reproducible container image with immutable tags and compiles standalone static musl binaries. |
-| 6 | **Trivy Image Scan & SBOM** | Enforces non-root container UID policies; scans final container filesystem for CVEs; exports CycloneDX SBOM JSON. |
-| 7 | **Verify Checksums** | Validates SHA-256 cryptographic signatures against release artifacts. |
-| 8 | **Push to Nexus Registry** | Uploads image to private Nexus repository under `ALLOW_ONCE` immutability policy (disallows tag overwriting). |
-| 9 | **Deploy by Verified Digest** | Deploys containers strictly referencing `@sha256:<digest>` verified in Stage 8, preventing image spoofing. |
+| 5 | **Web Quality Gate** | Runs the web workspace gates: full vitest suite, `tsc --noEmit` for both `web/apps/api` and `web/apps/dashboard`, and the production dashboard build. Skipped (with an explicit log line) for repositories without `web/package.json`. |
+| 6 | **Image & Musl Binary Build** | Generates reproducible container image with immutable tags and compiles standalone static musl binaries. |
+| 7 | **Trivy Image Scan & SBOM** | Enforces non-root container UID policies; scans final container filesystem for CVEs; exports CycloneDX SBOM JSON. |
+| 8 | **Verify Checksums** | Validates SHA-256 cryptographic signatures against release artifacts. |
+| 9 | **Push to Nexus Registry** | Uploads image to private Nexus repository under `ALLOW_ONCE` immutability policy (disallows tag overwriting). |
+| 10 | **Deploy by Verified Digest** | Deploys containers strictly referencing `@sha256:<digest>` verified in Stage 9, preventing image spoofing. |
 
 ---
 
@@ -293,7 +294,7 @@ Autore/
 │   ├── allowed-users.json        # Primary GitHub user whitelist
 │   └── .env                      # Environment secrets (OAuth keys, secrets, session configurations)
 ├── deploy/                       # systemd user service definitions (autore-web-api, autore-web-dashboard)
-├── vars/autorePipeline.groovy    # Jenkins Trusted Shared Library (Authoritative 9-stage pipeline)
+├── vars/autorePipeline.groovy    # Jenkins Trusted Shared Library (Authoritative 10-stage pipeline)
 ├── scripts/                      # Release, SonarQube, Nexus, and Telegram notification utility scripts
 ├── runner/                       # Jenkins agent provisioning and service configuration
 ├── sandbox/                      # Testbed environments (SonarQube, Nexus, local Docker registry)

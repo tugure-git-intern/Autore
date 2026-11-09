@@ -254,7 +254,7 @@ describe("hatchActions", () => {
 
   it("timeout jadi 504 dan lock tetap dilepas", async () => {
     const dir = await workspace(["tes-web"]);
-    const spawn = vi.fn(async () => {
+    const spawn = vi.fn(async (): Promise<SpawnResult> => {
       throw Object.assign(new Error("killed"), { code: "ETIMEDOUT" });
     });
     const { actions } = make(dir, { spawn });

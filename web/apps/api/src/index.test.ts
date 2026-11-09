@@ -166,7 +166,7 @@ async function workspace() {
 }
 
 const post = async (
-  app: { request: (input: string, init?: RequestInit) => Promise<Response> },
+  app: { request: (input: string, init?: RequestInit) => Response | Promise<Response> },
   path: string,
   body?: unknown,
   raw?: string,
@@ -429,7 +429,7 @@ describe("POST /api/actions/deploy", () => {
     expect(body).toMatchObject({ ok: true, action: "deploy", target: "audit-uji3" });
     expect(body.target).not.toBe("tes-web");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]];
     // Target dari body; identitas commit dari sesi cookie() — bukan bot `Autore CLI`.
     expect(args).toEqual([
       "deploy",
@@ -448,7 +448,7 @@ describe("POST /api/actions/deploy", () => {
     const response = await post(app, "/api/actions/deploy", { app: "tes-web" });
 
     expect((await response.json()).target).toBe("tes-web");
-    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]];
     expect(args).toEqual([
       "deploy",
       "--path",
@@ -551,7 +551,7 @@ describe("POST /api/actions/quick-start", () => {
       target: "coba-web",
       repo: "https://github.com/akun/coba-web",
     });
-    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]];
     expect(args.slice(0, 2)).toEqual(["quick-start", "--path"]);
     // Identitas sesi ikut di ujung argv (audit trail), jadi kode bukan lagi elemen terakhir.
     expect(args).toEqual(
@@ -613,12 +613,15 @@ describe("GET /api/audit/log", () => {
       { ts: "2026-11-08T05:00:00.000Z", login: "MAliffadlan", email: "m@tugu.com", action: "deploy", target: "tes-web", exit: 0 },
     ];
     const app = createApp(
-      async () => ({ code: 0, stdout: "{}", stderr: "" }),
-      { run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web" }), quickStart: async () => ({ ok: true, status: 200, action: "quick-start", taaget: "x" }) },
+      async () => "{}",
+      {
+        run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
+        quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
+      },
       async () => ({ data: RUNS, stale: false }),
       {},
       async () => ({ data: ACTIVE, stale: false }),
-      async () => ({ ok: true, data: { app: "x", generated_at: "", direct: 0, total: 0, packages: [] } }),
+      async () => ({ ok: true, status: 200, data: { app: "x", generated_at: "", source: "x", total: 0, packages: [] } }),
       () => 0,
       async () => auditData,
     );

@@ -226,6 +226,26 @@ the commit is blocked and the install command for the pinned version (v8.21.2, s
 is printed. Container CVE scanning (Trivy) stays in Jenkins, where the vulnerability database is
 always fresh; running it per commit would add more than a minute to every commit.
 
+### Repository ruleset configuration (`.gitleaks.toml`)
+
+A `.gitleaks.toml` in the repository is picked up automatically, by the hook **and** by the
+authoritative CI scan. Two keys are mandatory, and both fail silently when missing:
+
+```toml
+[extend]
+useDefault = true          # without this the file REPLACES the default ruleset
+
+[allowlist]
+regexTarget = "line"       # default target is the matched secret, not the whole line
+regexes = ['''dummy-value''']
+```
+
+Without `useDefault = true` gitleaks loads only the contents of the file, so the entire default
+ruleset is switched off and every scan reports "no leaks found" for any secret. Without
+`regexTarget = "line"` the allowlist entries never match. Both mistakes produce a green scan,
+never an error, which is why the pre-commit gate blocks commits when `.gitleaks.toml` exists
+without `useDefault`.
+
 Emergency bypass (single commit, never as a habit):
 
 ```bash

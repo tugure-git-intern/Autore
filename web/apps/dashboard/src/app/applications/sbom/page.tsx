@@ -7,7 +7,8 @@ import { SbomTable } from "@/components/sbom-table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { dash, type SbomPayload } from "@/lib/contracts";
+import { type SbomPayload } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { fetchSbom } from "@/lib/sbom-client";
 
 type Hasil =

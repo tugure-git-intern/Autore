@@ -7,8 +7,8 @@ const app = (ubah: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
   id: "a",
   name: "App A",
   status: "unknown",
-  last_build: null,
-  commit_sha: null,
+  last_build: "",
+  commit_sha: "",
   security_issues: 0,
   ...ubah,
 });
@@ -56,7 +56,7 @@ test("menulis 'Belum ada build' alih-alih waktu karangan saat build belum ada", 
   render(
     <AppPicker
       applications={[
-        app({ id: "belum", name: "Belum", last_build: null }),
+        app({ id: "belum", name: "Belum", last_build: "" }),
         app({ id: "sudah", name: "Sudah", last_build: "2026-11-01T10:00:00Z" }),
       ]}
       onPilih={() => {}}

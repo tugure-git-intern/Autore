@@ -1,4 +1,4 @@
-import type { SbomPayload } from "./contracts";
+import { validateSbomPayload, type SbomPayload } from "./contracts";
 
 /**
  * Same-origin relative URL; Next rewrites /api/* ke adapter Hono loopback.
@@ -14,5 +14,5 @@ export async function fetchSbom(app: string, signal?: AbortSignal): Promise<Sbom
   if (!response.ok) {
     throw new Error(`sbom request failed: ${response.status}`);
   }
-  return (await response.json()) as SbomPayload;
+  return validateSbomPayload(await response.json());
 }

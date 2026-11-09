@@ -6,7 +6,7 @@ import { ActionButton } from "@/components/actions/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { ActivePipeline, ApplicationRecord, DashboardStatus, RunRecord } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { formatDuration, relativeTime, shortSha } from "@/lib/format";
 import { cocokPipeline } from "@/lib/pilih-app";
 import { StatusBadge, type AppStatus } from "../status-badge";

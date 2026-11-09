@@ -76,3 +76,8 @@ export function inisial(nama: string): string {
     .join("")
     .toUpperCase();
 }
+
+/** CLI sends "" (never null) for unavailable text. Empty must render as a dash, not as a fake value. */
+export function dash(value: string | null | undefined): string {
+  return value && value.trim() ? value : "—";
+}

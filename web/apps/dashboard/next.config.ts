@@ -12,6 +12,8 @@ import type { NextConfig } from "next";
 const API_ASAL = "http://127.0.0.1:9121";
 
 const nextConfig: NextConfig = {
+  // Paket kontrak dikirim sebagai sumber TypeScript, bukan hasil build.
+  transpilePackages: ["@autore/contracts"],
   async rewrites() {
     return [
       { source: "/api/status", destination: `${API_ASAL}/api/status` },

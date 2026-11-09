@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Boxes, Container, Timer, Workflow } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { parseLeadTime, type PipelineWaktu } from "@/lib/format";
 import { AnimatedNumber } from "./ui/animated-number";
 import { useStatus } from "./app-shell";

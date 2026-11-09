@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { dash, type SbomPackageType, type SbomPayload } from "@/lib/contracts";
+import { type SbomPackageType, type SbomPayload } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { filterPackages } from "@/lib/filter-sbom";
 
 /** Label yang dibaca manusia untuk `type` dari CLI. */

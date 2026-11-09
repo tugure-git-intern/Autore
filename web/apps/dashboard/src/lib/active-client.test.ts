@@ -49,4 +49,18 @@ describe("fetchActive", () => {
 
     await expect(fetchActive()).rejects.toThrow("503");
   });
+
+  it("menolak payload yang tidak sesuai kontrak", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        response(true, 200, {
+          data: { ...PAYLOAD, active: [{ ...PAYLOAD.active[0], number: -1 }] },
+          stale: false,
+        }),
+      ),
+    );
+
+    await expect(fetchActive()).rejects.toThrow();
+  });
 });

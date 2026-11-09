@@ -1,5 +1,5 @@
 import type { ActiveCounts, ActivePipeline } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { inisial, shortSha } from "@/lib/format";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";

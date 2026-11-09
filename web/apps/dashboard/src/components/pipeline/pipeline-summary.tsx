@@ -1,7 +1,7 @@
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { DashboardStatus, StatusValue } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 
 const labels: Record<StatusValue, { label: string; tone: BadgeTone }> = {
   idle: { label: "Siaga", tone: "gray" },

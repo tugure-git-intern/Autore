@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, Layers } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { filterApps, type StatusFilter } from "@/lib/filter-apps";
 import { useStatus } from "@/components/app-shell";
 import { ActionButton } from "@/components/actions/action-button";

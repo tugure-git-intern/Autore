@@ -1,5 +1,5 @@
 import type { RunRecord } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { formatDuration, relativeTime, shortSha } from "@/lib/format";
 import { StatusBadge, type AppStatus } from "./status-badge";
 import { ChartCard } from "./ui/chart-card";

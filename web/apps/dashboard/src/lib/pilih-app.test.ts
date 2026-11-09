@@ -6,8 +6,8 @@ const app = (ubah: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
   id: "a",
   name: "A",
   status: "unknown",
-  last_build: null,
-  commit_sha: null,
+  last_build: "",
+  commit_sha: "",
   security_issues: 0,
   ...ubah,
 });

@@ -10,7 +10,7 @@ import { ChartCard } from "@/components/ui/chart-card";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RunsPayload, StatusValue } from "@/lib/contracts";
-import { dash } from "@/lib/contracts";
+import { dash } from "@/lib/format";
 import { fetchRuns } from "@/lib/runs-client";
 import { hitungSkor } from "@/lib/score";
 

@@ -28,6 +28,7 @@ const STATUS = {
     system_status: "passed",
     infra: { jenkins: "active", nexus: "active" },
     stats: { total_apps: 2, running_containers: 1 },
+    repository_health: { score_percent: 80, total_repos: 6, gold: 2, silver: 3, bronze: 1 },
     applications: [app(), app({ id: "api-pegawai", name: "API Pegawai", status: "failed", security_issues: 2 })],
     latest_pipeline: {
       status: "passed",

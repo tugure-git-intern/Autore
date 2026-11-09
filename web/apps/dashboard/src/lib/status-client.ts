@@ -1,4 +1,4 @@
-import type { ApiStatusResponse } from "./contracts";
+import { isDashboardStatus, parseApiResponse, type ApiStatusResponse } from "./contracts";
 
 /** Same-origin relative URL; Next rewrites /api/* to the loopback Hono adapter. */
 export async function fetchDashboardStatus(signal?: AbortSignal): Promise<ApiStatusResponse> {
@@ -6,5 +6,5 @@ export async function fetchDashboardStatus(signal?: AbortSignal): Promise<ApiSta
   if (!response.ok) {
     throw new Error(`status request failed: ${response.status}`);
   }
-  return (await response.json()) as ApiStatusResponse;
+  return parseApiResponse(await response.json(), isDashboardStatus);
 }

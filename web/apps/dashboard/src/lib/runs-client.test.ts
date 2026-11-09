@@ -50,4 +50,13 @@ describe("fetchRuns", () => {
 
     await expect(fetchRuns()).rejects.toThrow("500");
   });
+
+  it("menolak payload yang tidak sesuai kontrak", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response(true, 200, { data: { ...PAYLOAD, daily: "x" }, stale: false })),
+    );
+
+    await expect(fetchRuns()).rejects.toThrow();
+  });
 });

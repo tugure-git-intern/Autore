@@ -1,4 +1,4 @@
-import type { ApiRunsResponse } from "./contracts";
+import { isRunsPayload, parseApiResponse, type ApiRunsResponse } from "./contracts";
 
 /** Same-origin relative URL; Next rewrites /api/* to the loopback Hono adapter. */
 export async function fetchRuns(signal?: AbortSignal): Promise<ApiRunsResponse> {
@@ -6,5 +6,5 @@ export async function fetchRuns(signal?: AbortSignal): Promise<ApiRunsResponse> 
   if (!response.ok) {
     throw new Error(`runs request failed: ${response.status}`);
   }
-  return (await response.json()) as ApiRunsResponse;
+  return parseApiResponse(await response.json(), isRunsPayload);
 }

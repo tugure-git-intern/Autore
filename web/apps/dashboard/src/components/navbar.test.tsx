@@ -92,13 +92,23 @@ describe("topbar route context", () => {
     // punya latar biru yang kelihatan sebagai lengkungan.
     expect(kolom.className).toContain("bg-[#F0F5FE]");
     expect(kolom.className).not.toContain("bg-white");
-    // Kolom terpisah dari sidebar: jarak kiri 12px, jarak kanan 8px.
-    expect(kolom.className).toContain("lg:ml-3");
-    expect(kolom.className).toContain("lg:mr-2");
+    // Sidebar keluar dari alur flex, jadi kolom mengisi lebar viewport penuh:
+    // itulah sebabnya topbar benar-benar w-full dan tidak pernah terputus.
+    expect(kolom.className).not.toContain("lg:ml-3");
+    expect(kolom.className).not.toContain("lg:mr-2");
+    expect(kolom.className).not.toContain("lg:pt-3");
 
     const main = container.querySelector("main") as HTMLElement;
     expect(main.className).toContain("bg-white");
-    expect(main.className).toContain("lg:rounded-t-xl");
+    // Kartu konten melayang: mulai setelah 250px sidebar + 12px jarak + 12px celah,
+    // sudut melengkung di keempat sisi, dan renggang 12px dari kanan & bawah.
+    expect(main.className).toContain("lg:ml-[274px]");
+    expect(main.className).toContain("lg:mr-3");
+    expect(main.className).toContain("lg:mt-3");
+    expect(main.className).toContain("lg:mb-3");
+    expect(main.className).toContain("lg:w-auto");
+    expect(main.className).toContain("lg:rounded-2xl");
+    expect(main.className).not.toContain("lg:rounded-t-xl");
     expect(main.className).not.toContain("lg:ml-3");
     expect(main.className).not.toContain("lg:mr-2");
     // Scroll vertikal terjadi di dalam <main> pada desktop supaya sudut rounded
@@ -116,9 +126,15 @@ describe("topbar route context", () => {
     expect(isi.className).toContain("max-w-[1440px]");
     expect(isi.className).toContain("mx-auto");
 
-    // Chrome tetap biru muda: cuma kanvas isi yang jadi putih.
-    expect((container.querySelector("header") as HTMLElement).className).toContain("bg-[#F0F5FE]");
-    expect((container.querySelector("aside") as HTMLElement).className).toContain("bg-[#F0F5FE]");
+    // Topbar biru muda selebar viewport, di layer belakang sidebar (z-20) supaya
+    // tidak pernah terlihat putus; sidebar dan kanvas isi putih.
+    const header = container.querySelector("header") as HTMLElement;
+    expect(header.className).toContain("bg-[#F0F5FE]");
+    expect(header.className).toContain("w-full");
+    expect(header.className).toContain("z-10");
+    // Isi topbar digeser ke kanan supaya tidak tersembunyi di balik kartu sidebar.
+    expect((header.firstElementChild as HTMLElement).className).toContain("lg:pl-[274px]");
+    expect((container.querySelector("aside") as HTMLElement).className).toContain("bg-white");
   });
 
   it("drops the sidebar and topbar on the auth pages", () => {

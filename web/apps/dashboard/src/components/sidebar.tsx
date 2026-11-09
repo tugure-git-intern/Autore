@@ -7,8 +7,10 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="z-10 sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col rounded-br-3xl bg-[#F0F5FE] shadow-[6px_0_24px_rgba(15,23,42,0.15),2px_0_6px_rgba(15,23,42,0.12)] lg:flex">
-      {/* h-16 + 1px divider == the topbar block, so both dividers meet at the corner. */}
+    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm lg:flex">
+      {/* Blok logo setinggi topbar (64px). Kartu melayang: tidak ada garis pemisah
+          yang bisa berhenti mendadak di tepi, dan menempel viewport hanya lewat
+          jarak 12px di kiri/atas/bawah. */}
       <div
         data-testid="sidebar-brand"
         className="flex h-16 shrink-0 items-center gap-3 px-6"

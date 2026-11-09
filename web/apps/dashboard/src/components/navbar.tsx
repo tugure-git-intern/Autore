@@ -52,8 +52,9 @@ export function Navbar({
   user: SessionUser;
 }) {
   return (
-    <header className="sticky top-0 z-10 bg-[#F0F5FE]">
-      <div className="flex h-16 items-center justify-between gap-3 px-4 lg:px-6">
+    <header className="sticky top-0 z-10 w-full bg-[#F0F5FE]">
+      {/* lg:pl-[274px] melewati kartu sidebar melayang: 12px jarak + 250px lebar + 12px celah. */}
+      <div className="flex h-16 items-center justify-between gap-3 px-4 lg:pl-[274px] lg:pr-3">
         <div className="flex min-w-0 items-center gap-3">
           <span role="status" className="flex shrink-0 items-center gap-2">
             <span

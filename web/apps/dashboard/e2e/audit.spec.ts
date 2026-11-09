@@ -58,7 +58,7 @@ test.describe("Audit Log — garis timeline", () => {
   test("garis tidak putus: setiap titik di kolomnya milik garis atau avatar, bukan kartu", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1280, height: 1200 });
     await page.goto("/audit", { waitUntil: "networkidle" });
 
     const rail = page.getByTestId("audit-rail");
@@ -78,8 +78,13 @@ test.describe("Audit Log — garis timeline", () => {
 
     const x = kotakGaris.x + kotakGaris.width / 2;
     const sampel: number[] = [];
-    // elementFromPoint hanya membaca titik di dalam viewport (height=900).
-    const batasBawah = Math.min(kotakGaris.y + kotakGaris.height - 2, 898);
+    // elementFromPoint cuma membaca titik di dalam viewport, dan <main> memotong
+    // isi yang melewati tepinya: batasi ke tepi bawah kartu konten juga.
+    const kotakKonten = (await page.locator("main").boundingBox())!;
+    const batasBawah = Math.min(
+      kotakGaris.y + kotakGaris.height - 2,
+      kotakKonten.y + kotakKonten.height - 2,
+    );
     for (let y = kotakGaris.y + 2; y < batasBawah; y += 8) {
       sampel.push(y);
     }

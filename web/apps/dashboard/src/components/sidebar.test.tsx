@@ -37,29 +37,32 @@ describe("Sidebar", () => {
     expect(auditLink).toHaveAttribute("href", "/audit");
   });
 
-  it("memakai latar GCP Console #F0F5FE agar menyatu dengan topbar dan kanvas", () => {
+  it("berbentuk kartu melayang: renggang dari tepi, sudut melengkung penuh, border tipis", () => {
     const { container } = render(<Sidebar />);
     const aside = container.querySelector("aside") as HTMLElement;
 
-    expect(aside.className).toContain("bg-[#F0F5FE]");
-    expect(aside.className).not.toContain("bg-white");
-    // Mepet ke tepi jendela: sisi kiri tetap siku, sudut kanan yang membulat.
-    // Sudut kanan membulat tegas (24px / 3xl) agar lengkungan terbaca jelas di layar lebar.
-    // Sudut kanan-atas siku agar header 64px menyatu lurus dengan topbar,
-    // sudut kanan-bawah membulat tegas (24px / 3xl) agar menu tetap mengambang.
-    expect(aside.className).toContain("rounded-br-3xl");
-    expect(aside.className).not.toContain("rounded-r-3xl");
-    expect(aside.className).not.toContain("rounded-tr");
+    // Keluar dari alur flex dan menempel 12px dari tepi kiri/atas/bawah viewport,
+    // jadi topbar di belakangnya bisa membentang penuh tanpa terputus.
+    expect(aside.className).toContain("fixed");
+    expect(aside.className).toContain("left-3");
+    expect(aside.className).toContain("top-3");
+    expect(aside.className).toContain("bottom-3");
+    expect(aside.className).not.toContain("sticky");
+    expect(aside.className).not.toContain("h-screen");
+    // Menumpuk di atas topbar (z-10).
+    expect(aside.className).toContain("z-20");
+    // Sudut melengkung di keempat sisi, bukan cuma sisi kanan.
+    expect(aside.className).toContain("rounded-2xl");
+    expect(aside.className).not.toContain("rounded-br-");
+    expect(aside.className).not.toContain("rounded-r-");
     expect(aside.className).not.toContain("rounded-l");
-    expect(aside.className).not.toContain("rounded-xl");
-    expect(aside.className).not.toContain("m-3");
-    expect(aside.className).toContain("h-screen");
-    // Garis pemisah tetap ada di sisi kanan saja.
-    // Garis pemisah diganti bayangan lembut ke arah kanan supaya panel terbaca mengambang.
-    // Blur 12px: e2e/dashboard.spec.ts memberi pengecualian khusus <aside>, lihat komentarnya.
+    // Bidang putih + garis tipis: batas kartu dibaca dari border, bukan bayangan berat.
+    expect(aside.className).toContain("bg-white");
+    expect(aside.className).toContain("border");
+    expect(aside.className).toContain("border-gray-200");
+    expect(aside.className).toContain("shadow-sm");
     expect(aside.className).not.toContain("border-r");
-    expect(aside.className).toMatch(/shadow-\[/);
-    expect(aside.className).toContain("z-10");
+    expect(aside.className).not.toContain("border-b");
   });
 
   it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {

@@ -1,43 +1,78 @@
 import { test, expect } from "@playwright/test";
 
-// Keluhan yang dijaga tes ini: jarak panel konten ke menu kiri ikut melebar saat
-// viewport lebar / browser di-zoom out. Penyebabnya `max-w-[1440px] mx-auto` di
-// <main>: sisa lebar viewport jadi latar biru di kiri & kanan panel. Sekarang
-// panelnya selebar kolom, batas 1440px pindah ke pembungkus isi.
+// Keluhan yang dijaga tes ini: sidebar melayang (fixed) sementara topbar
+// membentang ujung-ke-ujung tanpa terputus. Karena sidebar keluar dari alur flex,
+// kolom konten mengisi lebar viewport penuh dan topbar benar-benar w-full.
 const LEBAR_LAYAR = [1920, 2560];
 
-// 250px sidebar + 12px jarak kiri + 8px jarak kanan.
-const JARAK_KIRI = 12;
-const JARAK_KANAN = 8;
+// Kartu sidebar: renggang 12px dari tepi kiri/atas/bawah, lebar 250px.
+const SIDEBAR_X = 12;
 const SIDEBAR = 250;
+// Kartu konten mulai setelah sidebar + jarak 12px, dan renggang 12px dari kanan.
+const KONTEN_X = SIDEBAR_X + SIDEBAR + 12;
+const JARAK_KANAN = 12;
+const TINGGI_TOPBAR = 64;
 
-test.describe("jarak panel konten di layar lebar", () => {
+test.describe("kerangka melayang di layar lebar", () => {
+  test("topbar membentang ujung ke ujung dan tidak pernah tertutup sidebar", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // getByRole("banner"): kartu konten juga memakai <header>, tapi hanya topbar
+    // di level kerangka yang jadi banner landmark.
+    const header = (await page.getByRole("banner").boundingBox())!;
+    expect(Math.round(header.x)).toBe(0);
+    expect(Math.round(header.width)).toBe(1280);
+
+    // Di 12px teratas viewport, tidak boleh ada satu titik pun yang dipegang
+    // selain topbar: di situlah "putus" itu dulu terlihat.
+    const tumpang = await page.evaluate(() => {
+      const topbar = document.querySelector("header")!;
+      return [4, 60, 130, 200, 260, 300, 700, 1276]
+        .map((x) => {
+          const el = document.elementFromPoint(x, 6);
+          if (!el) return `x=${x}: kosong`;
+          if (el === topbar || topbar.contains(el)) return null;
+          const kelas = typeof el.className === "string" ? el.className.trim() : "";
+          return `x=${x}: ${el.tagName.toLowerCase()}.${kelas}`;
+        })
+        .filter((v): v is string => v !== null);
+    });
+    expect(tumpang, `elemen di atas topbar: ${tumpang.join(" | ")}`).toEqual([]);
+  });
+
   for (const lebar of LEBAR_LAYAR) {
-    test(`viewport ${lebar}px: jarak kiri ${JARAK_KIRI}px & kanan ${JARAK_KANAN}px, panel selebar kolom`, async ({ page }) => {
+    test(`viewport ${lebar}px: sidebar melayang 12px dari tepi, kartu konten selebar sisa kolom`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: lebar, height: 1080 });
       await page.goto("/");
 
       const sidebar = (await page.locator("aside").boundingBox())!;
-      expect(Math.round(sidebar.x)).toBe(0);
+      expect(Math.round(sidebar.x)).toBe(SIDEBAR_X);
+      expect(Math.round(sidebar.y)).toBe(12);
       expect(Math.round(sidebar.width)).toBe(SIDEBAR);
+      expect(Math.round(sidebar.height)).toBe(1080 - 24);
 
       const main = (await page.locator("main").boundingBox())!;
-      expect(Math.round(main.x)).toBe(SIDEBAR + JARAK_KIRI);
-      expect(Math.round(main.width)).toBe(lebar - SIDEBAR - JARAK_KIRI - JARAK_KANAN);
+      expect(Math.round(main.x)).toBe(KONTEN_X);
+      expect(Math.round(main.y)).toBe(TINGGI_TOPBAR + 12);
+      expect(Math.round(main.width)).toBe(lebar - KONTEN_X - JARAK_KANAN);
+      expect(Math.round(main.height)).toBe(1080 - TINGGI_TOPBAR - 12 - JARAK_KANAN);
 
-      // Isi tetap dibatasi 1440px dan ditengahkan di dalam panel putih.
+      // Isi tetap dibatasi 1440px dan ditengahkan di dalam kartu putih.
       const isi = (await page.locator("main > div").boundingBox())!;
       expect(Math.round(isi.width)).toBe(1440);
       expect(Math.round(isi.x - main.x)).toBe(Math.round((main.width - isi.width) / 2));
 
-      // Warna tepat di titik kritis: celah biru, panel putih, celah biru lagi.
+      // Warna tepat di titik kritis: celah biru, kartu putih, celah biru lagi.
       const warna = await page.evaluate(
         ([titikKiri, titikTengah, titikKanan]: number[]) =>
           [titikKiri, titikTengah, titikKanan].map((titik) => {
             const el = document.elementFromPoint(titik, 400);
             return el ? getComputedStyle(el).backgroundColor : "";
           }),
-        [SIDEBAR + JARAK_KIRI / 2, SIDEBAR + JARAK_KIRI + 4, lebar - JARAK_KANAN / 2],
+        [SIDEBAR_X + SIDEBAR + 6, KONTEN_X + 6, lebar - JARAK_KANAN / 2],
       );
       expect(warna[0]).toBe("rgb(240, 245, 254)");
       expect(warna[1]).toBe("rgb(255, 255, 255)");
@@ -45,10 +80,8 @@ test.describe("jarak panel konten di layar lebar", () => {
     });
   }
 
-  test("saat digulir ke bawah, bingkai <main> dan sudut rounded tidak ketiban navbar", async ({
-    page,
-  }) => {
-    // Tinggi 500px supaya konten pasti melebihi tinggi panel dan bisa di-scroll.
+  test("saat digulir ke bawah, kartu konten tidak ketiban topbar", async ({ page }) => {
+    // Tinggi 500px supaya konten pasti melebihi tinggi kartu dan bisa di-scroll.
     await page.setViewportSize({ width: 1280, height: 500 });
     await page.goto("/audit", { waitUntil: "networkidle" });
 
@@ -71,7 +104,7 @@ test.describe("jarak panel konten di layar lebar", () => {
     expect(hasil.overflowY).toBe("auto");
     expect(hasil.mainScrollTop).toBeGreaterThan(0);
     expect(hasil.windowScrollY).toBe(0);
-    // Tepi atas <main> wajib tetap di bawah <header>, tidak boleh masuk ke kolongnya.
-    expect(hasil.mainTop).toBe(hasil.headerBottom);
+    // Tepi atas kartu konten tetap renggang 12px di bawah topbar.
+    expect(hasil.mainTop).toBe(hasil.headerBottom + 12);
   });
 });

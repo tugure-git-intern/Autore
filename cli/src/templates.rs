@@ -83,6 +83,11 @@ COPY --from=test /app /app
 # sehingga gerbang Trivy memblokir image. Hanya stage ini yang dikirim, jadi
 # menambal di stage `test` tidak menolong. Tanpa pin versi: `upgrade` ikut
 # membawa perbaikan berikutnya tanpa perlu menyunting template lagi.
+# Cache-bust dari pipeline: Jenkins mengisi ARG ini dengan nomor build, jadi
+# nilai berubah tiap build dan cache layer di bawahnya batal — `apt-get upgrade`
+# benar-benar dieksekusi ulang. Tanpa ini image memakai layer cache berhari-hari
+# lalu (terukur: zlib1g 1+b1, 2 CVE HIGH) dan gerbang Trivy kembali merah.
+ARG AUTORE_APT_REFRESH=0
 RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*
@@ -131,6 +136,11 @@ WORKDIR /app
 COPY --from=build /out /app
 # Tambal paket OS di stage runtime (hanya stage ini yang dikirim & dipindai Trivy).
 # Terukur: tanpa ini, apt bawaan punya CVE-2026-109518 HIGH (2.4.14 -> 2.4.15ubuntu0.1).
+# Cache-bust dari pipeline: Jenkins mengisi ARG ini dengan nomor build, jadi
+# nilai berubah tiap build dan cache layer di bawahnya batal — `apt-get upgrade`
+# benar-benar dieksekusi ulang. Tanpa ini image memakai layer cache berhari-hari
+# lalu (terukur: zlib1g 1+b1, 2 CVE HIGH) dan gerbang Trivy kembali merah.
+ARG AUTORE_APT_REFRESH=0
 RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*
@@ -492,6 +502,12 @@ mod tests {
             dockerfile.contains("rm -rf /var/lib/apt/lists/*"),
             "daftar paket apt wajib dibersihkan supaya image tidak membengkak"
         );
+        // Cache-bust: pipeline mengisi ARG ini tiap build, dan ARG harus
+        // mendahului RUN apt supaya perubahannya membatalkan cache layer apt.
+        let arg_bust = dockerfile
+            .find("ARG AUTORE_APT_REFRESH=0")
+            .expect("ARG cache-bust ada di template");
+        assert!(arg_bust < tambalan, "ARG cache-bust harus sebelum RUN apt");
     }
 
     #[test]
@@ -750,6 +766,10 @@ mod tests {
             "apt-get upgrade butuh root: harus sebelum USER appuser"
         );
         assert!(df.contains("rm -rf /var/lib/apt/lists/*"));
+        let arg_bust = df
+            .find("ARG AUTORE_APT_REFRESH=0")
+            .expect("ARG cache-bust ada di template Java");
+        assert!(arg_bust < tambalan, "ARG cache-bust harus sebelum RUN apt");
     }
 
     #[test]

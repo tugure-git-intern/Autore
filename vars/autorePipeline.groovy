@@ -172,7 +172,13 @@ def call(Map config = [:]) {
                         if [ ! -f "\${target_dir}/Dockerfile" ] && [ -f "sandbox/dummy-app/Dockerfile" ]; then
                           target_dir="sandbox/dummy-app"
                         fi
-                        docker build -t "${env.IMMUTABLE_IMAGE_TAG}" "\${target_dir}"
+                        # --pull: ambil base image terbaru dari registry (tag mengambang).
+                        # --build-arg AUTORE_APT_REFRESH: nilai berubah tiap build, jadi
+                        # cache layer `apt-get upgrade` batal dan tambalan OS benar-benar
+                        # dijalankan. Cache layer lain (maven/pip) tetap dipakai.
+                        docker build --pull \
+                          --build-arg AUTORE_APT_REFRESH="${BUILD_NUMBER}" \
+                          -t "${env.IMMUTABLE_IMAGE_TAG}" "\${target_dir}"
 
                         if [ -f "cli/Cargo.toml" ]; then
                           /usr/local/lib/autore-ci/build-musl-release.sh

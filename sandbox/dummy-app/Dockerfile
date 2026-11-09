@@ -16,6 +16,9 @@ COPY --from=test /app/app.py /app/app.py
 # sebab build autore-e2e #141 merah. Hanya stage ini yang dipindai, jadi menambal
 # di stage `test` tidak menolong. Tanpa pin versi supaya perbaikan berikutnya ikut
 # terbawa tanpa menyunting berkas ini lagi.
+# Cache-bust dari pipeline: nilai ARG ini berubah tiap build, jadi cache
+# layer apt batal dan apt-get upgrade benar-benar dijalankan ulang.
+ARG AUTORE_APT_REFRESH=0
 RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*

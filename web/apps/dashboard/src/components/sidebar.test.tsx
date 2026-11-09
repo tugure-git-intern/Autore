@@ -37,7 +37,7 @@ describe("Sidebar", () => {
     expect(auditLink).toHaveAttribute("href", "/audit");
   });
 
-  it("berbentuk kartu melayang: renggang dari tepi, sudut melengkung penuh, border tipis", () => {
+  it("berbentuk kartu melayang tanpa sekat: renggang dari tepi, sudut melengkung penuh", () => {
     const { container } = render(<Sidebar />);
     const aside = container.querySelector("aside") as HTMLElement;
 
@@ -56,12 +56,13 @@ describe("Sidebar", () => {
     expect(aside.className).not.toContain("rounded-br-");
     expect(aside.className).not.toContain("rounded-r-");
     expect(aside.className).not.toContain("rounded-l");
-    // Nyatu dengan chrome: bidangnya sama dengan latar utama #F0F5FE dan garis
-    // pemisah dihapus, jadi batasnya cuma bayangan tipis.
+    // Nyatu penuh dengan chrome: bidang sama dengan latar utama #F0F5FE, tanpa
+    // border dan tanpa bayangan, supaya tidak ada gradasi tepi yang terbaca
+    // sebagai sekat antara sidebar dan area konten.
     expect(aside.className).toContain("bg-[#F0F5FE]");
     expect(aside.className).not.toContain("bg-white");
     expect(aside.className).not.toContain("border");
-    expect(aside.className).toContain("shadow-sm");
+    expect(aside.className).not.toContain("shadow");
   });
 
   it("mewarnai menu non-aktif #545F72 dan membiarkan menu aktif tetap hijau", () => {

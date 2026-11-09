@@ -234,7 +234,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
             sudut rounded-nya tidak pernah naik ketiban topbar.
             lg:ml-[274px] = 12px jarak + 250px sidebar + 12px celah. lg:w-auto wajib:
             w-full menang atas margin, jadi tanpa itu marginnya tidak menyusutkan lebar. */}
-        <main className="w-full flex-1 bg-white lg:mt-3 lg:mb-3 lg:ml-[274px] lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border lg:border-gray-200">
+        <main className="w-full flex-1 bg-white lg:mt-3 lg:mb-3 lg:ml-[274px] lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200">
           <div className="mx-auto w-full max-w-[1440px] px-3 pt-4 pb-24 sm:px-6 sm:pt-6">{children}</div>
         </main>
       </div>

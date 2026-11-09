@@ -61,11 +61,28 @@ test.describe("kerangka melayang di layar lebar", () => {
           latar: cs.backgroundColor,
           borderAtas: cs.borderTopWidth,
           borderKanan: cs.borderRightWidth,
+          bayangan: cs.boxShadow,
         };
       });
       expect(gayaSidebar.latar).toBe("rgb(240, 245, 254)");
       expect(gayaSidebar.borderAtas).toBe("0px");
       expect(gayaSidebar.borderKanan).toBe("0px");
+      // Tanpa bayangan: gradasi 1px di tepi kanan terbaca sebagai sekat vertikal.
+      expect(gayaSidebar.bayangan).toBe("none");
+
+      // Sisi kiri kartu konten juga polos: biru chrome bertemu putih langsung,
+      // tanpa garis pemisah yang bikin tampilan terlihat terpotong.
+      const tepiKonten = await page.evaluate(() => {
+        const cs = getComputedStyle(document.querySelector("main")!);
+        return {
+          kiri: cs.borderLeftWidth,
+          atas: cs.borderTopWidth,
+          kanan: cs.borderRightWidth,
+        };
+      });
+      expect(tepiKonten.kiri).toBe("0px");
+      expect(tepiKonten.atas).toBe("1px");
+      expect(tepiKonten.kanan).toBe("1px");
 
       const main = (await page.locator("main").boundingBox())!;
       expect(Math.round(main.x)).toBe(KONTEN_X);

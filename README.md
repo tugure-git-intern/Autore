@@ -44,6 +44,10 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 
 ## Architecture
 
+For full architecture diagrams and component data flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For local development, quality gates, and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+
 ```mermaid
 flowchart LR
     U["User Browser (Desktop / Mobile)"] -->|"HTTP (tailnet):9120"| D["Frontend — Next.js 15<br/>(Auth.js GitHub OAuth + Whitelist)"]
@@ -285,7 +289,7 @@ Autore/
 ├── install.sh / install.ps1      # Automated single-command platform installers
 ├── cli/                          # Core: Standalone Rust binary (all operational logic)
 │   ├── src/                      # main.rs, admin.rs, launcher.rs, templates.rs, scanner.rs,
-│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, doctor.rs, ...
+│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, doctor.rs, workspace.rs, ...
 │   ├── tests/                    # Integration test suite (admin_cli, launcher_cli, scan_cli, sbom_cli)
 │   └── Cargo.toml
 ├── web/                          # Interface: npm monorepo workspaces

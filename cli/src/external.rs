@@ -412,6 +412,62 @@ pub fn summarize_gitleaks(json: &str) -> String {
     out.join("\n")
 }
 
+/// Ringkas temuan Trivy (maksimal lima, CRITICAL lebih dulu) supaya log gate
+/// menyebut ID CVE, paket, dan versi tambalan. Tanpa ini build merah tidak bisa
+/// ditindaklanjuti tanpa menebak.
+pub fn ringkas_temuan(report_json: &str) -> String {
+    let doc: serde_json::Value = match serde_json::from_str(report_json) {
+        Ok(v) => v,
+        Err(_) => return String::new(),
+    };
+    let mut baris: Vec<(u8, String)> = Vec::new();
+    let mut total = 0usize;
+    let kosong = Vec::new();
+    for hasil in doc
+        .get("Results")
+        .and_then(|r| r.as_array())
+        .unwrap_or(&kosong)
+    {
+        for v in hasil
+            .get("Vulnerabilities")
+            .and_then(|x| x.as_array())
+            .unwrap_or(&kosong)
+        {
+            total += 1;
+            let teks = |kunci: &str| v.get(kunci).and_then(|x| x.as_str()).unwrap_or("-");
+            let tingkat = match teks("Severity") {
+                "CRITICAL" => 0u8,
+                "HIGH" => 1,
+                _ => 2,
+            };
+            baris.push((
+                tingkat,
+                format!(
+                    "      {}  {}  {} -> tambalan {}",
+                    teks("VulnerabilityID"),
+                    teks("PkgName"),
+                    teks("InstalledVersion"),
+                    teks("FixedVersion")
+                ),
+            ));
+        }
+    }
+    if total == 0 {
+        return String::new();
+    }
+    baris.sort_by_key(|(tingkat, _)| *tingkat);
+    let tampil = baris.len().min(5);
+    let mut out = format!("  Temuan ({total}):");
+    for (_, b) in baris.iter().take(tampil) {
+        out.push('\n');
+        out.push_str(b);
+    }
+    if total > tampil {
+        out.push_str(&format!("\n      ... dan {} temuan lain", total - tampil));
+    }
+    out
+}
+
 pub struct ImageScanOptions<'a> {
     pub image: &'a str,
     pub severity: &'a str,
@@ -505,10 +561,22 @@ pub fn run_trivy_image(
         let _ = runner.run(docker, &["rmi".into(), opts.image.into()]);
         let _ = std::fs::remove_dir_all(&out_dir);
         if scan_code == 1 && well_formed {
-            return Err(format!(
+            let rincian = report_body
+                .as_deref()
+                .map(ringkas_temuan)
+                .unwrap_or_default();
+            let mut pesan = format!(
                 "Trivy mendeteksi celah keamanan {} pada image {}",
                 opts.severity, opts.image
-            ));
+            );
+            if !rincian.is_empty() {
+                pesan.push('\n');
+                pesan.push_str(&rincian);
+                pesan.push_str(
+                    "\n    Cara perbaiki: segarkan layer paket OS (apt-get upgrade) atau pakai base image yang sudah memuat tambalan.",
+                );
+            }
+            return Err(pesan);
         } else {
             return Err(format!(
                 "Trivy image scan gagal atau tidak menghasilkan laporan valid (exit {scan_code})"
@@ -1105,5 +1173,85 @@ mod tests {
             sbom_path.exists(),
             "sbom file must be created at requested path"
         );
+    }
+
+    // ---- pesan gate image: wajib menyebut CVE, paket, dan versi tambalan ----
+
+    const TRIVY_VULN: &str = r#"{"SchemaVersion": 2, "Results": [
+        {"Target": "app (debian 13.7)", "Class": "os-pkgs", "Type": "debian", "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-2026-76844", "PkgName": "zlib1g",
+             "InstalledVersion": "1:1.3.dfsg+really1.3.1-1+b1",
+             "FixedVersion": "1:1.3.dfsg+really1.3.1-1+deb13u1", "Severity": "HIGH"},
+            {"VulnerabilityID": "CVE-2026-85091", "PkgName": "zlib1g",
+             "InstalledVersion": "1:1.3.dfsg+really1.3.1-1+b1",
+             "FixedVersion": "1:1.3.dfsg+really1.3.1-1+deb13u1", "Severity": "HIGH"}
+        ]}
+    ]}"#;
+
+    #[test]
+    fn image_gate_message_names_cve_package_and_fix() {
+        let opts = ImageScanOptions {
+            image: "app:build-99-commit-abc",
+            severity: "HIGH,CRITICAL",
+            sbom_output: None,
+        };
+        let mut r = fake(1, Some(TRIVY_VULN));
+        r.inspect_user = Some("appuser".to_string());
+        let err = run_trivy_image(Path::new("/usr/bin/docker"), &opts, &r).unwrap_err();
+        assert!(
+            err.contains("CVE-2026-76844"),
+            "ID CVE tidak disebut: {err}"
+        );
+        assert!(err.contains("zlib1g"), "nama paket tidak disebut: {err}");
+        assert!(
+            err.contains("1+deb13u1"),
+            "versi tambalan tidak disebut: {err}"
+        );
+        assert!(
+            err.contains("Temuan (2)"),
+            "jumlah temuan tidak disebut: {err}"
+        );
+    }
+
+    fn temuan(n: usize, tingkat: &str) -> String {
+        let mut hasil = Vec::new();
+        for i in 0..n {
+            hasil.push(format!(
+                r#"{{"VulnerabilityID":"CVE-2026-1{i:04}","PkgName":"paket{i}","InstalledVersion":"1.0","FixedVersion":"1.1","Severity":"{tingkat}"}}"#
+            ));
+        }
+        format!(
+            r#"{{"SchemaVersion":2,"Results":[{{"Target":"app","Vulnerabilities":[{}]}}]}}"#,
+            hasil.join(",")
+        )
+    }
+
+    #[test]
+    fn ringkas_temuan_membatasi_lima_dan_menyebut_sisa() {
+        let ringkas = ringkas_temuan(&temuan(7, "HIGH"));
+        assert_eq!(ringkas.matches("CVE-").count(), 5, "{ringkas}");
+        assert!(ringkas.contains("Temuan (7)"), "{ringkas}");
+        assert!(ringkas.contains("... dan 2 temuan lain"), "{ringkas}");
+    }
+
+    #[test]
+    fn ringkas_temuan_menaruh_critical_di_atas() {
+        let json = r#"{"SchemaVersion":2,"Results":[{"Target":"app","Vulnerabilities":[
+            {"VulnerabilityID":"CVE-2026-20000","PkgName":"tinggi","InstalledVersion":"1.0","FixedVersion":"1.1","Severity":"HIGH"},
+            {"VulnerabilityID":"CVE-2026-30000","PkgName":"kritikal","InstalledVersion":"2.0","FixedVersion":"2.1","Severity":"CRITICAL"}
+        ]}]}"#;
+        let ringkas = ringkas_temuan(json);
+        let baris: Vec<&str> = ringkas.lines().collect();
+        assert!(
+            baris[1].contains("CVE-2026-30000"),
+            "CRITICAL harus di baris pertama: {ringkas}"
+        );
+        assert!(baris[2].contains("CVE-2026-20000"), "{ringkas}");
+    }
+
+    #[test]
+    fn ringkas_temuan_json_rusak_kosong() {
+        assert!(ringkas_temuan("bukan json").is_empty());
+        assert!(ringkas_temuan(r#"{"SchemaVersion":2,"Results":[]}"#).is_empty());
     }
 }

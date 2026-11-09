@@ -5,7 +5,7 @@
 //! berawalan [`PENANDA`]. Kalimat untuk manusia tetap dicetak seperti biasa —
 //! ini jalur tambahan, bukan pengganti.
 
-/// Awalan penanda. Dipakai juga oleh pembaca (lihat `serve.rs`).
+/// Awalan penanda. Dipakai juga oleh pengujian.
 pub const PENANDA: &str = "@@AUTORE ";
 
 /// Apakah pemanggil meminta baris data?
@@ -18,7 +18,7 @@ pub fn aktif() -> bool {
 /// Kabarkan satu tahap. Diam total kalau pemanggil tidak meminta baris data.
 ///
 /// `id` dipakai pemanggil untuk memutuskan tampilan (jangan diubah tanpa mengubah
-/// pembaca di `serve.rs` + `web2/index.html`), `pesan` untuk manusia.
+/// pembaca dashboard web), `pesan` untuk manusia.
 pub fn tahap(id: &str, status: &str, pesan: &str) {
     if !aktif() {
         return;
@@ -35,6 +35,7 @@ pub fn tahap(id: &str, status: &str, pesan: &str) {
 
 /// Ambil nilai sebuah kunci dari satu baris data. `None` kalau baris itu bukan
 /// baris data atau kuncinya tidak ada.
+#[cfg(test)]
 pub fn ambil(baris: &str, kunci: &str) -> Option<String> {
     let isi = baris.strip_prefix(PENANDA)?;
     let pola = format!("\"{kunci}\":\"");

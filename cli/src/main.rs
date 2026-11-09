@@ -8,7 +8,7 @@ mod hooks;
 mod jenkins;
 mod launcher;
 mod scanner;
-mod serve;
+mod workspace;
 mod status;
 mod pipeline_record;
 mod runs;
@@ -773,21 +773,6 @@ enum Commands {
     #[command(hide = true)]
     DeleteProject,
 
-    /// Jalankan dashboard web: satu kotak "Buat" yang menjalankan alur 1-klik
-    Serve {
-        /// Port dashboard
-        #[arg(long, short, default_value_t = 9119)]
-        port: u16,
-
-        /// Alamat yang di-bind (127.0.0.1 = hanya mesin ini, 0.0.0.0 = seluruh jaringan)
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-
-        /// Jangan buka browser otomatis
-        #[arg(long, short = 'n')]
-        no_browser: bool,
-    },
-
     /// Tampilkan kemampuan mesin ini sebagai data (dipakai dashboard web)
     Kemampuan,
 
@@ -850,7 +835,7 @@ enum PipelineAksi {
 ///
 /// ATURAN: tambah pertanyaan HANYA kalau flag pasangannya (`flag`) benar-benar ada
 /// di subcommand dan dihormati. Pertanyaan yang belum bisa dilaksanakan jangan
-/// ditampilkan. Serve (`serve.rs`) memetakan `id` -> `flag`; ubah keduanya bersama.
+/// ditampilkan. Workspace (`workspace.rs`) memetakan `id` -> `flag`; ubah keduanya bersama.
 pub(crate) fn kemampuan_json() -> String {
     let pertanyaan = [
         r#"{"id":"nama","flag":"--app-name","jenis":"teks","label":"Nama aplikasi","wajib":true,"pola":"^[a-z0-9][a-z0-9_-]{0,62}$","contoh":"aplikasi-absensi","bantuan":"Huruf kecil, angka, tanda minus. Dipakai untuk nama repo dan nama aplikasi di server."}"#,
@@ -1035,8 +1020,8 @@ fn execute_command(
 
             // Satu alokator untuk kedua jalur (CLI & dashboard): lihat registry
             // (port yang sudah dikunci aplikasi lain) + port yang sedang hidup.
-            let workspace = serve::workspace_dir();
-            let saran_port = serve::pilih_port(&workspace, &resolved_name, None)
+            let workspace = workspace::workspace_dir();
+            let saran_port = workspace::pilih_port(&workspace, &resolved_name, None)
                 .map(|(_, deploy)| deploy)
                 .unwrap_or(8081);
             let resolved_deploy_port = match deploy_port {
@@ -1045,7 +1030,7 @@ fn execute_command(
                         eprintln!("{} {}", "ERROR:".red().bold(), e);
                         return 1;
                     }
-                    match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                    match workspace::pilih_port(&workspace, &resolved_name, Some(p)) {
                         Ok((_, deploy)) => deploy,
                         Err(e) => {
                             eprintln!("{} {}", "ERROR:".red().bold(), e);
@@ -1060,7 +1045,7 @@ fn execute_command(
                                 eprintln!("{} {e}", "ERROR:".red().bold());
                                 continue;
                             }
-                            match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                            match workspace::pilih_port(&workspace, &resolved_name, Some(p)) {
                                 Ok((_, deploy)) => break deploy,
                                 Err(e) => eprintln!("{} {e}", "ERROR:".red().bold()),
                             }
@@ -1116,7 +1101,7 @@ fn execute_command(
                             println!("  • File pipeline  : {}", f.display());
                         }
                         println!("  • Satpam Git     : aktif ({})", hook_path.display());
-                        serve::catat_port(
+                        workspace::catat_port(
                             &workspace,
                             &cfg.app_name,
                             cfg.app_port,
@@ -1145,7 +1130,7 @@ fn execute_command(
                         for f in files {
                             println!("  • {}", f.display());
                         }
-                        serve::catat_port(
+                        workspace::catat_port(
                             &workspace,
                             &cfg.app_name,
                             cfg.app_port,
@@ -1549,7 +1534,7 @@ fn execute_command(
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.
             // Peringatan (kalau ada) harus ke stderr supaya stdout tetap satu JSON.
-            let snap = status::build(&serve::workspace_dir());
+            let snap = status::build(&workspace::workspace_dir());
             if json {
                 println!("{}", status::canonical(&snap));
                 return 0;
@@ -1652,14 +1637,14 @@ fn execute_command(
 
             let resolved_app_port = app_port.unwrap_or_else(|| resolved_stack.default_port());
             // Alokator yang sama dengan init/dashboard: registry + port hidup.
-            let workspace = serve::workspace_dir();
+            let workspace = workspace::workspace_dir();
             let resolved_deploy_port = match deploy_port {
                 Some(p) => {
                     if let Err(e) = validate_deploy_port(p) {
                         eprintln!("{} {}", "ERROR:".red().bold(), e);
                         return 1;
                     }
-                    match serve::pilih_port(&workspace, &resolved_name, Some(p)) {
+                    match workspace::pilih_port(&workspace, &resolved_name, Some(p)) {
                         Ok((_, deploy)) => deploy,
                         Err(e) => {
                             eprintln!("{} {}", "ERROR:".red().bold(), e);
@@ -1667,7 +1652,7 @@ fn execute_command(
                         }
                     }
                 }
-                None => match serve::pilih_port(&workspace, &resolved_name, None) {
+                None => match workspace::pilih_port(&workspace, &resolved_name, None) {
                     Ok((_, deploy)) => deploy,
                     Err(e) => {
                         eprintln!("{} {}", "ERROR:".red().bold(), e);
@@ -1761,7 +1746,7 @@ fn execute_command(
             *active_project = Some(target_dir.clone());
             // Port dikunci sebelum deploy jalan: aplikasi berikutnya tidak boleh
             // diberi port ini walau container-nya belum naik.
-            serve::catat_port(&workspace, &cfg.app_name, cfg.app_port, cfg.deploy_port);
+            workspace::catat_port(&workspace, &cfg.app_name, cfg.app_port, cfg.deploy_port);
             println!(
                 "  • Port deploy : {} (dikunci di registry)",
                 cfg.deploy_port
@@ -1885,12 +1870,6 @@ fn execute_command(
                 }
             }
         }
-
-        Commands::Serve {
-            port,
-            host,
-            no_browser,
-        } => serve::run(port, host, !no_browser),
 
         Commands::DeleteProject => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -2116,7 +2095,7 @@ mod tests {
             execute_command(init_ke(&dir, "port-satu", None), false, &mut act),
             0
         );
-        let daftar = serve::baca_registry(tmp.path());
+        let daftar = workspace::baca_registry(tmp.path());
         assert_eq!(daftar.len(), 1, "port harus langsung dikunci di registry");
         assert_eq!(daftar[0].nama, "port-satu");
         let jenkins = std::fs::read_to_string(dir.join("Jenkinsfile")).unwrap();
@@ -2139,7 +2118,7 @@ mod tests {
                 "{nama} gagal di-init"
             );
         }
-        let port: Vec<u16> = serve::baca_registry(tmp.path())
+        let port: Vec<u16> = workspace::baca_registry(tmp.path())
             .iter()
             .map(|p| p.deploy_port)
             .collect();
@@ -2170,7 +2149,7 @@ mod tests {
             "init ditolak tidak boleh menulis Jenkinsfile"
         );
         assert_eq!(
-            serve::baca_registry(tmp.path()).len(),
+            workspace::baca_registry(tmp.path()).len(),
             1,
             "registry tidak boleh ditambah saat ditolak"
         );

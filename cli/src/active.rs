@@ -321,7 +321,7 @@ pub fn jalankan(json: bool) -> i32 {
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
 
-    let laporan = match kumpulkan(&crate::serve::workspace_dir(), &cfg, sekarang_ms) {
+    let laporan = match kumpulkan(&crate::workspace::workspace_dir(), &cfg, sekarang_ms) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("ERROR: {e}");

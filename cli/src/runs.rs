@@ -281,7 +281,7 @@ pub fn kumpulkan(
     let base = crate::jenkins::normalize_jenkins_url(&cfg.url)?;
 
     let mut sumber = Vec::new();
-    for proyek in crate::serve::baca_registry(workspace) {
+    for proyek in crate::workspace::baca_registry(workspace) {
         if let Ok(builds) = ambil_build(cfg, &base, &proyek.nama, limit) {
             sumber.push((proyek.nama.clone(), builds));
         }
@@ -319,7 +319,7 @@ pub fn jalankan(days: u32, limit: usize, json: bool) -> i32 {
         return 1;
     };
 
-    let laporan = match kumpulkan(&crate::serve::workspace_dir(), &cfg, days, limit) {
+    let laporan = match kumpulkan(&crate::workspace::workspace_dir(), &cfg, days, limit) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("ERROR: {e}");

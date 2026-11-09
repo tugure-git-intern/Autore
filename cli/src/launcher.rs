@@ -93,7 +93,7 @@ fn tunggu_siap<'a>(
 fn pesan_port_bentrok() -> String {
     format!(
         "[!] Port {PORT_DASHBOARD} sudah dipakai proses lain. Hentikan proses tersebut \
-         (contoh: autore serve) lalu jalankan perintah ini lagi."
+         (contoh: proses node lama) lalu jalankan perintah ini lagi."
     )
 }
 

@@ -1,4 +1,4 @@
-//! `autore pipeline record` — penulis `dashboard-status.json` dari luar `serve`.
+//! `autore pipeline record` — penulis `dashboard-status.json` dari luar proses web.
 //!
 //! Pipeline (Jenkins) memanggil subcommand ini di tiap tahap, jadi logika
 //! kontrak tetap satu tempat: modul ini cuma *merge* peristiwa, `status::save`
@@ -130,7 +130,7 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
         .raw_log
         .extend(rekaman.log.iter().cloned());
 
-    // Status aplikasi: jalur yang sama dengan `serve::simpan_status` supaya
+    // Status aplikasi: jalur yang sama dengan perekaman status supaya
     // kartu Repository Health punya data dari build Jenkins, bukan cuma dari
     // build yang dijalankan dashboard. Dipanggil di akhir: `commit_sha` sudah
     // terbarui oleh blok `commit` di atas.
@@ -143,7 +143,7 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
             if lewat_deploy {
                 entri.deployed = true;
             }
-            // Sama seperti `serve`: hanya hasil akhir yang menulis status.
+            // Sama seperti perekaman standar: hanya hasil akhir yang menulis status.
             if let Some(status) = &rekaman.status {
                 if status == "passed" || status == "failed" {
                     entri.tuntaskan(status, &snap.latest_pipeline.commit_sha, lewat_deploy);
@@ -158,7 +158,7 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
 /// Baca-tulis lewat berkas (bukan objek di memori) supaya kegagalan permission
 /// atau disk terlihat, bukan jadi sukses palsu.
 pub fn jalankan(rekaman: &Rekaman) -> i32 {
-    let workspace = crate::serve::workspace_dir();
+    let workspace = crate::workspace::workspace_dir();
     let mut snap = crate::status::load(&workspace);
     terapkan(&mut snap, rekaman);
 

@@ -11,7 +11,7 @@
 //! jalan keluarnya.
 
 use crate::jenkins;
-use crate::serve;
+use crate::workspace;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -181,7 +181,7 @@ fn susun(app: &str, isi: &str, asal: &str) -> Result<LaporanSbom, String> {
 }
 
 fn baca(app: &str) -> Result<LaporanSbom, String> {
-    let path = path_sbom(&serve::workspace_dir(), app);
+    let path = path_sbom(&workspace::workspace_dir(), app);
     match std::fs::read_to_string(&path) {
         Ok(isi) => susun(app, &isi, &path.display().to_string()),
         Err(lokal) => {

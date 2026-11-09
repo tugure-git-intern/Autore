@@ -1,12 +1,12 @@
 //! Kontrak status dashboard (`autore status --json`) + simpanan yang ditulis
-//! pipeline `autore serve`.
+//! pipeline Autore.
 //!
 //! Satu sumber kebenaran untuk data yang dibaca web: pipeline menulis
 //! `dashboard-status.json` di workspace, CLI mencetaknya sebagai satu objek JSON.
 //! Yang belum pernah dibangun pipeline-nya tetap `unknown` — jangan pernah
 //! melaporkannya `passed`.
 //!
-//! ponytail: satu pekerjaan global (lihat `serve.rs`). Naikkan ke riwayat per
+//! ponytail: satu pekerjaan global (lihat `workspace.rs`). Naikkan ke riwayat per
 //! aplikasi saat dashboard melayani banyak orang sekaligus.
 
 use serde::{Deserialize, Serialize};
@@ -310,7 +310,7 @@ pub fn build(workspace: &Path) -> Snapshot {
     // web memakai `id` sebagai key baris tabel dan tujuan link, jadi daftarnya
     // harus unik walau berkasnya berisi baris kembar. Ambil yang pertama.
     let mut terlihat: Vec<String> = Vec::new();
-    snap.applications = crate::serve::baca_registry(workspace)
+    snap.applications = crate::workspace::baca_registry(workspace)
         .into_iter()
         .filter(|p| {
             if terlihat.contains(&p.nama) {
@@ -334,7 +334,7 @@ pub fn build(workspace: &Path) -> Snapshot {
     snap.stats.total_apps = snap.applications.len();
     snap.repository_health = hitungan_kesehatan(&snap.applications);
 
-    let hidup = crate::serve::container_jalan();
+    let hidup = crate::workspace::container_jalan();
     snap.infra = Infra {
         jenkins: infra_status(&hidup, "autore-jenkins"),
         nexus: infra_status(&hidup, "autore-nexus"),

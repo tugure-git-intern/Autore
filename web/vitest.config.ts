@@ -18,6 +18,16 @@ export default defineConfig({
           passWithNoTests: true,
         },
       },
+      {
+        test: {
+          name: "contracts",
+          root: "packages/contracts",
+          environment: "node",
+          globals: true,
+          include: ["src/**/*.test.ts"],
+          passWithNoTests: true,
+        },
+      },
     ],
   },
 });

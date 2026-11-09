@@ -19,6 +19,27 @@ gagal() { printf '\n[GAGAL] %s\n' "$*" >&2; exit 1; }
 
 cd "${WEB_DIR}"
 
+# next build berhenti di tahap "Collecting page data" kalau AUTH_SECRET /
+# NEXTAUTH_SECRET kosong (lihat petunjuk di web/.env.example). CI tidak punya
+# web/.env karena gitignored, jadi nilai contoh yang dilacak git dipakai — dan
+# berkas sementara ini dihapus lagi walau build gagal: kalau tertinggal,
+# gitleaks build berikutnya menandainya sebagai secret.
+if [[ ! -f .env ]]; then
+  [[ -f .env.example ]] || gagal "web/.env.example tidak ada — env build tidak bisa disiapkan."
+  cp .env.example .env
+  # .env.example sengaja mengosongkan semua secret, dan auth-secret.ts fail
+  # closed saat kosong — jadi build selalu butuh nilai. Nilai sekali-pakai:
+  # artefak .next juga tidak pernah dipakai/di-deploy oleh gerbang ini.
+  sesi="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  if grep -q '^NEXTAUTH_SECRET=' .env; then
+    sed -i "s|^NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=${sesi}|" .env
+  else
+    printf 'NEXTAUTH_SECRET=%s\n' "${sesi}" >> .env
+  fi
+  trap 'rm -f "${WEB_DIR}/.env"' EXIT
+  log "0/4 web/.env sementara dibuat dari .env.example + secret sekali-pakai (dihapus saat skrip keluar)"
+fi
+
 log "1/4 npm ci (pasang dari lockfile, node_modules bersih)"
 npm ci --no-audit --no-fund
 

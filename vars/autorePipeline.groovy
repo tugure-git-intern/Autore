@@ -68,7 +68,7 @@ def call(Map config = [:]) {
                     // Artefak stage 5 bukan kode proyek: gitleaks terbukti menandai berkas
                     // manifes .next sebagai secret (7 temuan), dan vendor 705 MB tidak perlu
                     // ditelusuri. Checkout bersih memang tidak punya berkas ini.
-                    sh 'rm -rf web/node_modules web/apps/*/node_modules web/apps/*/tsconfig.tsbuildinfo web/apps/dashboard/.next web/test-results'
+                    sh 'rm -rf web/node_modules web/apps/*/node_modules web/apps/*/tsconfig.tsbuildinfo web/apps/dashboard/.next web/test-results web/.env'
                     script {
                         // Script gate HANYA dari direktori yang dipasang admin (runner/setup-agent.sh).
                         // Repo yang dipindai tidak boleh menyediakan kode yang menentukan lulus/gagal.

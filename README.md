@@ -46,7 +46,7 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 
 ```mermaid
 flowchart LR
-    U["User Browser (Desktop / Mobile)"] -->|"HTTP 0.0.0.0:9120"| D["Frontend — Next.js 15<br/>(Auth.js GitHub OAuth + Whitelist)"]
+    U["User Browser (Desktop / Mobile)"] -->|"HTTP (tailnet):9120"| D["Frontend — Next.js 15<br/>(Auth.js GitHub OAuth + Whitelist)"]
     D -->|"Proxy /api/* to 127.0.0.1:9121"| A["API Shim — Hono (Loopback Only)"]
     A -->|"Subprocess Execution (JSON stdout)"| C["Core — Rust Binary autore"]
     C --> J["Jenkins (Pipeline Orchestration)"]
@@ -69,7 +69,7 @@ flowchart LR
 ### Architectural Invariants
 
 1. **Zero Business Logic in Frontend**: The web dashboard does not calculate pipeline states, parse raw scanner findings, or manage deployment logic. All operations translate directly into CLI subcommands.
-2. **Loopback API Isolation**: The Hono API listens exclusively on `127.0.0.1:9121`. Only the Next.js frontend is network-facing (`0.0.0.0:9120`), ensuring all external access is authenticated through GitHub OAuth before reaching the API layer.
+2. **Loopback API Isolation**: The Hono API listens exclusively on `127.0.0.1:9121`. Only the Next.js frontend is network-facing, and only on the Tailscale address (`<tailscale-ip>:9120`); all external access is authenticated through GitHub OAuth before reaching the API layer.
 3. **Fail-Closed Execution**: Security scanners and gates never fail silently. Missing tools, network timeouts, or non-zero scanner exit codes halt the pipeline immediately.
 
 ---
@@ -311,4 +311,33 @@ Autore/
 > The current sandbox configuration is designed for controlled evaluation environments:
 > 1. **C-1: Docker Group Membership**: The runner user belongs to the local `docker` group (equivalent to root privileges). Do not store production secrets or execute pull requests from untrusted external contributors. Production environments must transition to ephemeral rootless container runners as outlined in [`docs/PRODUCTION-ISOLATION-DESIGN.md`](docs/PRODUCTION-ISOLATION-DESIGN.md).
 > 2. **C-2: Authoritative Pipeline**: Build steps must always be enforced through the admin-controlled Jenkins Trusted Shared Library (`vars/autorePipeline.groovy`). Application repositories are treated as untrusted inputs.
-> 3. **H-6: Network Perimeter**: No internal services bind to `0.0.0.0` except the Next.js frontend (`:9120`). The API (`:9121`), Docker registry (`:5000`), Jenkins (`:8080`), Nexus (`:8082`), and SonarQube (`:9000`) are bound strictly to loopback or private Tailscale interfaces.
+> 3. **H-6: Network Perimeter**: No internal service binds to `0.0.0.0`. The dashboard (`:9120`) binds the Tailscale address only; the API (`:9121`), Docker registry (`:5000`), Jenkins (`:8080`), Nexus (`:8082`), and SonarQube (`:9000`) bind loopback. See [Network Surface](#network-surface).
+
+---
+
+## Network Surface
+
+Every Autore service is reachable from exactly one address. Anything that binds `0.0.0.0` is a
+defect: it exposes the service to every interface on the host (LAN, container bridges) instead of
+the operator's tailnet.
+
+| Service | Address | Command |
+|---|---|---|
+| Web dashboard (Next.js) | `<tailscale-ip>:9120` | `npm run start:dashboard` |
+| Web API (Hono) | `127.0.0.1:9121` | `npm run start:api` |
+| Docker registry | `127.0.0.1:5000` | `sandbox/` stack |
+| Jenkins | `127.0.0.1:8080` | `sandbox/` stack |
+| Nexus | `127.0.0.1:8082` | `sandbox/` stack |
+| SonarQube | `127.0.0.1:9000` | `sandbox/` stack |
+
+The dashboard address is set in `web/apps/dashboard/package.json` (`next start -H <address>`).
+Changing it requires updating the same value in `cli/src/launcher.rs` (`susun_url`, and the port
+probe that uses the bound host rather than `localhost`); otherwise `autore` prints a dead URL and
+reports the dashboard as unreachable.
+
+Verification after any change to the binding:
+
+```bash
+ss -lntp | grep 9120              # must show <tailscale-ip>:9120, never 0.0.0.0:9120
+curl -s -o /dev/null -w '%{http_code}\n' http://<tailscale-ip>:9120/
+```

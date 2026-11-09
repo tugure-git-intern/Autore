@@ -71,8 +71,9 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
       // blur `shadow-sm` di Tailwind v4 (0 1px 3px); di atas itu elevasi lebih
       // berat (shadow-md ke atas) dan berarti desainnya menyimpang.
       //
-      // Tanpa pengecualian: kartu sidebar melayang memakai `shadow-sm`, jadi
-      // batasnya dibaca dari border tipis, bukan bayangan berat.
+      // Satu pengecualian: notifikasi melayang `[data-testid="toast"]` boleh
+      // memakai `shadow-lg` — ia satu-satunya elemen yang memang terangkat di
+      // atas kanvas. Elemen lain tetap dibatasi ambang 3px.
       const isAtMostShadowSm = (value: string) => {
         const maks = 3;
         const layers = value.split(/,(?![^(]*\))/);
@@ -83,13 +84,14 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
             return px[2] === undefined || parseFloat(px[2]) <= maks;
           });
       };
+      const diToast = (el: Element) => el.closest('[data-testid="toast"]') !== null;
       const gradients: string[] = [];
       const heavyShadows: string[] = [];
       for (const el of Array.from(document.querySelectorAll("*"))) {
         const style = getComputedStyle(el);
         if (/gradient\(/i.test(style.backgroundImage)) gradients.push(describe(el));
         const shadow = style.boxShadow;
-        if (shadow && shadow !== "none" && !isAtMostShadowSm(shadow)) {
+        if (!diToast(el) && shadow && shadow !== "none" && !isAtMostShadowSm(shadow)) {
           heavyShadows.push(`${describe(el)} => ${shadow}`);
         }
       }
@@ -488,6 +490,15 @@ test.describe("tombol Sync", () => {
 
     const toast = page.getByText("Data berhasil disinkronkan.");
     await expect(toast).toBeVisible();
+
+    // Elevasi notifikasi memang berat (shadow-lg = blur 15px); ini yang membuat
+    // pengecualian `[data-testid="toast"]` di kontrak bayangan tetap dipakai,
+    // bukan jadi pengecualian mati.
+    const permukaan = page.getByTestId("toast");
+    await expect(permukaan).toHaveCSS("background-color", "rgb(39, 58, 82)");
+    const bayangan = await permukaan.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(bayangan).toContain("15px");
+
     await expect(toast).toBeHidden({ timeout: 6000 });
   });
 });

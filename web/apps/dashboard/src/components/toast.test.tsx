@@ -140,4 +140,24 @@ describe("Toast", () => {
     });
     expect(onTutup).not.toHaveBeenCalled();
   });
+
+  it("permukaan navy gelap ala Google Cloud: teks terang, ikon bertinta jenis", () => {
+    const { unmount } = render(
+      <Toast pesan="Data berhasil disinkronkan." jenis="sukses" onTutup={() => {}} />,
+    );
+
+    const sukses = screen.getByTestId("toast");
+    expect(sukses.className).toContain("bg-[#273a52]");
+    expect(sukses.className).toContain("text-[#eaedf3]");
+    expect(sukses.className).toContain("rounded-lg");
+    expect(sukses.className).not.toContain("bg-white");
+    // Teks #eaedf3 di atas #273a52 = 9.8:1; jenis pesan dibaca dari tint ikon.
+    expect(sukses.querySelector("svg")?.getAttribute("class")).toContain("text-green-300");
+    unmount();
+
+    render(<Toast pesan="Gagal menyinkronkan data." jenis="gagal" onTutup={() => {}} />);
+    expect(screen.getByTestId("toast").querySelector("svg")?.getAttribute("class")).toContain(
+      "text-red-300",
+    );
+  });
 });

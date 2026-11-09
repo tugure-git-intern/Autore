@@ -22,15 +22,20 @@ export const DURASI_TOAST_MS = 4_000;
 /** Harus sama dengan durasi `toast-naik`/`toast-turun` di `globals.css`. */
 const ANIMASI_TOAST_MS = 240;
 
+// Permukaan navy gelap (#273a52) sama untuk kedua jenis; jenis pesan dibaca dari
+// tint ikon, bukan dari warna teks — label tetap #eaedf3 supaya kontrasnya 9.8:1.
+// Tint border ikut meredup supaya tepinya tidak jadi garis terang di atas navy.
 const JENIS = {
   sukses: {
     Ikon: CheckCircle2,
-    kelas: "border-green-200 text-green-700",
+    kelas: "border-green-400/40",
+    ikon: "text-green-300",
     peran: "status",
   },
   gagal: {
     Ikon: AlertTriangle,
-    kelas: "border-red-200 text-red-700",
+    kelas: "border-red-400/40",
+    ikon: "text-red-300",
     peran: "alert",
   },
 } as const;
@@ -54,7 +59,7 @@ export function Toast({
   onTutup: () => void;
   durasiMs?: number;
 }) {
-  const { Ikon, kelas, peran } = JENIS[jenis];
+  const { Ikon, kelas, ikon, peran } = JENIS[jenis];
   const [keluar, setKeluar] = useState(false);
 
   useEffect(() => {
@@ -78,9 +83,9 @@ export function Toast({
       role={peran}
       data-testid="toast"
       data-keluar={keluar}
-      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm shadow-lg shadow-black/5 ${animasi} ${kelas}`}
+      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
     >
-      <Ikon className="h-4 w-4" aria-hidden="true" />
+      <Ikon className={`h-4 w-4 ${ikon}`} aria-hidden="true" />
       <span>{pesan}</span>
     </div>
   );

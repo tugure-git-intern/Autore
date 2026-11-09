@@ -6,7 +6,13 @@ use std::path::{Path, PathBuf};
 const HOOK_MARKER: &str = "# Managed by Autore CLI (pre-commit security gate)";
 const USER_BACKUP_NAME: &str = "pre-commit.user-backup";
 
-/// Lapis 2 gate pre-commit: Gitleaks native pada file yang di-stage.
+/// Lapis 2 gate pre-commit: Gitleaks native pada perubahan yang siap di-commit.
+///
+/// `git --staged` memindai blob hasil `git diff-index --cached`, sehingga berkas baru
+/// yang belum pernah di-commit pun ikut terbaca. `git --pre-commit` (v8.21.2) TIDAK:
+/// ia selalu melaporkan "0 commits scanned" — sudah diuji dengan dan tanpa HEAD.
+/// Flag `--config` juga sengaja tidak dipakai: ia mengganti default ruleset dengan isi
+/// file, dan `.gitleaks.toml` kantor berisi `[allowlist]` tanpa `[extend] useDefault`.
 ///
 /// Dipisah sebagai konstanta supaya bisa dieksekusi langsung oleh tes tanpa
 /// Docker dan tanpa memanggil binary `autore` (yang belum tentu terpasang di
@@ -43,16 +49,20 @@ else
 ' "${VERSI_GITLEAKS:-tidak diketahui}" >&2
   fi
 
-  KONFIG_GITLEAKS=()
-  if [ -f .gitleaks.toml ]; then
-    KONFIG_GITLEAKS=(--config .gitleaks.toml)
+  # Config repo tanpa `[extend] useDefault` mematikan default ruleset gitleaks:
+  # gate lalu melaporkan "no leaks found" untuk secret apa pun. Itu bukan mode aman.
+  if [ -f .gitleaks.toml ] && ! grep -q 'useDefault' .gitleaks.toml; then
+    printf 'BLOKIR: .gitleaks.toml repo tidak memuat "[extend] useDefault = true".\n' >&2
+    printf 'Tanpa itu gitleaks hanya memakai isi file tersebut, default ruleset mati, dan secret lolos.\n' >&2
+    printf 'Tambahkan di awal file:\n\n  [extend]\n  useDefault = true\n\n' >&2
+    exit 1
   fi
 
-  printf '==> [Autore Pre-Commit Gate] Gitleaks: memindai secret di file yang di-stage...
-'
-  if ! "$GITLEAKS_BIN" git --staged --redact --no-banner --exit-code 1 "${KONFIG_GITLEAKS[@]}"; then
-    printf 'BLOKIR: Gitleaks menemukan secret pada file yang di-stage. Hapus atau pindahkan ke secret manager, lalu commit ulang.
-' >&2
+  # `git --staged` membaca blob dari index, jadi ikut menangkap berkas baru yang
+  # belum pernah di-commit. Jangan tambah `--config`: flag itu membuat gitleaks
+  # meninggalkan default ruleset dan hanya memakai isi file tersebut.
+  if ! ${PINDAIAN_AWAL-"$GITLEAKS_BIN"} git --staged --redact --no-banner --exit-code 1; then
+    printf 'BLOKIR: Gitleaks menemukan secret pada perubahan yang siap di-commit. Hapus atau pindahkan ke secret manager, lalu commit ulang.\n' >&2
     exit 1
   fi
   printf '==> [Autore Pre-Commit Gate] Gitleaks: bersih.
@@ -332,8 +342,8 @@ mod tests {
         fs::write(
             &gitleaks,
             format!(
-                "#!/usr/bin/env bash\nif [ \"$1\" = version ]; then printf '%s\\n' '{versi}'; exit 0; fi\nprintf '%s\\n' \"$@\" >> '{argv_log}'\nexit {kode_keluar}\n",
-                argv_log = argv_log.display()
+                "#!/usr/bin/env bash\nif [ \"$1\" = version ]; then printf '%s\\n' '{versi}'; exit 0; fi\nprintf '%s\\n' \"$@\" >> '{log}'\nexit {kode_keluar}\n",
+                log = argv_log.display()
             ),
         )
         .unwrap();
@@ -343,17 +353,43 @@ mod tests {
 
     #[cfg(unix)]
     fn jalankan_gate(home: &Path, repo: &Path, env_tambahan: &[(&str, &str)]) -> std::process::Output {
+        jalankan_gate_dengan_git(home, repo, env_tambahan, None)
+    }
+
+    #[cfg(unix)]
+    fn jalankan_gate_dengan_git(
+        home: &Path,
+        repo: &Path,
+        env_tambahan: &[(&str, &str)],
+        git_palsu: Option<&Path>,
+    ) -> std::process::Output {
         let script = home.join("gate.sh");
         fs::write(&script, SECRET_GATE_SNIPPET).unwrap();
         let mut cmd = Shell::new("bash");
-        cmd.arg(&script)
-            .env("HOME", home)
-            .env_remove("AUTORE_HOOK_SKIP")
-            .current_dir(repo);
+        cmd.arg(&script).env("HOME", home).env_remove("AUTORE_HOOK_SKIP");
+        if let Some(dir_git) = git_palsu {
+            cmd.env("PATH", format!("{}:/usr/bin:/bin", dir_git.display()));
+        }
+        cmd.current_dir(repo);
         for (kunci, nilai) in env_tambahan {
             cmd.env(kunci, nilai);
         }
         cmd.output().unwrap()
+    }
+
+    #[cfg(unix)]
+    fn git(repo: &Path, argumen: &[&str]) {
+        let keluar = Shell::new("git")
+            .args(argumen)
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert!(
+            keluar.status.success(),
+            "`git {}` gagal: {}",
+            argumen.join(" "),
+            teks(&keluar)
+        );
     }
 
     #[cfg(unix)]
@@ -428,19 +464,73 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn gate_memakai_config_repo_bila_ada() {
+    fn gate_tidak_meneruskan_flag_config() {
+        // `--config <file>` membuat gitleaks MENOLAK default ruleset dan hanya memakai
+        // isi file itu. `.gitleaks.toml` kantor berisi [allowlist] tanpa [extend]
+        // useDefault, sehingga flag ini pernah membuat Slack token lolos dari gate.
         let home = TempDir::new().unwrap();
         let repo = TempDir::new().unwrap();
-        let argv_log = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
-        fs::write(repo.path().join(".gitleaks.toml"), "[allowlist]\n").unwrap();
+        let argv_dir = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+        fs::write(
+            repo.path().join(".gitleaks.toml"),
+            "[extend]\nuseDefault = true\n[allowlist]\nregexes = [\'\'\'zzz\'\'\']\n",
+        )
+        .unwrap();
 
         let out = jalankan_gate(home.path(), repo.path(), &[]);
         assert!(out.status.success(), "{}", teks(&out));
 
-        let rekam = fs::read_to_string(&argv_log).unwrap();
+        let rekam = fs::read_to_string(&argv_dir).unwrap();
         assert!(
-            rekam.contains("--config") && rekam.contains(".gitleaks.toml"),
-            "allowlist repo tidak diteruskan:\n{rekam}"
+            !rekam.contains("--config"),
+            "flag --config melumpuhkan default ruleset gitleaks:\n{rekam}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_memakai_penanda_staged_dan_scan_siap_commit() {
+        // Kasus yang lolos: secret pada FILE BARU yang belum pernah di-commit.
+        // `git --staged` mengambil blob dari index tanpa status diff-filter, jadi
+        // berkas untracked-but-staged tidak ikut terpindai; `git --pre-commit` memakai
+        // `git diff --cached` yang menangkapnya. Keduanya harus jalan.
+        let rumah_git = TempDir::new().unwrap();
+        fs::write(
+            rumah_git.path().join("git"),
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1" = "--version" ]; then echo "git version 2.43.0"; exit 0; fi
+if [ "$1" = "diff" ]; then
+  printf 'diff --git a/cfg.env b/cfg.env\n--- /dev/null\n+++ b/cfg.env\n+SLACK_BOT=palsu\n'
+  exit 0
+fi
+exec /usr/bin/git "$@"
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(
+            rumah_git.path().join("git"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        let argv_dir = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+        fs::write(home.path().join("gate.sh"), SECRET_GATE_SNIPPET).unwrap();
+
+        let keluar =
+            jalankan_gate_dengan_git(home.path(), repo.path(), &[], Some(rumah_git.path()));
+        assert!(keluar.status.success(), "{}", teks(&keluar));
+
+        let gabungan = fs::read_to_string(&argv_dir).unwrap();
+        assert!(
+            gabungan.contains("--staged"),
+            "index harus dipindai:\n{gabungan}"
+        );
+        assert!(
+            !gabungan.contains("--pre-commit"),
+            "git --pre-commit v8.21.2 selalu melaporkan 0 commit, jangan dipakai:\n{gabungan}"
         );
     }
 
@@ -487,6 +577,134 @@ mod tests {
             isi.contains("cli/target/release/autore"),
             "hook wajib memprioritaskan binary hasil build repo:\n{isi}"
         );
+    }
+
+    /// End-to-end memakai binary gitleaks sungguhan. Di sinilah bug `--config`
+    /// lolos dari jangkauan tes unit: stub tidak tahu apa-apa soal ruleset.
+    /// Skenario = persis laporan bos alif: Slack token pada berkas BARU, repo punya
+    /// `.gitleaks.toml` berisi `[allowlist]` tanpa `[extend] useDefault`.
+    #[test]
+    #[cfg(unix)]
+    fn gate_menangkap_secret_pada_berkas_baru_dengan_gitleaks_asli() {
+        let nyata = PathBuf::from(std::env::var("HOME").unwrap()).join(".local/bin/gitleaks");
+        if !nyata.is_file() {
+            // Mesin tanpa scanner: kontraknya fail-closed, bukan lulus diam-diam.
+            return;
+        }
+
+        let rumah = TempDir::new().unwrap();
+        fs::create_dir_all(rumah.path().join(".local/bin")).unwrap();
+        let salinan = rumah.path().join(".local/bin/gitleaks");
+        fs::copy(&nyata, &salinan).unwrap();
+        fs::set_permissions(&salinan, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let repo = TempDir::new().unwrap();
+        git(repo.path(), &["init", "-q", "-b", "main"]);
+        git(repo.path(), &["config", "user.email", "t@t"]);
+        git(repo.path(), &["config", "user.name", "t"]);
+        fs::write(repo.path().join("app.py"), "NORMAL=1\n").unwrap();
+        git(repo.path(), &["add", "app.py"]);
+        git(repo.path(), &["commit", "-q", "-m", "awal", "--no-verify"]);
+
+        fs::write(
+            repo.path().join(".gitleaks.toml"),
+            "[extend]\nuseDefault = true\n[allowlist]\nregexTarget = \"line\"\nregexes = [\'\'\'-u admin:admin http://127\\.0\\.0\\.1:9000\'\'\']\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.path().join("cfg.env"),
+            concat!("SLACK_BOT=xoxb-123456789012-", "1234567890123-AbCdEfGhIjKlMnOpQrStUvWx\n"),
+        )
+        .unwrap();
+        git(repo.path(), &["add", ".gitleaks.toml", "cfg.env"]);
+
+        let out = jalankan_gate(rumah.path(), repo.path(), &[]);
+        assert!(
+            !out.status.success(),
+            "secret pada berkas siap-commit harus diblokir: {}",
+            teks(&out)
+        );
+        assert!(teks(&out).contains("BLOKIR"), "{}", teks(&out));
+    }
+
+    /// Secret di file yang SUDAH pernah di-commit (modifikasi biasa) tetap tertangkap.
+    #[test]
+    #[cfg(unix)]
+    fn gate_menangkap_secret_pada_perubahan_berkas_lama_dengan_gitleaks_asli() {
+        let nyata = PathBuf::from(std::env::var("HOME").unwrap()).join(".local/bin/gitleaks");
+        if !nyata.is_file() {
+            return;
+        }
+
+        let rumah = TempDir::new().unwrap();
+        fs::create_dir_all(rumah.path().join(".local/bin")).unwrap();
+        let salinan = rumah.path().join(".local/bin/gitleaks");
+        fs::copy(&nyata, &salinan).unwrap();
+        fs::set_permissions(&salinan, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let repo = TempDir::new().unwrap();
+        git(repo.path(), &["init", "-q", "-b", "main"]);
+        git(repo.path(), &["config", "user.email", "t@t"]);
+        git(repo.path(), &["config", "user.name", "t"]);
+        fs::write(repo.path().join("app.py"), "NORMAL=1\n").unwrap();
+        git(repo.path(), &["add", "app.py"]);
+        git(repo.path(), &["commit", "-q", "-m", "awal", "--no-verify"]);
+
+        fs::write(
+            repo.path().join("app.py"),
+            concat!("NORMAL=1\nAWS_KEY=AKIA", "IOEXAMPLEKEY1234\n"),
+        )
+        .unwrap();
+        git(repo.path(), &["add", "app.py"]);
+
+        let out = jalankan_gate(rumah.path(), repo.path(), &[]);
+        assert!(
+            !out.status.success(),
+            "secret pada perubahan berkas lama harus diblokir: {}",
+            teks(&out)
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_memblokir_config_repo_tanpa_use_default() {
+        // Config tanpa `[extend] useDefault` membuat gitleaks mengabaikan default
+        // ruleset, sehingga gate melaporkan bersih untuk secret apa pun. Harus blokir.
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        let argv_log = siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+        fs::write(
+            repo.path().join(".gitleaks.toml"),
+            "[allowlist]\nregexes = [\'\'\'zzz\'\'\']\n",
+        )
+        .unwrap();
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+        let keluaran = teks(&out);
+
+        assert!(!out.status.success(), "config rusak harus memblokir: {keluaran}");
+        assert!(keluaran.contains("useDefault"), "{keluaran}");
+        assert!(
+            fs::read_to_string(&argv_log).is_err(),
+            "gitleaks tidak boleh dipanggil sama sekali dengan config rusak"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gate_meloloskan_config_repo_dengan_use_default() {
+        let home = TempDir::new().unwrap();
+        let repo = TempDir::new().unwrap();
+        siapkan_gitleaks_palsu(home.path(), "8.21.2", 0);
+        fs::write(
+            repo.path().join(".gitleaks.toml"),
+            "[extend]\nuseDefault = true\n[allowlist]\nregexTarget = \"line\"\nregexes = [\'\'\'zzz\'\'\']\n",
+        )
+        .unwrap();
+
+        let out = jalankan_gate(home.path(), repo.path(), &[]);
+
+        assert!(out.status.success(), "{}", teks(&out));
     }
 
     #[test]

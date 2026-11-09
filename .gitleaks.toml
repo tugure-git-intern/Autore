@@ -1,7 +1,17 @@
 # Allowlist: false positive rule curl-auth-user untuk health-check SonarQube LOKAL.
 # Bukan secret asli: kredensial default container lokal (admin:admin) yang hanya
 # valid di dalam sandbox (127.0.0.1). Secret produksi tetap diblokir.
+#
+# Wajib `[extend] useDefault = true`: tanpa baris itu gitleaks memakai HANYA isi
+# file ini, sehingga seluruh default ruleset berhenti dan gate jadi tidak bergigi.
+# `regexTarget = "line"` wajib juga: default target adalah potongan secret
+# (`admin:admin`), sedangkan regex di bawah menunjuk satu baris penuh.
+[extend]
+useDefault = true
+
 [allowlist]
+description = "kredensial default SonarQube lokal (bukan secret)"
+regexTarget = "line"
 regexes = [
   '''-u admin:admin http://127\.0\.0\.1:9000''',
 ]

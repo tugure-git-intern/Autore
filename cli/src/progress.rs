@@ -18,7 +18,7 @@ pub fn aktif() -> bool {
 /// Kabarkan satu tahap. Diam total kalau pemanggil tidak meminta baris data.
 ///
 /// `id` dipakai pemanggil untuk memutuskan tampilan (jangan diubah tanpa mengubah
-/// pembaca di `serve.rs` + `web/index.html`), `pesan` untuk manusia.
+/// pembaca di `serve.rs` + `web2/index.html`), `pesan` untuk manusia.
 pub fn tahap(id: &str, status: &str, pesan: &str) {
     if !aktif() {
         return;

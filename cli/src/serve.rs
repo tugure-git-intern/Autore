@@ -25,8 +25,16 @@ static RUN_COUNTER: AtomicU64 = AtomicU64::new(1);
 use crate::jenkins;
 use crate::templates::validate_app_name;
 
-const HALAMAN: &str = include_str!("web/index.html");
 const HALAMAN_V2: &str = include_str!("web2/index.html");
+
+/// Halaman yang disajikan untuk sebuah path (`None` = bukan halaman HTML).
+/// `/v2` dipertahankan sebagai alias supaya tautan lama tidak putus.
+fn halaman_untuk(path: &str) -> Option<&'static str> {
+    match path {
+        "/" | "/index.html" | "/v2" | "/v2/" | "/v2/index.html" => Some(HALAMAN_V2),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Status {
@@ -172,12 +180,12 @@ impl Server {
         }
 
         match (method.as_str(), path.split('?').next().unwrap_or("/")) {
-            ("GET", "/") | ("GET", "/index.html") => {
-                kirim(&mut stream, 200, "text/html; charset=utf-8", HALAMAN)
-            }
-            ("GET", "/v2") | ("GET", "/v2/") | ("GET", "/v2/index.html") => {
-                kirim(&mut stream, 200, "text/html; charset=utf-8", HALAMAN_V2)
-            }
+            ("GET", path) if halaman_untuk(path).is_some() => kirim(
+                &mut stream,
+                200,
+                "text/html; charset=utf-8",
+                halaman_untuk(path).unwrap_or_default(),
+            ),
             ("GET", "/api/status") => {
                 let (status, tautan, pesan, nama, tahap) = {
                     let j = self.job.lock().unwrap();
@@ -1587,6 +1595,15 @@ mod tests {
 
         let srv = buat_srv(vec![]);
         assert_eq!(srv.pesan_gagal_terakhir_id(999, "demo"), "Aplikasi 'demo' gagal disiapkan.");
+    }
+
+    #[test]
+    fn halaman_root_dan_v2_menyajikan_halaman_yang_sama() {
+        let root = halaman_untuk("/").expect("root harus punya halaman");
+        assert_eq!(Some(root), halaman_untuk("/v2"), "alias /v2 tetap hidup");
+        assert_eq!(Some(root), halaman_untuk("/v2/index.html"));
+        assert!(root.contains("dag-container"), "halaman / memakai UI baru");
+        assert_eq!(halaman_untuk("/api/status"), None);
     }
 
     #[test]

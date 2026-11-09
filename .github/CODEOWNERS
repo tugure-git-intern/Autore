@@ -1,0 +1,18 @@
+# Global default owners for all repository assets
+* @tugure-git-intern
+
+# Core Rust CLI and operational commands
+/cli/ @tugure-git-intern
+
+# Web monorepo (contracts, api, dashboard)
+/web/ @tugure-git-intern
+
+# Authoritative Jenkins shared library pipeline
+/vars/ @tugure-git-intern
+
+# Runner and security gate scripts
+/scripts/ @tugure-git-intern
+/runner/ @tugure-git-intern
+
+# Security policy and disclosure contracts
+/SECURITY.md @tugure-git-intern

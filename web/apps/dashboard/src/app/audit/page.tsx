@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, History, RefreshCw } from "lucide-react";
 import { AuditTimeline } from "@/components/audit/audit-timeline";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
-import { fetchAuditLog, type AuditEntry } from "@/lib/audit-client";
+import { BATAS_AUDIT, fetchAuditLog, type AuditEntry } from "@/lib/audit-client";
 
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -107,7 +107,18 @@ export default function AuditPage() {
         ) : null}
 
         {/* Content Loaded */}
-        {!loading && !error ? <AuditTimeline entries={entries} /> : null}
+        {!loading && !error ? (
+          <>
+            <AuditTimeline entries={entries} />
+            {/* Rute hanya mengirim baris terakhir; tanpa catatan ini pembaca bisa
+                menyimpulkan log-nya memang cuma segitu. */}
+            {entries.length > 0 ? (
+              <p className="mt-2 text-xs text-gray-500">
+                Menampilkan maksimal {BATAS_AUDIT} aktivitas terbaru.
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </div>
   );

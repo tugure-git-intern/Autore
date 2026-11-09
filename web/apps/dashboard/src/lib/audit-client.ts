@@ -1,3 +1,10 @@
+/**
+ * Batas baris yang benar-benar dikirim `/api/audit/log`; harus sama dengan
+ * `audit(100)` di `apps/api/src/index.ts`. Dipakai juga oleh catatan di bawah
+ * timeline, supaya angka yang ditulis tidak pernah beda dari yang ditampilkan.
+ */
+export const BATAS_AUDIT = 100;
+
 export interface AuditEntry {
   ts: string;
   login: string;

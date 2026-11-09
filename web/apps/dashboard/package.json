@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 9120",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 9120",
+    "start": "next start -H 100.80.3.14 -p 9120",
     "test": "vitest",
     "test:e2e": "playwright test"
   },

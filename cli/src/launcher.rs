@@ -46,8 +46,8 @@ pub trait Sistem {
     fn ip_tailscale(&self) -> Option<String>;
     /// Keluaran mentah `hostname -I` (None = perintah tidak ada/gagal).
     fn ip_hostname(&self) -> Option<String>;
-    /// Ada proses yang menerima koneksi pada `port` lokal?
-    fn port_terbuka(&self, port: u16) -> bool;
+    /// Ada proses yang menerima koneksi pada `host:port`?
+    fn port_terbuka(&self, host: &str, port: u16) -> bool;
     /// Jalankan perintah di latar (`nohup`), kembalikan PID; tulis PID ke `pid_file`.
     fn jalankan_latar(
         &self,
@@ -68,15 +68,20 @@ pub trait Sistem {
 const TIMEOUT_SIAP: Duration = Duration::from_millis(15_000);
 const JEDA_POLL: Duration = Duration::from_millis(500);
 
-/// Tunggu sampai semua `ports` menerima koneksi; kembalikan port yang masih tertutup
+/// Tunggu sampai semua `target` menerima koneksi; kembalikan target yang masih tertutup
 /// saat batas waktu habis (kosong = semua siap).
-fn tunggu_siap(sis: &dyn Sistem, ports: &[u16], batas: Duration, jeda: Duration) -> Vec<u16> {
+fn tunggu_siap<'a>(
+    sis: &dyn Sistem,
+    target: &[(&'a str, u16)],
+    batas: Duration,
+    jeda: Duration,
+) -> Vec<(&'a str, u16)> {
     let mulai = Instant::now();
     loop {
-        let tertutup: Vec<u16> = ports
+        let tertutup: Vec<(&'a str, u16)> = target
             .iter()
             .copied()
-            .filter(|port| !sis.port_terbuka(*port))
+            .filter(|(host, port)| !sis.port_terbuka(host, *port))
             .collect();
         if tertutup.is_empty() || mulai.elapsed() >= batas {
             return tertutup;
@@ -341,9 +346,16 @@ impl Sistem for SistemNyata {
         keluaran("hostname", &["-I"])
     }
 
-    fn port_terbuka(&self, port: u16) -> bool {
-        let alamat = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-        std::net::TcpStream::connect_timeout(&alamat, Duration::from_millis(300)).is_ok()
+    fn port_terbuka(&self, host: &str, port: u16) -> bool {
+        let Ok(mut alamat) = std::net::ToSocketAddrs::to_socket_addrs(&(host, port)) else {
+            return false;
+        };
+        match alamat.next() {
+            Some(alamat) => {
+                std::net::TcpStream::connect_timeout(&alamat, Duration::from_millis(300)).is_ok()
+            }
+            None => false,
+        }
     }
 
     fn jalankan_latar(
@@ -447,13 +459,14 @@ fn jaringan_docker(ip: &str) -> bool {
             .is_some_and(|oktet| (16..=31).contains(&oktet))
 }
 
-/// URL yang ditampilkan ke pengguna. Localhost selalu ada dan selalu lebih dulu.
+/// URL yang ditampilkan ke pengguna. Dashboard mengikat host ikat, jadi `localhost`
+/// hanya dipakai kalau host itu sendiri localhost (tanpa tailscale/hostname).
 fn susun_url(ip: &str) -> Vec<String> {
-    let mut url = vec![format!("http://localhost:{PORT_DASHBOARD}")];
-    if ip != IP_LOCALHOST {
-        url.push(format!("http://{ip}:{PORT_DASHBOARD}"));
+    if ip == IP_LOCALHOST {
+        vec![format!("http://localhost:{PORT_DASHBOARD}")]
+    } else {
+        vec![format!("http://{ip}:{PORT_DASHBOARD}")]
     }
-    url
 }
 
 /// Pengguna yang diharapkan menjalankan dashboard (env `AUTORE_WEB_USER` menimpa default).
@@ -510,7 +523,8 @@ fn jalankan_web_batas(
         // systemctl ada tapi bus tak bisa dipakai (kontainer/WSL): jalur tanpa systemd.
         return jalankan_tanpa_systemd(sis, keluar, batas, jeda, cari_web_dir());
     }
-    if status[1] != "active" && sis.port_terbuka(PORT_DASHBOARD) {
+    let host_ikat = pilih_ip(sis.ip_tailscale(), sis.ip_hostname());
+    if status[1] != "active" && sis.port_terbuka(&host_ikat, PORT_DASHBOARD) {
         let _ = writeln!(keluar, "{}", pesan_port_bentrok());
         return 1;
     }
@@ -548,7 +562,8 @@ fn selesaikan(sis: &dyn Sistem, keluar: &mut dyn Write, batas: Duration, jeda: D
         let _ = writeln!(keluar, "  {url}");
     }
 
-    let tertutup = tunggu_siap(sis, &[PORT_DASHBOARD, PORT_API], batas, jeda);
+    let target = [(ip.as_str(), PORT_DASHBOARD), (IP_LOCALHOST, PORT_API)];
+    let tertutup = tunggu_siap(sis, &target, batas, jeda);
     if !tertutup.is_empty() {
         let _ = writeln!(keluar, "{}", pesan_belum_siap(batas.as_secs()));
         return 1;
@@ -591,7 +606,7 @@ mod tests {
         start_calls: RefCell<Vec<String>>,
         ip_tailscale: Option<String>,
         ip_hostname: Option<String>,
-        ports: RefCell<HashMap<u16, bool>>,
+        ports: RefCell<HashMap<(String, u16), bool>>,
         port_buka_setelah: Option<usize>,
         panggilan_port: RefCell<usize>,
         /// Meniru systemd: begitu unit di-start, portnya benar-benar terbuka.
@@ -620,9 +635,10 @@ mod tests {
                 Some(pesan) => Err(pesan.clone()),
                 None => {
                     if self.buka_saat_start {
+                        let ikat = pilih_ip(self.ip_tailscale.clone(), self.ip_hostname.clone());
                         let mut ports = self.ports.borrow_mut();
-                        ports.insert(PORT_DASHBOARD, true);
-                        ports.insert(PORT_API, true);
+                        ports.insert((ikat, PORT_DASHBOARD), true);
+                        ports.insert((IP_LOCALHOST.to_string(), PORT_API), true);
                     }
                     Ok(())
                 }
@@ -634,12 +650,16 @@ mod tests {
         fn ip_hostname(&self) -> Option<String> {
             self.ip_hostname.clone()
         }
-        fn port_terbuka(&self, port: u16) -> bool {
+        fn port_terbuka(&self, host: &str, port: u16) -> bool {
             *self.panggilan_port.borrow_mut() += 1;
             if let Some(batas) = self.port_buka_setelah {
                 return *self.panggilan_port.borrow() >= batas;
             }
-            self.ports.borrow().get(&port).copied().unwrap_or(false)
+            self.ports
+                .borrow()
+                .get(&(host.to_string(), port))
+                .copied()
+                .unwrap_or(false)
         }
         fn jalankan_latar(
             &self,
@@ -655,9 +675,10 @@ mod tests {
                 pid_file.to_path_buf(),
             ));
             if self.buka_saat_start {
+                let ikat = pilih_ip(self.ip_tailscale.clone(), self.ip_hostname.clone());
                 let mut ports = self.ports.borrow_mut();
-                ports.insert(PORT_DASHBOARD, true);
-                ports.insert(PORT_API, true);
+                ports.insert((ikat, PORT_DASHBOARD), true);
+                ports.insert((IP_LOCALHOST.to_string(), PORT_API), true);
             }
             Ok(4242)
         }
@@ -672,6 +693,11 @@ mod tests {
         }
     }
 
+    /// Host yang dipakai `palsu()`: IP tailnet, sama dengan `ip_tailscale` bawaan.
+    fn host_ikat_palsu() -> String {
+        "100.80.3.14".to_string()
+    }
+
     fn palsu(pengguna: &str) -> SistemPalsu {
         SistemPalsu {
             pengguna: pengguna.to_string(),
@@ -682,7 +708,10 @@ mod tests {
             start_calls: RefCell::new(Vec::new()),
             ip_tailscale: Some("100.80.3.14\n".to_string()),
             ip_hostname: Some("192.168.0.89 172.18.0.1 fd7a:115c:a1e0::1\n".to_string()),
-            ports: RefCell::new(HashMap::from([(PORT_DASHBOARD, true), (PORT_API, true)])),
+            ports: RefCell::new(HashMap::from([
+                ((host_ikat_palsu(), PORT_DASHBOARD), true),
+                ((IP_LOCALHOST.to_string(), PORT_API), true),
+            ])),
             port_buka_setelah: None,
             panggilan_port: RefCell::new(0),
             buka_saat_start: true,
@@ -702,7 +731,10 @@ mod tests {
     fn port_dipakai_proses_lain_tidak_start_unit() {
         let mut sis = palsu("tugure");
         sis.statuses = vec!["active".to_string(), "inactive".to_string()];
-        sis.ports = RefCell::new(HashMap::from([(PORT_DASHBOARD, true)]));
+        sis.ports = RefCell::new(HashMap::from([(
+            (host_ikat_palsu(), PORT_DASHBOARD),
+            true,
+        )]));
         let mut keluaran = Vec::new();
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 1, "{teks}");
@@ -711,10 +743,27 @@ mod tests {
     }
 
     #[test]
+    fn localhost_terbuka_tidak_dianggap_bentrok() {
+        let mut sis = palsu("tugure");
+        sis.statuses = vec!["active".to_string(), "inactive".to_string()];
+        sis.ports = RefCell::new(HashMap::from([
+            ((IP_LOCALHOST.to_string(), PORT_DASHBOARD), true),
+            ((IP_LOCALHOST.to_string(), PORT_API), true),
+        ]));
+        let mut keluaran = Vec::new();
+        let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
+        assert_eq!(kode, 0, "localhost bukan host ikat dashboard: {teks}");
+        assert!(!teks.contains("sudah dipakai proses lain"), "{teks}");
+        assert_eq!(sis.start_calls.borrow().len(), 1, "unit tetap dijalankan: {teks}");
+    }
+
+    #[test]
     fn tunggu_siap_berhenti_begitu_port_terbuka() {
         let mut sis = palsu("tugure");
         sis.port_buka_setelah = Some(3);
-        let sisa = tunggu_siap(&sis, &[PORT_DASHBOARD, PORT_API], Duration::from_secs(5), JEDA_TES);
+        let host = host_ikat_palsu();
+        let target = [(host.as_str(), PORT_DASHBOARD), (IP_LOCALHOST, PORT_API)];
+        let sisa = tunggu_siap(&sis, &target, Duration::from_secs(5), JEDA_TES);
         assert!(sisa.is_empty(), "port terbuka setelah 3 panggilan: {sisa:?}");
         let panggilan = *sis.panggilan_port.borrow();
         assert!((3..10).contains(&panggilan), "poll berhenti tepat saat siap: {panggilan}");
@@ -722,8 +771,10 @@ mod tests {
 
     #[test]
     fn habis_waktu_belum_siap_lapor_journalctl_dan_exit_1() {
-        let mut sis = palsu("tugure");
-        sis.ports = RefCell::new(HashMap::from([(PORT_DASHBOARD, false), (PORT_API, false)]));
+        let sis = palsu("tugure");
+        for (host, port) in [(host_ikat_palsu(), PORT_DASHBOARD), (IP_LOCALHOST.to_string(), PORT_API)] {
+            sis.ports.borrow_mut().insert((host, port), false);
+        }
         let mut keluaran = Vec::new();
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 1, "{teks}");
@@ -806,7 +857,12 @@ mod tests {
     fn unit_nonaktif_dipanggil_start_sekali() {
         let mut sis = palsu("tugure");
         sis.statuses = vec!["active".to_string(), "inactive".to_string()];
-        sis.ports = RefCell::new(HashMap::from([(PORT_DASHBOARD, false), (PORT_API, true)]));
+        for (host, port, buka) in [
+            (host_ikat_palsu(), PORT_DASHBOARD, false),
+            (IP_LOCALHOST.to_string(), PORT_API, true),
+        ] {
+            sis.ports.borrow_mut().insert((host, port), buka);
+        }
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
         assert_eq!(kode, 0, "{teks}");
@@ -834,7 +890,10 @@ mod tests {
         let mut sis = palsu("tugure");
         sis.statuses = vec!["inactive".to_string(), "inactive".to_string()];
         sis.start_gagal = Some("Unit autore-web-api.service not found.".to_string());
-        sis.ports = RefCell::new(HashMap::from([(PORT_DASHBOARD, false), (PORT_API, false)]));
+        sis.ports = RefCell::new(HashMap::from([
+            ((host_ikat_palsu(), PORT_DASHBOARD), false),
+            ((IP_LOCALHOST.to_string(), PORT_API), false),
+        ]));
         sis.buka_saat_start = false;
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
@@ -880,11 +939,11 @@ mod tests {
     }
 
     #[test]
-    fn url_selalu_memuat_localhost_9120() {
-        let url = susun_url("100.80.3.14");
-        assert_eq!(url[0], "http://localhost:9120");
-        assert_eq!(url[1], "http://100.80.3.14:9120");
-        assert_eq!(url.len(), 2);
+    fn url_pakai_host_ikat_tanpa_localhost() {
+        assert_eq!(
+            susun_url("100.80.3.14"),
+            vec!["http://100.80.3.14:9120".to_string()]
+        );
     }
 
     #[test]
@@ -898,8 +957,11 @@ mod tests {
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
         assert_eq!(kode, 0, "{teks}");
-        assert!(teks.contains("http://localhost:9120"), "{teks}");
         assert!(teks.contains("http://100.80.3.14:9120"), "{teks}");
+        assert!(
+            !teks.contains("http://localhost:9120"),
+            "dashboard hanya mengikat IP tailnet, tautan localhost mati: {teks}"
+        );
     }
 
     #[test]

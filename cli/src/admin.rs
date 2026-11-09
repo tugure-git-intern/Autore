@@ -326,7 +326,7 @@ mod tests {
         fn ip_hostname(&self) -> Option<String> {
             None
         }
-        fn port_terbuka(&self, _port: u16) -> bool {
+        fn port_terbuka(&self, _host: &str, _port: u16) -> bool {
             false
         }
         fn jalankan_latar(

@@ -87,6 +87,21 @@ function Pratinjau({ mode }: { mode: Mode }) {
  */
 export function AppearanceMenu() {
   const { theme, setTheme } = useTheme();
+
+  const simpanTema = (nilai: Mode) => {
+    setTheme(nilai);
+    try {
+      document.cookie = `autore-theme=${encodeURIComponent(nilai)}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (theme) {
+      try {
+        document.cookie = `autore-theme=${encodeURIComponent(theme)}; path=/; max-age=31536000; SameSite=Lax`;
+      } catch {}
+    }
+  }, [theme]);
   const [menuTerbuka, setMenuTerbuka] = useState(false);
   const [modalTerbuka, setModalTerbuka] = useState(false);
   const [kontrasTinggi, setKontrasTinggi] = useState(false);
@@ -214,7 +229,7 @@ export function AppearanceMenu() {
                 type="button"
                 role="radio"
                 aria-checked={dipilih}
-                onClick={() => setTheme(nilai)}
+                onClick={() => simpanTema(nilai)}
                 className={`flex flex-col gap-3 rounded-lg border-2 p-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                   dipilih
                     ? "border-blue-500 bg-white/10 text-white ring-1 ring-blue-500"

@@ -492,4 +492,75 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(bgHtml).toBe("rgb(53, 59, 67)");
     expect(bgHtml).not.toBe("rgb(255, 255, 255)");
   });
+
+  test("hard refresh dengan cookie autore-theme=dark menghasilkan HTML awal yang sudah gelap (bebas FOUC tanpa JS)", async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({
+      storageState: "e2e/.auth/state.json",
+      javaScriptEnabled: false,
+    });
+    await ctx.addCookies([
+      {
+        name: "autore-theme",
+        value: "dark",
+        domain: "100.80.3.14",
+        path: "/",
+      },
+    ]);
+    const page = await ctx.newPage();
+    await page.goto("/login");
+
+    const htmlState = await page.evaluate(() => ({
+      className: document.documentElement.className,
+      bg: getComputedStyle(document.documentElement).backgroundColor,
+      colorScheme: getComputedStyle(document.documentElement).colorScheme,
+    }));
+
+    expect(htmlState.className).toContain("dark");
+    expect(htmlState.bg).toBe("rgb(53, 59, 67)");
+    expect(htmlState.colorScheme).toBe("dark");
+
+    await ctx.close();
+  });
+
+  test("hard refresh di Dark Mode bebas FOUC via critical inline CSS dan cookie SSR", async ({
+    page,
+    context,
+  }) => {
+    await context.addCookies([
+      {
+        name: "autore-theme",
+        value: "dark",
+        domain: "100.80.3.14",
+        path: "/",
+      },
+    ]);
+    await context.addInitScript(() => {
+      localStorage.setItem("autore-theme", "dark");
+    });
+
+    await page.goto("/", { waitUntil: "commit" });
+
+    const statusAwal = await page.evaluate(() => {
+      const el = document.documentElement;
+      return {
+        hasDarkClass: el.classList.contains("dark"),
+        bg: getComputedStyle(el).backgroundColor,
+        colorScheme: getComputedStyle(el).colorScheme,
+      };
+    });
+
+    expect(statusAwal.hasDarkClass).toBe(true);
+    expect(statusAwal.bg).toBe("rgb(53, 59, 67)");
+    expect(statusAwal.colorScheme).toBe("dark");
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const statusReload = await page.evaluate(() => ({
+      hasDarkClass: document.documentElement.classList.contains("dark"),
+      bg: getComputedStyle(document.documentElement).backgroundColor,
+    }));
+    expect(statusReload.hasDarkClass).toBe(true);
+    expect(statusReload.bg).toBe("rgb(53, 59, 67)");
+  });
 });

@@ -5,10 +5,21 @@ import { Folder } from "lucide-react";
 // The sidebar reads the App Router pathname; pin it to "/" for the unit run.
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
+import { StatusProvider } from "./app-shell";
 import { EmptyApplications } from "./empty-applications";
 import { Sidebar } from "./sidebar";
 import { StatCard, type StatTone } from "./stat-card";
 import { StatusBadge } from "./status-badge";
+
+/** Sidebar membaca useStatus(); tarikan /api/status dibiarkan menggantung. */
+const renderSidebar = () => {
+  vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+  return render(
+    <StatusProvider>
+      <Sidebar />
+    </StatusProvider>,
+  );
+};
 
 describe("StatusBadge", () => {
   it("renders neutral text for unknown security state", () => {
@@ -73,7 +84,7 @@ describe("StatCard", () => {
 
 describe("Sidebar", () => {
   it("labels the PRD routes and highlights the active one in PRD green", () => {
-    render(<Sidebar />);
+    renderSidebar();
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(["/", "/applications", "/pipeline", "/security", "/audit"]);
 
@@ -88,13 +99,13 @@ describe("Sidebar", () => {
   });
 
   it("sizes the brand block to the 64px topbar without orphaned border line", () => {
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getByTestId("sidebar-brand")).toHaveClass("h-16");
     expect(screen.getByTestId("sidebar-brand").className).not.toContain("border");
   });
 
   it("insets active and inactive nav pills identically", () => {
-    render(<Sidebar />);
+    renderSidebar();
     const aside = screen.getByRole("complementary");
     const links = within(aside).getAllByRole("link");
 

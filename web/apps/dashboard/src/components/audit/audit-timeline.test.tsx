@@ -166,4 +166,22 @@ describe("AuditTimeline — garis timeline", () => {
     // Latar solid, bukan transparan: garis terlihat masuk ke dalam avatar lalu berhenti.
     expect(lingkaran.className).toMatch(/bg-(white|emerald-50)/);
   });
+  it("avatar di Dark Mode menutup garis: latar solid (bukan transparan) dan ring kanvas", () => {
+    const { container } = render(<AuditTimeline entries={ENTRIES} />);
+
+    const lingkaran = container.querySelector("[data-testid='audit-avatar'] .rounded-full") as HTMLElement;
+    expect(lingkaran).toBeTruthy();
+
+    // Rail dark memakai #50638b; avatar dulu memakai dark:bg-emerald-950/60
+    // (transparan 60%) sehingga garis tembus ke tengah lingkaran. Sekarang latar
+    // wajib solid supaya garis berhenti di tepi avatar.
+    expect(lingkaran.className).not.toMatch(/\/60|\/70|\/80|\/50/);
+    expect(lingkaran.className).toContain("dark:bg-emerald-950");
+
+    // Ring warna kanvas di kedua mode: ada jarak visual antara lingkaran dan rail,
+    // jadi garis tidak menempel langsung di tepi avatar.
+    expect(lingkaran.className).toContain("ring-2");
+    expect(lingkaran.className).toContain("ring-[#fafafa]");
+    expect(lingkaran.className).toContain("dark:ring-[#353b43]");
+  });
 });

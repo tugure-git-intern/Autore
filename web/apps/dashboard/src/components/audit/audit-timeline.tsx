@@ -180,7 +180,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 >
                   {/* User Avatar + Action Pin */}
                   <div data-testid="audit-avatar" className="relative z-20 shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 ring-2 ring-[#fafafa] dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-[#353b43]">
                       {inisial(item.login || "?")}
                     </div>
                     <div

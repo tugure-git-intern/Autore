@@ -96,9 +96,8 @@ describe("Sidebar", () => {
     const footer = screen.getByTestId("sidebar-footer");
     expect(footer.className).toContain("flex items-center justify-between");
     expect(footer.className).toContain("px-4 py-3");
-    expect(footer.className).toContain("border-t");
-    expect(footer.className).toContain("border-gray-200");
-    expect(footer.className).toContain("dark:border-[#50638b]");
+    expect(footer.className).not.toContain("border");
+    expect(footer.className).not.toContain("border-t");
 
     // Titik hijau animate-pulse
     const dot = screen.getByTestId("server-online-dot");

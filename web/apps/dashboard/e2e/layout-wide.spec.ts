@@ -585,7 +585,8 @@ test.describe("kerangka melayang di layar lebar", () => {
     const textVersi = footer.getByText("v0.5.9");
     await expect(textVersi).toBeVisible();
     await expect(textVersi).toHaveClass(/text-gray-[56]00/);
-    await expect(footer).toHaveClass(/border-gray-200/);
+    // Garis tipis di atas indikator status dihapus
+    await expect(footer).toHaveCSS("border-top-width", "0px");
 
     // Posisi flexbox: Server Online di kiri, versi di kanan
     const boxDot = await dot.boundingBox();
@@ -610,6 +611,6 @@ test.describe("kerangka melayang di layar lebar", () => {
 
     await expect(textOnline).toHaveCSS("color", "rgb(255, 255, 255)"); // dark:text-white
     await expect(textVersi).toHaveCSS("color", /oklch\(0\.707|rgb\(156, 163, 175\)/); // dark:text-gray-400
-    await expect(footer).toHaveCSS("border-top-color", "rgb(80, 99, 139)"); // dark:border-[#50638b]
+    await expect(footer).toHaveCSS("border-top-width", "0px");
   });
 });

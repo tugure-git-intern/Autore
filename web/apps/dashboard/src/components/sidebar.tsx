@@ -57,7 +57,7 @@ export function Sidebar() {
       {/* Indikator status di pojok bawah: Server Online di kiri, versi di kanan */}
       <div
         data-testid="sidebar-footer"
-        className="mt-auto flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-[#50638b]"
+        className="mt-auto flex items-center justify-between px-4 py-3"
       >
         <div className="flex items-center gap-2">
           <span

@@ -37,8 +37,12 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 - **Multi-Language Support**: Production-ready scaffolding templates for **Python** (3.12-slim, non-root user), **Node.js** (20-alpine, unprivileged user), **Java** (Maven multi-stage build, Eclipse Temurin 21 JRE), and **Go** (minimal scratch/distroless static binary). Each template includes automated build tests and dedicated host port allocation to prevent deployment collisions.
 - **SBOM Viewer**: Integrated Software Supply Chain Security dashboard rendering CycloneDX v1.5 JSON components directly from build artifacts, complete with package type classification, version tracking, license compliance inspection, and instant search filtering.
 - **Audit Trail & Identity Propagation**: Immutable audit logging recorded in structured JSONL format (`~/.local/state/autore/audit.log`). Authenticated GitHub user sessions are propagated directly to CLI subprocess arguments, attributing Git commit author metadata (`user.name`, `user.email`) to the active developer rather than an untraceable bot.
+- **Audit Log Viewer**: `/audit` renders the JSONL trail as a chronological timeline with a distinct icon per action (Deploy, Scan Keamanan, Quick-Start), free-text search across user, email, and application, plus action and status filters. The page reads the latest 100 entries from `GET /api/audit/log`; entries that carry no exit code are labelled `Tanpa status` instead of being assumed successful.
 - **Fail-Closed Security Pipeline**: Strict 10-stage pipeline managed through an admin-governed Jenkins Trusted Shared Library. Any scanner failure, misconfiguration, or unverified artifact immediately terminates the build with zero bypasses.
-- **Responsive Operational UI**: Clean, light-only interface optimized for both desktop operations and mobile devices, featuring a mobile bottom navigation bar, live Lead Time analytics, stage matrix inspection, and real-time connection status indicators.
+- **Dark Mode & Appearance Control**: Complete light / dark / system theming driven by a three-card appearance modal with live previews and a high-contrast switch. The choice is persisted in the `autore-theme` cookie and resolved during SSR, so route changes and hard refreshes never flash a white frame (FOUC-free).
+- **Rate-Limited Mutations**: Every `POST /api/actions/*` call passes an in-memory sliding-window limiter keyed on the authenticated GitHub login (10 actions per 60 seconds). Rejections return `429` with `Retry-After` and `X-RateLimit-*` headers, so an abusive client never reaches the CLI.
+- **Shared Contract Validation**: `@autore/contracts` (`web/packages/contracts`) is the single source of truth for every API payload shape and its fail-closed runtime validators, imported by both the Hono API and the Next.js dashboard. A malformed payload is rejected at the boundary instead of rendered.
+- **Responsive Operational UI**: Interface optimized for desktop operations and mobile devices in either theme, featuring a mobile bottom navigation bar, live Lead Time analytics, stage matrix inspection, and real-time connection status indicators.
 
 ---
 
@@ -46,26 +50,30 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 
 For full architecture diagrams and component data flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
 For local development, quality gates, and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For the vulnerability disclosure policy, reporting channel, and response targets, see [SECURITY.md](SECURITY.md).
 
 
 ```mermaid
 flowchart LR
     U["User Browser (Desktop / Mobile)"] -->|"HTTP (tailnet):9120"| D["Frontend — Next.js 15<br/>(Auth.js GitHub OAuth + Whitelist)"]
-    D -->|"Proxy /api/* to 127.0.0.1:9121"| A["API Shim — Hono (Loopback Only)"]
+    D -->|"Proxy /api/* to 127.0.0.1:9121"| A["API Shim — Hono (Loopback Only)<br/>rate limiter: 10 aksi/menit per login"]
     A -->|"Subprocess Execution (JSON stdout)"| C["Core — Rust Binary autore"]
     C --> J["Jenkins (Pipeline Orchestration)"]
     C --> N["Nexus (ALLOW_ONCE Registry)"]
     J --> S["SonarQube (Quality Gate)"]
     C --> WS["Workspace: ~/autore-workspace<br/>(registry.tsv + dashboard-status.json)"]
     A --> AU["Audit Log: ~/.local/state/autore/audit.log"]
+    K["@autore/contracts<br/>(shared types + fail-closed validators)"] -.->|"validasi payload"| D
+    K -.->|"validasi payload"| A
 ```
 
 ### Architectural Layers
 
 | Layer | Technology | Operational Responsibility |
 |---|---|---|
-| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS, Lucide | Operational dashboard, pipeline visualization, SBOM catalog, Lead Time metric cards, and authenticated action dispatching. Light-mode operational tokens with complete mobile responsiveness. |
-| **API Shim** | Hono (Node.js), Auth.js (NextAuth v5 JWT) | GitHub OAuth authentication, case-insensitive whitelist authorization, action argument validation, subprocess invocation, and JSONL audit trail logging. Strictly bound to loopback `127.0.0.1:9121`. |
+| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS, Lucide | Operational dashboard, pipeline visualization, SBOM catalog, audit timeline, Lead Time metric cards, and authenticated action dispatching. Light and dark theme tokens with complete mobile responsiveness. |
+| **API Shim** | Hono (Node.js), Auth.js (NextAuth v5 JWT) | GitHub OAuth authentication, case-insensitive whitelist authorization, sliding-window rate limiting (10 mutations per minute per login), action argument validation, subprocess invocation, and JSONL audit trail logging. Strictly bound to loopback `127.0.0.1:9121`. |
+| **Shared Contracts** | `@autore/contracts` (TypeScript, source-only, `web/packages/contracts`) | Single source of truth for API payload types and their fail-closed runtime validators (`parseApiResponse`, `validateDashboardStatus`, `validateSbomPayload`, `validateRuns`, `validateActive`). Imported by both the API and the dashboard, so a drifted payload fails loudly instead of rendering. |
 | **Core** | Rust (2021 Edition, musl static binary) | Sole owner of all business logic: scaffolding (`init`, `quick-start`), artifact scanning (`scan`, `scan-image`), deployment orchestration (`deploy`), health inspections (`doctor`), and systemd unit supervision. |
 | **Integrations** | Jenkins Trusted Shared Library, Nexus OSS 3, SonarQube, Trivy, Gitleaks | Authoritative pipeline execution, immutable artifact storage, SAST quality gates, secret leak prevention, and vulnerability analysis. |
 | **State** | `~/.config/autore/`, `~/.local/state/autore/`, `~/autore-workspace/` | File-backed operational state. Eliminates in-memory session loss upon process restarts. |
@@ -103,6 +111,8 @@ The authoritative CI/CD pipeline definition is maintained in the administrative 
 - **Web Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, Lucide React icons.
 - **API Shim**: Hono, Auth.js v5 (NextAuth), Node.js LTS.
 - **Continuous Integration**: Jenkins LTS with Trusted Shared Library.
+- **Shared Contracts**: `@autore/contracts` (TypeScript, source-only) with fail-closed runtime payload validators consumed by both the API and the dashboard.
+- **Test & Quality Gates**: `cargo test` and `cargo clippy -D warnings` for the Rust CLI, Vitest 3.2.7 for unit and contract tests, Playwright for browser E2E and mobile contracts, `@axe-core/playwright` for WCAG 2.1 AA accessibility, `tsc --noEmit` across all three packages, and the production Next.js build.
 - **Artifact & Container Registry**: Sonatype Nexus OSS 3 (`ALLOW_ONCE` immutable policy).
 - **Security & Quality**: Trivy (SCA, Container, Config), Gitleaks, SonarQube Community Edition.
 - **Standards & Specifications**: CycloneDX v1.5 JSON (SBOM), SPDX licenses, JSONL (Audit logging).
@@ -202,8 +212,12 @@ Access the dashboard at `http://localhost:9120` (or through your assigned host/T
 | `autore doctor` | `doc` | Diagnoses health of Runner, Docker daemon, Java runtime, and Jenkins connection. |
 | `autore scan` | — | Pre-build security scan: Static Byte Guard + Gitleaks + Trivy. Supports `--no-docker` fast mode. |
 | `autore scan-image` | — | Post-build container scan: verifies non-root execution, scans CVEs, and exports CycloneDX SBOM. |
-| `autore hook install` | — | Installs the local Git pre-commit gate: static guard + native Gitleaks on staged files (no Docker). |
+| `autore hook install` | — | Installs the local Git pre-commit gate: static guard + native Gitleaks on staged files (no Docker). An existing user hook is backed up and chained. |
+| `autore hook status` | — | Reports whether the Autore-managed pre-commit hook is installed and executable in the current repository. |
+| `autore hook uninstall` | — | Removes the managed hook and restores the previous user hook from `pre-commit.user-backup`. |
 | `autore sbom` | — | Inspects software supply chain dependencies from build CycloneDX SBOM artifacts. |
+| `autore pipeline` | — | Records pipeline stage progress into the status store (called by the Jenkins pipeline, not by humans). |
+| `autore kemampuan` | — | Prints this host's capabilities as machine-readable data (consumed by the dashboard to decide which stacks are available). |
 | `autore start / stop / restart` | — | Controls background services via systemd user manager. |
 | `autore logs` | — | Streams real-time operational logs from dashboard and API services (`--lines N`, `--no-follow`). |
 | `autore update` | — | Downloads and atomicity verifies the latest binary release from GitHub Releases. |
@@ -225,6 +239,11 @@ autore logs --lines 50 --no-follow
 |---|---|---|---|
 | Static guard | `autore scan --no-docker` | whole working tree | ~40 ms |
 | Secret detection | native `gitleaks` (`git --staged`) | staged files only | ~20 ms |
+
+`autore hook status` reports whether the managed hook is active, and `autore hook uninstall` removes it
+and restores a previous hook from `.git/hooks/pre-commit.user-backup` (an existing non-Autore hook is
+backed up and chained automatically, never overwritten). Set `AUTORE_HOOK_DOCKER=1` to run the static
+guard through Docker instead of the `--no-docker` fast path.
 
 The gate is fail-closed: if `gitleaks` is missing from the machine or exits with any non-zero code,
 the commit is blocked and the install command for the pinned version (v8.21.2, same as the CI image)
@@ -268,17 +287,36 @@ curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitlea
 
 ## Verification & Testing
 
-Both the core binary and web applications maintain rigorous test suites:
+Both the core binary and the web monorepo maintain rigorous test suites:
 
 ```bash
-# Core Rust CLI Test Suite (from cli/)
-cargo test --bin autore          # 284 passed
+# Core Rust CLI (from cli/) - 335 tests total (285 unit + 50 integration)
+cargo test                       # 335 passed
+cargo test --bin autore          # 285 passed
 cargo test --test admin_cli      # 7 passed
 cargo test --test launcher_cli   # 5 passed
 
-# Web Dashboard & API Test Suite (from web/)
-npm test                         # 515 tests passed across 57 test files (100% green)
+# Web unit and contract tests (from web/) - 612 tests across 72 files
+npx vitest run                   # contracts + api + dashboard, 100% green
+
+# Web typechecks and production build (from web/)
+( cd packages/contracts && npx tsc --noEmit )
+( cd apps/api && npx tsc --noEmit )
+( cd apps/dashboard && npx tsc --noEmit )
+npm run build:dashboard
+
+# Browser E2E, mobile contract, and accessibility (from web/) - 77 tests across 7 spec files
+npm run test:e2e                 # Playwright: audit, a11y, dashboard, layout, mobile, quick-start, sbom
+npm run test:e2e -- e2e/a11y.spec.ts   # axe-core, WCAG 2.1 AA on 6 routes + dark-mode toast
 ```
+
+Playwright reads `AUTH_SECRET` / `NEXTAUTH_SECRET` from `web/.env`, so run it through the
+`npm run test:e2e` wrapper (dotenv-cli); a bare `npx playwright test` fails at global setup.
+
+CI scope note: Stage 5 of the Jenkins pipeline (`scripts/ci-web-tests.sh`) runs `npm ci`,
+`npx vitest run`, `tsc --noEmit` for the three packages, and `npm run build:dashboard`. The
+Playwright suites, including the axe-core accessibility pass, run on the developer host - a green
+pipeline does not by itself prove the browser contracts.
 
 ---
 
@@ -288,13 +326,18 @@ npm test                         # 515 tests passed across 57 test files (100% g
 Autore/
 ├── install.sh / install.ps1      # Automated single-command platform installers
 ├── cli/                          # Core: Standalone Rust binary (all operational logic)
-│   ├── src/                      # main.rs, admin.rs, launcher.rs, templates.rs, scanner.rs,
-│   │                             # sbom.rs, status.rs, runs.rs, jenkins.rs, doctor.rs, workspace.rs, ...
-│   ├── tests/                    # Integration test suite (admin_cli, launcher_cli, scan_cli, sbom_cli)
+│   ├── src/                      # main.rs, admin.rs, active.rs, launcher.rs, templates.rs, scanner.rs,
+│   │                             # external.rs, hooks.rs, github.rs, jenkins.rs, workspace.rs, status.rs,
+│   │                             # runs.rs, pipeline_record.rs, progress.rs, sbom.rs, doctor.rs, tui.rs, updater.rs
+│   ├── tests/                    # Integration suite: active, admin, deploy, launcher, pipeline_record,
+│   │                             # repository_health, runs, sbom, scan
 │   └── Cargo.toml
 ├── web/                          # Interface: npm monorepo workspaces
-│   ├── apps/dashboard/           # Next.js 15 App Router (/ , /pipeline, /applications, /security, /403)
-│   ├── apps/api/                 # Hono API (GitHub authentication, whitelist, audit trail, status proxy)
+│   ├── packages/contracts/       # @autore/contracts: shared payload types + fail-closed validators
+│   ├── apps/dashboard/           # Next.js 15 App Router (/, /pipeline, /applications, /applications/sbom,
+│   │                             # /audit, /security, /login, /403)
+│   │   └── e2e/                  # Playwright suites (audit, a11y, dashboard, layout-wide, mobile, quick-start, sbom)
+│   ├── apps/api/                 # Hono API (auth, whitelist, rate limiter, audit trail, status proxy)
 │   ├── allowed-users.json        # Primary GitHub user whitelist
 │   └── .env                      # Environment secrets (OAuth keys, secrets, session configurations)
 ├── deploy/                       # systemd user service definitions (autore-web-api, autore-web-dashboard)
@@ -302,7 +345,7 @@ Autore/
 ├── scripts/                      # Release, SonarQube, Nexus, and Telegram notification utility scripts
 ├── runner/                       # Jenkins agent provisioning and service configuration
 ├── sandbox/                      # Testbed environments (SonarQube, Nexus, local Docker registry)
-├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md and architectural specifications
+├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md, plans/ (implementation plans), specifications
 ├── assets/banner.png             # Official project banner asset
 └── Jenkinsfile                   # Self-hosting CI/CD pipeline for the Autore repository
 ```

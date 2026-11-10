@@ -72,7 +72,16 @@ npx vitest run
 
 # Verify production Next.js build
 npm run build:dashboard
+
+# Run browser E2E, mobile contract, and accessibility suites (needs web/.env)
+npm run test:e2e                        # 77 Playwright tests across 7 spec files
+npm run test:e2e -- e2e/a11y.spec.ts    # axe-core WCAG 2.1 AA: 6 routes + dark-mode toast
 ```
+
+Playwright reads `AUTH_SECRET` / `NEXTAUTH_SECRET` from `web/.env` through dotenv-cli, so always use the
+`npm run test:e2e` wrapper from `web/`. Running `npx playwright test` directly fails in global setup.
+These browser suites are not part of the Jenkins Stage 5 web gate, so run them locally before pushing
+changes that touch rendering, theming, navigation, or actions.
 
 ---
 
@@ -86,12 +95,14 @@ Install the hook using the Autore CLI:
 ```bash
 autore hook install (or cargo run --bin autore -- hook install)
 ```
-This writes `.git/hooks/pre-commit` managed by Autore.
+This writes `.git/hooks/pre-commit` managed by Autore. An existing user hook is backed up to
+`pre-commit.user-backup` and chained after the gate. `autore hook status` verifies the hook is active;
+`autore hook uninstall` removes it and restores the backup.
 
 ### 3.2 Pre-Commit Gate Layers
 
 1. **Layer 1: Static Byte Guard:** Scans staged changes against known secret patterns, private key headers, and credential token formats.
-2. **Layer 2: Native Gitleaks (`v8.21.2`):** Scans staged files via `gitleaks protect --staged --verbose`.
+2. **Layer 2: Native Gitleaks (`v8.21.2`):** Scans staged files via `gitleaks git --staged --redact --no-banner --exit-code 1`, using the same pinned version as the CI image. No Docker and no `--config` flag: a repository `.gitleaks.toml` without `[extend] useDefault = true` is rejected outright, because that config silently disables the default ruleset.
 
 ### 3.3 Emergency Bypass Policy
 
@@ -139,5 +150,6 @@ Before submitting a pull request:
 - [ ] `npx vitest run` passes 100% across all packages.
 - [ ] `npx tsc --noEmit` reports 0 errors in `contracts`, `api`, and `dashboard`.
 - [ ] `npm run build:dashboard` succeeds without error.
+- [ ] `npm run test:e2e` passes (77 Playwright tests, including the axe-core WCAG 2.1 AA suite).
 - [ ] Zero emojis in code, commits, and documentation.
 - [ ] No secrets, keys, or credential tokens committed.

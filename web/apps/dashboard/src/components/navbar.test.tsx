@@ -312,7 +312,20 @@ describe("Navbar", () => {
     expect(diam).not.toHaveAttribute("aria-busy");
     expect(diam.querySelector("svg")?.getAttribute("class")).not.toContain("animate-spin");
   });
+
+  it("menaruh tombol ThemeToggle tepat di sebelah kiri tombol Sync dan mendukung palet dark #282c32", () => {
+    const { container } = renderNavbar(USER);
+    const header = container.querySelector("header") as HTMLElement;
+    expect(header.className).toContain("bg-[#F0F5FE]");
+    expect(header.className).toContain("dark:bg-[#282c32]");
+
+    const toggleBtn = screen.getByTestId("theme-toggle");
+    const syncBtn = screen.getByRole("button", { name: "Sync" });
+    expect(toggleBtn.compareDocumentPosition(syncBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(toggleBtn.nextElementSibling).toBe(syncBtn);
+  });
 });
+
 
 describe("AppShell", () => {
   it("Sync menarik /api/status, /api/runs dan /api/active, bukan cuma status", async () => {

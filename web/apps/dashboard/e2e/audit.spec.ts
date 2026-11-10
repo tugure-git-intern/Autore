@@ -55,7 +55,7 @@ test.describe("Audit Log Feature", () => {
 });
 
 test.describe("Audit Log — garis timeline", () => {
-  test("garis tidak putus: setiap titik di kolomnya milik garis atau avatar, bukan kartu", async ({
+  test("garis di belakang kartu: border kartu tidak dipotong garis, garis terlihat di celah", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 1200 });
@@ -77,35 +77,31 @@ test.describe("Audit Log — garis timeline", () => {
     ).toBeLessThanOrEqual(1);
 
     const x = kotakGaris.x + kotakGaris.width / 2;
-    const sampel: number[] = [];
-    // elementFromPoint cuma membaca titik di dalam viewport, dan <main> memotong
-    // isi yang melewati tepinya: batasi ke tepi bawah kartu konten juga.
-    const kotakKonten = (await page.locator("main").boundingBox())!;
-    const batasBawah = Math.min(
-      kotakGaris.y + kotakGaris.height - 2,
-      kotakKonten.y + kotakKonten.height - 2,
-    );
-    for (let y = kotakGaris.y + 2; y < batasBawah; y += 8) {
-      sampel.push(y);
+    const pemilikDi = (sumbuX: number, sumbuY: number) =>
+      page.evaluate(
+        ([px, py]) => {
+          const el = document.elementFromPoint(px as number, py as number);
+          return el?.closest("[data-testid]")?.getAttribute("data-testid") ?? el?.tagName ?? "kosong";
+        },
+        [sumbuX, sumbuY],
+      );
+
+    // Di border atas tiap kartu, titik harus milik kartu (LI), bukan garis.
+    // Rail di belakang kartu, jadi border horizontal kartu tidak dipotong rail.
+    const jumlah = await kartu.count();
+    for (let i = 0; i < jumlah; i++) {
+      const kotak = (await kartu.nth(i).boundingBox())!;
+      expect(await pemilikDi(x, kotak.y + 1)).not.toBe("audit-rail");
     }
 
-    const pemilik = await page.evaluate(
-      ([sumbuX, daftarY]) =>
-        (daftarY as number[]).map((y) => {
-          // Avatar punya banyak div di dalamnya: naik ke pembungkus ber-testid terdekat
-          // supaya "titik ini milik garis" dan "titik ini milik avatar" bisa dibedakan.
-          const el = document.elementFromPoint(sumbuX as number, y);
-          return el?.closest("[data-testid]")?.getAttribute("data-testid") ?? el?.tagName ?? "kosong";
-        }),
-      [x, sampel],
-    );
+    // Garis tetap terlihat di celah antar kartu.
+    const kedua = (await kartu.nth(1).boundingBox())!;
+    const yCelah = pertama.y + pertama.height + (kedua.y - (pertama.y + pertama.height)) / 2;
+    expect(await pemilikDi(x, yCelah)).toBe("audit-rail");
 
-    // Titik yang tidak tertutup avatar wajib jatuh ke garis, bukan ke kartu putih.
-    const aneh = pemilik.filter((p) => p !== "audit-rail" && p !== "audit-avatar");
-    expect(aneh).toEqual([]);
-    // Avatarnya benar-benar menimpa garis.
-    expect(pemilik).toContain("audit-avatar");
-    expect(pemilik).toContain("audit-rail");
+    // Avatar menimpa garis.
+    const kotakAvatar = (await page.getByTestId("audit-avatar").first().boundingBox())!;
+    expect(await pemilikDi(x, kotakAvatar.y + kotakAvatar.height / 2)).toBe("audit-avatar");
   });
 
   test("garis tetap kontinu di layar HP", async ({ page }) => {

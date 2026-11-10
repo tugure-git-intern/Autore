@@ -148,8 +148,16 @@ describe("AuditTimeline — garis timeline", () => {
     // Garis ada di pembungkus feed, bukan di dalam kartu: saudara dari <ol>.
     expect(rail.parentElement?.querySelector("ol")).toBeTruthy();
     expect(rail.closest("li")).toBeNull();
-    // Di atas kartu putih, supaya celah antar kartu tidak memutus garis.
+    // Rail di BELAKANG kartu (z-0) dan ol di atasnya (z-10): latar kartu menutup
+    // rail, jadi border horizontal kartu tidak dipotong rail (tidak ada
+    // perpotongan "+"). Rail tetap terlihat di celah antar kartu.
+    // Rail z-10: di atas ol (z-auto) supaya terlihat di celah, di bawah kartu z-20.
     expect(rail.className).toContain("z-10");
+    const ol = rail.parentElement?.querySelector("ol") as HTMLElement;
+    expect(ol.className).not.toContain("z-10");
+    expect(ol.className).not.toContain("z-20");
+    const li = ol.querySelector("li") as HTMLElement;
+    expect(li.className).toContain("z-20");
   });
 
   it("avatar menimpa garis: latar solid dan lapisan lebih tinggi", () => {

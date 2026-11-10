@@ -159,8 +159,9 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
       ) : (
         <div className="relative">
           {/* Satu tarikan dari kartu pertama ke kartu terakhir. Diletakkan di pembungkus
-              feed (bukan di dalam kartu) dan diberi lapisan di atas kartu putih, jadi
-              celah antar kartu tidak memutus garis. Avatarlah yang menimpanya. */}
+              feed (bukan di dalam kartu) dan DI BELAKANG kartu (z-0, ol z-10): latar
+              kartu menutup rail, jadi border horizontal kartu tidak dipotong rail
+              (tidak ada perpotongan "+"). Rail terlihat di celah antar kartu. */}
           <div
             aria-hidden="true"
             data-testid="audit-rail"
@@ -176,7 +177,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               return (
                 <li
                   key={`${item.ts}-${item.target}-${idx}`}
-                  className="relative flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50/60 sm:gap-4 sm:p-5 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:hover:bg-[var(--bg-sidebar)]"
+                  className="relative z-20 flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50/60 sm:gap-4 sm:p-5 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:hover:bg-[var(--bg-sidebar)]"
                 >
                   {/* User Avatar + Action Pin */}
                   <div data-testid="audit-avatar" className="relative z-20 shrink-0">

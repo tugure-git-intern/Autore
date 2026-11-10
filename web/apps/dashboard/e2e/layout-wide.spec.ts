@@ -154,20 +154,32 @@ test.describe("kerangka melayang di layar lebar", () => {
         b.textContent?.includes("Sync"),
       ) as HTMLElement;
       const kebab = header.querySelector('[aria-label="Menu lainnya"]') as HTMLElement;
-      const avatar = header.querySelector("summary") as HTMLElement;
-      const kotak = (el: HTMLElement) => el.getBoundingClientRect();
+      const kebabIkon = kebab.querySelector("svg") as SVGSVGElement;
+      const avatar = (header.querySelector("summary img") ?? header.querySelector("summary span")) as HTMLElement;
+      const kotak = (el: Element) => el.getBoundingClientRect();
       return {
         syncKanan: kotak(sync).right,
+        syncPaddingKanan: getComputedStyle(sync).paddingRight,
         kebabKiri: kotak(kebab).left,
         kebabKanan: kotak(kebab).right,
+        kebabLebar: Math.round(kotak(kebab).width),
+        kebabTinggi: Math.round(kotak(kebab).height),
+        kebabIkonKiri: kotak(kebabIkon).left,
+        kebabIkonKanan: kotak(kebabIkon).right,
         avatarKiri: kotak(avatar).left,
       };
     });
     expect(urutan.syncKanan).toBeLessThanOrEqual(urutan.kebabKiri);
     expect(urutan.kebabKanan).toBeLessThanOrEqual(urutan.avatarKiri);
-    // Jarak antar kontrol di pojok kanan topbar 8px (token spasi GCP), bukan 12px.
-    expect(Math.round(urutan.kebabKiri - urutan.syncKanan)).toBe(8);
-    expect(Math.round(urutan.avatarKiri - urutan.kebabKanan)).toBe(8);
+    // Rapat ala Cloud Console: kotak tombol kebab menempel pill (0px), dan jarak
+    // ke tinta ikon 8px di kiri-kanan. Target sentuh tetap 32x44 (di atas minimum
+    // WCAG 2.5.8 24x24), jadi rapat tanpa mengorbankan akurasi klik.
+    expect(Math.round(urutan.kebabKiri - urutan.syncKanan)).toBe(0);
+    expect(Math.round(urutan.kebabIkonKiri - urutan.syncKanan)).toBe(8);
+    expect(Math.round(urutan.avatarKiri - urutan.kebabIkonKanan)).toBe(8);
+    expect(urutan.kebabLebar).toBe(32);
+    expect(urutan.kebabTinggi).toBe(44);
+    expect(urutan.syncPaddingKanan).toBe("12px");
 
     const bukaModal = async () => {
       await page.getByRole("button", { name: "Menu lainnya" }).click();
@@ -343,7 +355,7 @@ test.describe("kerangka melayang di layar lebar", () => {
 
     // Chromium membesarkan radius pill sampai batas float, jadi cukup cek >= 9999.
     expect(Number.parseFloat(gaya.radius)).toBeGreaterThanOrEqual(9999);
-    expect(gaya.padding).toBe("6px 16px 6px 16px");
+    expect(gaya.padding).toBe("6px 12px 6px 12px");
     expect(gaya.borderWidth).toBe("1px");
     expect(gaya.borderColor).toBe("rgb(80, 99, 139)");
     expect(gaya.bg).toBe("rgba(0, 0, 0, 0)");

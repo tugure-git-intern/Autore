@@ -11,7 +11,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
 
   return (
     <details className="relative">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-[#545F72] hover:bg-white/60 dark:text-white dark:hover:bg-[#353b43]">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-1 text-[#545F72] hover:bg-white/60 dark:text-white dark:hover:bg-[#353b43]">
         {user.image ? (
           <img
             src={user.image}

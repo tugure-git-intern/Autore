@@ -65,9 +65,9 @@ export function AppearanceMenu() {
         aria-haspopup="menu"
         aria-expanded={menuTerbuka}
         onClick={() => setMenuTerbuka((buka) => !buka)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-[#545F72] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:text-white dark:hover:bg-[#353b43]"
+        className="inline-flex h-11 w-8 -mr-1 items-center justify-center rounded-md text-[#545F72] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:text-white dark:hover:bg-[#353b43]"
       >
-        <MoreVertical className="h-5 w-5" aria-hidden="true" />
+        <MoreVertical className="h-4 w-4" aria-hidden="true" />
       </button>
 
       {menuTerbuka ? (

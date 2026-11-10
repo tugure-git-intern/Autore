@@ -1,6 +1,6 @@
 [package]
 name = "autore"
-version = "0.5.9"
+version = "0.6.0"
 edition = "2021"
 description = "Autore CLI — DevSecOps & CI/CD Platform Tooling for Tugu Re IT Team"
 authors = ["tugure-git-intern <tugure.gitintern@tugu-re.com>"]

@@ -75,6 +75,15 @@ pub fn parse_gates(summary: &str) -> (u32, u32) {
 
 /// Merge satu peristiwa ke simpanan. Tidak menyentuh filesystem.
 pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
+    // Build aplikasi (rekaman.app terisi) punya jalurnya sendiri: ia tidak boleh
+    // menyentuh `latest_pipeline`/`system_status` milik pipeline Autore. Kalau
+    // boleh, kartu "Status Pipeline" berganti-ganti milik tiap aplikasi dan
+    // tampak nyangkut "Berjalan" saat aplikasi lain sedang dibangun.
+    if let Some(nama) = rekaman.app.as_deref().filter(|n| !n.is_empty()) {
+        terapkan_aplikasi(snap, rekaman, nama);
+        return;
+    }
+
     if rekaman.reset {
         snap.latest_pipeline.stages.clear();
         snap.latest_pipeline.stage_times.clear();
@@ -129,25 +138,34 @@ pub fn terapkan(snap: &mut Snapshot, rekaman: &Rekaman) {
     snap.latest_pipeline
         .raw_log
         .extend(rekaman.log.iter().cloned());
+}
 
-    // Status aplikasi: jalur yang sama dengan perekaman status supaya
-    // kartu Repository Health punya data dari build Jenkins, bukan cuma dari
-    // build yang dijalankan dashboard. Dipanggil di akhir: `commit_sha` sudah
-    // terbarui oleh blok `commit` di atas.
-    if let Some(nama) = rekaman.app.as_deref().filter(|n| !n.is_empty()) {
-        let lewat_deploy = rekaman.stage.iter().any(|t| t == crate::status::TAHAP_DEPLOY);
-        if !snap.applications.iter().any(|a| a.name == nama) {
-            snap.applications.push(Application::baru(nama));
+/// Update satu baris `applications[]` untuk build aplikasi non-Autore.
+/// `deployed` hanya pernah naik; commit diambil dari peristiwa build (jatuh ke
+/// commit baris aplikasi kalau pipeline tidak mengirim `--commit`).
+fn terapkan_aplikasi(snap: &mut Snapshot, rekaman: &Rekaman, nama: &str) {
+    let lewat_deploy = rekaman
+        .stage
+        .iter()
+        .any(|t| t == crate::status::TAHAP_DEPLOY);
+    if !snap.applications.iter().any(|a| a.name == nama) {
+        snap.applications.push(Application::baru(nama));
+    }
+    let commit = rekaman.commit.clone().unwrap_or_default();
+    if let Some(entri) = snap.applications.iter_mut().find(|a| a.name == nama) {
+        if lewat_deploy {
+            entri.deployed = true;
         }
-        if let Some(entri) = snap.applications.iter_mut().find(|a| a.name == nama) {
-            if lewat_deploy {
-                entri.deployed = true;
-            }
-            // Sama seperti perekaman standar: hanya hasil akhir yang menulis status.
-            if let Some(status) = &rekaman.status {
-                if status == "passed" || status == "failed" {
-                    entri.tuntaskan(status, &snap.latest_pipeline.commit_sha, lewat_deploy);
-                }
+        // Commit boleh datang di panggilan mana pun (biasanya yang pertama):
+        // simpan begitu ada, hasil akhir tinggal pakai yang tersimpan.
+        if !commit.is_empty() {
+            entri.commit_sha = commit;
+        }
+        // Sama seperti perekaman standar: hanya hasil akhir yang menulis status.
+        if let Some(status) = &rekaman.status {
+            if status == "passed" || status == "failed" {
+                let sha = entri.commit_sha.clone();
+                entri.tuntaskan(status, &sha, lewat_deploy);
             }
         }
     }
@@ -168,16 +186,39 @@ pub fn jalankan(rekaman: &Rekaman) -> i32 {
     }
 
     let balik = crate::status::load(&workspace);
-    if let Some(status) = &rekaman.status {
-        if &balik.latest_pipeline.status != status {
-            eprintln!("WARNING: status '{status}' tidak terbaca kembali dari simpanan");
+    // Rekaman aplikasi diverifikasi lewat barisnya sendiri, bukan lewat slot
+    // pipeline Autore (yang memang tidak disentuh).
+    if let Some(nama) = rekaman.app.as_deref().filter(|n| !n.is_empty()) {
+        let Some(baris) = balik.applications.iter().find(|a| a.name == nama) else {
+            eprintln!("WARNING: aplikasi '{nama}' tidak terbaca kembali dari simpanan");
             return 1;
+        };
+        // Hanya hasil akhir yang ditulis ke baris aplikasi; `running` tidak
+        // pernah mengklaim status, jadi tidak ada yang diverifikasi.
+        if let Some(status) = rekaman
+            .status
+            .as_deref()
+            .filter(|s| *s == "passed" || *s == "failed")
+        {
+            if baris.status != status {
+                eprintln!(
+                    "WARNING: status '{status}' aplikasi '{nama}' tidak terbaca kembali dari simpanan"
+                );
+                return 1;
+            }
         }
-    }
-    for tahap in &rekaman.stage {
-        if !balik.latest_pipeline.stages.contains(tahap) {
-            eprintln!("WARNING: tahap '{tahap}' tidak terbaca kembali dari simpanan");
-            return 1;
+    } else {
+        if let Some(status) = &rekaman.status {
+            if &balik.latest_pipeline.status != status {
+                eprintln!("WARNING: status '{status}' tidak terbaca kembali dari simpanan");
+                return 1;
+            }
+        }
+        for tahap in &rekaman.stage {
+            if !balik.latest_pipeline.stages.contains(tahap) {
+                eprintln!("WARNING: tahap '{tahap}' tidak terbaca kembali dari simpanan");
+                return 1;
+            }
         }
     }
 
@@ -185,6 +226,17 @@ pub fn jalankan(rekaman: &Rekaman) -> i32 {
         println!(
             "{}",
             crate::status::canonical(&crate::status::build(&workspace))
+        );
+    } else if let Some(nama) = rekaman.app.as_deref().filter(|n| !n.is_empty()) {
+        println!(
+            "aplikasi direkam: {}, status {}",
+            nama,
+            balik
+                .applications
+                .iter()
+                .find(|a| a.name == nama)
+                .map(|a| a.status.as_str())
+                .unwrap_or(crate::status::UNKNOWN)
         );
     } else {
         println!(
@@ -441,5 +493,77 @@ mod tests {
         );
         assert_eq!(snap.latest_pipeline.gates_total, 0);
         assert!(snap.latest_pipeline.finished_at.is_empty());
+    }
+    #[test]
+    fn rekaman_aplikasi_tidak_mengubah_kartu_status_pipeline() {
+        let mut snap = Snapshot::default();
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                status: Some("passed".to_string()),
+                commit: Some("b83318f".to_string()),
+                log: vec!["[done] build #227 SUCCESS".to_string()],
+                stage: vec!["checkout".to_string()],
+                ..rekaman()
+            },
+        );
+        let sebelum = snap.latest_pipeline.clone();
+        let system_sebelum = snap.system_status.clone();
+
+        // Build aplikasi lain (tes-web) menulis peristiwanya sendiri.
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                reset: true,
+                app: Some("tes-web".to_string()),
+                status: Some("running".to_string()),
+                commit: Some("6d0bca6".to_string()),
+                stage: vec!["checkout".to_string()],
+                ..rekaman()
+            },
+        );
+
+        assert_eq!(
+            snap.latest_pipeline.status, sebelum.status,
+            "kartu Status Pipeline tidak boleh ikut berubah karena build aplikasi"
+        );
+        assert_eq!(snap.latest_pipeline.commit_sha, sebelum.commit_sha);
+        assert_eq!(snap.latest_pipeline.raw_log, sebelum.raw_log);
+        assert_eq!(snap.latest_pipeline.stages, sebelum.stages);
+        assert_eq!(snap.system_status, system_sebelum);
+    }
+
+    #[test]
+    fn rekaman_aplikasi_menuntaskan_baris_aplikasinya_sendiri() {
+        let mut snap = Snapshot::default();
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                status: Some("passed".to_string()),
+                commit: Some("b83318f".to_string()),
+                ..rekaman()
+            },
+        );
+
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                app: Some("tes-web".to_string()),
+                status: Some("passed".to_string()),
+                commit: Some("6d0bca6".to_string()),
+                stage: vec![crate::status::TAHAP_DEPLOY.to_string()],
+                ..rekaman()
+            },
+        );
+
+        let app = snap
+            .applications
+            .iter()
+            .find(|a| a.name == "tes-web")
+            .expect("baris aplikasi dibuat");
+        assert_eq!(app.status, "passed");
+        assert_eq!(app.commit_sha, "6d0bca6");
+        assert!(app.deployed);
+        assert_eq!(snap.latest_pipeline.commit_sha, "b83318f");
     }
 }

@@ -175,17 +175,19 @@ test.describe("kerangka melayang di layar lebar", () => {
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.locator("html")).toHaveClass(/dark/);
 
-    for (const rute of ["/applications", "/audit", "/pipeline", "/security"]) {
+    for (const rute of ["/applications", "/audit", "/pipeline", "/security", "/login"]) {
       await page.goto(rute, { waitUntil: "networkidle" });
-      const bgPutih = await page.evaluate(() => {
+      const putih = await page.evaluate(() => {
         const kandidat = Array.from(
-          document.querySelectorAll("[data-testid='page-tab-header'], thead, main > div > div"),
+          document.querySelectorAll(
+            "[data-testid='page-tab-header'], thead, main, main section, table",
+          ),
         ) as HTMLElement[];
         return kandidat
           .map((el) => getComputedStyle(el).backgroundColor)
           .filter((bg) => bg === "rgb(255, 255, 255)");
       });
-      expect(bgPutih, `masih ada elemen putih nyala di ${rute}`).toEqual([]);
+      expect(putih, `masih ada elemen putih nyala di ${rute}`).toEqual([]);
     }
   });
 });

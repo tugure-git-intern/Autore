@@ -393,4 +393,21 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(bgHover).not.toBe(gaya.bg);
     expect(bgHover).not.toContain("/ 0)");
   });
+
+  test("font utama menggunakan Google Sans Flex via --font-google-sans-flex", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    const fontInfo = await page.evaluate(() => {
+      const s = getComputedStyle(document.body);
+      const root = getComputedStyle(document.documentElement);
+      return {
+        bodyFont: s.fontFamily,
+        varGoogleSans: root.getPropertyValue("--font-google-sans-flex").trim(),
+      };
+    });
+    expect(fontInfo.varGoogleSans).toContain("Google Sans Flex");
+    expect(fontInfo.bodyFont.toLowerCase()).toContain("google sans flex");
+    expect(fontInfo.bodyFont.toLowerCase()).not.toContain("inter");
+  });
 });

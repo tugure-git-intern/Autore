@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
+import "@fontsource-variable/google-sans-flex";
 import "@fontsource/jetbrains-mono/400.css";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -19,7 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const user = await currentUser();
 
   return (
-    <html lang="id" suppressHydrationWarning>
+    <html lang="id" className="[--font-google-sans-flex:'Google_Sans_Flex_Variable']" suppressHydrationWarning>
       <body className="min-h-screen bg-canvas text-ink antialiased">
         <ThemeProvider>
           <AppShell user={user}>{children}</AppShell>

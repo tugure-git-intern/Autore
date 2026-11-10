@@ -40,6 +40,7 @@ def call(Map config = [:]) {
         if (code != 0) {
             echo "WARNING: dashboard record gagal (exit ${code}): ${cmd}"
         }
+        return code
     }
 
     pipeline {
@@ -269,15 +270,21 @@ def call(Map config = [:]) {
                 script {
                     // Hasil akhir: `passed` atau `failed` + sebabnya. Tahap gagal dicatat sejak stage 1.
                     def verified = sh(script: 'cat .verified-image-digest 2>/dev/null || true', returnStdout: true).trim()
+                    // Jejak eksplisit: blok ini yang menutup status pipeline di dashboard.
+                    // Tanpa baris ini, status "running" yang nyangkut tidak bisa dibedakan
+                    // antara blok tak jalan dan penulisan yang gagal (record = best-effort).
+                    echo "POST-ALWAYS: result=${currentBuild.currentResult}, digest=${verified ?: '(kosong)'}, stage-gagal=${env.FAILED_STAGE ?: '-'}"
+                    def kode
                     if (currentBuild.currentResult == 'SUCCESS') {
-                        record(status: 'passed',
-                               summary: "9/9 gerbang lolos · digest ${verified}".toString(),
-                               logs: ["[done] build #${BUILD_NUMBER} SUCCESS".toString()])
+                        kode = record(status: 'passed',
+                                      summary: "9/9 gerbang lolos · digest ${verified}".toString(),
+                                      logs: ["[done] build #${BUILD_NUMBER} SUCCESS".toString()])
                     } else {
-                        record(status: 'failed',
-                               message: "Gagal di tahap: ${env.FAILED_STAGE ?: 'tidak diketahui'}".toString(),
-                               logs: ["[done] build #${BUILD_NUMBER} ${currentBuild.currentResult}".toString()])
+                        kode = record(status: 'failed',
+                                      message: "Gagal di tahap: ${env.FAILED_STAGE ?: 'tidak diketahui'}".toString(),
+                                      logs: ["[done] build #${BUILD_NUMBER} ${currentBuild.currentResult}".toString()])
                     }
+                    echo "POST-ALWAYS: record status akhir ditulis, exit=${kode}"
                 }
                 withCredentials([string(credentialsId: telegramCreds, variable: 'TELEGRAM_BOT_TOKEN')]) {
                     sh """

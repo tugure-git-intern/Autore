@@ -90,4 +90,36 @@ describe("Sidebar", () => {
     expect(nonAktif.className).toContain("dark:text-white");
     expect(nonAktif.className).toContain("dark:hover:bg-[#353b43]");
   });
+  it("menampilkan indikator status Server Online dan versi di pojok bawah", () => {
+    render(<Sidebar />);
+
+    const footer = screen.getByTestId("sidebar-footer");
+    expect(footer.className).toContain("flex items-center justify-between");
+    expect(footer.className).toContain("px-4 py-3");
+    expect(footer.className).toContain("border-t");
+    expect(footer.className).toContain("border-gray-200");
+    expect(footer.className).toContain("dark:border-[#50638b]");
+
+    // Titik hijau animate-pulse
+    const dot = screen.getByTestId("server-online-dot");
+    expect(dot.className).toContain("w-2.5");
+    expect(dot.className).toContain("h-2.5");
+    expect(dot.className).toContain("rounded-full");
+    expect(dot.className).toContain("bg-green-500");
+    expect(dot.className).toContain("animate-pulse");
+
+    // Teks Server Online
+    const statusText = screen.getByText("Server Online");
+    expect(statusText.className).toContain("text-sm");
+    expect(statusText.className).toContain("font-medium");
+    expect(statusText.className).toContain("text-gray-900");
+    expect(statusText.className).toContain("dark:text-white");
+
+    // Teks Versi
+    const versionText = screen.getByText("v0.5.9");
+    expect(versionText.className).toContain("text-xs");
+    expect(versionText.className).toContain("font-mono");
+    expect(versionText.className).toMatch(/text-gray-[56]00/);
+    expect(versionText.className).toContain("dark:text-gray-400");
+  });
 });

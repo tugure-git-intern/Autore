@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-
 import { usePathname } from "next/navigation";
 import { isActiveHref, navItems } from "./nav-items";
+
+const VERSI_AUTORE = "v0.5.9";
 
 export function Sidebar() {
   const pathname = usePathname() ?? "/";
@@ -32,7 +33,7 @@ export function Sidebar() {
           <p className="text-xs text-muted dark:text-[#c9d1d9]">CI/CD Workspace</p>
         </div>
       </div>
-      <nav aria-label="Navigasi utama" className="flex flex-col gap-0.5 px-3 py-4">
+      <nav aria-label="Navigasi utama" className="flex flex-1 flex-col gap-0.5 px-3 py-4">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
@@ -52,6 +53,26 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Indikator status di pojok bawah: Server Online di kiri, versi di kanan */}
+      <div
+        data-testid="sidebar-footer"
+        className="mt-auto flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-[#50638b]"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            data-testid="server-online-dot"
+            className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"
+          />
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            Server Online
+          </span>
+        </div>
+        <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
+          {VERSI_AUTORE}
+        </span>
+      </div>
     </aside>
   );
 }

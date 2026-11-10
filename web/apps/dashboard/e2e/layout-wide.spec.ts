@@ -563,4 +563,53 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(statusReload.hasDarkClass).toBe(true);
     expect(statusReload.bg).toBe("rgb(53, 59, 67)");
   });
+
+  test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi v0.5.9 di kanan", async ({
+    page,
+    context,
+  }) => {
+    // 1. Uji di Light Mode
+    await page.goto("/");
+    const footer = page.getByTestId("sidebar-footer");
+    await expect(footer).toBeVisible();
+
+    const dot = page.getByTestId("server-online-dot");
+    await expect(dot).toBeVisible();
+    await expect(dot).toHaveClass(/bg-green-500/);
+    await expect(dot).toHaveCSS("background-color", /oklch\(0\.723|rgb\(34, 197, 94\)/);
+
+    const textOnline = footer.getByText("Server Online");
+    await expect(textOnline).toBeVisible();
+    await expect(textOnline).toHaveClass(/text-gray-900/);
+
+    const textVersi = footer.getByText("v0.5.9");
+    await expect(textVersi).toBeVisible();
+    await expect(textVersi).toHaveClass(/text-gray-[56]00/);
+    await expect(footer).toHaveClass(/border-gray-200/);
+
+    // Posisi flexbox: Server Online di kiri, versi di kanan
+    const boxDot = await dot.boundingBox();
+    const boxVersi = await textVersi.boundingBox();
+    expect(boxDot).not.toBeNull();
+    expect(boxVersi).not.toBeNull();
+    expect(boxDot!.x).toBeLessThan(boxVersi!.x);
+
+    // 2. Uji di Dark Mode
+    await context.addCookies([
+      {
+        name: "autore-theme",
+        value: "dark",
+        domain: "100.80.3.14",
+        path: "/",
+      },
+    ]);
+    await context.addInitScript(() => {
+      localStorage.setItem("autore-theme", "dark");
+    });
+    await page.reload();
+
+    await expect(textOnline).toHaveCSS("color", "rgb(255, 255, 255)"); // dark:text-white
+    await expect(textVersi).toHaveCSS("color", /oklch\(0\.707|rgb\(156, 163, 175\)/); // dark:text-gray-400
+    await expect(footer).toHaveCSS("border-top-color", "rgb(80, 99, 139)"); // dark:border-[#50638b]
+  });
 });

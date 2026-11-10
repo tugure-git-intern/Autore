@@ -1,6 +1,27 @@
 @import "tailwindcss";
 
-/* Light-only operational tokens. No dark alternatives exist by design. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg-sidebar: #F0F5FE;
+  --bg-canvas: #ffffff;
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-line: #e5e7eb;
+  --color-ink: #111827;
+  --color-muted: #4b5563;
+}
+
+.dark {
+  --bg-sidebar: #282c32;
+  --bg-canvas: #353b43;
+  --color-canvas: #353b43;
+  --color-surface: #353b43;
+  --color-line: #50638b;
+  --color-ink: #ffffff;
+  --color-muted: #c9d1d9;
+}
+
 @theme {
   --color-canvas: #fafafa;
   --color-surface: #ffffff;

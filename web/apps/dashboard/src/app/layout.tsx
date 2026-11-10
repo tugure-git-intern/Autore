@@ -4,6 +4,7 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/jetbrains-mono/400.css";
 import { AppShell } from "@/components/app-shell";
+import { ThemeProvider } from "@/components/theme-provider";
 import { currentUser } from "@/lib/current-user";
 import "./globals.css";
 
@@ -18,9 +19,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const user = await currentUser();
 
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
       <body className="min-h-screen bg-canvas text-ink antialiased">
-        <AppShell user={user}>{children}</AppShell>
+        <ThemeProvider>
+          <AppShell user={user}>{children}</AppShell>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { usePathname } from "next/navigation";
 import { isActiveHref, navItems } from "./nav-items";
 
@@ -32,7 +34,7 @@ export function NavBawah() {
         {navItems.map(({ href, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
-            <a
+            <Link
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
@@ -44,7 +46,7 @@ export function NavBawah() {
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
               {LABEL_PENDEK[href]}
-            </a>
+            </Link>
           );
         })}
       </div>

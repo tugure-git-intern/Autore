@@ -96,9 +96,26 @@ html.dark.high-contrast {
   }
 }
 
+html {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+html.dark {
+  background-color: var(--bg-canvas);
+  color: var(--color-ink);
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  html.dark {
+    background-color: var(--bg-canvas);
+    color: var(--color-ink);
   }
 
   body {

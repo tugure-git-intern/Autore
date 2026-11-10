@@ -410,4 +410,59 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(fontInfo.bodyFont.toLowerCase()).toContain("google sans flex");
     expect(fontInfo.bodyFont.toLowerCase()).not.toContain("inter");
   });
+
+  test("navigasi sidebar di Dark Mode bebas FOUC: html dan body tetap berlatar gelap tanpa reload dokumen", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      localStorage.setItem("autore-theme", "dark");
+      document.documentElement.classList.add("dark");
+    });
+
+    const bgAwal = await page.evaluate(() => ({
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
+    }));
+    expect(bgAwal.html).toBe("rgb(53, 59, 67)");
+    expect(bgAwal.body).toBe("rgb(53, 59, 67)");
+
+    await page.evaluate(() => {
+      (window as unknown as { __spa_marker?: string }).__spa_marker = "AUTORE_STILL_ALIVE";
+    });
+
+    const linkAplikasi = page.locator("aside").getByRole("link", { name: "Daftar Aplikasi" });
+    await linkAplikasi.click();
+    await page.waitForURL("**/applications");
+
+    const marker = await page.evaluate(
+      () => (window as unknown as { __spa_marker?: string }).__spa_marker,
+    );
+    expect(marker).toBe("AUTORE_STILL_ALIVE");
+
+    const bgSetelah = await page.evaluate(() => ({
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
+    }));
+    expect(bgSetelah.html).toBe("rgb(53, 59, 67)");
+    expect(bgSetelah.body).toBe("rgb(53, 59, 67)");
+
+    // Jelajah menu lain di sidebar: background body tidak boleh berkedip putih
+    for (const [nama, ruteTarget] of [
+      ["Pipeline & Log", "/pipeline"],
+      ["Keamanan", "/security"],
+      ["Audit Log", "/audit"],
+      ["Dashboard", "/"],
+    ] as const) {
+      await page.locator("aside").getByRole("link", { name: nama }).click();
+      await page.waitForURL(`**${ruteTarget}`);
+      const bg = await page.evaluate(() => ({
+        body: getComputedStyle(document.body).backgroundColor,
+        html: getComputedStyle(document.documentElement).backgroundColor,
+      }));
+      expect(bg.body).toBe("rgb(53, 59, 67)");
+      expect(bg.html).toBe("rgb(53, 59, 67)");
+    }
+  });
 });

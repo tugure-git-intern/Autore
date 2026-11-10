@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { usePathname } from "next/navigation";
 import { isActiveHref, navItems } from "./nav-items";
 
@@ -34,7 +36,7 @@ export function Sidebar() {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
-            <a
+            <Link
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
@@ -46,7 +48,7 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
               {label}
-            </a>
+            </Link>
           );
         })}
       </nav>

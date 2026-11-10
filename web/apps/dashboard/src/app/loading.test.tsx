@@ -10,4 +10,10 @@ describe("Global loading skeleton (loading.tsx)", () => {
     expect(status).toBeInTheDocument();
     expect(screen.getByText(/Memuat data dashboard/i)).toBeInTheDocument();
   });
+
+  it("tidak memiliki class bg-white agar bebas FOUC dan otomatis mengikuti tema", () => {
+    const { container } = render(<Loading />);
+    const putih = container.querySelectorAll(".bg-white");
+    expect(putih).toHaveLength(0);
+  });
 });

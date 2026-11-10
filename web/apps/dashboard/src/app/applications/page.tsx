@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState } from "react";
 import { AlertTriangle, Layers } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
@@ -47,12 +49,12 @@ function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void
 
   return (
     <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex items-center gap-3"}>
-      <a href={`/pipeline?app=${encodeURIComponent(app)}`} className={kelasTautan}>
+      <Link href={`/pipeline?app=${encodeURIComponent(app)}`} className={kelasTautan}>
         Detail
-      </a>
-      <a href={`/applications/sbom?app=${encodeURIComponent(app)}`} className={kelasTautan}>
+      </Link>
+      <Link href={`/applications/sbom?app=${encodeURIComponent(app)}`} className={kelasTautan}>
         Lihat SBOM
-      </a>
+      </Link>
       <ActionButton label="Scan Keamanan" action="scan" app={app} onDone={onDone} />
     </div>
   );

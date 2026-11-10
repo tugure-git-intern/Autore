@@ -17,7 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const user = await currentUser();
 
   return (
-    <html lang="id" className="[--font-google-sans-flex:'Google_Sans_Flex_Variable']" suppressHydrationWarning>
+    <html lang="id" className="[--font-google-sans-flex:'Google_Sans_Flex_Variable'] bg-canvas text-ink" suppressHydrationWarning>
       <body className="min-h-screen bg-canvas text-ink antialiased">
         <ThemeProvider>
           <AppShell user={user}>{children}</AppShell>

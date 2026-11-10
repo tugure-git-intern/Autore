@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Suspense, useState } from "react";
 import { AlertTriangle, Search, Workflow } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -83,9 +85,9 @@ function PipelineSplit() {
           <p className="font-medium text-ink">{`Aplikasi "${appId}" tidak ditemukan.`}</p>
           <p className="mt-1 text-sm text-muted">
             Pilih aplikasi dari daftar di samping, atau buka halaman{" "}
-            <a href="/applications" className="text-blue-600 hover:underline dark:text-blue-300">
+            <Link href="/applications" className="text-blue-600 hover:underline dark:text-blue-300">
               Aplikasi
-            </a>
+            </Link>
             .
           </p>
         </Card>

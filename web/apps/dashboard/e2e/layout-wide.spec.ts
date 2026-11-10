@@ -465,4 +465,31 @@ test.describe("kerangka melayang di layar lebar", () => {
       expect(bg.html).toBe("rgb(53, 59, 67)");
     }
   });
+
+  test("hard refresh di Dark Mode bebas FOUC via critical inline CSS di head", async ({
+    page,
+    context,
+  }) => {
+    await context.addInitScript(() => {
+      localStorage.setItem("autore-theme", "dark");
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    // 1. Critical inline style harus ada di head dengan aturan html.dark
+    const inlineStyle = await page.evaluate(() => {
+      const el = document.querySelector("head style");
+      return el ? el.textContent : "";
+    });
+    expect(inlineStyle).toContain("html.dark");
+    expect(inlineStyle).toContain("#353b43");
+    expect(inlineStyle).toContain("color-scheme: dark");
+
+    // 2. documentElement harus sudah berlatar #353b43 (bukan putih rgb(255, 255, 255))
+    const bgHtml = await page.evaluate(
+      () => getComputedStyle(document.documentElement).backgroundColor,
+    );
+    expect(bgHtml).toBe("rgb(53, 59, 67)");
+    expect(bgHtml).not.toBe("rgb(255, 255, 255)");
+  });
 });

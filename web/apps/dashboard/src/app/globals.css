@@ -59,12 +59,14 @@
     background-color: transparent;
   }
 
+  /* #3a3d41 terlalu dekat dengan kanvas #353b43 (nyaris tak terlihat), jadi thumb
+     gelap dinaikkan ke abu-biru netral yang masih tenang di mata. */
   .dark *::-webkit-scrollbar-thumb {
-    background-color: #3a3d41;
+    background-color: #5a6270;
   }
 
   .dark *::-webkit-scrollbar-thumb:hover {
-    background-color: #4a4e54;
+    background-color: #6b7381;
   }
 
   @supports not selector(::-webkit-scrollbar) {
@@ -74,7 +76,7 @@
     }
 
     .dark * {
-      scrollbar-color: #3a3d41 transparent;
+      scrollbar-color: #5a6270 transparent;
     }
   }
 }

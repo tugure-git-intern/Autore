@@ -252,7 +252,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     const gelap = await ukur();
     expect(gelap.lebarPseudo).toBe("8px");
     expect(gelap.adaFallbackFirefox).toBe(true);
-    expect(gelap.thumb.find((t) => t.sel.includes(".dark"))?.bg).toBe("rgb(58, 61, 65)");
+    expect(gelap.thumb.find((t) => t.sel.includes(".dark"))?.bg).toBe("rgb(90, 98, 112)");
     expect(gelap.track.every((t) => t.bg === "transparent" || t.bg === "rgba(0, 0, 0, 0)")).toBe(true);
   });
 });

@@ -72,7 +72,7 @@ export function Navbar({
             <>
               <span aria-hidden="true" className="h-4 w-px shrink-0 bg-gray-300" />
               <p className="truncate text-sm font-semibold tracking-tight text-[#545F72]">
-                <span className="font-normal text-[#545F72]/80">Autore / </span>
+                <span className="font-normal text-[#545F72]">Autore / </span>
                 {title}
               </p>
             </>
@@ -84,7 +84,7 @@ export function Navbar({
             onClick={onSync}
             disabled={refreshing}
             aria-busy={refreshing ? "true" : undefined}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-300/80 bg-white/80 px-3 py-2 text-sm font-medium text-[#545F72] transition-colors hover:bg-white hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-300/80 bg-white/80 px-3 py-2 text-sm font-medium text-[#545F72] transition-colors hover:bg-white hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw
               className={refreshing ? "h-4 w-4 motion-safe:animate-spin text-[#545F72]" : "h-4 w-4 text-[#545F72]"}

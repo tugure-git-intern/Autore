@@ -39,7 +39,7 @@ export function ApplicationsFilter({
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Cari aplikasi..."
           aria-label="Cari aplikasi"
-          className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+          className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
         />
       </div>
 
@@ -48,7 +48,7 @@ export function ApplicationsFilter({
           value={status}
           onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
           aria-label="Status"
-          className="h-9 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
+          className="h-9 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
         >
           {OPSI.map((opsi) => (
             <option key={opsi.value} value={opsi.value}>

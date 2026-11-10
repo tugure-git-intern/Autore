@@ -35,7 +35,7 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Cari library..."
             aria-label="Cari library"
-            className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+            className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
           />
         </div>
         <p className="text-sm text-gray-500">

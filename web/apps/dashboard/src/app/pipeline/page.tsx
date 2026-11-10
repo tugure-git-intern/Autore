@@ -121,7 +121,7 @@ function PipelineSplit() {
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Cari aplikasi..."
                       aria-label="Cari aplikasi"
-                      className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                      className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
                     />
                   </div>
                   <Card className="max-h-[calc(100vh-15rem)] overflow-y-auto p-1">

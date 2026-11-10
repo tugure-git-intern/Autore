@@ -218,9 +218,9 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   if (TANPA_KERANGKA.has(pathname)) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen bg-[#F0F5FE] lg:h-screen lg:overflow-hidden">
+    <div className="flex min-h-screen bg-[#F0F5FE] dark:bg-[#282c32] lg:h-screen lg:overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] lg:overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] dark:bg-[#282c32] lg:overflow-hidden">
         <Navbar
           title={routeTitle(pathname)}
           connection={connectionStatus(status.state, status.loading, status.failed)}
@@ -234,7 +234,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
             sudut rounded-nya tidak pernah naik ketiban topbar.
             lg:ml-[274px] = 12px jarak + 250px sidebar + 12px celah. lg:w-auto wajib:
             w-full menang atas margin, jadi tanpa itu marginnya tidak menyusutkan lebar. */}
-        <main className="w-full flex-1 bg-white lg:mt-3 lg:mb-3 lg:ml-[274px] lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200">
+        <main className="w-full flex-1 bg-white dark:bg-[#353b43] dark:text-white lg:mt-3 lg:mb-3 lg:ml-[274px] lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200 dark:lg:border-[#50638b]">
           <div className="mx-auto w-full max-w-[1440px] px-3 pt-4 pb-24 sm:px-6 sm:pt-6">{children}</div>
         </main>
       </div>

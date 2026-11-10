@@ -72,4 +72,15 @@ describe("NavBawah", () => {
     expect(nonAktif.className).toContain("text-[#545F72]");
     expect(nonAktif.className).not.toContain("text-muted");
   });
+
+  it("mendukung palet dark mode #282c32, border #50638b, dan teks #ffffff", () => {
+    nav.pathname = "/pipeline";
+    render(<NavBawah />);
+    const bar = screen.getByRole("navigation", { name: "Navigasi bawah" });
+    expect(bar.className).toContain("dark:bg-[#282c32]");
+    expect(bar.className).toContain("dark:border-[#50638b]");
+
+    const nonAktif = screen.getByRole("link", { name: "Keamanan" });
+    expect(nonAktif.className).toContain("dark:text-white");
+  });
 });

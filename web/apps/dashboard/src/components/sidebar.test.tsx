@@ -79,4 +79,15 @@ describe("Sidebar", () => {
     expect(nonAktif.className).toContain("text-[#545F72]");
     expect(nonAktif.className).not.toContain("text-muted");
   });
+
+  it("mendukung palet dark mode #282c32 untuk latar sidebar dan #ffffff untuk teks non-aktif", () => {
+    const { container } = render(<Sidebar />);
+    const aside = container.querySelector("aside") as HTMLElement;
+    expect(aside.className).toContain("bg-[#F0F5FE]");
+    expect(aside.className).toContain("dark:bg-[#282c32]");
+
+    const nonAktif = screen.getByRole("link", { name: /daftar aplikasi/i });
+    expect(nonAktif.className).toContain("dark:text-white");
+    expect(nonAktif.className).toContain("dark:hover:bg-[#353b43]");
+  });
 });

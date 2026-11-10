@@ -7,7 +7,7 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl bg-[#F0F5FE] lg:flex">
+    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl bg-[#F0F5FE] dark:bg-[#282c32] lg:flex">
       {/* Blok logo setinggi topbar (64px). Bingkainya memakai chrome yang sama
           dengan latar utama dan tampil tanpa border maupun bayangan: tidak ada
           gradasi tepi yang terbaca sebagai sekat vertikal. Jarak 12px dari tepi
@@ -26,8 +26,8 @@ export function Sidebar() {
           className="h-10 w-auto shrink-0 object-contain"
         />
         <div className="min-w-0">
-          <p className="text-sm font-semibold tracking-tight text-ink">Autore</p>
-          <p className="text-xs text-muted">CI/CD Workspace</p>
+          <p className="text-sm font-semibold tracking-tight text-ink dark:text-white">Autore</p>
+          <p className="text-xs text-muted dark:text-[#c9d1d9]">CI/CD Workspace</p>
         </div>
       </div>
       <nav aria-label="Navigasi utama" className="flex flex-col gap-0.5 px-3 py-4">
@@ -40,8 +40,8 @@ export function Sidebar() {
               aria-current={active ? "page" : undefined}
               className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
                 active
-                  ? "bg-green-100 font-medium text-green-700"
-                  : "text-[#545F72] hover:bg-white/60 hover:text-gray-900"
+                  ? "bg-green-100 font-medium text-green-700 dark:bg-green-950/60 dark:text-green-300"
+                  : "text-[#545F72] hover:bg-white/60 hover:text-gray-900 dark:text-white dark:hover:bg-[#353b43] dark:hover:text-white"
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />

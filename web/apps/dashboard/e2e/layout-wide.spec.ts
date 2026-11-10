@@ -255,4 +255,41 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(gelap.thumb.find((t) => t.sel.includes(".dark"))?.bg).toBe("rgb(90, 98, 112)");
     expect(gelap.track.every((t) => t.bg === "transparent" || t.bg === "rgba(0, 0, 0, 0)")).toBe(true);
   });
+
+  test("tombol Sync berbentuk kapsul: rounded-full, border #50638b, latar transparan", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    const sync = page.getByRole("button", { name: "Sync" });
+    await expect(sync).toBeVisible();
+
+    const gaya = await sync.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        radius: s.borderRadius,
+        padding: `${s.paddingTop} ${s.paddingRight} ${s.paddingBottom} ${s.paddingLeft}`,
+        borderWidth: s.borderTopWidth,
+        borderColor: s.borderTopColor,
+        bg: s.backgroundColor,
+        fontSize: s.fontSize,
+        fontWeight: s.fontWeight,
+      };
+    });
+
+    // Chromium membesarkan radius pill sampai batas float, jadi cukup cek >= 9999.
+    expect(Number.parseFloat(gaya.radius)).toBeGreaterThanOrEqual(9999);
+    expect(gaya.padding).toBe("6px 16px 6px 16px");
+    expect(gaya.borderWidth).toBe("1px");
+    expect(gaya.borderColor).toBe("rgb(80, 99, 139)");
+    expect(gaya.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(gaya.fontSize).toBe("14px");
+    expect(gaya.fontWeight).toBe("500");
+
+    // Tailwind v4 mencampur warna lewat oklab, jadi hasilnya bukan string rgb();
+    // yang penting latar hover benar-benar berubah dari transparan.
+    await sync.hover();
+    const bgHover = await sync.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bgHover).not.toBe(gaya.bg);
+    expect(bgHover).not.toContain("/ 0)");
+  });
 });

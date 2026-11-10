@@ -86,7 +86,7 @@ export function Navbar({
             onClick={onSync}
             disabled={refreshing}
             aria-busy={refreshing ? "true" : undefined}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-300/80 bg-white/80 px-3 py-2 text-sm font-medium text-[#545F72] transition-colors hover:bg-white hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#50638b] dark:bg-[#353b43] dark:text-white dark:hover:bg-[#3d444d] dark:hover:text-white"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#50638b] bg-transparent px-4 py-1.5 text-sm font-medium text-[#545F72] transition-colors hover:bg-white/10 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white dark:hover:text-white"
           >
             <RefreshCw
               className={

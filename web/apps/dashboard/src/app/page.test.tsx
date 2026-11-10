@@ -24,7 +24,7 @@ test("renders Autore Dashboard heading", () => {
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
 });
 
-test("the topbar carries the connection indicator and never repeats the H1 word", () => {
+test("topbar never repeats the H1 or product name and carries no second connection indicator", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
   render(
@@ -35,9 +35,10 @@ test("the topbar carries the connection indicator and never repeats the H1 word"
 
   const banner = within(screen.getByRole("banner"));
 
-  // Root route punya indikator koneksi di kiri, bukan judul: nama produk ada di
-  // sidebar dan "Dashboard" adalah H1 — topbar tidak mengulang keduanya.
-  expect(banner.getByRole("status")).toBeVisible();
+  // Indikator "Server Online" hanya ada di footer sidebar. Root route tidak punya
+  // judul breadcrumb karena nama produk sudah di sidebar dan "Dashboard" adalah H1.
+  expect(banner.queryByRole("status")).toBeNull();
+  expect(banner.queryByText("Terhubung")).toBeNull();
   expect(banner.queryByRole("heading")).toBeNull();
   expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
   expect(banner.queryByText("Autore", { selector: "p" })).toBeNull();

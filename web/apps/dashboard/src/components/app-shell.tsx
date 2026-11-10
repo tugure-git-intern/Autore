@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
 import { fetchDashboardStatus } from "@/lib/status-client";
-import { connectionStatus, Navbar } from "./navbar";
+import { Navbar } from "./navbar";
 import { NavBawah } from "./nav-bawah";
 import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
@@ -223,7 +223,6 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
       <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] dark:bg-[#282c32] lg:overflow-hidden">
         <Navbar
           title={routeTitle(pathname)}
-          connection={connectionStatus(status.state, status.loading, status.failed)}
           onSync={status.sync}
           refreshing={status.refreshing}
           user={user}

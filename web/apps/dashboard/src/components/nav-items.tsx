@@ -16,8 +16,8 @@ export function isActiveHref(pathname: string, href: string): boolean {
 
 /**
  * Topbar context, from the same table as the sidebar active rule. The root has
- * no section of its own, so the topbar there carries only the connection
- * indicator — the product name already sits in the sidebar brand block.
+ * no section of its own, so it returns null: the product name already sits in
+ * the sidebar brand block and the H1 already says "Dashboard".
  */
 export function routeTitle(pathname: string): string | null {
   const section = navItems.find(({ href }) => href !== "/" && isActiveHref(pathname, href));

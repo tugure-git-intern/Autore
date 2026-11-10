@@ -190,4 +190,69 @@ test.describe("kerangka melayang di layar lebar", () => {
       expect(putih, `masih ada elemen putih nyala di ${rute}`).toEqual([]);
     }
   });
+
+  test("scrollbar global tipis 8px, track transparan, thumb abu terang/gelap", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // Scrollbar overlay di Chromium headless tidak memakan lebar kotak, jadi lebar
+    // 8px diverifikasi dari aturan ::-webkit-scrollbar yang benar-benar diparse
+    // browser, bukan dari offsetWidth.
+    const ukur = async () =>
+      page.evaluate(() => {
+        const thumb: { sel: string; bg: string; radius: string }[] = [];
+        const track: { sel: string; bg: string }[] = [];
+        let lebarPseudo = "";
+        let adaFallbackFirefox = false;
+
+        // Aturan bisa terkubur di @layer/@supports, jadi turun rekursif.
+        const jelajah = (rules: CSSRuleList) => {
+          for (const rule of Array.from(rules)) {
+            const r = rule as CSSStyleRule & { cssRules?: CSSRuleList };
+            if (r.selectorText?.includes("::-webkit-scrollbar")) {
+              const sel = r.selectorText;
+              if (/::-webkit-scrollbar$/.test(sel)) lebarPseudo = r.style.width;
+              if (sel.includes("::-webkit-scrollbar-thumb")) {
+                thumb.push({ sel, bg: r.style.backgroundColor, radius: r.style.borderRadius });
+              }
+              if (sel.includes("::-webkit-scrollbar-track")) {
+                track.push({ sel, bg: r.style.backgroundColor });
+              }
+            }
+            if (r.cssRules) jelajah(r.cssRules);
+          }
+        };
+
+        for (const sheet of Array.from(document.styleSheets)) {
+          let rules: CSSRuleList;
+          let teks = "";
+          try {
+            rules = sheet.cssRules;
+            teks = Array.from(rules).map((r) => r.cssText).join("");
+          } catch {
+            continue;
+          }
+          if (teks.includes("scrollbar-width: thin")) adaFallbackFirefox = true;
+          jelajah(rules);
+        }
+        return { lebarPseudo, adaFallbackFirefox, thumb, track };
+      });
+
+    const terang = await ukur();
+    expect(terang.lebarPseudo).toBe("8px");
+    expect(terang.adaFallbackFirefox).toBe(true);
+    expect(terang.thumb.find((t) => !t.sel.includes(".dark"))?.bg).toBe("rgb(204, 204, 204)");
+    expect(terang.thumb.find((t) => !t.sel.includes(".dark"))?.radius).not.toBe("");
+    expect(terang.track.every((t) => t.bg === "transparent" || t.bg === "rgba(0, 0, 0, 0)")).toBe(true);
+
+    await page.evaluate(() => window.localStorage.setItem("autore-theme", "dark"));
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    const gelap = await ukur();
+    expect(gelap.lebarPseudo).toBe("8px");
+    expect(gelap.adaFallbackFirefox).toBe(true);
+    expect(gelap.thumb.find((t) => t.sel.includes(".dark"))?.bg).toBe("rgb(58, 61, 65)");
+    expect(gelap.track.every((t) => t.bg === "transparent" || t.bg === "rgba(0, 0, 0, 0)")).toBe(true);
+  });
 });

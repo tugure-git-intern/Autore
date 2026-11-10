@@ -29,6 +29,56 @@
   color-scheme: dark;
 }
 
+/**
+ * Scrollbar tipis ala Google Cloud Console: lebar 8px, track transparan supaya
+ * menyatu dengan kanvas, thumb abu netral membulat penuh. Chrome/Edge/Safari
+ * memakai pseudo ::-webkit-scrollbar; Firefox hanya paham properti standar, jadi
+ * fallback-nya dikurung @supports agar Chromium tidak mengabaikan aturan webkit
+ * (menurut spesifikasi, scrollbar-width/scrollbar-color mematikan styling pseudo).
+ */
+@layer base {
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #cccccc;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #b0b0b0;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: #3a3d41;
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background-color: #4a4e54;
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #cccccc transparent;
+    }
+
+    .dark * {
+      scrollbar-color: #3a3d41 transparent;
+    }
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

@@ -19,7 +19,7 @@ export default defineConfig({
   // /login, karena satu-satunya cara masuk adalah OAuth GitHub.
   globalSetup: "./e2e/global-setup.ts",
   use: {
-    baseURL: "http://127.0.0.1:9120",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://100.80.3.14:9120",
     viewport: { width: 1280, height: 720 },
     storageState: "./e2e/.auth/state.json",
     // Host workaround, harmless on a normal box:

@@ -137,4 +137,42 @@ test.describe("kerangka melayang di layar lebar", () => {
     // Tepi atas kartu konten tetap renggang 12px di bawah topbar.
     expect(hasil.mainTop).toBe(hasil.headerBottom + 12);
   });
+
+  test("tombol ThemeToggle mengubah ke Dark Mode (#282c32, #353b43, #ffffff, #50638b) dan bertahan saat reload", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const toggle = page.getByTestId("theme-toggle");
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    const stored = await page.evaluate(() => window.localStorage.getItem("autore-theme"));
+    expect(stored).toBe("dark");
+
+    const warnaDark = await page.evaluate(() => {
+      const aside = document.querySelector("aside") as HTMLElement;
+      const header = document.querySelector("header") as HTMLElement;
+      const main = document.querySelector("main") as HTMLElement;
+      const h1 = document.querySelector("h1") as HTMLElement;
+      return {
+        sidebarBg: getComputedStyle(aside).backgroundColor,
+        navbarBg: getComputedStyle(header).backgroundColor,
+        mainBg: getComputedStyle(main).backgroundColor,
+        mainBorder: getComputedStyle(main).borderTopColor,
+        h1Color: getComputedStyle(h1).color,
+      };
+    });
+
+    expect(warnaDark.sidebarBg).toBe("rgb(40, 44, 50)");
+    expect(warnaDark.navbarBg).toBe("rgb(40, 44, 50)");
+    expect(warnaDark.mainBg).toBe("rgb(53, 59, 67)");
+    expect(warnaDark.mainBorder).toBe("rgb(80, 99, 139)");
+    expect(warnaDark.h1Color).toBe("rgb(255, 255, 255)");
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/dark/);
+  });
 });

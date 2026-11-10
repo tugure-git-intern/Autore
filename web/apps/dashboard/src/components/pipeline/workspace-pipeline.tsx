@@ -58,7 +58,7 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
           aria-labelledby="pipeline-log-title"
           className="mt-4 rounded-md border border-gray-200 bg-gray-50"
         >
-          <pre className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink">
+          <pre tabIndex={0} className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
             {pipeline.raw_log.length === 0
               ? "Belum ada log."
               : pipeline.raw_log.map((line, index) => (

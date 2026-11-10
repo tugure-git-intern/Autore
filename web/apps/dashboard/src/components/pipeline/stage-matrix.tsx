@@ -69,7 +69,8 @@ export function StageMatrix({
   return (
     <ol
       aria-label="Tahapan pipeline"
-      className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:overflow-x-auto pb-2"
+      tabIndex={0}
+      className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:overflow-x-auto pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
     >
       {isi.map((tahap, urutan) => (
         <li key={`${tahap.id}-${urutan}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">

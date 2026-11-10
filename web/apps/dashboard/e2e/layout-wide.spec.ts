@@ -165,6 +165,9 @@ test.describe("kerangka melayang di layar lebar", () => {
     });
     expect(urutan.syncKanan).toBeLessThanOrEqual(urutan.kebabKiri);
     expect(urutan.kebabKanan).toBeLessThanOrEqual(urutan.avatarKiri);
+    // Jarak antar kontrol di pojok kanan topbar 8px (token spasi GCP), bukan 12px.
+    expect(Math.round(urutan.kebabKiri - urutan.syncKanan)).toBe(8);
+    expect(Math.round(urutan.avatarKiri - urutan.kebabKanan)).toBe(8);
 
     const bukaModal = async () => {
       await page.getByRole("button", { name: "Menu lainnya" }).click();

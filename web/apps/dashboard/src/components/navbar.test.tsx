@@ -313,16 +313,16 @@ describe("Navbar", () => {
     expect(diam.querySelector("svg")?.getAttribute("class")).not.toContain("animate-spin");
   });
 
-  it("menaruh tombol ThemeToggle tepat di sebelah kiri tombol Sync dan mendukung palet dark #282c32", () => {
+  it("menaruh menu kebab di kanan avatar, tanpa toggle tema lama, dan mendukung palet dark #282c32", () => {
     const { container } = renderNavbar(USER);
     const header = container.querySelector("header") as HTMLElement;
     expect(header.className).toContain("bg-[#F0F5FE]");
     expect(header.className).toContain("dark:bg-[#282c32]");
 
-    const toggleBtn = screen.getByTestId("theme-toggle");
-    const syncBtn = screen.getByRole("button", { name: "Sync" });
-    expect(toggleBtn.compareDocumentPosition(syncBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(toggleBtn.nextElementSibling).toBe(syncBtn);
+    expect(screen.queryByTestId("theme-toggle")).toBeNull();
+    const avatar = screen.getByAltText("tugure-git-intern");
+    const kebab = screen.getByRole("button", { name: "Menu lainnya" });
+    expect(avatar.compareDocumentPosition(kebab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

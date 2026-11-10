@@ -70,7 +70,7 @@ test.describe("Buat Aplikasi Baru (quick-start) @1280x720", () => {
     await page.getByRole("button", { name: "Kembali" }).click();
     await page.getByRole("button", { name: "Batal" }).click();
 
-    await expect(page.locator("dialog")).not.toHaveAttribute("open");
+    await expect(page.getByLabel("Buat Aplikasi Baru")).not.toHaveAttribute("open");
     expect(panggilan).toEqual([]);
   });
 

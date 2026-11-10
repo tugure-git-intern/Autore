@@ -138,20 +138,56 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(hasil.mainTop).toBe(hasil.headerBottom + 12);
   });
 
-  test("tombol ThemeToggle mengubah ke Dark Mode (#282c32, #353b43, #ffffff, #50638b) dan bertahan saat reload", async ({
+  test("menu Penampilan mengganti tema lewat modal kebab dan tersimpan setelah reload", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto("/", { waitUntil: "networkidle" });
 
-    const toggle = page.getByTestId("theme-toggle");
-    await expect(toggle).toBeVisible();
-    await toggle.click();
+    // Toggle lama sudah tidak ada; satu-satunya jalan adalah kebab > Penampilan.
+    await expect(page.getByTestId("theme-toggle")).toHaveCount(0);
 
+    const bukaModal = async () => {
+      await page.getByRole("button", { name: "Menu lainnya" }).click();
+      await page.getByRole("menuitem", { name: /Penampilan/ }).click();
+      return page.getByRole("dialog");
+    };
+
+    let modal = await bukaModal();
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("heading", { name: "Pilih Tema Tampilan" })).toBeVisible();
+    const gayaModal = await modal.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { bg: s.backgroundColor, color: s.color, radius: s.borderRadius };
+    });
+    expect(gayaModal.bg).toBe("rgb(60, 68, 78)");
+    expect(gayaModal.color).toBe("rgb(255, 255, 255)");
+    expect(Number.parseFloat(gayaModal.radius)).toBeGreaterThanOrEqual(12);
+
+    // Escape menutup modal (dialog native).
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    modal = await bukaModal();
+    await modal.getByRole("button", { name: /Gelap/ }).click();
     await expect(page.locator("html")).toHaveClass(/dark/);
     const stored = await page.evaluate(() => window.localStorage.getItem("autore-theme"));
     expect(stored).toBe("dark");
 
+    // Kartu aktif ditandai border biru dan aria-pressed.
+    const kartuGelap = modal.getByRole("button", { name: /Gelap/ });
+    expect(await kartuGelap.getAttribute("aria-pressed")).toBe("true");
+    // Tailwind v4 menulis biru-500 sebagai oklch, jadi yang diuji: kartu aktif
+    // berborder 2px dengan warna berbeda dari kartu non-aktif.
+    const gayaKartu = await kartuGelap.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { warna: s.borderTopColor, lebar: s.borderTopWidth };
+    });
+    expect(gayaKartu.lebar).toBe("2px");
+    const warnaTerang = await modal
+      .getByRole("button", { name: /Terang/ })
+      .evaluate((el) => getComputedStyle(el).borderTopColor);
+    expect(gayaKartu.warna).not.toBe(warnaTerang);
     const warnaDark = await page.evaluate(() => {
       const aside = document.querySelector("aside") as HTMLElement;
       const header = document.querySelector("header") as HTMLElement;
@@ -173,6 +209,13 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(warnaDark.h1Color).toBe("rgb(255, 255, 255)");
 
     await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    // Klik di luar panel (tepi dialog) menutup modal tanpa mengubah tema.
+    const modalLagi = await bukaModal();
+    const kotak = await modalLagi.boundingBox();
+    if (kotak) await page.mouse.click(4, 4);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator("html")).toHaveClass(/dark/);
 
     for (const rute of ["/applications", "/audit", "/pipeline", "/security", "/login"]) {

@@ -3,7 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import type { SessionUser } from "@/lib/current-user";
-import { ThemeToggle } from "./theme-toggle";
+import { AppearanceMenu } from "./appearance-menu";
 import { UserMenu } from "./user-menu";
 
 export type ConnectionTone = "green" | "neutral" | "red";
@@ -80,7 +80,6 @@ export function Navbar({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <ThemeToggle />
           <button
             type="button"
             onClick={onSync}
@@ -99,6 +98,7 @@ export function Navbar({
             Sync
           </button>
           {user.login ? <UserMenu user={user} /> : null}
+          <AppearanceMenu />
         </div>
       </div>
     </header>

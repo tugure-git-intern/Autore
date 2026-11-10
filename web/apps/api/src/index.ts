@@ -1,5 +1,6 @@
+import { rateLimit } from "./rate-limit";
 import { serve } from "@hono/node-server";
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
@@ -109,6 +110,7 @@ export function createApp(
   sbom: SbomLoader = configuredSbom(run),
   clock: () => number = () => Date.now(),
   audit: AuditLoader = (max = 100) => bacaAudit(max),
+  rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -117,6 +119,7 @@ export function createApp(
   // Hanya aksi yang butuh identitas; halaman read-only tetap terbuka dan unit
   // ini hanya listen di 127.0.0.1.
   app.use("/api/actions/*", requireSession(auth));
+  app.use("/api/actions/*", rateLimiter);
 
   // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
   app.get("/api/runs", async (c) => {

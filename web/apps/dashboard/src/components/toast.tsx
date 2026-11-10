@@ -22,20 +22,21 @@ export const DURASI_TOAST_MS = 4_000;
 /** Harus sama dengan durasi `toast-naik`/`toast-turun` di `globals.css`. */
 const ANIMASI_TOAST_MS = 240;
 
-// Permukaan navy gelap (#273a52) sama untuk kedua jenis; jenis pesan dibaca dari
-// tint ikon, bukan dari warna teks — label tetap #eaedf3 supaya kontrasnya 9.8:1.
-// Tint border ikut meredup supaya tepinya tidak jadi garis terang di atas navy.
+// Permukaan toast:
+// - Mode Terang: Navy gelap (#273a52), label terang (#eaedf3), ikon tint hijau/merah terang.
+// - Mode Gelap: Biru muda soft (#c9d9f2), teks gelap (#282c32), border #50638b,
+//   dan ikon hijau/merah tua (dark:text-green-800 / dark:text-red-800) untuk memenuhi kontras WCAG AA/AAA.
 const JENIS = {
   sukses: {
     Ikon: CheckCircle2,
-    kelas: "border-green-400/40",
-    ikon: "text-green-300",
+    kelas: "border-green-400/40 dark:border-[#50638b]",
+    ikon: "text-green-300 dark:text-green-800",
     peran: "status",
   },
   gagal: {
     Ikon: AlertTriangle,
-    kelas: "border-red-400/40",
-    ikon: "text-red-300",
+    kelas: "border-red-400/40 dark:border-[#50638b]",
+    ikon: "text-red-300 dark:text-red-800",
     peran: "alert",
   },
 } as const;
@@ -121,7 +122,7 @@ export function Toast({
       data-terjeda={terjeda}
       onMouseEnter={() => setTerjeda(true)}
       onMouseLeave={() => setTerjeda(false)}
-      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
+      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] dark:border-[#50638b] dark:bg-[#c9d9f2] dark:text-[#282c32] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
     >
       <Ikon className={`h-4 w-4 ${ikon}`} aria-hidden="true" />
       <span>{pesan}</span>

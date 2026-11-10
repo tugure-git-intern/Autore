@@ -217,4 +217,23 @@ describe("Toast", () => {
       "text-red-300",
     );
   });
+  it("di Dark Mode: permukaan biru muda soft #c9d9f2, teks gelap #282c32, border #50638b, ikon kontras tinggi", () => {
+    const { unmount } = render(
+      <Toast pesan="Data berhasil disinkronkan." jenis="sukses" onTutup={() => {}} />,
+    );
+
+    const sukses = screen.getByTestId("toast");
+    expect(sukses.className).toContain("dark:bg-[#c9d9f2]");
+    expect(sukses.className).toContain("dark:text-[#282c32]");
+    expect(sukses.className).toContain("dark:border-[#50638b]");
+    expect(sukses.querySelector("svg")?.getAttribute("class")).toContain("dark:text-green-800");
+    unmount();
+
+    render(<Toast pesan="Gagal menyinkronkan data." jenis="gagal" onTutup={() => {}} />);
+    const gagal = screen.getByTestId("toast");
+    expect(gagal.className).toContain("dark:bg-[#c9d9f2]");
+    expect(gagal.className).toContain("dark:text-[#282c32]");
+    expect(gagal.className).toContain("dark:border-[#50638b]");
+    expect(gagal.querySelector("svg")?.getAttribute("class")).toContain("dark:text-red-800");
+  });
 });

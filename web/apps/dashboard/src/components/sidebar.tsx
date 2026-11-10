@@ -6,9 +6,13 @@ import type { ApiStatusResponse } from "@/lib/contracts";
 import { useStatus } from "./app-shell";
 import { isActiveHref, navItems } from "./nav-items";
 
-/** Dibakar saat build; fallback disamakan dengan `cli/Cargo.toml`. */
+/**
+ * `NEXT_PUBLIC_APP_VERSION` disuntik `next.config.ts` dari `cli/Cargo.toml`
+ * saat build, jadi versi UI selalu ikut versi CLI tanpa edit manual. Fallback
+ * di bawah cuma jaring pengaman (mis. tes satuan yang merender tanpa build).
+ */
 export function versiAutore(): string {
-  return process.env.NEXT_PUBLIC_APP_VERSION || "v0.5.9";
+  return process.env.NEXT_PUBLIC_APP_VERSION || "v0.6.0";
 }
 
 export type ToneServer = "green" | "red" | "neutral";

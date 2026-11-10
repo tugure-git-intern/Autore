@@ -122,8 +122,8 @@ describe("versiAutore", () => {
     expect(versiAutore()).toBe("v9.9.9");
   });
 
-  it("jatuh ke v0.5.9 saat env kosong", () => {
-    expect(versiAutore()).toBe("v0.5.9");
+  it("jatuh ke v0.6.0 saat env kosong (sinkron cli/Cargo.toml)", () => {
+    expect(versiAutore()).toBe("v0.6.0");
   });
 });
 

@@ -1,4 +1,20 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { NextConfig } from "next";
+
+/**
+ * Versi produk satu sumber: `cli/Cargo.toml`. Dibaca saat build karena
+ * `NEXT_PUBLIC_*` di-inline Next ke bundel klien; Environment= di unit
+ * systemd tidak berpengaruh pada nilai yang sudah dibakar. Gagal keras
+ * kalau berkasnya tak terbaca, supaya versi tidak diam-diam jatuh ke
+ * fallback saat berkas hilang.
+ */
+function versiCli(): string {
+  const toml = readFileSync(join(__dirname, "../../../cli/Cargo.toml"), "utf8");
+  const cocok = toml.match(/^version\s*=\s*"([^"]+)"/m);
+  if (!cocok) throw new Error("versi tidak ditemukan di cli/Cargo.toml");
+  return `v${cocok[1]}`;
+}
 
 /**
  * Dashboard berbicara ke unit API lewat lima endpoint ini saja.
@@ -12,6 +28,7 @@ import type { NextConfig } from "next";
 const API_ASAL = "http://127.0.0.1:9121";
 
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_APP_VERSION: versiCli() },
   // Paket kontrak dikirim sebagai sumber TypeScript, bukan hasil build.
   transpilePackages: ["@autore/contracts"],
   async rewrites() {

@@ -147,6 +147,25 @@ test.describe("kerangka melayang di layar lebar", () => {
     // Toggle lama sudah tidak ada; satu-satunya jalan adalah kebab > Penampilan.
     await expect(page.getByTestId("theme-toggle")).toHaveCount(0);
 
+    // Urutan visual kiri ke kanan: Sync -> kebab -> avatar profil.
+    const urutan = await page.evaluate(() => {
+      const header = document.querySelector("header") as HTMLElement;
+      const sync = Array.from(header.querySelectorAll("button")).find((b) =>
+        b.textContent?.includes("Sync"),
+      ) as HTMLElement;
+      const kebab = header.querySelector('[aria-label="Menu lainnya"]') as HTMLElement;
+      const avatar = header.querySelector("summary") as HTMLElement;
+      const kotak = (el: HTMLElement) => el.getBoundingClientRect();
+      return {
+        syncKanan: kotak(sync).right,
+        kebabKiri: kotak(kebab).left,
+        kebabKanan: kotak(kebab).right,
+        avatarKiri: kotak(avatar).left,
+      };
+    });
+    expect(urutan.syncKanan).toBeLessThanOrEqual(urutan.kebabKiri);
+    expect(urutan.kebabKanan).toBeLessThanOrEqual(urutan.avatarKiri);
+
     const bukaModal = async () => {
       await page.getByRole("button", { name: "Menu lainnya" }).click();
       await page.getByRole("menuitem", { name: /Penampilan/ }).click();

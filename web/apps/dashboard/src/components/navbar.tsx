@@ -97,8 +97,8 @@ export function Navbar({
             />
             Sync
           </button>
-          {user.login ? <UserMenu user={user} /> : null}
           <AppearanceMenu />
+          {user.login ? <UserMenu user={user} /> : null}
         </div>
       </div>
     </header>

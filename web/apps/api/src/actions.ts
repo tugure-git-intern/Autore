@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { catatAudit, type PencatatAudit } from "./audit";
-import { catatAplikasi } from "./registry";
+import { bacaRegistry, catatAplikasi } from "./registry";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
 import type { Identitas } from "./session";
-import { loadDashboardStatus, type RunAutore } from "./status";
+import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
 
 const execFileAsync = promisify(execFile);
 
@@ -140,7 +140,8 @@ export function hatchActions(deps: {
   const audit = deps.audit ?? catatAudit;
   // Satu lock untuk semua aksi: dua git push/deploy bersamaan ke repo yang sama
   // bukan sesuatu yang bisa diselamatkan di sisi klien.
-  let busy: ActionKind | null = null;
+  const busyByTarget = new Map<string, ActionKind>();
+  let busyQuickStart = false;
 
   async function resolveTarget(
     id: string,
@@ -162,7 +163,11 @@ export function hatchActions(deps: {
       return { ok: false, status: 503, error: "daftar aplikasi tidak bisa dibaca dari autore status" };
     }
     if (!listed.includes(id)) {
-      return { ok: false, status: 404, error: `aplikasi "${id}" tidak terdaftar` };
+      const isiRegistry = await readFile(join(workspace, "registry.tsv"), "utf8").catch(() => "");
+      const terdaftar = bacaRegistry(isiRegistry).map((item) => item.nama);
+      if (!terdaftar.includes(id)) {
+        return { ok: false, status: 404, error: `aplikasi "${id}" tidak terdaftar` };
+      }
     }
 
     // Lapis ketiga: path hasil gabungan tetap harus satu tingkat di bawah workspace.
@@ -200,11 +205,15 @@ export function hatchActions(deps: {
           : "body harus memuat app id aplikasi yang akan dipindai",
       );
     }
-    if (busy) {
-      return failed(409, `aksi ${busy} masih berjalan, tunggu sampai selesai`);
+    if (busyQuickStart) {
+      return failed(409, "aksi quick-start masih berjalan, tunggu sampai selesai");
+    }
+    const sedang = busyByTarget.get(id);
+    if (sedang) {
+      return failed(409, `aksi ${sedang} masih berjalan, tunggu sampai selesai`);
     }
 
-    busy = kind;
+    busyByTarget.set(id, kind);
     try {
       const target = await resolveTarget(id);
       if (!target.ok) return failed(target.status, target.error);
@@ -233,6 +242,7 @@ export function hatchActions(deps: {
       const output = capped([res.stdout.trim(), res.stderr.trim()].filter(Boolean).join("\n"));
       // Dicatat sebelum hasil dikembalikan, termasuk saat gagal: "siapa menekan
       // tombol" harus tetap ada walau deploy-nya berakhir 422.
+      resetStatusCache();
       await audit({
         login: author?.login ?? "",
         email: author?.email ?? "",
@@ -244,7 +254,7 @@ export function hatchActions(deps: {
         ? { ok: true, status: 200, action: kind, target: id, output }
         : failed(422, `aksi ${kind} keluar dengan kode ${res.exitCode}`, output);
     } finally {
-      busy = null;
+      busyByTarget.delete(id);
     }
   }
 
@@ -259,8 +269,9 @@ export function hatchActions(deps: {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
-    if (busy) {
-      return failed(409, `aksi ${busy} masih berjalan, tunggu sampai selesai`);
+    if (busyQuickStart || busyByTarget.size > 0) {
+      const berjalan = busyQuickStart ? "quick-start" : busyByTarget.values().next().value!;
+      return failed(409, `aksi ${berjalan} masih berjalan, tunggu sampai selesai`);
     }
 
     const dir = join(workspace, input.nama);
@@ -275,7 +286,7 @@ export function hatchActions(deps: {
       // Belum ada: itu keadaan yang diinginkan.
     }
 
-    busy = "quick-start";
+    busyQuickStart = true;
     try {
       let res: SpawnResult;
       try {
@@ -303,6 +314,7 @@ export function hatchActions(deps: {
       }
 
       const catatan = await catatKeRegistry(workspace, dir, input.nama);
+      resetStatusCache();
       const output = capped(
         [res.stdout.trim(), res.stderr.trim(), catatan].filter(Boolean).join("\n"),
       );
@@ -324,7 +336,7 @@ export function hatchActions(deps: {
           }
         : failed(422, `quick-start keluar dengan kode ${res.exitCode}`, output);
     } finally {
-      busy = null;
+      busyQuickStart = false;
     }
   }
 

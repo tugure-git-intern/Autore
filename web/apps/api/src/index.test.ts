@@ -633,3 +633,143 @@ describe("GET /api/audit/log", () => {
     expect(json).toEqual({ data: auditData, total: 1 });
   });
 });
+
+
+describe("Full Action Matrix Audit Log (quick-start, deploy, scan, jalankan-ulang)", () => {
+  async function setupMatrixApp() {
+    const { createApp } = await freshApp();
+    const { hatchActions } = await import("./actions");
+    const { catatAudit } = await import("./audit");
+    const { readFile, writeFile } = await import("node:fs/promises");
+
+    const dir = await workspace();
+    await mkdir(join(dir, "tes-java"), { recursive: true });
+    await writeFile(
+      join(dir, "registry.tsv"),
+      "tes-web\t3000\t8085\t2026-11-10T00:00:00Z\ntes-java\t8080\t8086\t2026-11-10T00:00:00Z\n",
+    );
+    const auditFile = join(dir, "audit.log");
+
+    const baseStatus = JSON.parse(STATUS);
+    const statusPayload = JSON.stringify({
+      ...baseStatus,
+      applications: [appJson("tes-web"), appJson("tes-java")],
+    });
+
+    let releaseDeploy: (() => void) | undefined;
+    let deployStarted: (() => void) | undefined;
+    const deployGate = new Promise<void>((r) => {
+      releaseDeploy = r;
+    });
+    const deployRunning = new Promise<void>((r) => {
+      deployStarted = r;
+    });
+
+    const spawn: SpawnAction = vi.fn(async (_file, args) => {
+      if (args[0] === "quick-start") {
+        const idxNama = args.indexOf("--app-name");
+        const nama = idxNama >= 0 ? args[idxNama + 1] : "audit-test-app";
+        await mkdir(join(dir, nama), { recursive: true });
+        await writeFile(join(dir, nama, "Jenkinsfile"), "autorePipeline(deployPort: 3001)\n");
+        return { exitCode: 0, stdout: "https://github.com/tugure-git-intern/" + nama, stderr: "" };
+      }
+      if (args[0] === "deploy" && args.includes(join(dir, "tes-java")) && deployStarted) {
+        const notify = deployStarted;
+        deployStarted = undefined;
+        notify();
+        await deployGate;
+      }
+      return ok();
+    });
+
+    const app = createApp(
+      async () => statusPayload,
+      hatchActions({
+        workspace: dir,
+        run: async () => statusPayload,
+        spawn,
+        bin: "autore",
+        audit: (masukan) => catatAudit(masukan, auditFile),
+      }),
+      async () => ({ data: RUNS, stale: false }),
+      { secret: TEST_SECRET },
+      async () => ({ data: ACTIVE, stale: false }),
+    );
+
+    const bacaBarisTerakhir = async () => {
+      const isi = await readFile(auditFile, "utf8");
+      const baris = isi.trim().split("\n").filter(Boolean);
+      return JSON.parse(baris[baris.length - 1]);
+    };
+
+    return { app, dir, auditFile, bacaBarisTerakhir, deployRunning, releaseDeploy: () => releaseDeploy?.() };
+  }
+
+  it("1. Buat Aplikasi Baru (POST /api/actions/quick-start) -> action='quick-start', target='audit-test-app', exit=0", async () => {
+    const { app, bacaBarisTerakhir } = await setupMatrixApp();
+
+    const res = await post(app, "/api/actions/quick-start", {
+      nama: "audit-test-app",
+      stack: "nodejs",
+      kode: "contoh",
+    });
+
+    expect(res.status).toBe(200);
+    const last = await bacaBarisTerakhir();
+    expect(last.action).toBe("quick-start");
+    expect(last.target).toBe("audit-test-app");
+    expect(last.exit).toBe(0);
+  });
+
+  it("2. Deploy Sekarang (POST /api/actions/deploy) -> action='deploy', target='tes-java', exit=0", async () => {
+    const { app, bacaBarisTerakhir, releaseDeploy } = await setupMatrixApp();
+    releaseDeploy();
+
+    const res = await post(app, "/api/actions/deploy", { app: "tes-java" });
+
+    expect(res.status).toBe(200);
+    const last = await bacaBarisTerakhir();
+    expect(last.action).toBe("deploy");
+    expect(last.target).toBe("tes-java");
+    expect(last.exit).toBe(0);
+  });
+
+  it("3. Scan Keamanan (POST /api/actions/scan) -> action='scan', target='tes-web', exit=0 (tidak tertelan/tercatat sebagai 'deploy' saat deploy aplikasi lain berjalan)", async () => {
+    const { app, bacaBarisTerakhir, deployRunning, releaseDeploy } = await setupMatrixApp();
+
+    // Simulasi kondisi nyata di produksi: deploy pada tes-java sedang berjalan, lalu user klik Scan Keamanan pada tes-web
+    const deployInFlight = post(app, "/api/actions/deploy", { app: "tes-java" });
+    await deployRunning;
+
+    const resScan = await post(app, "/api/actions/scan", { app: "tes-web" });
+    const lastAfterScan = await bacaBarisTerakhir().catch(() => ({ action: "deploy", target: "tes-java", exit: 0 }));
+    releaseDeploy();
+    await deployInFlight;
+
+    const last = resScan.status === 200 ? lastAfterScan : await bacaBarisTerakhir();
+    expect(last.action).toBe("scan");
+    expect(last.target).toBe("tes-web");
+    expect(last.exit).toBe(0);
+    expect(resScan.status).toBe(200);
+  });
+
+  it("4. Jalankan Ulang (POST /api/actions/deploy) pada aplikasi hasil quick-start -> action='deploy', target='audit-test-app', exit=0", async () => {
+    const { app, bacaBarisTerakhir, releaseDeploy } = await setupMatrixApp();
+    releaseDeploy();
+
+    // Panaskan cache status lalu buat aplikasi baru dan jalankan ulang deploy pada aplikasi baru tersebut
+    await app.request("http://localhost/api/status");
+    await post(app, "/api/actions/quick-start", {
+      nama: "audit-test-app",
+      stack: "nodejs",
+      kode: "contoh",
+    });
+
+    const resRerun = await post(app, "/api/actions/deploy", { app: "audit-test-app" });
+    const last = await bacaBarisTerakhir();
+    expect(last.action).toBe("deploy");
+    expect(last.target).toBe("audit-test-app");
+    expect(last.exit).toBe(0);
+    expect(resRerun.status).toBe(200);
+  });
+});

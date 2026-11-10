@@ -25,7 +25,7 @@ export async function runAutore(): Promise<string> {
       encoding: "utf8",
       env: process.env,
       shell: false,
-      timeout: 5_000,
+      timeout: 15_000,
     },
   );
   return stdout;

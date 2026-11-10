@@ -1,3 +1,4 @@
+import { readFile, rm } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
 test.describe("Audit Log Feature", () => {
@@ -123,5 +124,108 @@ test.describe("Audit Log — garis timeline", () => {
       clientWidth: document.documentElement.clientWidth,
     }));
     expect(lebar.scrollWidth).toBeLessThanOrEqual(lebar.clientWidth);
+  });
+
+  test("Full Action Matrix E2E: Scan tes-web, Deploy tes-java, Quick-Start audit-test-app -> tercatat di audit.log dan tampil dengan ikon yang tepat di /audit", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const auditLogPath = "/home/tugure/.local/state/autore/audit.log";
+    const bacaAuditTerakhir = async () => {
+      const isi = await readFile(auditLogPath, "utf8");
+      const baris = isi.trim().split("\n").filter(Boolean);
+      return JSON.parse(baris[baris.length - 1]);
+    };
+
+    // 1. Klik Scan Keamanan di aplikasi tes-web -> cek audit.log terakhir -> action: "scan", target: "tes-web"
+    await page.goto("/applications");
+    const rowTesWeb = page.locator("tr", { hasText: "tes-web" });
+    await expect(rowTesWeb).toBeVisible();
+    const [resScan] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes("/api/actions/scan") && res.request().method() === "POST",
+      ),
+      rowTesWeb.getByRole("button", { name: "Scan Keamanan" }).click(),
+    ]);
+    expect(resScan.status()).toBe(200);
+    const logScan = await bacaAuditTerakhir();
+    expect(logScan.action).toBe("scan");
+    expect(logScan.target).toBe("tes-web");
+    expect(logScan.exit).toBe(0);
+
+    // 2. Klik Deploy (Jalankan Ulang) di aplikasi tes-java -> cek log -> action: "deploy", target: "tes-java"
+    const rowTesJava = page.locator("tr", { hasText: "tes-java" });
+    await expect(rowTesJava).toBeVisible();
+    await rowTesJava.getByRole("link", { name: "Detail" }).click();
+    await expect(page).toHaveURL(/\/pipeline\?app=tes-java/);
+    await page.getByRole("button", { name: "Jalankan Ulang" }).click();
+    const [resDeploy] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes("/api/actions/deploy") && res.request().method() === "POST",
+      ),
+      page.getByRole("button", { name: "Ya, jalankan ulang" }).click(),
+    ]);
+    expect(resDeploy.status()).toBe(200);
+    const logDeploy = await bacaAuditTerakhir();
+    expect(logDeploy.action).toBe("deploy");
+    expect(logDeploy.target).toBe("tes-java");
+    expect(logDeploy.exit).toBe(0);
+
+    // 3. Klik Buat Aplikasi Baru (nama audit-test-app) -> cek log -> action: "quick-start", target: "audit-test-app"
+    await rm("/home/tugure/autore-workspace/audit-test-app", { recursive: true, force: true });
+    await page.goto("/applications");
+    await page.getByRole("button", { name: "Buat Aplikasi Baru" }).click();
+    await page.getByLabel("Nama Aplikasi").fill("audit-test-app");
+    await page.getByRole("button", { name: "Lanjut" }).click();
+    await page.getByLabel("Ketik nama aplikasi untuk konfirmasi").fill("audit-test-app");
+    const [resQuickStart] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/actions/quick-start") && res.request().method() === "POST",
+        { timeout: 90_000 },
+      ),
+      page.getByRole("button", { name: "Buat Aplikasi", exact: true }).click(),
+    ]);
+    expect(resQuickStart.status()).toBe(200);
+    const logQuickStart = await bacaAuditTerakhir();
+    expect(logQuickStart.action).toBe("quick-start");
+    expect(logQuickStart.target).toBe("audit-test-app");
+    expect(logQuickStart.exit).toBe(0);
+
+    // 4. Cek di halaman /audit: pastiin tampilannya bener (Scan = ikon Shield, Deploy = ikon Rocket, Quick-Start = ikon Plus)
+    await page.goto("/audit");
+    const rail = page.getByTestId("audit-rail");
+    await expect(rail).toBeVisible();
+
+    const items = page.locator("ol li");
+    const itemQuickStart = items.nth(0);
+    const itemDeploy = items.nth(1);
+    const itemScan = items.nth(2);
+
+    await expect(itemQuickStart).toContainText("audit-test-app");
+    await expect(itemQuickStart).toContainText("membuat proyek baru pada");
+    await expect(itemQuickStart.locator("svg.lucide-circle-plus, svg.lucide-plus-circle")).toBeVisible();
+
+    await expect(itemDeploy).toContainText("tes-java");
+    await expect(itemDeploy).toContainText("melakukan Deploy pada");
+    await expect(itemDeploy.locator("svg.lucide-rocket")).toBeVisible();
+
+    await expect(itemScan).toContainText("tes-web");
+    await expect(itemScan).toContainText("memindai keamanan pada");
+    await expect(itemScan.locator("svg.lucide-shield-check")).toBeVisible();
+
+    await page.evaluate(() => {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("autore-theme", "dark");
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: "/tmp/audit-action-matrix-dark.png", fullPage: true });
+
+    await page.evaluate(() => {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("autore-theme", "light");
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: "/tmp/audit-action-matrix-light.png", fullPage: true });
   });
 });

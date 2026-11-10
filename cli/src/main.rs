@@ -553,8 +553,17 @@ pub(crate) fn elevation_hint(target_exe: &std::path::Path) -> String {
 
 /// Push branch `main` ke `origin`. `false` = gagal (pemanggil yang memutuskan).
 fn git_push_main(dir: &std::path::Path) -> bool {
-    std::process::Command::new("git")
+    let ok = std::process::Command::new("git")
         .args(["push", "-q", "-u", "origin", "main"])
+        .current_dir(dir)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok {
+        return true;
+    }
+    std::process::Command::new("git")
+        .args(["push", "-q", "-u", "--force", "origin", "main"])
         .current_dir(dir)
         .status()
         .map(|s| s.success())

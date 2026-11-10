@@ -42,8 +42,8 @@ function findings(status: AppStatus, securityIssues: number): string {
  */
 function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void; sentuh?: boolean }) {
   const kelasTautan = sentuh
-    ? "inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline"
-    : "text-blue-600 hover:underline";
+    ? "inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline dark:text-blue-300"
+    : "text-blue-600 hover:underline dark:text-blue-300";
 
   return (
     <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex items-center gap-3"}>
@@ -77,7 +77,7 @@ export default function ApplicationsPage() {
   if (!state) {
     return (
       <Card className="p-6">
-        <p role="alert" className="font-medium text-red-700">
+        <p role="alert" className="font-medium text-red-700 dark:text-red-300">
           Status Autore belum tersedia.
         </p>
         <Button className="mt-4" onClick={reload}>
@@ -96,7 +96,7 @@ export default function ApplicationsPage() {
       {stale || failed ? (
         <div
           role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {STALE_COPY}
@@ -111,7 +111,7 @@ export default function ApplicationsPage() {
           action={<QuickStartDialog onSelesai={reload} />}
         />
 
-        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4">
+        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4 dark:bg-[var(--bg-canvas)]">
           {applications.length === 0 ? null : (
             <ApplicationsFilter
               query={query}
@@ -126,9 +126,9 @@ export default function ApplicationsPage() {
           {applications.length === 0 ? (
             <EmptyApplications />
           ) : tersaring.length === 0 ? (
-            <p className="text-sm text-gray-500">Tidak ada aplikasi yang cocok</p>
+            <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">Tidak ada aplikasi yang cocok</p>
           ) : sempit ? (
-            <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+            <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-[var(--color-line)] dark:border-[var(--color-line)]">
               {tersaring.map((app) => {
                 const badge = toBadge(app.status);
                 return (
@@ -153,9 +153,9 @@ export default function ApplicationsPage() {
               })}
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
+            <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-[var(--color-line)]">
               <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
                   <tr>
                     <th scope="col" className="px-5 py-3 font-medium">
                       Nama
@@ -171,7 +171,7 @@ export default function ApplicationsPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-[var(--color-line)]">
                   {tersaring.map((app) => {
                     const badge = toBadge(app.status);
                     return (

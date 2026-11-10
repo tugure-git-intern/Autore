@@ -4,17 +4,17 @@ import { FileQuestion, Home } from "lucide-react";
 export default function NotFound() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-600 dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
           <FileQuestion className="h-6 w-6" aria-hidden="true" />
         </div>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
           Error 404
         </p>
-        <h2 className="mt-1 text-lg font-semibold text-gray-900">
+        <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-[var(--color-ink)]">
           Halaman Tidak Ditemukan
         </h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-gray-600 dark:text-[var(--color-muted)]">
           Rute yang Anda minta tidak tersedia atau telah dipindahkan.
         </p>
         <div className="mt-6 flex justify-center">

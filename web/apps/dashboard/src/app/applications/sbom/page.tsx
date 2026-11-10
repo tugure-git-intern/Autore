@@ -31,7 +31,7 @@ function Kembali() {
   return (
     <a
       href={KEMBALI.href}
-      className="mb-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
+      className="mb-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline dark:text-blue-300"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
       {KEMBALI.label}
@@ -93,8 +93,8 @@ function SbomDetail() {
         <Kembali />
         <Card className="p-6">
           <div role="alert">
-            <p className="font-medium text-red-700">Gagal memuat SBOM.</p>
-            <p className="mt-1 text-sm text-red-600">
+            <p className="font-medium text-red-700 dark:text-red-300">Gagal memuat SBOM.</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">
               Server tidak mengembalikan datanya. Coba lagi sebentar.
             </p>
           </div>

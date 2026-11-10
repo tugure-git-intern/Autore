@@ -16,28 +16,28 @@ function getActionInfo(action: string) {
         label: "Deploy",
         verb: "melakukan Deploy pada",
         icon: Rocket,
-        iconTone: "bg-blue-50 text-blue-600 border-blue-200",
+        iconTone: "bg-blue-50 text-blue-600 border-blue-200 dark:border-blue-800 dark:bg-blue-950/80 dark:text-blue-300",
       };
     case "scan":
       return {
         label: "Scan",
         verb: "memindai keamanan pada",
         icon: ShieldCheck,
-        iconTone: "bg-emerald-50 text-emerald-600 border-emerald-200",
+        iconTone: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300",
       };
     case "quick-start":
       return {
         label: "Quick-Start",
         verb: "membuat proyek baru pada",
         icon: PlusCircle,
-        iconTone: "bg-purple-50 text-purple-600 border-purple-200",
+        iconTone: "bg-purple-50 text-purple-600 border-purple-200 dark:border-purple-800 dark:bg-purple-950/80 dark:text-purple-300",
       };
     default:
       return {
         label: action,
         verb: `menjalankan ${action} pada`,
         icon: Rocket,
-        iconTone: "bg-gray-50 text-gray-600 border-gray-200",
+        iconTone: "bg-gray-50 text-gray-600 border-gray-200 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]",
       };
   }
 }
@@ -87,14 +87,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
       {/* Search & Filter Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[var(--color-muted)]" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Cari pengguna atau nama aplikasi..."
             aria-label="Cari log audit"
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
           />
         </div>
 
@@ -106,7 +106,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               aria-label="Filter aksi"
               value={filterAksi}
               onChange={(e) => setFilterAksi(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
             >
               <option value="all">Semua Aksi</option>
               <option value="deploy">Deploy</option>
@@ -122,7 +122,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               aria-label="Filter status"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
             >
               <option value="all">Semua Status</option>
               <option value="success">Sukses</option>
@@ -134,14 +134,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
       {/* Activity Feed / Empty State */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center">
-          <div className="mb-3 rounded-full bg-gray-50 p-3 text-gray-400">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]">
+          <div className="mb-3 rounded-full bg-gray-50 p-3 text-gray-400 dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
             <SearchX className="h-6 w-6" />
           </div>
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
             {kosong ? "Belum ada aktivitas" : "Tidak ada aktivitas yang cocok"}
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-[var(--color-muted)]">
             {kosong
               ? "Deploy, scan, dan quick-start akan tercatat di sini."
               : "Coba ubah kata kunci pencarian atau reset filter."}
@@ -150,7 +150,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             <button
               type="button"
               onClick={resetFilter}
-              className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-sidebar)]"
             >
               Reset Filter
             </button>
@@ -164,7 +164,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
           <div
             aria-hidden="true"
             data-testid="audit-rail"
-            className="absolute bottom-0 left-9 top-0 z-10 w-0.5 -translate-x-1/2 bg-gray-200 sm:left-10"
+            className="absolute bottom-0 left-9 top-0 z-10 w-0.5 -translate-x-1/2 bg-gray-200 sm:left-10 dark:bg-[var(--color-line)]"
           />
 
           <ol className="relative space-y-4">
@@ -176,11 +176,11 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               return (
                 <li
                   key={`${item.ts}-${item.target}-${idx}`}
-                  className="relative flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50/60 sm:gap-4 sm:p-5"
+                  className="relative flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50/60 sm:gap-4 sm:p-5 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:hover:bg-[var(--bg-sidebar)]"
                 >
                   {/* User Avatar + Action Pin */}
                   <div data-testid="audit-avatar" className="relative z-20 shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
                       {inisial(item.login || "?")}
                     </div>
                     <div
@@ -194,10 +194,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                   {/* Body Content */}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-700">
-                        <span className="font-semibold text-gray-900">{item.login || "tanpa-sesi"}</span>
+                      <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-700 dark:text-[var(--color-muted)]">
+                        <span className="font-semibold text-gray-900 dark:text-[var(--color-ink)]">{item.login || "tanpa-sesi"}</span>
                         <span>{verb}</span>
-                        <code className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800">
+                        <code className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]">
                           {item.target}
                         </code>
                       </div>
@@ -206,10 +206,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                       <span
                         className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                           tanpaStatus
-                            ? "border-gray-200 bg-gray-50 text-gray-600"
+                            ? "border-gray-200 bg-gray-50 text-gray-600 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]"
                             : isSuccess
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-rose-200 bg-rose-50 text-rose-700"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300"
+                              : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-300"
                         }`}
                       >
                         {tanpaStatus ? "Tanpa status" : isSuccess ? "Sukses" : `Gagal (${item.exit})`}
@@ -217,13 +217,13 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                     </div>
 
                     {/* Metadata Footer */}
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-[var(--color-muted)]">
                       <time dateTime={item.ts} title={new Date(item.ts).toLocaleString("id-ID")}>
                         {relativeTime(item.ts)}
                       </time>
                       {item.email ? (
                         <>
-                          <span className="text-gray-300">•</span>
+                          <span className="text-gray-300 dark:text-[var(--color-line)]">•</span>
                           <span className="truncate">{item.email}</span>
                         </>
                       ) : null}

@@ -11,7 +11,8 @@ export interface PageTabHeaderProps {
 /**
  * Secondary Tab Card / Breadcrumb Area ala Google Cloud Console.
  * Berlatar putih bersih tanpa bingkai: sudut melengkung atas (rounded-t-xl) melebur ke kanvas
- * agar menyatu mulus dengan lembaran konten di bawahnya.
+ * agar menyatu mulus dengan lembaran konten di bawahnya. Di mode gelap latarnya ikut
+ * token `--bg-canvas`, bukan putih, supaya tidak ada panel menyala.
  */
 export function PageTabHeader({
   title,
@@ -23,21 +24,23 @@ export function PageTabHeader({
   return (
     <div
       data-testid="page-tab-header"
-      className={`rounded-t-xl sm:rounded-t-2xl bg-white p-5 sm:p-6 ${className}`}
+      className={`rounded-t-xl sm:rounded-t-2xl bg-white p-5 sm:p-6 dark:bg-[var(--bg-canvas)] ${className}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           {Icon ? (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-[#545F72]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-[#545F72] dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]">
               <Icon className="h-5 w-5" />
             </div>
           ) : null}
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
+            <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl dark:text-[var(--color-ink)]">
               {title}
             </h1>
             {description ? (
-              <p className="mt-0.5 text-xs text-gray-500 sm:text-sm">{description}</p>
+              <p className="mt-0.5 text-xs text-gray-500 sm:text-sm dark:text-[var(--color-muted)]">
+                {description}
+              </p>
             ) : null}
           </div>
         </div>

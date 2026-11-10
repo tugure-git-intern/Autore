@@ -49,7 +49,7 @@ export function AppPicker({
 
   return (
     <nav aria-label="Daftar aplikasi">
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-gray-100 dark:divide-[var(--color-line)]">
         {applications.map((app, index) => (
           <li key={app.id}>
             <button
@@ -61,9 +61,9 @@ export function AppPicker({
               aria-current={app.id === terpilih ? "true" : undefined}
               onClick={() => onPilih(app.id)}
               onKeyDown={(event) => onKeyDown(event, index)}
-              className={`flex w-full flex-col items-start gap-1.5 border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 motion-reduce:transition-none ${
+              className={`flex w-full flex-col items-start gap-1.5 border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 motion-reduce:transition-none dark:border-l-[var(--color-line)] dark:hover:bg-[var(--bg-sidebar)] ${
                 AKSEN[app.status] ?? AKSEN.unknown
-              } ${app.id === terpilih ? "bg-gray-50" : "bg-white"}`}
+              } ${app.id === terpilih ? "bg-gray-50 dark:bg-[var(--bg-sidebar)]" : "bg-white dark:bg-[var(--bg-canvas)]"}`}
             >
               <span className="flex w-full items-center justify-between gap-2">
                 <span className="truncate text-sm font-medium text-ink">{app.name}</span>

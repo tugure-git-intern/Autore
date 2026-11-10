@@ -5,8 +5,10 @@ type Size = "md" | "icon";
 
 const variants: Record<Variant, string> = {
   primary: "bg-blue-600 text-white hover:bg-blue-700",
-  secondary: "border border-gray-200 bg-white text-ink hover:bg-gray-50",
-  ghost: "text-muted hover:bg-gray-100 hover:text-ink",
+  secondary:
+    "border border-gray-200 bg-white text-ink hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-sidebar)]",
+  ghost:
+    "text-muted hover:bg-gray-100 hover:text-ink dark:text-[var(--color-muted)] dark:hover:bg-[var(--bg-sidebar)] dark:hover:text-[var(--color-ink)]",
   green: "bg-green-600 text-white hover:bg-green-700",
 };
 
@@ -26,7 +28,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[var(--bg-canvas)] ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     />
   );

@@ -32,4 +32,15 @@ describe("PageTabHeader", () => {
     expect(screen.getByRole("heading", { name: "Daftar Aplikasi" })).toBeVisible();
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("menerapkan variabel CSS Dark Mode pada PageTabHeader", () => {
+    const { container } = render(
+      <PageTabHeader title="Daftar Aplikasi" description="Subjudul" icon={History} />,
+    );
+    const header = container.querySelector("[data-testid='page-tab-header']") as HTMLElement;
+    expect(header.className).toContain("dark:bg-[var(--bg-canvas)]");
+    expect(screen.getByRole("heading", { name: "Daftar Aplikasi" }).className).toContain(
+      "dark:text-[var(--color-ink)]",
+    );
+  });
 });

@@ -33,7 +33,7 @@ export function PipelineSummary({ pipeline }: { pipeline: DashboardStatus["lates
           <dd className="break-all font-mono text-ink">{dash(pipeline.author)}</dd>
         </div>
       </dl>
-      <div className="mt-4 border-t border-gray-200 pt-4">
+      <div className="mt-4 border-t border-gray-200 pt-4 dark:border-[var(--color-line)]">
         <p className="text-xs uppercase tracking-wide text-muted">Hasil Security Scan</p>
         <p className="mt-1 break-all text-sm text-ink">
           {securitySummary || "Belum ada hasil scan"}

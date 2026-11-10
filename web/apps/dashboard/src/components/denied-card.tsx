@@ -9,9 +9,9 @@ export function DeniedCard({
   action: (formData: FormData) => void | Promise<void>;
 }) {
   return (
-    <section className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6">
+    <section className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]">
       <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
-        <ShieldOff className="h-5 w-5 text-red-600" aria-hidden="true" />
+        <ShieldOff className="h-5 w-5 text-red-600 dark:text-red-300" aria-hidden="true" />
         Akses Ditolak
       </h1>
       <p className="mt-2 text-sm text-muted">
@@ -25,7 +25,7 @@ export function DeniedCard({
       <form action={action} className="mt-6">
         <button
           type="submit"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-gray-200 bg-white px-4 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+          className="inline-flex h-10 items-center justify-center rounded-md border border-gray-200 bg-white px-4 text-sm font-medium text-ink transition-colors hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
         >
           Keluar dan masuk dengan akun lain
         </button>

@@ -15,10 +15,10 @@ import { WorkspacePipeline } from "./workspace-pipeline";
 const MAKS_RUN = 5;
 
 const IKON: Record<string, string> = {
-  passed: "bg-green-50 text-green-600",
-  failed: "bg-red-50 text-red-600",
-  running: "bg-amber-50 text-amber-600",
-  pending: "bg-yellow-50 text-yellow-600",
+  passed: "bg-green-50 text-green-600 dark:bg-green-950/60 dark:text-green-300",
+  failed: "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300",
+  running: "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300",
+  pending: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/60 dark:text-yellow-300",
 };
 
 // "Jalankan Ulang" memakai jalur deploy: commit + push lokal lalu trigger Jenkins.
@@ -31,7 +31,7 @@ const RERUN_CONFIRM = {
 
 function Fakta({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-3">
+    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]">
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
       <div className="mt-1 text-sm text-ink">{children}</div>
     </div>
@@ -77,7 +77,7 @@ export function AppDetail({
             <button
               type="button"
               onClick={onDaftar}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Daftar aplikasi
@@ -86,7 +86,7 @@ export function AppDetail({
           <span
             aria-hidden="true"
             className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${
-              IKON[app.status] ?? "bg-gray-100 text-gray-600"
+              IKON[app.status] ?? "bg-gray-100 text-gray-600 dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]"
             }`}
           >
             <Boxes className="h-5 w-5" />
@@ -110,7 +110,7 @@ export function AppDetail({
       {sedangAktif.length > 0 ? (
         <div
           data-testid="detail-aktif"
-          className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+          className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
         >
           {sedangAktif.map((baris) => (
             <span key={`${baris.app}#${baris.number}`} className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export function AppDetail({
               </Badge>
               {baris.status === "queued" ? "Sedang menunggu di antrean Jenkins" : "Sedang dibangun sekarang"}
               {baris.url ? (
-                <a href={baris.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                <a href={baris.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-300">
                   Buka Jenkins
                 </a>
               ) : null}
@@ -149,7 +149,7 @@ export function AppDetail({
         {riwayat.length === 0 ? (
           <p className="mt-3 text-sm text-muted">Belum ada run untuk aplikasi ini</p>
         ) : (
-          <ul aria-label="Riwayat build aplikasi ini" className="mt-3 divide-y divide-gray-100">
+          <ul aria-label="Riwayat build aplikasi ini" className="mt-3 divide-y divide-gray-100 dark:divide-[var(--color-line)]">
             {riwayat.map((run) => (
               <li
                 key={`${run.app}#${run.number}`}
@@ -160,15 +160,15 @@ export function AppDetail({
                   href={run.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-blue-600 hover:underline"
+                  className="font-medium text-blue-600 hover:underline dark:text-blue-300"
                 >
                   #{run.number}
                 </a>
                 <StatusBadge status={run.status as AppStatus} />
                 <span className="font-mono text-xs text-muted">{shortSha(run.commit_sha)}</span>
-                <span className="text-gray-600">{dash(run.author)}</span>
-                <span className="text-gray-500">{formatDuration(run.duration_ms)}</span>
-                <span className="text-gray-500">{relativeTime(run.started_at)}</span>
+                <span className="text-gray-600 dark:text-[var(--color-muted)]">{dash(run.author)}</span>
+                <span className="text-gray-500 dark:text-[var(--color-muted)]">{formatDuration(run.duration_ms)}</span>
+                <span className="text-gray-500 dark:text-[var(--color-muted)]">{relativeTime(run.started_at)}</span>
               </li>
             ))}
           </ul>
@@ -182,7 +182,7 @@ export function AppDetail({
         // itu inti bug "semua hijau padahal build gagal".
         <Card className="p-5">
           <div data-testid="detail-gagal">
-            <p role="alert" className="text-sm font-medium text-red-700">
+            <p role="alert" className="text-sm font-medium text-red-700 dark:text-red-300">
               Pipeline gagal, cek log Jenkins.
             </p>
             <p className="mt-1 text-sm text-muted">
@@ -195,7 +195,7 @@ export function AppDetail({
                 href={buildGagal.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 Buka log build #{buildGagal.number} di Jenkins
@@ -205,7 +205,7 @@ export function AppDetail({
                 href={jobUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 Buka job Jenkins {app.name}
@@ -226,7 +226,7 @@ export function AppDetail({
               href={jobUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
             >
               <ExternalLink className="h-4 w-4" aria-hidden="true" />
               Buka job Jenkins {app.name}

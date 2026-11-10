@@ -121,7 +121,7 @@ export function Toast({
       data-terjeda={terjeda}
       onMouseEnter={() => setTerjeda(true)}
       onMouseLeave={() => setTerjeda(false)}
-      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
+      className={`fixed bottom-6 left-0 right-0 z-20 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-[#273a52] px-3 py-2 text-sm text-[#eaedf3] dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] shadow-lg shadow-black/30 ${animasi} ${kelas}`}
     >
       <Ikon className={`h-4 w-4 ${ikon}`} aria-hidden="true" />
       <span>{pesan}</span>

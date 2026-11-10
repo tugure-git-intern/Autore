@@ -92,7 +92,7 @@ export function DashboardOverview() {
       {stale || failed ? (
         <div
           role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {STALE_COPY}

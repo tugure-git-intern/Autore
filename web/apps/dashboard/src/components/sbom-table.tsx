@@ -23,10 +23,10 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-[var(--color-line)]">
         <div className="relative w-full sm:max-w-xs">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[var(--color-muted)]"
             aria-hidden="true"
           />
           <input
@@ -35,22 +35,22 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Cari library..."
             aria-label="Cari library"
-            className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+            className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
           />
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">
           {paket.length} dari {payload.total} paket
         </p>
       </div>
 
       {paket.length === 0 ? (
-        <p className="p-5 text-sm text-gray-500">
+        <p className="p-5 text-sm text-gray-500 dark:text-[var(--color-muted)]">
           {payload.total === 0 ? "SBOM ini tidak memuat paket" : "Tidak ada library yang cocok"}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
               <tr>
                 <th scope="col" className="px-5 py-3 font-medium">
                   Nama Library
@@ -63,7 +63,7 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-[var(--color-line)]">
               {paket.map((p) => (
                 <tr key={`${p.name}@${p.version}#${p.type}`}>
                   <td className="px-5 py-3 font-medium text-ink">{p.name}</td>

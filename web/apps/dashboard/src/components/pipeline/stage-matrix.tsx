@@ -26,9 +26,9 @@ const LABEL: Record<StageResult, string> = {
 };
 
 const WARNA: Record<StageResult, string> = {
-  passed: "border-emerald-200 bg-emerald-50/40",
-  failed: "border-red-300 bg-red-50/40",
-  running: "border-amber-200 bg-amber-50/40",
+  passed: "border-emerald-200 bg-emerald-50/40 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]",
+  failed: "border-red-300 bg-red-50/40 dark:border-red-800 dark:bg-red-950/50",
+  running: "border-amber-200 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/50",
 };
 
 /**
@@ -63,7 +63,7 @@ export function StageMatrix({
   const isi = larik(rows, stages, pipelineStatus);
 
   if (isi.length === 0) {
-    return <p className="text-sm text-gray-500">Tidak ada data pipeline untuk ditampilkan.</p>;
+    return <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">Tidak ada data pipeline untuk ditampilkan.</p>;
   }
 
   return (
@@ -75,7 +75,7 @@ export function StageMatrix({
       {isi.map((tahap, urutan) => (
         <li key={`${tahap.id}-${urutan}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
           {urutan > 0 ? (
-            <span data-testid="stage-arrow" aria-hidden="true" className="self-center text-gray-300 rotate-90 sm:rotate-0">
+            <span data-testid="stage-arrow" aria-hidden="true" className="self-center text-gray-300 rotate-90 sm:rotate-0 dark:text-[var(--color-muted)]">
               →
             </span>
           ) : null}
@@ -83,11 +83,11 @@ export function StageMatrix({
             data-testid="stage-card"
             className={`w-full sm:min-w-[168px] rounded-lg border p-4 ${WARNA[tahap.result]}`}
           >
-            <p className="text-[11px] text-gray-400">{urutan + 1}</p>
-            <p className="mt-1 text-sm font-medium capitalize text-gray-900">
+            <p className="text-[11px] text-gray-400 dark:text-[var(--color-muted)]">{urutan + 1}</p>
+            <p className="mt-1 text-sm font-medium capitalize text-gray-900 dark:text-[var(--color-ink)]">
               {NAMA[tahap.id] ?? tahap.id}
             </p>
-            <p className="mt-2 font-mono text-xs text-gray-600">
+            <p className="mt-2 font-mono text-xs text-gray-600 dark:text-[var(--color-muted)]">
               {tahap.durationMs === null ? "—" : formatDuration(tahap.durationMs)}
             </p>
             <div className="mt-2">

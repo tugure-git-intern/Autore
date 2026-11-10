@@ -2,7 +2,10 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
+/* Token tema. @theme wajib lebih dulu supaya utility (bg-surface, text-ink, ...)
+   tetap dihasilkan; .dark diletakkan sesudahnya agar nilai gelap menang di
+   cascade untuk selector berspesifisitas sama. */
+@theme {
   --bg-sidebar: #F0F5FE;
   --bg-canvas: #ffffff;
   --color-canvas: #fafafa;
@@ -10,6 +13,9 @@
   --color-line: #e5e7eb;
   --color-ink: #111827;
   --color-muted: #4b5563;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 .dark {
@@ -20,17 +26,7 @@
   --color-line: #50638b;
   --color-ink: #ffffff;
   --color-muted: #c9d1d9;
-}
-
-@theme {
-  --color-canvas: #fafafa;
-  --color-surface: #ffffff;
-  --color-line: #e5e7eb;
-  --color-ink: #111827;
-  --color-muted: #4b5563;
-
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  color-scheme: dark;
 }
 
 @layer base {

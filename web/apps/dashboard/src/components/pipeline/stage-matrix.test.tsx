@@ -80,4 +80,10 @@ describe("StageMatrix", () => {
     expect(screen.getByText("Tidak ada data pipeline untuk ditampilkan.")).toBeVisible();
     expect(screen.queryAllByTestId("stage-card")).toHaveLength(0);
   });
+
+  it("kartu tahap memakai variabel CSS Dark Mode agar tidak menyala putih", () => {
+    render(<StageMatrix rows={LIMA.slice(0, 1)} stages={[]} pipelineStatus="passed" />);
+    expect(kartu()[0].className).toContain("dark:border-[var(--color-line)]");
+    expect(kartu()[0].className).toContain("dark:bg-[var(--bg-sidebar)]");
+  });
 });

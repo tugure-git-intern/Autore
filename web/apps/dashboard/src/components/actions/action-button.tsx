@@ -92,13 +92,13 @@ export function ActionButton({
         <dialog
           ref={dialog}
           aria-labelledby={titleId}
-          className="m-auto rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30"
+          className="m-auto rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]"
         >
-          <h2 id={titleId} className="text-sm font-semibold text-gray-900">
+          <h2 id={titleId} className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
             {confirm.title}
           </h2>
           {confirm.warning ? (
-            <p className="mt-2 max-w-sm text-xs font-medium text-red-600">{confirm.warning}</p>
+            <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-300">{confirm.warning}</p>
           ) : null}
           <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => setOpen(false)}>Batal</Button>

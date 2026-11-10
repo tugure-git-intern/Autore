@@ -48,7 +48,7 @@ export default function SecurityPage() {
   if (!state) {
     return (
       <Card className="p-6">
-        <p role="alert" className="font-medium text-red-700">
+        <p role="alert" className="font-medium text-red-700 dark:text-red-300">
           Status Autore belum tersedia.
         </p>
       </Card>
@@ -65,7 +65,7 @@ export default function SecurityPage() {
       {stale || failed ? (
         <div
           role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {STALE_COPY}
@@ -79,7 +79,7 @@ export default function SecurityPage() {
           icon={ShieldCheck}
         />
 
-        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4">
+        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4 dark:bg-[var(--bg-canvas)]">
           {/* Grid Skor & Gerbang */}
           <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
             <ChartCard title="Skor Pipeline" subtitle="Lima sumbu terukur">
@@ -100,7 +100,7 @@ export default function SecurityPage() {
           </div>
 
           <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4">
+            <div className="border-b border-gray-200 px-5 py-4 dark:border-[var(--color-line)]">
               <h2 className="text-sm font-semibold text-ink">Temuan per Aplikasi</h2>
             </div>
             {temuan.length === 0 ? (
@@ -108,7 +108,7 @@ export default function SecurityPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
                     <tr>
                       <th scope="col" className="px-5 py-3 font-medium">
                         Aplikasi
@@ -121,7 +121,7 @@ export default function SecurityPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-[var(--color-line)]">
                     {temuan.map((app) => (
                       <tr key={app.id}>
                         <td className="px-5 py-4">

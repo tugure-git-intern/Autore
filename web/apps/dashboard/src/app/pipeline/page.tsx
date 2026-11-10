@@ -38,8 +38,8 @@ function PipelineSplit() {
     return (
       <Card className="p-6">
         <div role="alert">
-          <p className="font-medium text-red-700">Status Autore belum tersedia.</p>
-          <p className="mt-1 text-sm text-red-600">
+          <p className="font-medium text-red-700 dark:text-red-300">Status Autore belum tersedia.</p>
+          <p className="mt-1 text-sm text-red-600 dark:text-red-300">
             Server tidak mengembalikan data. Coba lagi setelah pipeline berjalan.
           </p>
         </div>
@@ -71,7 +71,7 @@ function PipelineSplit() {
       {stale || failed ? (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {STALE_COPY}
@@ -83,7 +83,7 @@ function PipelineSplit() {
           <p className="font-medium text-ink">{`Aplikasi "${appId}" tidak ditemukan.`}</p>
           <p className="mt-1 text-sm text-muted">
             Pilih aplikasi dari daftar di samping, atau buka halaman{" "}
-            <a href="/applications" className="text-blue-600 hover:underline">
+            <a href="/applications" className="text-blue-600 hover:underline dark:text-blue-300">
               Aplikasi
             </a>
             .
@@ -98,7 +98,7 @@ function PipelineSplit() {
           icon={Workflow}
         />
 
-        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-4 sm:p-6 pt-4">
+        <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-4 sm:p-6 pt-4 dark:bg-[var(--bg-canvas)]">
           <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
             <aside
               data-testid="panel-daftar"
@@ -112,7 +112,7 @@ function PipelineSplit() {
                 <>
                   <div className="relative">
                     <Search
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[var(--color-muted)]"
                       aria-hidden="true"
                     />
                     <input
@@ -121,7 +121,7 @@ function PipelineSplit() {
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Cari aplikasi..."
                       aria-label="Cari aplikasi"
-                      className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+                      className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
                     />
                   </div>
                   <Card className="max-h-[calc(100vh-15rem)] overflow-y-auto p-1">

@@ -22,15 +22,15 @@ export default function ErrorBoundary({
       <div
         role="alert"
         aria-live="assertive"
-        className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 shadow-sm"
+        className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 shadow-sm dark:border-red-900 dark:bg-[var(--bg-canvas)]"
       >
-        <div className="flex items-center gap-3 text-red-600">
+        <div className="flex items-center gap-3 text-red-600 dark:text-red-300">
           <AlertTriangle className="h-6 w-6 shrink-0" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-[var(--color-ink)]">
             Terjadi Kesalahan pada Aplikasi
           </h2>
         </div>
-        <p className="mt-3 text-sm text-gray-600">
+        <p className="mt-3 text-sm text-gray-600 dark:text-[var(--color-muted)]">
           Gagal memuat komponen antarmuka. Layanan API mungkin sedang dalam pemeliharaan atau terjadi gangguan koneksi jaringan.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -44,7 +44,7 @@ export default function ErrorBoundary({
           </Button>
           <Link
             href="/"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
           >
             <Home className="h-4 w-4" aria-hidden="true" />
             Kembali ke Dashboard

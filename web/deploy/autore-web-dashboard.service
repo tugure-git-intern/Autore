@@ -12,7 +12,7 @@ WorkingDirectory=/home/tugure/Autore/web
 # `-` = jangan gagal kalau `.env` belum ada.
 EnvironmentFile=-/home/tugure/Autore/web/.env
 Environment=NODE_ENV=production
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/tugure/.local/share/node22/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:dashboard
 Restart=on-failure
 RestartSec=5

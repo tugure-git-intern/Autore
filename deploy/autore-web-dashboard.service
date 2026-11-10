@@ -9,7 +9,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/home/tugure/Autore/web
 Environment=NODE_ENV=production
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/tugure/.local/share/node22/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run start:dashboard
 Restart=on-failure
 RestartSec=5

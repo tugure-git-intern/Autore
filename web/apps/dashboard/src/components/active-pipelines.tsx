@@ -31,7 +31,7 @@ export function ActivePipelines({
       title="Active Pipelines"
       action={
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 text-green-700">
+          <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-300">
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             {total} berjalan atau menunggu
           </span>
@@ -44,11 +44,11 @@ export function ActivePipelines({
           data-testid="active-pipelines-empty"
           className="flex flex-col items-center justify-center py-12 text-center"
         >
-          <div className="mb-4 rounded-full bg-green-50 p-3">
+          <div className="mb-4 rounded-full bg-green-50 dark:bg-green-950/60 p-3">
             <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Semua Pipeline Selesai</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Semua Pipeline Selesai</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-white">
             Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya
             akan muncul di sini secara real-time.
           </p>
@@ -61,13 +61,13 @@ export function ActivePipelines({
               <div key={`${p.app}-${p.number}`} data-testid="pipeline-card" className="min-w-0">
                 <Card className="relative flex h-full min-w-0 flex-col gap-2 overflow-hidden p-4">
                   <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-gray-900">{p.app}</span>
+                    <span className="truncate text-sm font-medium text-gray-900 dark:text-white">{p.app}</span>
                     {p.number > 0 ? (
-                      <span className="text-xs text-gray-500">#{p.number}</span>
+                      <span className="text-xs text-gray-500 dark:text-[#c9d1d9]">#{p.number}</span>
                     ) : null}
                   </div>
 
-                  <span className="inline-flex items-center gap-1 text-xs text-gray-600">
+                  <span className="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-white">
                     <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
                     {dash(p.branch)}
                   </span>
@@ -76,17 +76,17 @@ export function ActivePipelines({
                     href={p.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-xs text-blue-600 hover:underline"
+                    className="font-mono text-xs text-blue-600 dark:text-blue-300 hover:underline"
                   >
                     {shortSha(p.commit_sha)}
                   </a>
 
                   {p.author ? (
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-600">
+                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-[#282c32] text-[10px] font-medium text-gray-600 dark:text-white">
                         {inisial(p.author)}
                       </span>
-                      <span className="truncate text-xs text-gray-600">{dash(p.author)}</span>
+                      <span className="truncate text-xs text-gray-600 dark:text-white">{dash(p.author)}</span>
                     </div>
                   ) : null}
 

@@ -11,17 +11,19 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center gap-4 sm:mb-8 sm:gap-5">
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Dashboard</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink dark:text-white">Dashboard</h1>
         {login ? (
           <>
             <span
               data-testid="header-separator"
               aria-hidden="true"
-              className="hidden text-gray-300 sm:inline"
+              className="hidden text-gray-300 dark:text-[#50638b] sm:inline"
             >
               |
             </span>
-            <p className="text-sm text-gray-500 sm:text-base">Selamat datang, {login}.</p>
+            <p className="text-sm text-gray-500 dark:text-white sm:text-base">
+              Selamat datang, {login}.
+            </p>
           </>
         ) : null}
       </div>

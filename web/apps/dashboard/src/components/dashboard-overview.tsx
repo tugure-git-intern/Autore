@@ -134,15 +134,15 @@ export function DashboardOverview() {
       <OverviewAnalytics />
 
       <Card className="mt-6 overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="text-sm font-semibold text-ink">Aplikasi</h2>
+        <div className="border-b border-gray-200 dark:border-[#50638b] px-5 py-4">
+          <h2 className="text-sm font-semibold text-ink dark:text-white">Aplikasi</h2>
         </div>
         {applications.length === 0 ? (
           <EmptyApplications />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+              <thead className="bg-gray-50 dark:bg-[#282c32] text-xs uppercase tracking-wide text-muted dark:text-white">
                 <tr>
                   <th scope="col" className="px-5 py-3 font-medium">
                     Nama Aplikasi
@@ -160,11 +160,11 @@ export function DashboardOverview() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-[#50638b]">
                 {applications.map((app) => (
                   <tr key={app.id}>
                     <td className="px-5 py-4">
-                      <p className="font-medium text-ink">{dash(app.name)}</p>
+                      <p className="font-medium text-ink dark:text-white">{dash(app.name)}</p>
                       {/* sha 25 karakter = ~175px min-content: di HP ia yang
                           memaksa tabel melebar, jadi tampil mulai sm saja. */}
                       <p className="hidden font-mono text-xs text-muted sm:block">
@@ -180,7 +180,7 @@ export function DashboardOverview() {
                     <td className="px-5 py-4">
                       <a
                         href={`/pipeline?app=${encodeURIComponent(app.id)}`}
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 dark:text-blue-300 hover:underline"
                       >
                         Detail
                       </a>

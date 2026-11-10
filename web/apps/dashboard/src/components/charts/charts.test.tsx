@@ -1,6 +1,16 @@
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { Boxes } from "lucide-react";
+
+let mockTheme = "light";
+vi.mock("next-themes", () => ({
+  useTheme: () => ({
+    theme: mockTheme,
+    resolvedTheme: mockTheme,
+    setTheme: vi.fn(),
+  }),
+}));
 
 /**
  * jsdom tidak punya layout, jadi Recharts asli merender 0×0 dan tes berhenti
@@ -10,9 +20,15 @@ vi.mock("recharts", () => {
   const Kotak = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     ResponsiveContainer: Kotak,
-    CartesianGrid: Kotak,
-    XAxis: Kotak,
-    YAxis: Kotak,
+    CartesianGrid: ({ stroke }: { stroke?: string }) => (
+      <div data-testid="cartesian-grid" data-stroke={stroke} />
+    ),
+    XAxis: ({ stroke, tick }: { stroke?: string; tick?: { fill?: string } }) => (
+      <div data-testid="x-axis" data-stroke={stroke} data-tick-fill={tick?.fill} />
+    ),
+    YAxis: ({ stroke, tick }: { stroke?: string; tick?: { fill?: string } }) => (
+      <div data-testid="y-axis" data-stroke={stroke} data-tick-fill={tick?.fill} />
+    ),
     Tooltip: Kotak,
     PieChart: Kotak,
     AreaChart: ({ data, children }: { data?: unknown[]; children?: ReactNode }) => (
@@ -32,6 +48,9 @@ vi.mock("recharts", () => {
   };
 });
 
+import { Card } from "../ui/card";
+import { ChartCard } from "../ui/chart-card";
+import { StatCard } from "../stat-card";
 import { RunDistribution } from "./run-distribution";
 import { RunTrends } from "./run-trends";
 
@@ -47,6 +66,7 @@ const TUJUH_HARI = [
 
 describe("RunTrends", () => {
   it("mengirim 7 titik dan dua seri dengan warna hasil", () => {
+    mockTheme = "light";
     render(<RunTrends daily={TUJUH_HARI} />);
 
     const chart = screen.getByTestId("area-chart");
@@ -59,6 +79,19 @@ describe("RunTrends", () => {
 
     expect(screen.getByTestId("area-passed").dataset.stroke).toBe("#16a34a");
     expect(screen.getByTestId("area-failed").dataset.stroke).toBe("#dc2626");
+    expect(screen.getByTestId("cartesian-grid").dataset.stroke).toBe("#e5e7eb");
+    expect(screen.getByTestId("x-axis").dataset.tickFill).toBe("#64748b");
+  });
+
+  it("mengubah warna grid dan axis ke #50638b serta teks tick #ffffff saat Dark Mode", () => {
+    mockTheme = "dark";
+    render(<RunTrends daily={TUJUH_HARI} />);
+
+    expect(screen.getByTestId("cartesian-grid").dataset.stroke).toBe("#50638b");
+    expect(screen.getByTestId("x-axis").dataset.stroke).toBe("#50638b");
+    expect(screen.getByTestId("y-axis").dataset.stroke).toBe("#50638b");
+    expect(screen.getByTestId("x-axis").dataset.tickFill).toBe("#ffffff");
+    expect(screen.getByTestId("y-axis").dataset.tickFill).toBe("#ffffff");
   });
 
   it("menampilkan empty state saat semua nol", () => {
@@ -102,5 +135,31 @@ describe("RunDistribution", () => {
 
     expect(screen.getByTestId("donut-total")).toHaveTextContent("0");
     expect(container.textContent).not.toContain("NaN");
+  });
+});
+
+describe("Card, ChartCard, dan StatCard Dark Mode", () => {
+  it("menerapkan latar #353b43, border #50638b, dan teks #ffffff pada Dark Mode", () => {
+    const { container } = render(
+      <div>
+        <Card>Isi Kartu</Card>
+        <ChartCard title="Judul Grafik" subtitle="Subjudul">
+          <div>Grafik</div>
+        </ChartCard>
+        <StatCard label="Total" value="10" icon={Boxes} />
+      </div>,
+    );
+
+    const cardEl = screen.getByText("Isi Kartu");
+    expect(cardEl.className).toContain("bg-white");
+    expect(cardEl.className).toContain("dark:bg-[#353b43]");
+    expect(cardEl.className).toContain("dark:border-[#50638b]");
+
+    const sections = container.querySelectorAll("section");
+    for (const sec of sections) {
+      expect(sec.className).toContain("bg-white");
+      expect(sec.className).toContain("dark:bg-[#353b43]");
+      expect(sec.className).toContain("dark:border-[#50638b]");
+    }
   });
 });

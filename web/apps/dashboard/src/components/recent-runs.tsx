@@ -37,11 +37,11 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
       }
     >
       {baris.length === 0 ? (
-        <p className="text-sm text-gray-500">Belum ada run</p>
+        <p className="text-sm text-gray-500 dark:text-white">Belum ada run</p>
       ) : (
         <div className="-mx-5 -mb-5 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-gray-50 dark:bg-[#282c32] text-xs uppercase tracking-wide text-gray-500 dark:text-white">
               <tr>
                 {KOLOM.map((judul) => (
                   <th key={judul} scope="col" className={`px-5 py-2 font-medium ${sembunyi(judul)}`}>
@@ -55,9 +55,9 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
                 <tr
                   key={`${run.app}#${run.number}`}
                   data-testid="recent-run-row"
-                  className="border-t border-gray-200"
+                  className="border-t border-gray-200 dark:border-[#50638b]"
                 >
-                  <td className="px-5 py-3 font-medium text-gray-900">
+                  <td className="px-5 py-3 font-medium text-gray-900 dark:text-white">
                     {run.app} #{run.number}
                   </td>
                   <td className={`px-5 py-3 ${sembunyi("Commit")}`}>
@@ -65,21 +65,21 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
                       href={run.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-blue-600 hover:underline"
+                      className="font-mono text-xs text-blue-600 dark:text-blue-300 hover:underline"
                     >
                       {shortSha(run.commit_sha)}
                     </a>
                   </td>
-                  <td className={`px-5 py-3 text-gray-600 ${sembunyi("Penulis")}`}>
+                  <td className={`px-5 py-3 text-gray-600 dark:text-white ${sembunyi("Penulis")}`}>
                     {dash(run.author)}
                   </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={run.status as AppStatus} />
                   </td>
-                  <td className={`px-5 py-3 text-gray-600 ${sembunyi("Durasi")}`}>
+                  <td className={`px-5 py-3 text-gray-600 dark:text-white ${sembunyi("Durasi")}`}>
                     {formatDuration(run.duration_ms)}
                   </td>
-                  <td className="px-5 py-3 text-gray-600">
+                  <td className="px-5 py-3 text-gray-600 dark:text-white">
                     <time dateTime={run.started_at}>{relativeTime(run.started_at)}</time>
                   </td>
                 </tr>

@@ -1,26 +1,105 @@
 "use client";
 
-import { Moon, MoreVertical, Palette, Sun, X } from "lucide-react";
+import { MoreVertical, Palette, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
+const KUNCI_KONTRAS = "autore-high-contrast";
+
+type Mode = "light" | "dark" | "system";
+
+/** Satu lembar miniatur dashboard: bar atas, rel kiri, tiga baris teks palsu. */
+function LembarMini({ gelap }: { gelap: boolean }) {
+  const latar = gelap ? "bg-[#282c32]" : "bg-white";
+  const bar = gelap ? "bg-[#3c444e]" : "bg-gray-200";
+  const rel = gelap ? "bg-[#353b43]" : "bg-[#F0F5FE]";
+  const garis = gelap ? "bg-[#50638b]" : "bg-gray-200";
+  const garisTebal = gelap ? "bg-gray-400" : "bg-gray-300";
+
+  return (
+    <div className={`flex h-full w-full flex-col p-2 ${latar}`}>
+      <div className={`h-2 w-full rounded-sm ${bar}`} />
+      <div className="mt-1.5 flex flex-1 gap-1.5">
+        <div className={`w-1/4 rounded-sm ${rel}`} />
+        <div className="flex flex-1 flex-col justify-center gap-1.5 px-1">
+          <div className={`h-1.5 w-3/4 rounded-sm ${garisTebal}`} />
+          <div className={`h-1.5 w-full rounded-sm ${garis}`} />
+          <div className={`h-1.5 w-5/6 rounded-sm ${garis}`} />
+          <div className={`h-1.5 w-2/3 rounded-sm ${garis}`} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Pratinjau({ mode }: { mode: Mode }) {
+  if (mode === "light") {
+    return (
+      <div
+        data-testid="preview-light"
+        aria-hidden="true"
+        className="h-24 w-full overflow-hidden rounded-md border border-white/20 bg-white"
+      >
+        <LembarMini gelap={false} />
+      </div>
+    );
+  }
+  if (mode === "dark") {
+    return (
+      <div
+        data-testid="preview-dark"
+        aria-hidden="true"
+        className="h-24 w-full overflow-hidden rounded-md border border-[#50638b] bg-[#282c32]"
+      >
+        <LembarMini gelap={true} />
+      </div>
+    );
+  }
+  // Ikuti Sistem: belah diagonal kiri-atas terang, kanan-bawah gelap.
+  return (
+    <div
+      data-testid="preview-system"
+      aria-hidden="true"
+      className="relative h-24 w-full overflow-hidden rounded-md border border-[#50638b]"
+    >
+      <div
+        data-testid="preview-half"
+        className="absolute inset-0"
+        style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
+      >
+        <LembarMini gelap={false} />
+      </div>
+      <div
+        data-testid="preview-half"
+        className="absolute inset-0"
+        style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }}
+      >
+        <LembarMini gelap={true} />
+      </div>
+    </div>
+  );
+}
+
 /**
- * Pengaturan tampilan ala Google Cloud Console: satu menu kebab di ujung kanan
- * topbar, bukan tombol toggle terpisah. Menu memuat satu item "Penampilan" yang
- * membuka modal berisi dua kartu tema.
- *
- * Modal memakai <dialog> native supaya Escape, jebakan fokus, dan backdrop
- * ditangani browser; klik di luar panel = klik pada elemen <dialog> itu sendiri.
+ * Pengaturan tampilan ala Google Cloud Console: menu kebab di topbar memuat item
+ * "Penampilan" yang membuka modal tiga kartu radio (Terang, Gelap, Ikuti Sistem)
+ * dengan miniatur UI + sakelar Kontras Tinggi di bawahnya.
  */
 export function AppearanceMenu() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [menuTerbuka, setMenuTerbuka] = useState(false);
   const [modalTerbuka, setModalTerbuka] = useState(false);
+  const [kontrasTinggi, setKontrasTinggi] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const judulId = useId();
 
-  // Tutup menu saat klik di luar atau Escape.
+  useEffect(() => {
+    const tersimpan = window.localStorage.getItem(KUNCI_KONTRAS) === "1";
+    setKontrasTinggi(tersimpan);
+    document.documentElement.classList.toggle("high-contrast", tersimpan);
+  }, []);
+
   useEffect(() => {
     if (!menuTerbuka) return;
     const onDown = (event: MouseEvent) => {
@@ -37,7 +116,6 @@ export function AppearanceMenu() {
     };
   }, [menuTerbuka]);
 
-  // jsdom belum punya showModal, jadi atribut `open` jadi jalur cadangannya.
   useEffect(() => {
     const element = dialogRef.current;
     if (!element) return;
@@ -50,11 +128,20 @@ export function AppearanceMenu() {
     }
   }, [modalTerbuka]);
 
-  const aktif = (resolvedTheme ?? theme) === "dark" ? "dark" : "light";
+  const ubahKontras = () => {
+    const baru = !kontrasTinggi;
+    setKontrasTinggi(baru);
+    window.localStorage.setItem(KUNCI_KONTRAS, baru ? "1" : "0");
+    document.documentElement.classList.toggle("high-contrast", baru);
+  };
 
-  const kartu = [
-    { nilai: "light" as const, label: "Terang", Ikon: Sun },
-    { nilai: "dark" as const, label: "Gelap", Ikon: Moon },
+  const aktif: Mode =
+    theme === "dark" || theme === "system" || theme === "light" ? theme : "light";
+
+  const pilihan: { nilai: Mode; label: string }[] = [
+    { nilai: "light", label: "Terang" },
+    { nilai: "dark", label: "Gelap" },
+    { nilai: "system", label: "Ikuti Sistem" },
   ];
 
   return (
@@ -98,7 +185,7 @@ export function AppearanceMenu() {
         onClick={(event) => {
           if (event.target === event.currentTarget) setModalTerbuka(false);
         }}
-        className="m-auto w-[min(26rem,92vw)] rounded-xl border border-[#50638b] bg-[#3c444e] p-5 text-white backdrop:bg-black/60"
+        className="m-auto w-[92vw] max-w-xl rounded-xl border border-[#50638b] bg-[#3c444e] p-6 text-white backdrop:bg-black/60"
       >
         <div className="flex items-start justify-between gap-4">
           <h2 id={judulId} className="text-base font-semibold">
@@ -114,26 +201,71 @@ export function AppearanceMenu() {
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {kartu.map(({ nilai, label, Ikon }) => {
+        <div
+          role="radiogroup"
+          aria-labelledby={judulId}
+          className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3"
+        >
+          {pilihan.map(({ nilai, label }) => {
             const dipilih = aktif === nilai;
             return (
               <button
                 key={nilai}
                 type="button"
-                aria-pressed={dipilih}
+                role="radio"
+                aria-checked={dipilih}
                 onClick={() => setTheme(nilai)}
-                className={`flex flex-col items-center gap-2 rounded-lg border-2 px-3 py-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                className={`flex flex-col gap-3 rounded-lg border-2 p-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                   dipilih
-                    ? "border-blue-500 bg-white/10 text-white"
-                    : "border-white/20 text-white/80 hover:border-white/40 hover:text-white"
+                    ? "border-blue-500 bg-white/10 text-white ring-1 ring-blue-500"
+                    : "border-white/20 text-white/85 hover:border-white/40 hover:text-white"
                 }`}
               >
-                <Ikon className="h-6 w-6" aria-hidden="true" />
-                {label}
+                <Pratinjau mode={nilai} />
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                      dipilih ? "border-blue-400" : "border-white/50"
+                    }`}
+                  >
+                    {dipilih ? <span className="h-2 w-2 rounded-full bg-blue-400" /> : null}
+                  </span>
+                  {label}
+                </span>
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/15 pt-4">
+          <div>
+            <p id={`${judulId}-kontras`} className="text-sm font-medium text-white">
+              Kontras Tinggi
+            </p>
+            <p className="mt-0.5 text-xs text-white/75">
+              Meningkatkan kontras antara teks dan latar belakang.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-labelledby={`${judulId}-kontras`}
+            aria-checked={kontrasTinggi}
+            onClick={ubahKontras}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+              kontrasTinggi
+                ? "border-blue-400 bg-blue-500"
+                : "border-white/30 bg-[#282c32]"
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                kontrasTinggi ? "translate-x-5" : "translate-x-1"
+              }`}
+            />
+          </button>
         </div>
       </dialog>
     </div>

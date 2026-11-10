@@ -192,34 +192,58 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(modal.getByRole("heading", { name: "Pilih Tema Tampilan" })).toBeVisible();
     const gayaModal = await modal.evaluate((el) => {
       const s = getComputedStyle(el);
-      return { bg: s.backgroundColor, color: s.color, radius: s.borderRadius };
+      return {
+        bg: s.backgroundColor,
+        color: s.color,
+        radius: s.borderRadius,
+        lebar: el.getBoundingClientRect().width,
+      };
     });
     expect(gayaModal.bg).toBe("rgb(60, 68, 78)");
     expect(gayaModal.color).toBe("rgb(255, 255, 255)");
     expect(Number.parseFloat(gayaModal.radius)).toBeGreaterThanOrEqual(12);
+    expect(gayaModal.lebar).toBeGreaterThanOrEqual(520);
+
+    // Tiga kartu radio sejajar + miniatur UI di tiap kartu.
+    await expect(modal.getByRole("radio", { name: "Terang" })).toBeVisible();
+    await expect(modal.getByRole("radio", { name: "Gelap" })).toBeVisible();
+    await expect(modal.getByRole("radio", { name: "Ikuti Sistem" })).toBeVisible();
+    await expect(modal.getByTestId("preview-light")).toBeVisible();
+    await expect(modal.getByTestId("preview-dark")).toBeVisible();
+    await expect(modal.getByTestId("preview-system")).toBeVisible();
+
+    // Sakelar Kontras Tinggi beserta subteks.
+    await expect(
+      modal.getByText("Meningkatkan kontras antara teks dan latar belakang."),
+    ).toBeVisible();
+    const sakelar = modal.getByRole("switch", { name: /Kontras Tinggi/ });
+    await expect(sakelar).toHaveAttribute("aria-checked", "false");
+    await sakelar.click();
+    await expect(sakelar).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("html")).toHaveClass(/high-contrast/);
+    await sakelar.click();
+    await expect(sakelar).toHaveAttribute("aria-checked", "false");
 
     // Escape menutup modal (dialog native).
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
     modal = await bukaModal();
-    await modal.getByRole("button", { name: /Gelap/ }).click();
+    await modal.getByRole("radio", { name: "Gelap" }).click();
     await expect(page.locator("html")).toHaveClass(/dark/);
     const stored = await page.evaluate(() => window.localStorage.getItem("autore-theme"));
     expect(stored).toBe("dark");
 
-    // Kartu aktif ditandai border biru dan aria-pressed.
-    const kartuGelap = modal.getByRole("button", { name: /Gelap/ });
-    expect(await kartuGelap.getAttribute("aria-pressed")).toBe("true");
-    // Tailwind v4 menulis biru-500 sebagai oklch, jadi yang diuji: kartu aktif
-    // berborder 2px dengan warna berbeda dari kartu non-aktif.
+    // Kartu aktif ditandai border biru dan aria-checked.
+    const kartuGelap = modal.getByRole("radio", { name: "Gelap" });
+    expect(await kartuGelap.getAttribute("aria-checked")).toBe("true");
     const gayaKartu = await kartuGelap.evaluate((el) => {
       const s = getComputedStyle(el);
       return { warna: s.borderTopColor, lebar: s.borderTopWidth };
     });
     expect(gayaKartu.lebar).toBe("2px");
     const warnaTerang = await modal
-      .getByRole("button", { name: /Terang/ })
+      .getByRole("radio", { name: "Terang" })
       .evaluate((el) => getComputedStyle(el).borderTopColor);
     expect(gayaKartu.warna).not.toBe(warnaTerang);
     const warnaDark = await page.evaluate(() => {

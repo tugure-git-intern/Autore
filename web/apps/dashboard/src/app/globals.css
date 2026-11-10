@@ -29,6 +29,17 @@
   color-scheme: dark;
 }
 
+/* Kontras tinggi: menajamkan garis batas dan teks skunder di kedua tema. */
+html.high-contrast {
+  --color-line: #6b7280;
+  --color-muted: #111827;
+}
+
+html.dark.high-contrast {
+  --color-line: #93a8d4;
+  --color-muted: #ffffff;
+}
+
 /**
  * Scrollbar tipis ala Google Cloud Console: lebar 8px, track transparan supaya
  * menyatu dengan kanvas, thumb abu netral membulat penuh. Chrome/Edge/Safari

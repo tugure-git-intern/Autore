@@ -261,7 +261,10 @@ test.describe("kerangka melayang di layar lebar", () => {
     });
 
     expect(warnaDark.sidebarBg).toBe("rgb(40, 44, 50)");
-    expect(warnaDark.navbarBg).toBe("rgb(40, 44, 50)");
+    // Di desktop topbar sengaja transparan (hamburger digambar di atas kartu
+    // sidebar yang warnanya identik). Yang melukis kanvas di belakangnya adalah
+    // <html> dengan --bg-canvas pada dark (#353b43), jadi tidak ada garis sambung.
+    expect(warnaDark.navbarBg).toBe("rgba(0, 0, 0, 0)");
     expect(warnaDark.mainBg).toBe("rgb(53, 59, 67)");
     expect(warnaDark.mainBorder).toBe("rgb(80, 99, 139)");
     expect(warnaDark.h1Color).toBe("rgb(255, 255, 255)");

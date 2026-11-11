@@ -129,13 +129,14 @@ describe("topbar route context", () => {
     expect(isi.className).toContain("max-w-[1440px]");
     expect(isi.className).toContain("mx-auto");
 
-    // Topbar biru muda selebar viewport, di layer belakang sidebar (z-20) supaya
-    // tidak pernah terlihat putus. Sidebar memakai chrome yang sama; hanya kartu
-    // konten yang putih.
+    // Topbar biru muda selebar viewport. Sejak hamburger pindah ke pojok kiri,
+    // topbar digambar DI ATAS sidebar (z-30 > z-20) dan latarnya transparan di
+    // desktop; warnanya sama dengan sidebar jadi tetap tidak terlihat putus.
+    // Sidebar memakai chrome yang sama; hanya kartu konten yang putih.
     const header = container.querySelector("header") as HTMLElement;
     expect(header.className).toContain("bg-[#F0F5FE]");
     expect(header.className).toContain("w-full");
-    expect(header.className).toContain("z-10");
+    expect(header.className).toContain("z-30");
     // Isi topbar digeser ke kanan supaya tidak tersembunyi di balik kartu sidebar.
     expect((header.firstElementChild as HTMLElement).className).toContain("lg:pl-[274px]");
     expect((container.querySelector("aside") as HTMLElement).className).toContain("bg-[#F0F5FE]");

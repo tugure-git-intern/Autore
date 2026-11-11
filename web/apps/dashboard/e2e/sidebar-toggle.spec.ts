@@ -71,8 +71,9 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     // Keluar layar sepenuhnya: tepi kanan kartu sidebar tidak lagi terlihat.
     expect((await kotakSidebar(page)).right).toBeLessThanOrEqual(0);
 
-    // Topbar ikut rapat, bukan menyisakan lubang 274px.
-    expect(await paddingTopbar(page)).toBe("12px");
+    // Topbar ikut rapat: breadcrumb mulai setelah hamburger (12+32+8 = 52px),
+    // bukan menyisakan lubang 274px.
+    expect(await paddingTopbar(page)).toBe("52px");
 
     // Tertutup = tidak bisa di-Tab: tautan sidebar tidak boleh menerima fokus.
     await expect(page.locator("aside")).toHaveJSProperty("inert", true);
@@ -129,6 +130,52 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     // tetap bergeser setelah navigasi client-side.
     await page.getByRole("button", { name: "Tutup sidebar" }).click();
     await expect.poll(async () => (await kotakMain(page)).x, { timeout: 3_000 }).toBe(KONTEN_TERTUTUP);
+  });
+
+  test("hamburger menempel pojok kiri topbar, tidak melayang di dekat judul konten", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const tombolKotak = (await page.getByRole("button", { name: "Tutup sidebar" }).boundingBox())!;
+    // 12px dari tepi layar: posisi yang sama saat sidebar terbuka maupun tertutup.
+    expect(Math.round(tombolKotak.x)).toBe(12);
+
+    // Ikon tiga garis (Menu), bukan ikon panel.
+    await expect(page.locator("header svg.lucide-menu").first()).toBeVisible();
+    await expect(page.locator("header svg.lucide-panel-left")).toHaveCount(0);
+
+    // Tidak menabrak lockup logo: blok merek sidebar digeser ke kanan hamburger.
+    const logo = (await page.getByTestId("sidebar-brand").locator("img").boundingBox())!;
+    expect(Math.round(logo.x)).toBeGreaterThanOrEqual(Math.round(tombolKotak.x + tombolKotak.width));
+
+    // Posisi tombol tidak berubah setelah sidebar ditutup: tetap di pojok kiri,
+    // tidak ikut melayang mengikuti padding konten.
+    await page.getByRole("button", { name: "Tutup sidebar" }).click();
+    await expect.poll(async () => (await kotakMain(page)).x, { timeout: 3_000 }).toBe(KONTEN_TERTUTUP);
+    const setelahTutup = (await page.getByRole("button", { name: "Buka sidebar" }).boundingBox())!;
+    expect(Math.round(setelahTutup.x)).toBe(12);
+  });
+
+  test("tagline Automation Tugure tampil kecil dan abu-abu di bawah Autore", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const tagline = page.getByTestId("sidebar-brand").getByText("Automation Tugure");
+    await expect(tagline).toBeVisible();
+
+    const gaya = await tagline.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { size: s.fontSize, color: s.color };
+    });
+    expect(gaya.size).toBe("10px");
+    // text-muted bertema (#4b5563 di light) — lolos kontras AA 4.5:1.
+    expect(gaya.color).toBe("rgb(75, 85, 99)");
+
+    // Urutan: di bawah "Autore", di atas tagline lama.
+    const urutan = await page
+      .getByTestId("sidebar-brand")
+      .evaluate((el) => Array.from(el.querySelectorAll("p"), (p) => p.textContent));
+    expect(urutan).toEqual(["Autore", "Automation Tugure", "CI/CD Workspace"]);
   });
 
   test.describe("prefers-reduced-motion", () => {

@@ -388,10 +388,12 @@ test.describe("kerangka melayang di layar lebar", () => {
 
     // Tailwind v4 mencampur warna lewat oklab, jadi hasilnya bukan string rgb();
     // yang penting latar hover benar-benar berubah dari transparan.
+    // Transisi CSS baru selesai beberapa frame setelah hover; dibaca langsung,
+    // nilainya masih transparan. `expect.poll` menunggu sampai warnanya terpasang.
     await sync.hover();
-    const bgHover = await sync.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(bgHover).not.toBe(gaya.bg);
-    expect(bgHover).not.toContain("/ 0)");
+    await expect
+      .poll(() => sync.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 3_000 })
+      .not.toContain("/ 0)");
   });
 
   test("font utama menggunakan Google Sans Flex via --font-google-sans-flex", async ({
@@ -485,12 +487,10 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(inlineStyle).toContain("#353b43");
     expect(inlineStyle).toContain("color-scheme: dark");
 
-    // 2. documentElement harus sudah berlatar #353b43 (bukan putih rgb(255, 255, 255))
-    const bgHtml = await page.evaluate(
-      () => getComputedStyle(document.documentElement).backgroundColor,
-    );
-    expect(bgHtml).toBe("rgb(53, 59, 67)");
-    expect(bgHtml).not.toBe("rgb(255, 255, 255)");
+    // 2. documentElement harus berlatar #353b43 (bukan putih rgb(255, 255, 255)).
+    // Dibaca lewat locator supaya auto-retry: tepat setelah `domcontentloaded`
+    // aturan kritis itu bisa belum diterapkan (pernah terbaca rgb(250, 250, 250)).
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(53, 59, 67)");
   });
 
   test("hard refresh dengan cookie autore-theme=dark menghasilkan HTML awal yang sudah gelap (bebas FOUC tanpa JS)", async ({
@@ -542,26 +542,22 @@ test.describe("kerangka melayang di layar lebar", () => {
 
     await page.goto("/", { waitUntil: "commit" });
 
-    const statusAwal = await page.evaluate(() => {
-      const el = document.documentElement;
-      return {
-        hasDarkClass: el.classList.contains("dark"),
-        bg: getComputedStyle(el).backgroundColor,
-        colorScheme: getComputedStyle(el).colorScheme,
-      };
-    });
+    // Kelas `dark` di sini murni dari SSR (cookie) — dibaca tepat saat `commit`,
+    // sebelum JS sempat jalan. Warna latar baru terpasang ketika CSS kritis di
+    // <head> diterapkan, dan itu tidak dijamin sudah selesai saat `commit`, jadi
+    // di-poll lewat locator (auto-retry) alih-alih dibaca sekali.
+    const kelasAwal = await page.evaluate(() =>
+      document.documentElement.classList.contains("dark"),
+    );
+    expect(kelasAwal, "kelas dark harus sudah ada dari SSR, sebelum JS jalan").toBe(true);
 
-    expect(statusAwal.hasDarkClass).toBe(true);
-    expect(statusAwal.bg).toBe("rgb(53, 59, 67)");
-    expect(statusAwal.colorScheme).toBe("dark");
+    const html = page.locator("html");
+    await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
+    await expect(html).toHaveCSS("color-scheme", "dark");
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    const statusReload = await page.evaluate(() => ({
-      hasDarkClass: document.documentElement.classList.contains("dark"),
-      bg: getComputedStyle(document.documentElement).backgroundColor,
-    }));
-    expect(statusReload.hasDarkClass).toBe(true);
-    expect(statusReload.bg).toBe("rgb(53, 59, 67)");
+    await expect(html).toHaveClass(/\bdark\b/);
+    await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
   });
 
   test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi v0.6.0 di kanan", async ({

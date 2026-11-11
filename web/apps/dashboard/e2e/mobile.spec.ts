@@ -40,13 +40,25 @@ test.describe("Autore dashboard mobile contract @390x844", () => {
     test(`nol scroll horizontal di ${rute}`, async ({ page }) => {
       await page.goto(rute, { waitUntil: "networkidle" });
 
-      const { scroll, pelaku } = await ukurLebar(page);
-
       // Dua syarat: halaman tidak menggeser, DAN tidak ada elemen yang lebih
       // lebar dari layar — tabel di dalam wadah `overflow-x-auto` tidak
       // menggeser halaman, tapi tetap memaksa jempol men-swipe menyamping.
-      expect(scroll, `halaman menggeser; pelaku: ${pelaku.join(" | ") || "tidak ada"}`).toBeLessThanOrEqual(1);
-      expect(pelaku, "elemen melewati tepi kanan").toEqual([]);
+      //
+      // Di-poll, bukan dibaca sekali: tepat setelah `networkidle` animasi masuk
+      // masih berjalan, dan pengukuran sekali sempat menangkap frame antara
+      // (4 div 215/107 px, 4 px lewat tepi) yang hilang sendiri sepersekian
+      // detik kemudian. Yang dijamin kontraknya: layout akhir tidak menggeser.
+      await expect
+        .poll(
+          async () => {
+            const { scroll, pelaku } = await ukurLebar(page);
+            return scroll <= 1 && pelaku.length === 0
+              ? "stabil"
+              : `scroll=${scroll}; pelaku: ${pelaku.join(" | ") || "tidak ada"}`;
+          },
+          { timeout: 5_000, message: `layout ${rute} harus stabil tanpa geser horizontal` },
+        )
+        .toBe("stabil");
     });
   }
 

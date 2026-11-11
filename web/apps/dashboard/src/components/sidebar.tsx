@@ -66,13 +66,15 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
       {/* Blok logo setinggi topbar (64px). Bingkainya memakai chrome yang sama
           dengan latar utama dan tampil tanpa border maupun bayangan: tidak ada
           gradasi tepi yang terbaca sebagai sekat vertikal. Jarak 12px dari tepi
-          layar tetap dipertahankan lewat posisi `fixed`. */}
+          layar tetap dipertahankan lewat posisi `fixed`.
+          Dua sisi: kiri = lockup + nama + workspace (vertikal), kanan = tagline
+          produk. px-6 dipertahankan supaya logo tetap lurus dengan ikon menu. */}
       <div
         data-testid="sidebar-brand"
         className="flex h-16 shrink-0 items-center gap-3 px-6"
       >
-        {/* Lockup asli Tugu Reasuransi (ikon + wordmark + tagline), latar transparan.
-            h-10 + object-contain: seluruh lockup diskalakan utuh, tidak ada yang dipotong. */}
+        {/* Lockup asli Tugu Reasuransi (ikon + wordmark), latar transparan.
+            h-10 + object-contain: utuh tanpa dipotong, dan tidak digencet flex. */}
         <img
           src="/tugure-logo-asli.png"
           alt="Tugu Reasuransi"
@@ -82,10 +84,7 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
         />
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-tight text-ink dark:text-white">Autore</p>
-          <p className="text-[10px] leading-tight text-muted dark:text-[#c9d1d9]">
-            Automation Tugure
-          </p>
-          <p className="text-xs text-muted dark:text-[#c9d1d9]">CI/CD Workspace</p>
+          <p className="text-xs leading-tight text-muted dark:text-[#c9d1d9]">CI/CD Workspace</p>
         </div>
       </div>
       <nav aria-label="Navigasi utama" className="flex flex-1 flex-col gap-0.5 px-3 py-4">

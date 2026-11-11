@@ -15,7 +15,6 @@ import type { SessionUser } from "@/lib/current-user";
 import { fetchDashboardStatus } from "@/lib/status-client";
 import { Navbar } from "./navbar";
 import { NavBawah } from "./nav-bawah";
-import { routeTitle } from "./nav-items";
 import { Sidebar } from "./sidebar";
 import { Toast, ToastSink, type JenisToast } from "./toast";
 import { useActivePipelines, type HasilActive } from "./use-active-pipelines";
@@ -212,7 +211,6 @@ const TANPA_KERANGKA = new Set(["/login", "/403"]);
 
 function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   const status = useStatus();
-  // Same pathname source as the sidebar active rule: one title per route.
   const pathname = usePathname() ?? "/";
   // Terbuka secara bawaan; state tinggal di sini supaya sidebar, topbar dan kartu
   // konten bergeser dari satu sumber. Navigasi antar rute tidak mereset (Shell
@@ -226,7 +224,6 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
       <Sidebar terbuka={sidebarTerbuka} />
       <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] dark:bg-[#282c32] lg:overflow-hidden">
         <Navbar
-          title={routeTitle(pathname)}
           onSync={status.sync}
           refreshing={status.refreshing}
           user={user}

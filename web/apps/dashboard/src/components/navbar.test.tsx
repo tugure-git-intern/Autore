@@ -54,29 +54,25 @@ describe("topbar route context", () => {
     );
   }
 
-  it.each([["/applications", "Daftar Aplikasi"], ["/pipeline", "Pipeline & Log"]])(
-    "titles the 64px topbar with GCP breadcrumb format Autore / <Judul> (%s)",
-    (pathname, expected) => {
+  it.each(["/", "/applications", "/pipeline", "/audit"])(
+    "menampilkan tagline produk statis di topbar pada rute %s",
+    (pathname) => {
       renderShell(pathname);
 
       const banner = within(screen.getByRole("banner"));
-      const p = banner.getByText((content) => content.includes(expected), { selector: "p" });
-      expect(p).toBeVisible();
-      expect(p.textContent).toContain(`Autore / ${expected}`);
-      expect(p.className).toContain("text-[#545F72]");
+      expect(banner.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
+      // Judul jalur dinamis sudah dihapus: tidak ada "Autore / <halaman>" di topbar.
+      expect(banner.queryByText(/Autore \//)).toBeNull();
     },
   );
 
-  it("leaves the topbar left side empty on the dashboard: no product name and no connection dot", () => {
+  it("di dashboard topbar hanya memuat tagline produk, tanpa indikator koneksi", () => {
     renderShell("/");
 
     const banner = within(screen.getByRole("banner"));
-    // Nama produk sudah ada di sidebar, H1 sudah bilang "Dashboard", dan indikator
-    // koneksi cuma milik footer sidebar, jadi topbar tidak mengulang satu pun.
-    expect(banner.queryByText("Autore")).toBeNull();
-    expect(banner.queryByText("Dashboard", { selector: "p" })).toBeNull();
+    expect(banner.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
+    expect(banner.queryByText(/Autore \//)).toBeNull();
     expect(banner.queryByRole("status")).toBeNull();
-    // Kontrol kanan tetap ada sehingga topbar tidak runtuh tanpa breadcrumb.
     expect(banner.getByRole("button", { name: "Sync" })).toBeVisible();
   });
 
@@ -150,10 +146,9 @@ describe("topbar route context", () => {
 });
 
 describe("Navbar", () => {
-  function renderNavbar(user: SessionUser, title = "Dashboard") {
+  function renderNavbar(user: SessionUser) {
     const hasil = render(
       <Navbar
-        title={title}
         onSync={() => {}}
         user={user}
         sidebarTerbuka
@@ -166,14 +161,11 @@ describe("Navbar", () => {
     return hasil;
   }
 
-  it("carries the GCP breadcrumb title, Sync in #545F72 and the signed-in user", () => {
+  it("menampilkan tagline produk, Sync #545F72, dan pengguna yang masuk", () => {
     renderNavbar(USER);
 
     expect(screen.queryByRole("heading")).toBeNull();
-    const p = screen.getByText((c) => c.includes("Dashboard"), { selector: "p" });
-    expect(p).toBeVisible();
-    expect(p.textContent).toContain("Autore / Dashboard");
-    expect(p.className).toContain("text-[#545F72]");
+    expect(screen.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
     // Indikator koneksi hanya milik footer sidebar, bukan topbar.
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByTestId("connection-dot")).toBeNull();
@@ -184,28 +176,29 @@ describe("Navbar", () => {
     expect(screen.getByRole("button", { name: /keluar/i })).toBeVisible();
   });
 
-  it("menaruh breadcrumb di tepi kiri tanpa divider menggantung dan tanpa indikator tambahan", () => {
-    const { container } = renderNavbar(USER, "Pipeline & Log");
-
-    const banner = within(screen.getByRole("banner"));
-    const judul = banner.getByText((c) => c.includes("Pipeline & Log"), { selector: "p" });
+  it("grup kiri hanya [hamburger][tagline], tanpa sisa judul jalur", () => {
+    const { container } = renderNavbar(USER);
 
     // Topbar tidak punya titik hijau maupun teks status: itu milik footer sidebar.
-    expect(banner.queryByRole("status")).toBeNull();
+    expect(within(screen.getByRole("banner")).queryByRole("status")).toBeNull();
     expect(container.querySelector('[data-testid="connection-dot"]')).toBeNull();
-    // Grup kiri dimulai tombol buka/tutup sidebar, lalu breadcrumb; tidak ada garis
-    // "|" menggantung karena tidak ada pemisah sama sekali di antaranya.
-    const grupKiri = judul.parentElement as HTMLElement;
-    expect(grupKiri.className).toContain("items-center");
-    expect(grupKiri.firstElementChild).toBe(
+
+    const tagline = screen.getByTestId("topbar-tagline");
+    const grupTombol = tagline.parentElement as HTMLElement;
+    expect(grupTombol.className).toContain("flex items-center gap-2");
+    expect(grupTombol.firstElementChild).toBe(
       screen.getByRole("button", { name: "Tutup sidebar" }),
     );
-    expect(grupKiri.firstElementChild?.nextElementSibling).toBe(judul);
+    expect(grupTombol.lastElementChild).toBe(tagline);
+    // Tidak ada elemen lain sesudahnya: pemisah "|" dan judul jalur sudah tidak ada.
+    const grupKiri = grupTombol.parentElement as HTMLElement;
+    expect(grupKiri.className).toContain("items-center");
+    expect(grupKiri.children).toHaveLength(1);
     expect(container.querySelector("header")?.className).toContain("bg-[#F0F5FE]");
   });
 
   it("menjaga topbar polos tanpa lengkungan, tetap #F0F5FE dengan teks #545F72", () => {
-    const { container } = renderNavbar(USER, "Audit Log");
+    const { container } = renderNavbar(USER);
 
     const header = container.querySelector("header") as HTMLElement;
     // Bar biasa: menempel penuh, tanpa lengkungan dan tanpa celah kanvas.
@@ -217,21 +210,19 @@ describe("Navbar", () => {
     expect(header.className).not.toContain("border");
 
     const banner = within(screen.getByRole("banner"));
-    expect(
-      banner.getByText((c) => c.includes("Audit Log"), { selector: "p" }).className,
-    ).toContain("text-[#545F72]");
+    expect(banner.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
     expect(banner.getByRole("button", { name: "Sync" }).className).toContain("text-[#545F72]");
     expect(banner.getByText("Alif").className).toContain("text-[#545F72]");
   });
 
-  it("tanpa judul halaman, grup kiri kosong dan tidak ada status yang menggantung", () => {
-    renderNavbar(USER, "");
+  it("tidak ada status yang menggantung di grup kiri", () => {
+    renderNavbar(USER);
 
     const banner = within(screen.getByRole("banner"));
     expect(banner.queryByRole("status")).toBeNull();
     expect(banner.queryByText("Terhubung")).toBeNull();
     expect(banner.queryByText((c) => c.includes("Autore /"), { selector: "p" })).toBeNull();
-    // Kontrol kanan tetap utuh, jadi topbar tidak runtuh saat tanpa breadcrumb.
+    // Kontrol kanan tetap utuh, jadi topbar tidak runtuh tanpa judul jalur.
     expect(banner.getByRole("button", { name: "Sync" })).toBeVisible();
   });
 
@@ -253,7 +244,6 @@ describe("Navbar", () => {
 
   it("berputar dan terkunci selama sync, kembali normal setelah selesai", () => {
     const props = {
-      title: "Dashboard",
       onSync: () => {},
       user: USER,
       sidebarTerbuka: true,

@@ -71,7 +71,7 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     // Keluar layar sepenuhnya: tepi kanan kartu sidebar tidak lagi terlihat.
     expect((await kotakSidebar(page)).right).toBeLessThanOrEqual(0);
 
-    // Topbar ikut rapat: hamburger dan breadcrumb mulai di tepi kiri (12px),
+    // Topbar ikut rapat: hamburger dan tagline mulai di tepi kiri (12px),
     // bukan menyisakan lubang 274px.
     expect(await paddingTopbar(page)).toBe(`${KONTEN_TERTUTUP}px`);
 
@@ -132,7 +132,20 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     await expect.poll(async () => (await kotakMain(page)).x, { timeout: 3_000 }).toBe(KONTEN_TERTUTUP);
   });
 
-  test("hamburger duduk di grup kiri topbar: di kanan sidebar, sebelum breadcrumb", async ({ page }) => {
+  test("tagline produk tampil di semua halaman, tanpa judul jalur dinamis", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    for (const rute of ["/", "/pipeline", "/applications", "/audit"]) {
+      await page.goto(rute, { waitUntil: "networkidle" });
+      const topbar = page.locator("header");
+      await expect(topbar.getByTestId("topbar-tagline")).toBeVisible();
+      await expect(topbar.getByTestId("topbar-tagline")).toHaveText("Automation Tugure");
+      // Breadcrumb "Autore / <halaman>" sudah dihapus total dari topbar.
+      await expect(topbar.getByText(/Autore \//)).toHaveCount(0);
+    }
+  });
+
+  test("hamburger duduk di grup kiri topbar: di kanan sidebar, di kiri tagline", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/pipeline", { waitUntil: "networkidle" });
 
@@ -144,9 +157,11 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     await expect(page.locator("header svg.lucide-menu").first()).toBeVisible();
     await expect(page.locator("header svg.lucide-panel-left")).toHaveCount(0);
 
-    // Breadcrumb menyusul di kanan tombol, bukan mendahuluinya.
-    const remah = (await page.locator("header p").first().boundingBox())!;
-    expect(Math.round(remah.x)).toBeGreaterThanOrEqual(Math.round(tombolKotak.x + tombolKotak.width));
+    // Tagline menyusul di kanan tombol, bukan mendahuluinya.
+    const taglineKotak = (await page.getByTestId("topbar-tagline").boundingBox())!;
+    expect(Math.round(taglineKotak.x)).toBeGreaterThanOrEqual(
+      Math.round(tombolKotak.x + tombolKotak.width),
+    );
 
     // Saat ditutup tombol ikut meluncur ke tepi kiri bersama padding baris.
     await page.getByRole("button", { name: "Tutup sidebar" }).click();
@@ -155,26 +170,97 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     expect(Math.round(setelahTutup.x)).toBeLessThanOrEqual(24);
   });
 
-  test("tagline Automation Tugure tampil kecil dan abu-abu di bawah Autore", async ({ page }) => {
+  test("tagline duduk di topbar tepat di kanan hamburger, kepala sidebar bersih", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/", { waitUntil: "networkidle" });
 
-    const tagline = page.getByTestId("sidebar-brand").getByText("Automation Tugure");
+    const tombol = page.getByRole("button", { name: "Tutup sidebar" });
+    const tagline = page.getByTestId("topbar-tagline");
     await expect(tagline).toBeVisible();
+    await expect(tagline).toHaveText("Automation Tugure");
 
-    const gaya = await tagline.evaluate((el) => {
-      const s = getComputedStyle(el);
-      return { size: s.fontSize, color: s.color };
+    const ukur = await tagline.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const tb = (
+        document.querySelector('header button[aria-controls="sidebar-utama"]') as HTMLElement
+      ).getBoundingClientRect();
+      const kartu = (document.querySelector("#sidebar-utama") as HTMLElement).getBoundingClientRect();
+      const gaya = getComputedStyle(el);
+      const gayaSync = getComputedStyle(
+        Array.from(document.querySelectorAll("header button")).find((b) =>
+          b.textContent?.includes("Sync"),
+        ) as HTMLElement,
+      );
+      return {
+        tagline: {
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+          right: Math.round(b.right),
+          bottom: Math.round(b.bottom),
+        },
+        tombol: {
+          x: Math.round(tb.x),
+          right: Math.round(tb.right),
+          y: Math.round(tb.y),
+          bottom: Math.round(tb.bottom),
+        },
+        kartu: { x: Math.round(kartu.x), right: Math.round(kartu.right) },
+        size: gaya.fontSize,
+        bobot: gaya.fontWeight,
+        color: gaya.color,
+        font: gaya.fontFamily,
+        latar: getComputedStyle(document.querySelector("header") as HTMLElement).backgroundColor,
+        terpotong: el.scrollWidth - el.clientWidth,
+        sizeSync: gayaSync.fontSize,
+        bobotSync: gayaSync.fontWeight,
+        tetangga: el.previousElementSibling?.getAttribute("aria-label") ?? "",
+      };
     });
-    expect(gaya.size).toBe("10px");
-    // text-muted bertema (#4b5563 di light) — lolos kontras AA 4.5:1.
-    expect(gaya.color).toBe("rgb(75, 85, 99)");
 
-    // Urutan: di bawah "Autore", di atas tagline lama.
-    const urutan = await page
-      .getByTestId("sidebar-brand")
-      .evaluate((el) => Array.from(el.querySelectorAll("p"), (p) => p.textContent));
-    expect(urutan).toEqual(["Autore", "Automation Tugure", "CI/CD Workspace"]);
+    // 1. Duduk di KANAN tombol, tidak menumpuk, satu band 64px topbar.
+    expect(ukur.tetangga, "tagline tidak langsung setelah tombol").toBe("Tutup sidebar");
+    expect(ukur.tagline.x).toBeGreaterThanOrEqual(ukur.tombol.right);
+    expect(ukur.tagline.y).toBeLessThan(ukur.tombol.bottom);
+    expect(ukur.tagline.bottom).toBeGreaterThan(ukur.tombol.y);
+
+    // 2. Bukan bagian kartu sidebar: seluruhnya di luar tepi kanannya.
+    expect(ukur.tagline.x).toBeGreaterThan(ukur.kartu.right);
+
+    // 3. Tipografi: 11px Google Sans Flex, utuh, kontras AA di atas latar topbar.
+    expect(ukur.size).toBe("14px");
+    expect(ukur.font).toMatch(/Google Sans Flex/);
+    // Sama ukuran dan bobot dengan label tombol Sync di ujung kanan topbar.
+    expect(ukur.sizeSync).toBe(ukur.size);
+    expect(ukur.bobotSync).toBe(ukur.bobot);
+    expect(ukur.terpotong).toBeLessThanOrEqual(0);
+
+    const kanal = (c: number) => {
+      const x = c / 255;
+      return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    };
+    const luminansi = (rgb: number[]) =>
+      0.2126 * kanal(rgb[0]) + 0.7152 * kanal(rgb[1]) + 0.0722 * kanal(rgb[2]);
+    const teks = (ukur.color.match(/\d+/g) as string[]).slice(0, 3).map(Number);
+    const latar = (ukur.latar.match(/\d+/g) as string[]).slice(0, 3).map(Number);
+    const [terang, gelap] = [luminansi(teks), luminansi(latar)].sort((a, b) => b - a);
+    expect((terang + 0.05) / (gelap + 0.05)).toBeGreaterThanOrEqual(4.5);
+
+    // 4. Kepala sidebar tidak lagi memuat tagline.
+    await expect(page.getByTestId("sidebar-brand").getByText("Automation Tugure")).toHaveCount(0);
+
+    // 5. Tagline ikut topbar saat sidebar ditutup: tetap di kanan tombol.
+    await tombol.click();
+    await expect(tagline).toBeVisible();
+    const saatTutup = await tagline.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const tb = (
+        document.querySelector('header button[aria-controls="sidebar-utama"]') as HTMLElement
+      ).getBoundingClientRect();
+      return { tag: Math.round(b.x), tombolRight: Math.round(tb.right) };
+    });
+    expect(saatTutup.tag).toBeGreaterThanOrEqual(saatTutup.tombolRight);
   });
 
   test.describe("prefers-reduced-motion", () => {

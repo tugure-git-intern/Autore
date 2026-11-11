@@ -137,6 +137,8 @@ describe("Sidebar", () => {
 
     const logo = screen.getByRole("img", { name: "Tugu Reasuransi" });
     expect(logo).toHaveAttribute("src", "/tugure-logo-asli.png");
+    // Tinggi logo menyusut supaya baris merek memuat tagline di sisi kanan
+    // tanpa melewati lebar kartu 250px (h-8 = 32px, diukur di browser).
     expect(logo.className).toContain("h-10");
     expect(logo.className).toContain("w-auto");
     // object-contain + shrink-0: ikon tidak boleh dipotong atau digencet flex.

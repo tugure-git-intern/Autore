@@ -123,7 +123,7 @@ describe("AppShell — sidebar buka/tutup konten", () => {
     expect(btn.querySelector("svg.lucide-panel-left")).toBeNull();
   });
 
-  it("hamburger duduk di grup kiri topbar, sebelum breadcrumb dan tidak absolut", () => {
+  it("hamburger duduk di grup kiri topbar, bersebelahan dengan tagline dan tidak absolut", () => {
     renderShell();
 
     // Posisi diatur padding baris (274px saat terbuka), bukan absolute left-3.
@@ -131,19 +131,57 @@ describe("AppShell — sidebar buka/tutup konten", () => {
     expect(btn.className).not.toContain("absolute");
     expect(btn.className).not.toContain("left-3");
     expect(btn.parentElement?.firstElementChild).toBe(btn);
+    // Grup itu hanya [tombol][tagline]; tidak ada judul jalur yang menyusul.
+    expect(btn.parentElement?.children).toHaveLength(2);
+    expect(btn.nextElementSibling).toBe(screen.getByTestId("topbar-tagline"));
   });
 
-  it("blok merek sidebar kembali memakai padding simetris, tanpa jalur tombol", () => {
+  it("tagline duduk di grup topbar, tepat setelah tombol hamburger", () => {
+    renderShell();
+
+    const btn = screen.getByRole("button", { name: "Tutup sidebar" });
+    const tagline = screen.getByTestId("topbar-tagline");
+    expect(tagline.textContent).toBe("Automation Tugure");
+
+    // Satu grup dengan tombol, tombol lebih dulu, tagline langsung sesudahnya.
+    expect(tagline.parentElement).toBe(btn.parentElement);
+    expect(btn.nextElementSibling).toBe(tagline);
+    expect(tagline.parentElement?.className).toContain("flex items-center gap-2");
+
+    // Tipografi: 11px, warna bertema, tanpa kelas font lain yang menimpa
+    // Google Sans Flex global dari globals.css.
+    expect(tagline.className).toContain("text-sm");
+    expect(tagline.className).toContain("leading-tight");
+    expect(tagline.className).toContain("text-muted");
+    expect(tagline.className).toContain("dark:text-[#c9d1d9]");
+    expect(tagline.className).not.toContain("tracking-tight");
+    // Bobot sama dengan label tombol Sync di topbar.
+    expect(tagline.className).toContain("font-medium");
+    expect(tagline.className).not.toMatch(/font-(sans|serif|mono)\b/);
+
+    // Ikut nasib tombolnya: desktop saja.
+    expect(tagline.className).toContain("hidden");
+    expect(tagline.className).toContain("lg:inline-block");
+  });
+
+  it("kepala sidebar bersih: hanya logo, Autore, dan CI/CD Workspace", () => {
     renderShell();
 
     const merek = screen.getByTestId("sidebar-brand");
-    expect(merek.className).toContain("px-6");
-    expect(merek.className).not.toContain("pl-12");
+    const logo = screen.getByRole("img", { name: "Tugu Reasuransi" });
+    const autore = screen.getByText("Autore");
+    const cicd = screen.getByText("CI/CD Workspace");
 
-    const tagline = screen.getByText("Automation Tugure");
-    expect(tagline.className).toContain("text-[10px]");
-    expect(tagline.className).toContain("text-muted");
-    // Tagline lama tetap ada: yang diminta hanya menambah baris baru.
-    expect(screen.getByText("CI/CD Workspace")).toBeInTheDocument();
+    // Satu baris, logo di depan kolom teks, tanpa elemen di sisi kanan.
+    expect(merek.className).toContain("flex");
+    expect(merek.className).toContain("items-center");
+    expect(merek.className).toContain("gap-3");
+    expect(merek.firstElementChild).toBe(logo);
+
+    // Autore dan CI/CD Workspace tetap satu kolom vertikal.
+    expect(cicd.parentElement).toBe(autore.parentElement);
+
+    // Tagline sudah pindah ke topbar: bukan bagian blok merek lagi.
+    expect(merek.contains(screen.getByTestId("topbar-tagline"))).toBe(false);
   });
 });

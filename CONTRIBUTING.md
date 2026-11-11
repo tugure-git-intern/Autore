@@ -74,7 +74,7 @@ npx vitest run
 npm run build:dashboard
 
 # Run browser E2E, mobile contract, and accessibility suites (needs web/.env)
-npm run test:e2e                        # 77 Playwright tests across 7 spec files
+npm run test:e2e                        # 87 Playwright tests across 8 spec files
 npm run test:e2e -- e2e/a11y.spec.ts    # axe-core WCAG 2.1 AA: 6 routes + dark-mode toast
 ```
 
@@ -150,6 +150,6 @@ Before submitting a pull request:
 - [ ] `npx vitest run` passes 100% across all packages.
 - [ ] `npx tsc --noEmit` reports 0 errors in `contracts`, `api`, and `dashboard`.
 - [ ] `npm run build:dashboard` succeeds without error.
-- [ ] `npm run test:e2e` passes (77 Playwright tests, including the axe-core WCAG 2.1 AA suite).
+- [ ] `npm run test:e2e` passes (87 Playwright tests, including the axe-core WCAG 2.1 AA suite).
 - [ ] Zero emojis in code, commits, and documentation.
 - [ ] No secrets, keys, or credential tokens committed.

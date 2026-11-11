@@ -7,6 +7,7 @@
 <h3 align="center">CLI as the Brain, Web as the Interface</h3>
 
 <p align="center">
+  <a href="https://github.com/tugure-git-intern/Autore/releases/latest"><img src="https://img.shields.io/github/v/release/tugure-git-intern/Autore?style=for-the-badge&label=Release&color=blue" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Language-Rust-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/Security-Fail--Closed-red?style=for-the-badge&logo=shield" alt="Security">
   <img src="https://img.shields.io/badge/CI%2FCD-Jenkins%20Shared%20Library-blue?style=for-the-badge&logo=jenkins" alt="Jenkins">
@@ -43,6 +44,7 @@ The web interface is a stateless presentation layer built on Next.js and Hono th
 - **Rate-Limited Mutations**: Every `POST /api/actions/*` call passes an in-memory sliding-window limiter keyed on the authenticated GitHub login (10 actions per 60 seconds). Rejections return `429` with `Retry-After` and `X-RateLimit-*` headers, so an abusive client never reaches the CLI.
 - **Shared Contract Validation**: `@autore/contracts` (`web/packages/contracts`) is the single source of truth for every API payload shape and its fail-closed runtime validators, imported by both the Hono API and the Next.js dashboard. A malformed payload is rejected at the boundary instead of rendered.
 - **Responsive Operational UI**: Interface optimized for desktop operations and mobile devices in either theme, featuring a mobile bottom navigation bar, live Lead Time analytics, stage matrix inspection, and real-time connection status indicators.
+- **Collapsible Sidebar & Brand Identity**: The desktop sidebar opens and closes from a hamburger in the topbar; the main content tracks it with a 300 ms margin transition, and the closed panel is translated fully off-screen and marked `inert`, so keyboard focus never lands on hidden links. The sidebar brand block carries the product identity - `Autore` above the `Automation Tugure` tagline.
 
 ---
 
@@ -207,7 +209,7 @@ Access the dashboard at `http://localhost:9120` (or through your assigned host/T
 | `autore runs` | — | Retrieves 7-day Jenkins pipeline run history. |
 | `autore active` | — | Lists actively running or queued pipeline jobs. |
 | `autore deploy` | `dep` | Registers application project to Jenkins CI/CD and triggers automated build. |
-| `autore quick-start` | `qs` | 1-Click workflow: scaffolds code, creates GitHub repository, configures Jenkins, and runs build. |
+| `autore quick-start` | `qs` | 1-Click workflow: scaffolds code, creates GitHub repository, configures Jenkins, and runs build. Repository creation is idempotent: an existing repository is detected with a `GET` before any `POST`, so re-running a finished quick-start never attempts to create it twice. When GitHub does refuse, the message distinguishes a *secondary rate limit* from a genuine token permission problem. |
 | `autore init` | `in` | Generates standardized `Dockerfile`, `Jenkinsfile`, and `.dockerignore` for python, nodejs, java, or go. |
 | `autore doctor` | `doc` | Diagnoses health of Runner, Docker daemon, Java runtime, and Jenkins connection. |
 | `autore scan` | — | Pre-build security scan: Static Byte Guard + Gitleaks + Trivy. Supports `--no-docker` fast mode. |
@@ -290,13 +292,13 @@ curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitlea
 Both the core binary and the web monorepo maintain rigorous test suites:
 
 ```bash
-# Core Rust CLI (from cli/) - 335 tests total (285 unit + 50 integration)
-cargo test                       # 335 passed
-cargo test --bin autore          # 285 passed
+# Core Rust CLI (from cli/) - 343 tests total (293 unit + 50 integration)
+cargo test                       # 343 passed
+cargo test --bin autore          # 293 passed
 cargo test --test admin_cli      # 7 passed
 cargo test --test launcher_cli   # 5 passed
 
-# Web unit and contract tests (from web/) - 612 tests across 72 files
+# Web unit and contract tests (from web/) - 625 tests across 74 files
 npx vitest run                   # contracts + api + dashboard, 100% green
 
 # Web typechecks and production build (from web/)
@@ -305,8 +307,8 @@ npx vitest run                   # contracts + api + dashboard, 100% green
 ( cd apps/dashboard && npx tsc --noEmit )
 npm run build:dashboard
 
-# Browser E2E, mobile contract, and accessibility (from web/) - 77 tests across 7 spec files
-npm run test:e2e                 # Playwright: audit, a11y, dashboard, layout, mobile, quick-start, sbom
+# Browser E2E, mobile contract, and accessibility (from web/) - 87 tests across 8 spec files
+npm run test:e2e                 # Playwright: audit, a11y, dashboard, layout, mobile, quick-start, sbom, sidebar-toggle
 npm run test:e2e -- e2e/a11y.spec.ts   # axe-core, WCAG 2.1 AA on 6 routes + dark-mode toast
 ```
 
@@ -336,7 +338,7 @@ Autore/
 │   ├── packages/contracts/       # @autore/contracts: shared payload types + fail-closed validators
 │   ├── apps/dashboard/           # Next.js 15 App Router (/, /pipeline, /applications, /applications/sbom,
 │   │                             # /audit, /security, /login, /403)
-│   │   └── e2e/                  # Playwright suites (audit, a11y, dashboard, layout-wide, mobile, quick-start, sbom)
+│   │   └── e2e/                  # Playwright suites (audit, a11y, dashboard, layout-wide, mobile, quick-start, sbom, sidebar-toggle)
 │   ├── apps/api/                 # Hono API (auth, whitelist, rate limiter, audit trail, status proxy)
 │   ├── allowed-users.json        # Primary GitHub user whitelist
 │   └── .env                      # Environment secrets (OAuth keys, secrets, session configurations)

@@ -46,13 +46,23 @@ const KELAS_TITIK: Record<ToneServer, string> = {
   neutral: "bg-gray-400",
 };
 
-export function Sidebar() {
+export function Sidebar({ terbuka }: { terbuka: boolean }) {
   const pathname = usePathname() ?? "/";
   const { state, failed, loading } = useStatus();
   const { tone, label, pulse } = indikatorServer({ state, failed, loading });
 
   return (
-    <aside className="fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl bg-[#F0F5FE] dark:bg-[#282c32] lg:flex">
+    /* Ditutup = keluar layar penuh (250px + 12px celah), bukan display:none, supaya
+       geseran 300ms terlihat. `inert` menahan Tab masuk ke tautan yang tak terlihat.
+       Di bawah lg sidebar memang `hidden` (navigasi pindah ke bar bawah), jadi tidak
+       pernah menumpuk konten sebagai overlay. */
+    <aside
+      id="sidebar-utama"
+      inert={terbuka ? undefined : true}
+      className={`fixed left-3 top-3 bottom-3 z-20 hidden w-[250px] shrink-0 flex-col rounded-2xl bg-[#F0F5FE] transition-transform duration-300 ease-in-out motion-reduce:transition-none dark:bg-[#282c32] lg:flex ${
+        terbuka ? "translate-x-0" : "-translate-x-[calc(100%+12px)]"
+      }`}
+    >
       {/* Blok logo setinggi topbar (64px). Bingkainya memakai chrome yang sama
           dengan latar utama dan tampil tanpa border maupun bayangan: tidak ada
           gradasi tepi yang terbaca sebagai sekat vertikal. Jarak 12px dari tepi

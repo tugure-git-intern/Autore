@@ -78,6 +78,16 @@ test.describe("Autore dashboard mobile contract @390x844", () => {
     }
   });
 
+  test("tombol buka/tutup sidebar tidak ada dan konten menempel tepi kiri", async ({ page }) => {
+    await page.goto("/");
+
+    // Toggle sidebar hanya untuk desktop; di HP navigasi lewat bar bawah, dan
+    // sidebar (hidden) tidak pernah mendorong konten lewat margin.
+    await expect(page.getByRole("button", { name: /sidebar/i })).toHaveCount(0);
+    const main = (await page.locator("main").boundingBox())!;
+    expect(Math.round(main.x)).toBe(0);
+  });
+
   test("bar bawah benar-benar menavigasi, bukan cuma tampil", async ({ page }) => {
     await page.goto("/");
 

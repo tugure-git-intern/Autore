@@ -53,7 +53,7 @@ const renderSidebar = (status: ApiStatusResponse | Error = SEGAR) => {
   pasangFetch(status);
   return render(
     <StatusProvider>
-      <Sidebar />
+      <Sidebar terbuka />
     </StatusProvider>,
   );
 };

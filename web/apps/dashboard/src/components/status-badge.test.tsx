@@ -16,7 +16,7 @@ const renderSidebar = () => {
   vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
   return render(
     <StatusProvider>
-      <Sidebar />
+      <Sidebar terbuka />
     </StatusProvider>,
   );
 };

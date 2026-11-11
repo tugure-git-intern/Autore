@@ -151,7 +151,15 @@ describe("topbar route context", () => {
 
 describe("Navbar", () => {
   function renderNavbar(user: SessionUser, title = "Dashboard") {
-    const hasil = render(<Navbar title={title} onSync={() => {}} user={user} />);
+    const hasil = render(
+      <Navbar
+        title={title}
+        onSync={() => {}}
+        user={user}
+        sidebarTerbuka
+        onToggleSidebar={() => {}}
+      />,
+    );
     // Isi <details> yang tertutup dianggap tidak terlihat oleh jsdom.
     const details = hasil.container.querySelector("details");
     if (details) details.open = true;
@@ -185,10 +193,14 @@ describe("Navbar", () => {
     // Topbar tidak punya titik hijau maupun teks status: itu milik footer sidebar.
     expect(banner.queryByRole("status")).toBeNull();
     expect(container.querySelector('[data-testid="connection-dot"]')).toBeNull();
-    // Breadcrumb jadi elemen pertama di grup kiri, jadi tidak ada garis "|" menggantung.
+    // Grup kiri dimulai tombol buka/tutup sidebar, lalu breadcrumb; tidak ada garis
+    // "|" menggantung karena tidak ada pemisah sama sekali di antaranya.
     const grupKiri = judul.parentElement as HTMLElement;
     expect(grupKiri.className).toContain("items-center");
-    expect(grupKiri.firstElementChild).toBe(judul);
+    expect(grupKiri.firstElementChild).toBe(
+      screen.getByRole("button", { name: "Tutup sidebar" }),
+    );
+    expect(grupKiri.firstElementChild?.nextElementSibling).toBe(judul);
     expect(container.querySelector("header")?.className).toContain("bg-[#F0F5FE]");
   });
 
@@ -244,6 +256,8 @@ describe("Navbar", () => {
       title: "Dashboard",
       onSync: () => {},
       user: USER,
+      sidebarTerbuka: true,
+      onToggleSidebar: () => {},
     };
 
     const { rerender } = render(<Navbar {...props} refreshing />);

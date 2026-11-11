@@ -214,26 +214,40 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
   const status = useStatus();
   // Same pathname source as the sidebar active rule: one title per route.
   const pathname = usePathname() ?? "/";
+  // Terbuka secara bawaan; state tinggal di sini supaya sidebar, topbar dan kartu
+  // konten bergeser dari satu sumber. Navigasi antar rute tidak mereset (Shell
+  // hidup di layout), tapi reload kembali ke terbuka.
+  const [sidebarTerbuka, setSidebarTerbuka] = useState(true);
 
   if (TANPA_KERANGKA.has(pathname)) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen bg-[#F0F5FE] dark:bg-[#282c32] lg:h-screen lg:overflow-hidden">
-      <Sidebar />
+      <Sidebar terbuka={sidebarTerbuka} />
       <div className="flex min-w-0 flex-1 flex-col bg-[#F0F5FE] dark:bg-[#282c32] lg:overflow-hidden">
         <Navbar
           title={routeTitle(pathname)}
           onSync={status.sync}
           refreshing={status.refreshing}
           user={user}
+          sidebarTerbuka={sidebarTerbuka}
+          onToggleSidebar={() => setSidebarTerbuka((buka) => !buka)}
         />
         {/* pb-24 = tinggi bar bawah + jeda; tanpa ini baris terakhir konten
             (dan tombol aksinya) tersembunyi di balik bar di layar sempit.
             lg:overflow-y-auto: di desktop scroll terjadi di dalam kartu supaya
             sudut rounded-nya tidak pernah naik ketiban topbar.
-            lg:ml-[274px] = 12px jarak + 250px sidebar + 12px celah. lg:w-auto wajib:
-            w-full menang atas margin, jadi tanpa itu marginnya tidak menyusutkan lebar. */}
-        <main className="w-full flex-1 bg-white dark:bg-[#353b43] dark:text-white lg:mt-3 lg:mb-3 lg:ml-[274px] lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200 dark:lg:border-[#50638b]">
+            lg:ml-[274px] = 12px jarak + 250px sidebar + 12px celah, dan lg:ml-3 saat
+            sidebar ditutup: margin itu yang dianimasikan (transition-[margin] 300ms)
+            sehingga kartu konten ikut bergeser, bukan melompat. lg:w-auto wajib:
+            w-full menang atas margin, jadi tanpa itu marginnya tidak menyusutkan lebar.
+            Semua jarak kiri ber-prefix lg:, jadi di mobile (sidebar overlay lewat bar
+            bawah) kartu tetap menempel tepi. */}
+        <main
+          className={`w-full flex-1 bg-white transition-[margin] duration-300 ease-in-out motion-reduce:transition-none dark:bg-[#353b43] dark:text-white lg:mt-3 lg:mb-3 lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200 dark:lg:border-[#50638b] ${
+            sidebarTerbuka ? "lg:ml-[274px]" : "lg:ml-3"
+          }`}
+        >
           <div className="mx-auto w-full max-w-[1440px] px-3 pt-4 pb-24 sm:px-6 sm:pt-6">{children}</div>
         </main>
       </div>

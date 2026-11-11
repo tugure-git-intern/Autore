@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { PanelLeft, RefreshCw } from "lucide-react";
 import type { SessionUser } from "@/lib/current-user";
 import { AppearanceMenu } from "./appearance-menu";
 import { UserMenu } from "./user-menu";
@@ -10,18 +10,42 @@ export function Navbar({
   onSync,
   refreshing,
   user,
+  sidebarTerbuka,
+  onToggleSidebar,
 }: {
   /** Null on the dashboard: the sidebar already owns the product name. */
   title: string | null;
   onSync: () => void;
   refreshing?: boolean;
   user: SessionUser;
+  /** Sidebar sedang terlihat; tombol kiri topbar membalik nilainya. */
+  sidebarTerbuka: boolean;
+  onToggleSidebar: () => void;
 }) {
   return (
     <header className="sticky top-0 z-10 w-full bg-[#F0F5FE] dark:bg-[#282c32]">
-      {/* lg:pl-[274px] melewati kartu sidebar melayang: 12px jarak + 250px lebar + 12px celah. */}
-      <div className="flex h-16 items-center justify-between gap-3 px-4 lg:pl-[274px] lg:pr-3">
-        <div className="flex min-w-0 items-center">
+      {/* lg:pl-[274px] melewati kartu sidebar melayang: 12px jarak + 250px lebar +
+          12px celah. Saat sidebar ditutup padding itu menyusut ke 12px, jadi tombol
+          dan breadcrumb ikut bergeser dengan transisi yang sama dengan konten. */}
+      <div
+        className={`flex h-16 items-center justify-between gap-3 px-4 transition-[padding] duration-300 ease-in-out motion-reduce:transition-none lg:pr-3 ${
+          sidebarTerbuka ? "lg:pl-[274px]" : "lg:pl-3"
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Tombol buka/tutup sidebar ala Cloud Console: selalu ada di tepi kiri
+              topbar, jadi tidak perlu tombol panah di dalam sidebar. Hanya desktop —
+              di mobile navigasi pindah ke bar bawah. */}
+          <button
+            type="button"
+            aria-label={sidebarTerbuka ? "Tutup sidebar" : "Buka sidebar"}
+            aria-expanded={sidebarTerbuka}
+            aria-controls="sidebar-utama"
+            onClick={onToggleSidebar}
+            className="hidden h-11 w-8 -ml-1 shrink-0 items-center justify-center rounded-md text-[#545F72] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:text-white dark:hover:bg-[#353b43] lg:inline-flex"
+          >
+            <PanelLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
           {/* Status koneksi hanya ada di footer sidebar ("Server Online"); topbar tidak
               mengulanginya. Tanpa indikator, breadcrumb jadi elemen pertama grup kiri,
               jadi tidak ada divider "|" yang menggantung di tepi. */}

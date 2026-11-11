@@ -157,6 +157,16 @@ test.describe("halaman publik @1280x720", () => {
 // Data live Jenkins berubah-ubah, jadi kasus yang harus deterministik dikunci
 // dengan `page.route`. Satu tes tetap memakai data nyata untuk membuktikan dua
 // panggilan Jenkins memang tersambung sampai ke kartu.
+// Membaca teks hitungan dan jumlah kartu dalam SATU evaluasi. Dua bacaan terpisah
+// (teks dulu, kartu kemudian) bisa jatuh di antara dua polling Jenkins dan
+// melaporkan pasangan yang tidak pernah dirender bersama.
+const frameAktif = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => {
+    const span = document.querySelector('[data-testid="hitungan-aktif"]');
+    const angka = span ? Number(span.textContent?.match(/\d+/)?.[0]) : -1;
+    return { hitungan: angka, kartu: document.querySelectorAll('[data-testid="pipeline-card"]').length };
+  });
+
 test.describe("section Active Pipelines", () => {
   const pipeline = (over: Partial<Record<string, unknown>> = {}) => ({
     app: "tes-web",
@@ -192,14 +202,59 @@ test.describe("section Active Pipelines", () => {
     expect(kotakJudul.y).toBeLessThan(kotakGrafik.y);
   });
 
-  test("dengan data nyata: hitungan sama dengan jumlah kartu", async ({ page }) => {
+  test("dengan data nyata: kartu dan hitungan berasal dari satu payload Jenkins", async ({
+    page,
+  }) => {
+    // Jenkins dipolling ulang setiap INTERVAL_AKTIF_MS dan tombol Sync menariknya
+    // lagi. Membaca teks hitungan lalu menghitung kartu pada dua waktu berbeda bisa
+    // jatuh di antara dua snapshot (teks "0 berjalan", kartu 4). Di sini payload
+    // nyata tetap diambil sekali dari Jenkins lalu dibekukan, dan kedua nilai dibaca
+    // dalam satu frame supaya keduanya pasti dari snapshot yang sama.
+    type Payload = {
+      generated_at: string;
+      active: unknown[];
+      counts: { running: number; queued: number };
+    };
+    let snapshot: Payload | null = null;
+    const ambilSnapshot = (): Payload | null => snapshot;
+    await page.route("**/api/active", async (route) => {
+      if (snapshot === null) {
+        const jawaban = await route.fetch();
+        snapshot = ((await jawaban.json()) as { data: Payload }).data;
+      }
+      await route.fulfill({ json: { data: snapshot, stale: false } });
+    });
+
     await page.goto("/");
 
-    const hitungan = page.getByText(/\d+ berjalan atau menunggu/);
-    await expect(hitungan).toBeVisible();
+    await expect.poll(ambilSnapshot).not.toBeNull();
+    const data = ambilSnapshot();
+    if (!data) throw new Error("payload /api/active belum terambil dari Jenkins");
 
-    const jumlah = Number((await hitungan.textContent())!.match(/^(\d+)/)![1]);
-    await expect(page.getByTestId("pipeline-card")).toHaveCount(jumlah);
+    // Datanya dari Jenkins, bukan rakitan tes.
+    expect(data.generated_at).not.toBe("");
+
+    await expect.poll(() => frameAktif(page)).toEqual({
+      hitungan: data.counts.running + data.counts.queued,
+      kartu: data.active.length,
+    });
+  });
+
+  test("hitungan dan kartu tetap satu snapshot setelah Sync menarik data baru", async ({ page }) => {
+    await paksaActive(page, [], { running: 0, queued: 0 });
+    await page.goto("/");
+    await expect(page.getByText("0 berjalan atau menunggu")).toBeVisible();
+
+    // Sync memicu pengambilan ulang: Jenkins kini melaporkan dua pipeline berjalan.
+    await page.unroute("**/api/active");
+    await paksaActive(page, [pipeline(), pipeline({ app: "diag-ws", number: 43 })], {
+      running: 2,
+      queued: 0,
+    });
+    await page.getByRole("button", { name: "Sync" }).click();
+
+    // Satu frame: teks hitungan dan jumlah kartu harus dari snapshot yang sama.
+    await expect.poll(() => frameAktif(page)).toEqual({ hitungan: 2, kartu: 2 });
   });
 
   test("dua pipeline: satu Berjalan dengan bar, satu Menunggu tanpa bar", async ({ page }) => {

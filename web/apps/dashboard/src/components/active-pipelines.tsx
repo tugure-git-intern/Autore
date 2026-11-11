@@ -31,7 +31,10 @@ export function ActivePipelines({
       title="Active Pipelines"
       action={
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-300">
+          <span
+            data-testid="hitungan-aktif"
+            className="inline-flex items-center gap-1 text-green-700 dark:text-green-300"
+          >
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             {total} berjalan atau menunggu
           </span>

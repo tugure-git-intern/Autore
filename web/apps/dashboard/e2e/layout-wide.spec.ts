@@ -415,20 +415,36 @@ test.describe("kerangka melayang di layar lebar", () => {
 
   test("navigasi sidebar di Dark Mode bebas FOUC: html dan body tetap berlatar gelap tanpa reload dokumen", async ({
     page,
+    context,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/", { waitUntil: "networkidle" });
-    await page.evaluate(() => {
+    // Tema gelap dipasang lewat mekanisme aplikasi sendiri: cookie untuk SSR dan
+    // storageKey next-themes untuk provider. Menempelkan class `dark` manual tidak
+    // sah — state provider tetap "light" dan class itu dilepas lagi saat re-render
+    // navigasi, sehingga tes kadang melihat latar terang (flaky).
+    await context.addCookies([
+      { name: "autore-theme", value: "dark", domain: "100.80.3.14", path: "/" },
+    ]);
+    await context.addInitScript(() => {
       localStorage.setItem("autore-theme", "dark");
-      document.documentElement.classList.add("dark");
     });
 
-    const bgAwal = await page.evaluate(() => ({
-      html: getComputedStyle(document.documentElement).backgroundColor,
-      body: getComputedStyle(document.body).backgroundColor,
-    }));
-    expect(bgAwal.html).toBe("rgb(53, 59, 67)");
-    expect(bgAwal.body).toBe("rgb(53, 59, 67)");
+    await page.goto("/", { waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+
+    const html = page.locator("html");
+    const body = page.locator("body");
+    await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
+    await expect(body).toHaveCSS("background-color", "rgb(53, 59, 67)");
+
+    // Rekam setiap pelepasan class `dark`: satu kedipan terang pun harus gagal.
+    await page.evaluate(() => {
+      const w = window as unknown as { __kedipan?: string[] };
+      w.__kedipan = [];
+      new MutationObserver(() => {
+        if (!document.documentElement.classList.contains("dark")) w.__kedipan!.push("terang");
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    });
 
     await page.evaluate(() => {
       (window as unknown as { __spa_marker?: string }).__spa_marker = "AUTORE_STILL_ALIVE";
@@ -443,12 +459,9 @@ test.describe("kerangka melayang di layar lebar", () => {
     );
     expect(marker).toBe("AUTORE_STILL_ALIVE");
 
-    const bgSetelah = await page.evaluate(() => ({
-      html: getComputedStyle(document.documentElement).backgroundColor,
-      body: getComputedStyle(document.body).backgroundColor,
-    }));
-    expect(bgSetelah.html).toBe("rgb(53, 59, 67)");
-    expect(bgSetelah.body).toBe("rgb(53, 59, 67)");
+    await expect(html).toHaveClass(/\bdark\b/);
+    await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
+    await expect(body).toHaveCSS("background-color", "rgb(53, 59, 67)");
 
     // Jelajah menu lain di sidebar: background body tidak boleh berkedip putih
     for (const [nama, ruteTarget] of [
@@ -459,13 +472,16 @@ test.describe("kerangka melayang di layar lebar", () => {
     ] as const) {
       await page.locator("aside").getByRole("link", { name: nama }).click();
       await page.waitForURL(`**${ruteTarget}`);
-      const bg = await page.evaluate(() => ({
-        body: getComputedStyle(document.body).backgroundColor,
-        html: getComputedStyle(document.documentElement).backgroundColor,
-      }));
-      expect(bg.body).toBe("rgb(53, 59, 67)");
-      expect(bg.html).toBe("rgb(53, 59, 67)");
+      await expect(html).toHaveClass(/\bdark\b/);
+      await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
+      await expect(body).toHaveCSS("background-color", "rgb(53, 59, 67)");
     }
+
+    // Tidak ada satu frame pun yang melepas class `dark` selama seluruh rangkaian
+    // navigasi client-side di atas.
+    expect(
+      await page.evaluate(() => (window as unknown as { __kedipan: string[] }).__kedipan),
+    ).toEqual([]);
   });
 
   test("hard refresh di Dark Mode bebas FOUC via critical inline CSS di head", async ({

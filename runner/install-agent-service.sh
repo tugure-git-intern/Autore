@@ -40,6 +40,17 @@ id "${AGENT_USER}" >/dev/null 2>&1 || die "user '${AGENT_USER}' not found — ru
 [[ -x /usr/bin/java ]] || die "/usr/bin/java not found — run runner/setup-agent.sh first"
 [[ -f "${SCRIPT_DIR}/${UNIT_NAME}" ]] || die "${UNIT_NAME} not found next to this script"
 
+# The agent runs with the systemd default PATH, so the node this script sees is
+# the node the builds will get. web/.nvmrc pins 22 and the guard test in
+# web/apps/api/src/node-version.test.ts fails the Web Quality Gate stage on an
+# older runtime — refuse to wire up an agent that cannot pass it.
+NODE_MAJOR_MIN="22"
+node_major="$(node -v 2>/dev/null | sed 's/^v//' | cut -d. -f1)"
+[[ -n "${node_major}" ]] || die "node not found on PATH — run runner/setup-agent.sh first"
+[[ "${node_major}" -ge "${NODE_MAJOR_MIN}" ]] \
+  || die "node $(node -v) is older than ${NODE_MAJOR_MIN} — run runner/setup-agent.sh first (web/.nvmrc pins 22)"
+log "Node for builds: $(node -v) ($(command -v node))"
+
 read -rsp "Agent secret for '${AGENT_NAME}': " AGENT_SECRET
 echo
 [[ -n "${AGENT_SECRET}" ]] || die "secret is empty"

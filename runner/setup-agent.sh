@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # setup-agent.sh — prepare an Ubuntu 24.04 host to act as a Jenkins runner.
 #
-# Installs Java 21 (headless), Docker + Compose v2, creates the `jenkins`
-# system user and adds it to the `docker` group. Safe to run more than once.
+# Installs Java 21 (headless), Docker + Compose v2, Node.js >= 22, creates the
+# `jenkins` system user and adds it to the `docker` group. Safe to run more
+# than once.
+
+# Why Node here: web/.nvmrc pins 22 and the guard test
+# web/apps/api/src/node-version.test.ts fails the Web Quality Gate stage on an
+# older runtime. The Ubuntu repo only ships 18 for this release, so Node comes
+# from the official tarball into /usr/local — that directory is already on the
+# systemd default PATH, so the agent picks it up without a unit override.
 #
 # Usage:
 #   sudo ./runner/setup-agent.sh [--add-user <name>]...
@@ -69,6 +76,48 @@ for u in "${extra_users[@]}"; do
   usermod -aG docker "$u"
 done
 
+# --- Node.js >= 22 -----------------------------------------------------------
+# Pinned the same major as web/.nvmrc; override with NODE_VERSION=<x.y.z>.
+NODE_MAJOR_MIN="22"
+NODE_VERSION="${NODE_VERSION:-22.23.4}"
+NODE_PREFIX="/usr/local/lib/node22"
+NODE_LINK_DIR="/usr/local/bin"
+
+node_major() { "$1" -v 2>/dev/null | sed 's/^v//' | cut -d. -f1; }
+
+install_node() {
+  if [[ "$(node_major "${NODE_PREFIX}/bin/node")" -ge "${NODE_MAJOR_MIN}" ]]; then
+    log "Node $("${NODE_PREFIX}/bin/node" -v) already installed — skipping"
+  else
+    local arch tarball url
+    arch="$(uname -m)"
+    [[ "${arch}" == "x86_64" ]] || die "this script only knows the x86_64 Node tarball (host is ${arch})"
+    url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
+    log "Installing Node ${NODE_VERSION} into ${NODE_PREFIX}"
+    tarball="$(mktemp)"
+    curl -fsSL -o "${tarball}" "${url}" || die "could not download ${url}"
+    rm -rf "${NODE_PREFIX}.new"
+    install -d -m 0755 "${NODE_PREFIX}.new"
+    tar -xzf "${tarball}" -C "${NODE_PREFIX}.new" --strip-components=1
+    rm -f "${tarball}"
+    rm -rf "${NODE_PREFIX}"
+    mv "${NODE_PREFIX}.new" "${NODE_PREFIX}"
+    chown -R root:root "${NODE_PREFIX}"
+    chmod -R a+rX "${NODE_PREFIX}"
+  fi
+
+  local bin
+  for bin in node npm npx; do
+    ln -sfn "${NODE_PREFIX}/bin/${bin}" "${NODE_LINK_DIR}/${bin}"
+  done
+
+  [[ "$(node_major "${NODE_LINK_DIR}/node")" -ge "${NODE_MAJOR_MIN}" ]] \
+    || die "node in ${NODE_LINK_DIR} is not >= ${NODE_MAJOR_MIN} — check PATH order"
+  log "Node on PATH: $("${NODE_LINK_DIR}/node" -v) (npm $("${NODE_LINK_DIR}/npm" -v))"
+}
+
+install_node
+
 log "Preparing agent work directory ${AGENT_WORKDIR}"
 install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0750 "${AGENT_WORKDIR}"
 
@@ -97,6 +146,8 @@ log "Done. Versions:"
 java -version 2>&1 | head -1
 docker --version
 docker compose version
+node -v
+npm -v
 if [ -x /usr/local/bin/autore ]; then
   /usr/local/bin/autore --version
 fi

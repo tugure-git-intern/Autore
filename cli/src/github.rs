@@ -167,22 +167,59 @@ pub fn whoami(token: &str) -> Result<String, String> {
 }
 
 /// Pastikan repo `owner/name` ada di GitHub. `true` = baru dibuat.
+/// Jalur `ensure_repo` dengan lapisan HTTP disuntik, supaya tes bisa membuktikan
+/// permintaan apa saja yang benar-benar dikirim tanpa menyentuh jaringan.
 pub fn ensure_repo(token: &str, owner: &str, name: &str) -> Result<(String, bool), String> {
+    ensure_repo_dengan(&curl_api, token, owner, name)
+}
+
+fn ensure_repo_dengan(
+    kirim: &dyn Fn(&str, &str, &str, Option<&str>) -> Result<(u16, String), String>,
+    token: &str,
+    owner: &str,
+    name: &str,
+) -> Result<(String, bool), String> {
+    let full = format!("{owner}/{name}");
+
+    // Cek keberadaan dulu: repo yang sudah ada tidak boleh di-POST ulang. POST
+    // berulang ke `/user/repos` kena secondary rate limit GitHub untuk "content
+    // creation", dan pembatasan itu datang sebagai HTTP 403 yang gampang salah
+    // dibaca sebagai masalah izin token.
+    match kirim(token, "GET", &format!("/repos/{full}"), None)?.0 {
+        200 => return Ok((full, false)),
+        401 => return Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
+        // 403/404/5xx: hasil cek tidak bisa dipercaya, jadi tempuh jalur lama —
+        // POST akan melaporkan penyebab sebenarnya.
+        _ => {}
+    }
+
     let payload = format!(
         "{{\"name\":\"{name}\",\"private\":false,\"description\":\"Dibuat otomatis oleh Autore CLI\"}}"
     );
-    let (code, body) = curl_api(token, "POST", "/user/repos", Some(&payload))?;
+    let (code, body) = kirim(token, "POST", "/user/repos", Some(&payload))?;
     match code {
-        201 => Ok((format!("{owner}/{name}"), true)),
-        422 => Ok((format!("{owner}/{name}"), false)),
+        201 => Ok((full, true)),
+        422 => Ok((full, false)),
         401 => Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
-        403 => Err(
-            "Token GitHub tidak punya izin membuat repo (HTTP 403). Tambahkan permission 'Administration: Read and write' pada token.".into(),
-        ),
+        403 => Err(pesan_gagal_buat_repo(&body)),
         _ => {
             let msg = extract_json_string(&body, "message").unwrap_or_default();
             Err(format!("Gagal membuat repo GitHub (HTTP {code}) {msg}"))
         }
+    }
+}
+
+/// HTTP 403 dari GitHub tidak selalu soal izin: pembatasan sementara (secondary
+/// rate limit untuk content creation) juga datang sebagai 403 dengan pesannya
+/// sendiri. Membedakannya supaya pesan izin tidak menyesatkan.
+fn pesan_gagal_buat_repo(body: &str) -> String {
+    let pesan = extract_json_string(body, "message").unwrap_or_default();
+    if pesan.to_lowercase().contains("secondary rate limit") {
+        format!(
+            "GitHub sedang membatasi pembuatan repo sementara (secondary rate limit). Tunggu beberapa menit lalu ulangi. Pesan GitHub: {pesan}"
+        )
+    } else {
+        "Token GitHub tidak punya izin membuat repo (HTTP 403). Tambahkan permission 'Administration: Read and write' pada token.".into()
     }
 }
 
@@ -209,6 +246,170 @@ mod tests {
         assert_eq!(
             parse_token_from_credentials("https://user:@github.com\n"),
             None
+        );
+    }
+
+    /// Catatan panggilan + jawaban tetap, dipakai semua tes kontrak di bawah.
+    fn kirim_rekaman<'a>(
+        catatan: &'a std::cell::RefCell<Vec<(String, String)>>,
+        jawaban: Vec<(u16, &'static str)>,
+    ) -> impl Fn(&str, &str, &str, Option<&str>) -> Result<(u16, String), String> + 'a {
+        let urut = std::cell::Cell::new(0usize);
+        move |_token, method, path, _body| {
+            catatan
+                .borrow_mut()
+                .push((method.to_string(), path.to_string()));
+            let (code, body) = jawaban
+                .get(urut.get())
+                .copied()
+                .unwrap_or((500, "{\"message\":\"tak terduga\"}"));
+            urut.set(urut.get() + 1);
+            Ok((code, body.to_string()))
+        }
+    }
+
+    #[test]
+    fn repo_yang_sudah_ada_tidak_pernah_dipost() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![(200, r#"{"full_name":"tugure-git-intern/audit-test-app"}"#)],
+        );
+
+        let (full, baru) =
+            ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "audit-test-app")
+                .expect("repo yang sudah ada harus lolos");
+
+        assert_eq!(full, "tugure-git-intern/audit-test-app");
+        assert!(!baru, "repo lama bukan repo baru");
+        let panggilan = catatan.borrow();
+        assert_eq!(panggilan.len(), 1, "cukup satu permintaan: {panggilan:?}");
+        assert_eq!(
+            panggilan[0].0, "GET",
+            "harus GET cek keberadaan: {panggilan:?}"
+        );
+        assert_eq!(panggilan[0].1, "/repos/tugure-git-intern/audit-test-app");
+        assert!(
+            !panggilan.iter().any(|(m, _)| m == "POST"),
+            "POST /user/repos tidak boleh dikirim kalau repo sudah ada: {panggilan:?}"
+        );
+    }
+
+    #[test]
+    fn repo_belum_ada_baru_dibuat_lewat_post() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (201, r#"{"full_name":"tugure-git-intern/app-baru"}"#),
+            ],
+        );
+
+        let (full, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+            .expect("repo baru harus dibuat");
+
+        assert_eq!(full, "tugure-git-intern/app-baru");
+        assert!(baru, "201 berarti repo memang baru");
+        let panggilan = catatan.borrow();
+        assert_eq!(
+            panggilan.as_slice(),
+            &[
+                (
+                    "GET".to_string(),
+                    "/repos/tugure-git-intern/app-baru".to_string()
+                ),
+                ("POST".to_string(), "/user/repos".to_string()),
+            ],
+            "urutan cek lalu buat"
+        );
+    }
+
+    #[test]
+    fn post_422_berarti_repo_sudah_ada() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (422, r#"{"message":"Repository creation failed."}"#),
+            ],
+        );
+
+        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-lama")
+            .expect("422 = repo sudah ada, bukan kegagalan");
+
+        assert!(!baru);
+    }
+
+    #[test]
+    fn get_403_tetap_dicoba_post() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (
+                    403,
+                    r#"{"message":"Resource not accessible by integration"}"#,
+                ),
+                (201, r#"{"full_name":"tugure-git-intern/app-baru"}"#),
+            ],
+        );
+
+        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+            .expect("cek yang tidak bisa dibaca tidak boleh memblokir pembuatan");
+
+        assert!(baru);
+        assert!(catatan.borrow().iter().any(|(m, _)| m == "POST"));
+    }
+
+    #[test]
+    fn error_403_secondary_rate_limit_tidak_disebut_masalah_izin() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (
+                    403,
+                    r#"{"message":"You have exceeded a secondary rate limit and have been temporarily blocked from content creation."}"#,
+                ),
+            ],
+        );
+
+        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+            .expect_err("403 harus jadi error");
+
+        assert!(
+            err.contains("secondary rate limit"),
+            "penyebab aslinya harus disebut: {err}"
+        );
+        assert!(
+            !err.contains("Administration"),
+            "pesan izin token salah untuk pembatasan sementara: {err}"
+        );
+    }
+
+    #[test]
+    fn error_403_izin_tetap_menyebut_permission_administration() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (
+                    403,
+                    r#"{"message":"Resource not accessible by personal access token"}"#,
+                ),
+            ],
+        );
+
+        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+            .expect_err("403 harus jadi error");
+
+        assert!(
+            err.contains("Administration"),
+            "pesan lama tetap dipakai: {err}"
         );
     }
 

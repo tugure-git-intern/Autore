@@ -71,9 +71,9 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     // Keluar layar sepenuhnya: tepi kanan kartu sidebar tidak lagi terlihat.
     expect((await kotakSidebar(page)).right).toBeLessThanOrEqual(0);
 
-    // Topbar ikut rapat: breadcrumb mulai setelah hamburger (12+32+8 = 52px),
+    // Topbar ikut rapat: hamburger dan breadcrumb mulai di tepi kiri (12px),
     // bukan menyisakan lubang 274px.
-    expect(await paddingTopbar(page)).toBe("52px");
+    expect(await paddingTopbar(page)).toBe(`${KONTEN_TERTUTUP}px`);
 
     // Tertutup = tidak bisa di-Tab: tautan sidebar tidak boleh menerima fokus.
     await expect(page.locator("aside")).toHaveJSProperty("inert", true);
@@ -132,28 +132,27 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
     await expect.poll(async () => (await kotakMain(page)).x, { timeout: 3_000 }).toBe(KONTEN_TERTUTUP);
   });
 
-  test("hamburger menempel pojok kiri topbar, tidak melayang di dekat judul konten", async ({ page }) => {
+  test("hamburger duduk di grup kiri topbar: di kanan sidebar, sebelum breadcrumb", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/pipeline", { waitUntil: "networkidle" });
 
     const tombolKotak = (await page.getByRole("button", { name: "Tutup sidebar" }).boundingBox())!;
-    // 12px dari tepi layar: posisi yang sama saat sidebar terbuka maupun tertutup.
-    expect(Math.round(tombolKotak.x)).toBe(12);
+    // Di atas area konten, bukan menabrak kartu sidebar (tepi kanannya 12 + 250).
+    expect(Math.round(tombolKotak.x)).toBeGreaterThanOrEqual(SIDEBAR_X + LEBAR_SIDEBAR);
 
     // Ikon tiga garis (Menu), bukan ikon panel.
     await expect(page.locator("header svg.lucide-menu").first()).toBeVisible();
     await expect(page.locator("header svg.lucide-panel-left")).toHaveCount(0);
 
-    // Tidak menabrak lockup logo: blok merek sidebar digeser ke kanan hamburger.
-    const logo = (await page.getByTestId("sidebar-brand").locator("img").boundingBox())!;
-    expect(Math.round(logo.x)).toBeGreaterThanOrEqual(Math.round(tombolKotak.x + tombolKotak.width));
+    // Breadcrumb menyusul di kanan tombol, bukan mendahuluinya.
+    const remah = (await page.locator("header p").first().boundingBox())!;
+    expect(Math.round(remah.x)).toBeGreaterThanOrEqual(Math.round(tombolKotak.x + tombolKotak.width));
 
-    // Posisi tombol tidak berubah setelah sidebar ditutup: tetap di pojok kiri,
-    // tidak ikut melayang mengikuti padding konten.
+    // Saat ditutup tombol ikut meluncur ke tepi kiri bersama padding baris.
     await page.getByRole("button", { name: "Tutup sidebar" }).click();
     await expect.poll(async () => (await kotakMain(page)).x, { timeout: 3_000 }).toBe(KONTEN_TERTUTUP);
     const setelahTutup = (await page.getByRole("button", { name: "Buka sidebar" }).boundingBox())!;
-    expect(Math.round(setelahTutup.x)).toBe(12);
+    expect(Math.round(setelahTutup.x)).toBeLessThanOrEqual(24);
   });
 
   test("tagline Automation Tugure tampil kecil dan abu-abu di bawah Autore", async ({ page }) => {

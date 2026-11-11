@@ -26,28 +26,28 @@ export function Navbar({
     /* z-30 + latar transparan di desktop: tombol hamburger digambar di atas kartu
        sidebar (z-20) yang warnanya sama dengan topbar, jadi tidak ada garis sambung.
        Di mobile topbar tetap solid karena konten di bawahnya ikut menggulir. */
-    <header className="sticky top-0 z-30 w-full bg-[#F0F5FE] dark:bg-[#282c32] lg:bg-transparent dark:lg:bg-transparent">
-      {/* lg:pl-[274px] melewati kartu sidebar melayang: 12px jarak + 250px lebar +
-          12px celah. Saat sidebar ditutup padding itu menyusut ke 12px, jadi tombol
-          dan breadcrumb ikut bergeser dengan transisi yang sama dengan konten. */}
+    <header className="sticky top-0 z-10 w-full bg-[#F0F5FE] dark:bg-[#282c32]">
+      {/* Padding kiri baris = lebar sidebar + celah (274px), jadi hamburger dan
+          breadcrumb duduk di atas area konten, bukan menabrak kartu sidebar.
+          Saat sidebar ditutup padding menyusut ke 12px dengan transisi yang sama
+          dengan konten, sehingga tombol ikut meluncur halus (bukan lompat). */}
       <div
-        className={`relative flex h-16 items-center justify-between gap-3 px-4 transition-[padding] duration-300 ease-in-out motion-reduce:transition-none lg:pr-3 ${
-          sidebarTerbuka ? "lg:pl-[274px]" : "lg:pl-[52px]"
+        className={`flex h-16 items-center justify-between gap-3 px-4 transition-[padding] duration-300 ease-in-out motion-reduce:transition-none lg:pr-3 ${
+          sidebarTerbuka ? "lg:pl-[274px]" : "lg:pl-3"
         }`}
       >
         <div className="flex min-w-0 items-center gap-2">
-          {/* Hamburger standar (tiga garis) di pojok kiri topbar. `absolute left-3`
-              melepasnya dari padding baris, jadi posisinya tetap 12px dari tepi layar
-              dan tidak ikut melayang ke arah judul halaman saat sidebar terbuka.
-              Padding 274px/52px hanya menggeser breadcrumb agar tidak menimpanya.
-              Hanya desktop — di mobile navigasi pindah ke bar bawah. */}
+          {/* Hamburger standar (tiga garis) sebagai anak pertama grup kiri:
+              urutannya [tombol] [breadcrumb] ... [Sync/Profil]. -ml-1 menariknya
+              ke 12px dari tepi saat sidebar tertutup. Hanya desktop — di mobile
+              navigasi pindah ke bar bawah. */}
           <button
             type="button"
             aria-label={sidebarTerbuka ? "Tutup sidebar" : "Buka sidebar"}
             aria-expanded={sidebarTerbuka}
             aria-controls="sidebar-utama"
             onClick={onToggleSidebar}
-            className="absolute left-3 top-1/2 hidden h-11 w-8 -translate-y-1/2 shrink-0 items-center justify-center rounded-md text-[#545F72] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:text-white dark:hover:bg-[#353b43] lg:inline-flex"
+            className="-ml-1 hidden h-11 w-8 shrink-0 items-center justify-center rounded-md text-[#545F72] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:text-white dark:hover:bg-[#353b43] lg:inline-flex"
           >
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>

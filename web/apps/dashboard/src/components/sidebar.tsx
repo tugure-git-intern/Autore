@@ -67,11 +67,9 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
           dengan latar utama dan tampil tanpa border maupun bayangan: tidak ada
           gradasi tepi yang terbaca sebagai sekat vertikal. Jarak 12px dari tepi
           layar tetap dipertahankan lewat posisi `fixed`. */}
-      {/* pl-12: menyisakan jalur hamburger topbar (12px + 32px) supaya lockup logo
-          tidak tertimpa tombol yang digambar di atas kartu ini. */}
       <div
         data-testid="sidebar-brand"
-        className="flex h-16 shrink-0 items-center gap-3 pl-12 pr-6"
+        className="flex h-16 shrink-0 items-center gap-3 px-6"
       >
         {/* Lockup asli Tugu Reasuransi (ikon + wordmark + tagline), latar transparan.
             h-10 + object-contain: seluruh lockup diskalakan utuh, tidak ada yang dipotong. */}

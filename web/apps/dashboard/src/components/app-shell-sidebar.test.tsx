@@ -123,26 +123,25 @@ describe("AppShell — sidebar buka/tutup konten", () => {
     expect(btn.querySelector("svg.lucide-panel-left")).toBeNull();
   });
 
-  it("hamburger dipatok ke tepi kiri topbar, bukan ikut padding konten", () => {
+  it("hamburger duduk di grup kiri topbar, sebelum breadcrumb dan tidak absolut", () => {
     renderShell();
 
-    // Padding baris 274px hanya menggeser breadcrumb; tombol diposisikan absolut
-    // di left-3 supaya tetap menempel pojok kiri layar seperti hamburger standar.
+    // Posisi diatur padding baris (274px saat terbuka), bukan absolute left-3.
     const btn = screen.getByRole("button", { name: "Tutup sidebar" });
-    expect(btn.className).toContain("absolute");
-    expect(btn.className).toContain("left-3");
+    expect(btn.className).not.toContain("absolute");
+    expect(btn.className).not.toContain("left-3");
+    expect(btn.parentElement?.firstElementChild).toBe(btn);
   });
 
-  it("blok merek sidebar menyisakan ruang hamburger lalu menampilkan Automation Tugure", () => {
+  it("blok merek sidebar kembali memakai padding simetris, tanpa jalur tombol", () => {
     renderShell();
 
     const merek = screen.getByTestId("sidebar-brand");
-    expect(merek.className).toContain("pl-12");
+    expect(merek.className).toContain("px-6");
+    expect(merek.className).not.toContain("pl-12");
 
     const tagline = screen.getByText("Automation Tugure");
     expect(tagline.className).toContain("text-[10px]");
-    // Abu-abu muted bertema (sama dengan tagline di bawahnya), bukan gray-500
-    // polos yang gagal kontras AA di atas #F0F5FE (4.42 < 4.5).
     expect(tagline.className).toContain("text-muted");
     // Tagline lama tetap ada: yang diminta hanya menambah baris baru.
     expect(screen.getByText("CI/CD Workspace")).toBeInTheDocument();

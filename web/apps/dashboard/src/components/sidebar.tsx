@@ -12,7 +12,7 @@ import { isActiveHref, navItems } from "./nav-items";
  * di bawah cuma jaring pengaman (mis. tes satuan yang merender tanpa build).
  */
 export function versiAutore(): string {
-  return process.env.NEXT_PUBLIC_APP_VERSION || "v0.6.0";
+  return process.env.NEXT_PUBLIC_APP_VERSION || "v0.6.1";
 }
 
 export type ToneServer = "green" | "red" | "neutral";

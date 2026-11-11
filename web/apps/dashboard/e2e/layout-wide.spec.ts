@@ -576,7 +576,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
   });
 
-  test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi v0.6.0 di kanan", async ({
+  test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi v0.6.1 di kanan", async ({
     page,
     context,
   }) => {
@@ -594,7 +594,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(textOnline).toBeVisible();
     await expect(textOnline).toHaveClass(/text-gray-900/);
 
-    const textVersi = footer.getByText("v0.6.0");
+    const textVersi = footer.getByText("v0.6.1");
     await expect(textVersi).toBeVisible();
     await expect(textVersi).toHaveClass(/text-gray-[56]00/);
     // Garis tipis di atas indikator status dihapus

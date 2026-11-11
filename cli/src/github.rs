@@ -166,6 +166,11 @@ pub fn whoami(token: &str) -> Result<String, String> {
     }
 }
 
+/// Pengirim request HTTP yang bisa disuntik: (token, method, path, body) ->
+/// (status, body). Alias ini juga yang membuat clippy tidak mengeluh soal tipe
+/// fungsi yang panjang.
+type KirimHttp<'a> = &'a dyn Fn(&str, &str, &str, Option<&str>) -> Result<(u16, String), String>;
+
 /// Pastikan repo `owner/name` ada di GitHub. `true` = baru dibuat.
 /// Jalur `ensure_repo` dengan lapisan HTTP disuntik, supaya tes bisa membuktikan
 /// permintaan apa saja yang benar-benar dikirim tanpa menyentuh jaringan.
@@ -174,7 +179,7 @@ pub fn ensure_repo(token: &str, owner: &str, name: &str) -> Result<(String, bool
 }
 
 fn ensure_repo_dengan(
-    kirim: &dyn Fn(&str, &str, &str, Option<&str>) -> Result<(u16, String), String>,
+    kirim: KirimHttp<'_>,
     token: &str,
     owner: &str,
     name: &str,

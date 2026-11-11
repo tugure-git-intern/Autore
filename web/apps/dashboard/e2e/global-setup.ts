@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { webcrypto } from "node:crypto";
 
-// Node 18 belum punya `globalThis.crypto`, sedangkan `jose` (di balik
-// `encode()`) butuh WebCrypto — sama seperti polyfill di apps/api/src/session.ts.
+// `jose` (di balik `encode()`) butuh WebCrypto. Node 22 sudah menyediakannya
+// sendiri; cabang ini tinggal untuk lingkungan Node lama — sama seperti
+// polyfill di apps/api/src/session.ts.
 if (!globalThis.crypto) {
   Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 }

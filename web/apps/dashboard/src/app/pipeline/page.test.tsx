@@ -161,7 +161,7 @@ test("still renders previous details with the stale banner when the CLI stops an
   renderPage();
 
   expect(
-    await screen.findByText("Gagal terhubung ke Jenkins. Menampilkan data terakhir."),
+    await screen.findByText("Data terakhir ditampilkan; status terbaru belum terbaca."),
   ).toBeVisible();
   const logs = screen.getByRole("region", { name: "Detail Log" });
   expect(within(logs).getByText("Pipeline selesai tanpa error.")).toBeVisible();

@@ -151,7 +151,9 @@ describe("DashboardOverview", () => {
     renderOverview();
 
     const banner = await screen.findByRole("alert");
-    expect(banner).toHaveTextContent("Gagal terhubung ke Jenkins. Menampilkan data terakhir.");
+    expect(banner).toHaveTextContent("Data terakhir ditampilkan; status terbaru belum terbaca.");
+    expect(banner.className).toContain("border-amber-200");
+    expect(banner.className).not.toContain("border-red-200");
     expect(screen.getByText("Portal Klaim")).toBeVisible();
   });
 

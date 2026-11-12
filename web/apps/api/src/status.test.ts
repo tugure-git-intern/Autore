@@ -114,7 +114,22 @@ describe("loadDashboardStatus", () => {
         },
         () => sekarang,
       ),
-    ).resolves.toEqual({ data: fixture, stale: true });
+    ).resolves.toEqual({ data: fixture, stale: true, stale_reason: "command_failed" });
+  });
+
+  it("membedakan stdout yang ditolak kontrak dari CLI yang gagal jalan", async () => {
+    const { loadDashboardStatus } = await freshStatus();
+    let sekarang = 1_000;
+
+    await loadDashboardStatus(async () => JSON.stringify(fixture), () => sekarang);
+    sekarang += 5_000;
+
+    await expect(
+      loadDashboardStatus(async () => JSON.stringify({ ...fixture, extra: true }), () => sekarang),
+    ).resolves.toEqual({ data: fixture, stale: true, stale_reason: "invalid_payload" });
+    await expect(
+      loadDashboardStatus(async () => "not-json", () => sekarang),
+    ).resolves.toEqual({ data: fixture, stale: true, stale_reason: "invalid_payload" });
   });
 });
 
@@ -305,7 +320,11 @@ describe("status API", () => {
     const stale = await app.request("http://localhost/api/status");
     expect(stale.status).toBe(200);
     expect(stale.headers.get("Cache-Control")).toBe("no-store");
-    await expect(stale.json()).resolves.toEqual({ data: fixture, stale: true });
+    await expect(stale.json()).resolves.toEqual({
+      data: fixture,
+      stale: true,
+      stale_reason: "command_failed",
+    });
   });
 
   it("does not pass browser input to command runner", async () => {

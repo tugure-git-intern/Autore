@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { Suspense, useState } from "react";
-import { AlertTriangle, Search, Workflow } from "lucide-react";
+import { Search, Workflow } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
 import { EmptyApplications } from "@/components/empty-applications";
@@ -13,10 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBanner } from "@/components/status-banner";
 import { filterApps } from "@/lib/filter-apps";
 import { pilihAwal } from "@/lib/pilih-app";
-
-const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
 
 export default function PipelinePage() {
   return (
@@ -70,15 +69,7 @@ function PipelineSplit() {
 
   return (
     <div className="space-y-4">
-      {stale || failed ? (
-        <div
-          role="alert"
-          className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {STALE_COPY}
-        </div>
-      ) : null}
+      <StatusBanner stale={stale} failed={failed} />
 
       {appId && !terpilih ? (
         <Card className="p-6">

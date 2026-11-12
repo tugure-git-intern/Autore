@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useStatus } from "@/components/app-shell";
 import { QualityRadar } from "@/components/security/quality-radar";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
@@ -9,12 +9,11 @@ import { Card } from "@/components/ui/card";
 import { ChartCard } from "@/components/ui/chart-card";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBanner } from "@/components/status-banner";
 import type { RunsPayload, StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { fetchRuns } from "@/lib/runs-client";
 import { hitungSkor } from "@/lib/score";
-
-const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
 
 function keBadge(status: StatusValue): AppStatus {
   return status === "passed" || status === "running" || status === "failed" ? status : "unknown";
@@ -62,15 +61,7 @@ export default function SecurityPage() {
 
   return (
     <>
-      {stale || failed ? (
-        <div
-          role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {STALE_COPY}
-        </div>
-      ) : null}
+      <StatusBanner stale={stale} failed={failed} />
 
       <div className="space-y-0">
         <PageTabHeader

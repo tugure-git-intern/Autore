@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { useState } from "react";
-import { AlertTriangle, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { filterApps, type StatusFilter } from "@/lib/filter-apps";
@@ -18,9 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBanner } from "@/components/status-banner";
 import { useLayarSempit } from "@/components/use-layar-sempit";
-
-const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
 
 /** Only a recorded gate result may style an app as passed/running/failed. */
 function toBadge(status: StatusValue): AppStatus {
@@ -95,15 +94,7 @@ export default function ApplicationsPage() {
 
   return (
     <>
-      {stale || failed ? (
-        <div
-          role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {STALE_COPY}
-        </div>
-      ) : null}
+      <StatusBanner stale={stale} failed={failed} />
 
       <div className="space-y-0">
         <PageTabHeader

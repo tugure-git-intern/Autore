@@ -72,10 +72,10 @@ describe("indikatorServer", () => {
     });
   });
 
-  it("merah saat snapshot basi walau API menjawab", () => {
+  it("kuning Data Lama saat snapshot basi walau API menjawab", () => {
     expect(indikatorServer({ state: BASI, failed: false, loading: false })).toEqual({
-      tone: "red",
-      label: "Server Offline",
+      tone: "amber",
+      label: "Data Lama",
       pulse: false,
     });
   });
@@ -266,11 +266,14 @@ describe("Sidebar", () => {
     expect(screen.getByRole("status").textContent).toContain("Server Offline");
   });
 
-  it("berubah jadi Server Offline saat snapshot API basi", async () => {
+  it("berubah jadi Data Lama bertitik kuning saat snapshot API basi", async () => {
     renderSidebar(BASI);
 
-    await tungguStatus("Server Offline");
-    expect(screen.getByTestId("server-online-dot").className).toContain("bg-red-500");
+    await tungguStatus("Data Lama");
+    const dot = screen.getByTestId("server-online-dot");
+    expect(dot.className).toContain("bg-amber-500");
+    expect(dot.className).not.toContain("bg-red-500");
+    expect(screen.queryByText("Server Offline")).toBeNull();
   });
 
 });

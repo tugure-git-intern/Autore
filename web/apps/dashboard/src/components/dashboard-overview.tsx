@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Boxes, Container, Timer, Workflow } from "lucide-react";
+import { Boxes, Container, Timer, Workflow } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { parseLeadTime, type PipelineWaktu } from "@/lib/format";
@@ -14,8 +14,7 @@ import { StatusBadge, type AppStatus } from "./status-badge";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
-
-const STALE_COPY = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
+import { StatusBanner } from "./status-banner";
 
 const pipelineLabels: Record<StatusValue, string> = {
   idle: "Siaga",
@@ -89,15 +88,7 @@ export function DashboardOverview() {
 
   return (
     <>
-      {stale || failed ? (
-        <div
-          role="alert"
-          className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {STALE_COPY}
-        </div>
-      ) : null}
+      <StatusBanner stale={stale} failed={failed} />
 
       <section
         aria-label="Statistik"

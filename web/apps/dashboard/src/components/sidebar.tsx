@@ -15,14 +15,14 @@ export function versiAutore(): string {
   return process.env.NEXT_PUBLIC_APP_VERSION || "v0.6.1";
 }
 
-export type ToneServer = "green" | "red" | "neutral";
+export type ToneServer = "green" | "amber" | "red" | "neutral";
 
 export type IndikatorServer = { tone: ToneServer; label: string; pulse: boolean };
 
 /**
- * Satu-satunya penentu status koneksi di UI. `stale` berarti API menjawab
- * snapshot lama dan `failed` tarikan terakhir gagal — dua-duanya bikin data di
- * layar tidak bisa dipercaya, jadi sama-sama merah.
+ * Satu-satunya penentu status koneksi di UI. `failed` (API tak menjawab) =
+ * merah "Server Offline"; `stale` saja (API menjawab snapshot lama) = kuning
+ * "Data Lama" — data layak dilihat tapi belum terbaru.
  */
 export function indikatorServer({
   state,
@@ -33,7 +33,8 @@ export function indikatorServer({
   failed: boolean;
   loading: boolean;
 }): IndikatorServer {
-  if (failed || state?.stale) return { tone: "red", label: "Server Offline", pulse: false };
+  if (failed) return { tone: "red", label: "Server Offline", pulse: false };
+  if (state?.stale) return { tone: "amber", label: "Data Lama", pulse: false };
   if (state) return { tone: "green", label: "Server Online", pulse: true };
   return loading
     ? { tone: "neutral", label: "Memuat status", pulse: true }
@@ -42,6 +43,7 @@ export function indikatorServer({
 
 const KELAS_TITIK: Record<ToneServer, string> = {
   green: "bg-green-500",
+  amber: "bg-amber-500",
   red: "bg-red-500",
   neutral: "bg-gray-400",
 };

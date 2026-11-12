@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isDashboardStatus,
+  isStaleReason,
+  parseApiResponse,
   validateActive,
   validateDashboardStatus,
   validateRuns,
@@ -96,6 +98,39 @@ describe("kontrak status", () => {
     const rusak = snapshot();
     rusak.penulis = [["abc1234", 7]];
     expect(isDashboardStatus(rusak)).toBe(false);
+  });
+});
+
+describe("amplop API", () => {
+  const amplop = (isian: Record<string, unknown>) => ({ data: snapshot(), stale: true, ...isian });
+
+  it("meneruskan stale_reason yang sah dan membiarkannya opsional", () => {
+    expect(parseApiResponse(amplop({ stale_reason: "command_failed" }), isDashboardStatus)).toEqual({
+      data: snapshot(),
+      stale: true,
+      stale_reason: "command_failed",
+    });
+    expect(parseApiResponse(amplop({}), isDashboardStatus)).toEqual({
+      data: snapshot(),
+      stale: true,
+    });
+  });
+
+  it("menolak stale_reason asing dan tipe yang salah", () => {
+    expect(() => parseApiResponse(amplop({ stale_reason: "jenkins_mati" }), isDashboardStatus)).toThrow(
+      "invalid api response",
+    );
+    expect(() => parseApiResponse(amplop({ stale_reason: 1 }), isDashboardStatus)).toThrow(
+      "invalid api response",
+    );
+    expect(isStaleReason("invalid_payload")).toBe(true);
+    expect(isStaleReason(undefined)).toBe(false);
+  });
+
+  it("tetap menolak kunci amplop di luar daftar", () => {
+    expect(() => parseApiResponse(amplop({ extra: true }), isDashboardStatus)).toThrow(
+      "invalid api response",
+    );
   });
 });
 

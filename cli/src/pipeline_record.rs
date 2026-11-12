@@ -152,6 +152,7 @@ fn terapkan_aplikasi(snap: &mut Snapshot, rekaman: &Rekaman, nama: &str) {
         snap.applications.push(Application::baru(nama));
     }
     let commit = rekaman.commit.clone().unwrap_or_default();
+    let mut sha_penulis: Option<String> = None;
     if let Some(entri) = snap.applications.iter_mut().find(|a| a.name == nama) {
         if lewat_deploy {
             entri.deployed = true;
@@ -161,6 +162,11 @@ fn terapkan_aplikasi(snap: &mut Snapshot, rekaman: &Rekaman, nama: &str) {
         if !commit.is_empty() {
             entri.commit_sha = commit;
         }
+        // `--author` dari pipeline disimpan sebagai peta: baris "Recent Runs"
+        // membacanya untuk commit yang tidak ada di klon host.
+        if rekaman.author.is_some() && !entri.commit_sha.is_empty() {
+            sha_penulis = Some(entri.commit_sha.clone());
+        }
         // Sama seperti perekaman standar: hanya hasil akhir yang menulis status.
         if let Some(status) = &rekaman.status {
             if status == "passed" || status == "failed" {
@@ -168,6 +174,9 @@ fn terapkan_aplikasi(snap: &mut Snapshot, rekaman: &Rekaman, nama: &str) {
                 entri.tuntaskan(status, &sha, lewat_deploy);
             }
         }
+    }
+    if let (Some(sha), Some(nama_penulis)) = (sha_penulis.as_deref(), rekaman.author.as_deref()) {
+        crate::status::catat_penulis(snap, sha, nama_penulis);
     }
 }
 
@@ -565,5 +574,50 @@ mod tests {
         assert_eq!(app.commit_sha, "6d0bca6");
         assert!(app.deployed);
         assert_eq!(snap.latest_pipeline.commit_sha, "b83318f");
+    }
+
+    #[test]
+    fn rekaman_aplikasi_menyimpan_penulis_commit() {
+        let mut snap = Snapshot::default();
+        let sha = "a".repeat(40);
+        terapkan(
+            &mut snap,
+            &Rekaman {
+                app: Some("uji-final".to_string()),
+                status: Some("running".to_string()),
+                commit: Some(sha.clone()),
+                author: Some("maliffadlan <maliffadlan@gmail.com>".to_string()),
+                stage: vec!["checkout".to_string()],
+                ..rekaman()
+            },
+        );
+
+        assert_eq!(
+            snap.penulis,
+            vec![(sha, "maliffadlan <maliffadlan@gmail.com>".to_string())]
+        );
+    }
+
+    #[test]
+    fn peta_penulis_dibatasi_dan_buang_yang_tua() {
+        let mut snap = Snapshot::default();
+        for i in 0..crate::status::MAX_PENULIS + 3 {
+            terapkan(
+                &mut snap,
+                &Rekaman {
+                    app: Some("uji-final".to_string()),
+                    commit: Some(format!("{i:040}")),
+                    author: Some(format!("orang{i} <o{i}@contoh.test>")),
+                    ..rekaman()
+                },
+            );
+        }
+
+        assert_eq!(
+            snap.penulis.len(),
+            crate::status::MAX_PENULIS,
+            "peta penulis tidak boleh tumbuh tanpa batas"
+        );
+        assert_eq!(snap.penulis[0].0, format!("{:040}", 3));
     }
 }

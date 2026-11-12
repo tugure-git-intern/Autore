@@ -18,6 +18,8 @@ pub const SNAPSHOT_FILE: &str = "dashboard-status.json";
 /// Batas yang diminta kontrak: log mentah tidak boleh tumbuh tanpa batas.
 pub const MAX_LOG_LINES: usize = 500;
 pub const MAX_SNAPSHOT_BYTES: usize = 64 * 1024;
+/// Batas peta `penulis`: cukup untuk run terbaru, tidak menumbuhkan berkas terus.
+pub const MAX_PENULIS: usize = 50;
 
 /// Status infrastruktur yang tidak bisa ditanya (docker mati) — jangan menuduh.
 pub const UNKNOWN: &str = "unknown";
@@ -176,6 +178,11 @@ pub struct Snapshot {
     pub repository_health: RepositoryHealth,
     pub applications: Vec<Application>,
     pub latest_pipeline: Pipeline,
+    /// Peta `sha commit -> penulis` dari peristiwa build. Klon host di workspace
+    /// tidak selalu punya commit yang dibangun (build dari mesin developer), jadi
+    /// `runs` membacanya sebagai cadangan. Kosong = tidak ikut ditulis.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub penulis: Vec<(String, String)>,
 }
 
 impl Default for Snapshot {
@@ -192,6 +199,7 @@ impl Default for Snapshot {
             },
             repository_health: RepositoryHealth::default(),
             applications: Vec::new(),
+            penulis: Vec::new(),
             latest_pipeline: Pipeline {
                 status: "idle".to_string(),
                 failure_reason: String::new(),
@@ -207,6 +215,20 @@ impl Default for Snapshot {
             },
         }
     }
+}
+
+/// Catat `sha -> penulis` dari satu peristiwa build. Dipakai `runs` sebagai
+/// cadangan untuk commit yang tidak ada di klon host (build dari mesin developer).
+/// Entri terbaru bertahan; yang tertua dibuang supaya berkas tidak tumbuh terus.
+pub fn catat_penulis(snap: &mut Snapshot, sha: &str, nama: &str) {
+    let (sha, nama) = (sha.trim(), nama.trim());
+    if sha.is_empty() || nama.is_empty() {
+        return;
+    }
+    snap.penulis.retain(|(s, _)| s != sha);
+    snap.penulis.push((sha.to_string(), nama.to_string()));
+    let lebih = snap.penulis.len().saturating_sub(MAX_PENULIS);
+    snap.penulis.drain(..lebih);
 }
 
 /// Berkas simpanan di workspace.
@@ -238,6 +260,10 @@ fn capped(mut snap: Snapshot) -> Snapshot {
         && !snap.latest_pipeline.raw_log.is_empty()
     {
         snap.latest_pipeline.raw_log.remove(0);
+    }
+    if snap.penulis.len() > MAX_PENULIS {
+        let lebih = snap.penulis.len() - MAX_PENULIS;
+        snap.penulis.drain(..lebih);
     }
     snap
 }

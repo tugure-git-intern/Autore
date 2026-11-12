@@ -33,6 +33,9 @@ export type RepositoryHealth = {
 
 export type StageTime = { id: string; at: string };
 
+/** Satu entri peta `penulis`: `[sha commit, "Nama <email>"]`. */
+export type PenulisEntry = [string, string];
+
 export type ApplicationRecord = {
   id: string;
   name: string;
@@ -69,6 +72,8 @@ export interface DashboardStatus {
     author: string;
     raw_log: string[];
   };
+  /** Peta `sha commit -> penulis` dari rekaman pipeline. Snapshot lama tidak punya. */
+  penulis?: PenulisEntry[];
 }
 
 const PIPELINE_OPSIONAL = [
@@ -81,14 +86,18 @@ const PIPELINE_OPSIONAL = [
 
 export function isDashboardStatus(value: unknown): value is DashboardStatus {
   if (
-    !hasKeys(value, [
-      "system_status",
-      "infra",
-      "stats",
-      "repository_health",
-      "applications",
-      "latest_pipeline",
-    ])
+    !hasKeys(
+      value,
+      [
+        "system_status",
+        "infra",
+        "stats",
+        "repository_health",
+        "applications",
+        "latest_pipeline",
+      ],
+      ["penulis"],
+    )
   ) {
     return false;
   }
@@ -100,6 +109,7 @@ export function isDashboardStatus(value: unknown): value is DashboardStatus {
     isRepositoryHealth(value.repository_health) &&
     Array.isArray(value.applications) &&
     value.applications.every(isApplication) &&
+    isPenulis(value.penulis) &&
     isPipeline(value.latest_pipeline)
   );
 }
@@ -187,6 +197,16 @@ export function isPipeline(value: unknown): value is DashboardStatus["latest_pip
     isString(value.author) &&
     Array.isArray(value.raw_log) &&
     value.raw_log.every((line) => typeof line === "string")
+  );
+}
+
+export function isPenulis(value: unknown): value is PenulisEntry[] | undefined {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        (entri) => Array.isArray(entri) && entri.length === 2 && entri.every(isString),
+      ))
   );
 }
 

@@ -223,7 +223,7 @@ pub fn susun_laporan(
 }
 
 /// Author commit dari repo lokal. Commit tidak ada di sini (build dari mesin lain)
-/// → string kosong; dashboard menampilkannya sebagai strip.
+/// → string kosong; `kumpulkan` menutupnya dari peta rekaman pipeline.
 pub fn cari_penulis(dir_app: &Path, sha: &str) -> String {
     if sha.is_empty() {
         return String::new();
@@ -236,6 +236,19 @@ pub fn cari_penulis(dir_app: &Path, sha: &str) -> String {
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         _ => String::new(),
+    }
+}
+
+/// Isi penulis yang tidak bisa dijawab klon host dari peta rekaman build.
+/// Klon host tetap sumber utama: jawaban yang sudah ada tidak pernah ditimpa.
+fn isi_penulis_tersimpan(lokal: &mut HashMap<String, String>, tersimpan: &[(String, String)]) {
+    for (sha, nama) in tersimpan {
+        if sha.is_empty() || nama.trim().is_empty() {
+            continue;
+        }
+        if lokal.get(sha).map(String::is_empty).unwrap_or(true) {
+            lokal.insert(sha.clone(), nama.clone());
+        }
     }
 }
 
@@ -297,6 +310,7 @@ pub fn kumpulkan(
             penulis.insert(b.commit_sha.clone(), nama);
         }
     }
+    isi_penulis_tersimpan(&mut penulis, &crate::status::load(workspace).penulis);
 
     let sekarang_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -533,11 +547,63 @@ mod tes {
         .trim()
         .to_string();
 
+        assert_eq!(cari_penulis(tmp.path(), &sha), "Uji <uji@example.test>");
         assert_eq!(
-            cari_penulis(tmp.path(), &sha),
-            "Uji <uji@example.test>"
+            cari_penulis(tmp.path(), "0000000000000000000000000000000000000000"),
+            ""
         );
-        assert_eq!(cari_penulis(tmp.path(), "0000000000000000000000000000000000000000"), "");
         assert_eq!(cari_penulis(tmp.path(), ""), "");
+    }
+
+    #[test]
+    fn penulis_tersimpan_menutup_commit_yang_tidak_ada_di_klon_host() {
+        let mut penulis: HashMap<String, String> = HashMap::new();
+        penulis.insert("lokal".to_string(), "Lokal <lokal@contoh.test>".to_string());
+
+        isi_penulis_tersimpan(
+            &mut penulis,
+            &[
+                (
+                    "hilang".to_string(),
+                    "maliffadlan <maliffadlan@gmail.com>".to_string(),
+                ),
+                ("lokal".to_string(), "Palsu <palsu@contoh.test>".to_string()),
+            ],
+        );
+
+        assert_eq!(
+            penulis.get("hilang").map(String::as_str),
+            Some("maliffadlan <maliffadlan@gmail.com>")
+        );
+        assert_eq!(
+            penulis.get("lokal").map(String::as_str),
+            Some("Lokal <lokal@contoh.test>"),
+            "jawaban klon host tidak boleh ditimpa peta rekaman"
+        );
+    }
+
+    #[test]
+    fn penulis_tersimpan_mengisi_yang_kosong_dan_abaikan_yang_tak_lengkap() {
+        let mut penulis: HashMap<String, String> = HashMap::new();
+        penulis.insert("kosong".to_string(), String::new());
+
+        isi_penulis_tersimpan(
+            &mut penulis,
+            &[
+                (
+                    "kosong".to_string(),
+                    "maliffadlan <maliffadlan@gmail.com>".to_string(),
+                ),
+                (String::new(), "tanpa-sha <x@contoh.test>".to_string()),
+                ("tanpa-nama".to_string(), "   ".to_string()),
+            ],
+        );
+
+        assert_eq!(
+            penulis.get("kosong").map(String::as_str),
+            Some("maliffadlan <maliffadlan@gmail.com>")
+        );
+        assert!(!penulis.contains_key(""));
+        assert!(!penulis.contains_key("tanpa-nama"));
     }
 }

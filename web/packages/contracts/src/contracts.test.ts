@@ -84,6 +84,19 @@ describe("kontrak status", () => {
     (rusak.latest_pipeline as Record<string, unknown>).stage_times = [{ id: 1 }];
     expect(isDashboardStatus(rusak)).toBe(false);
   });
+
+  it("menerima peta penulis opsional dan menolak bentuknya yang rusak", () => {
+    const kosong = snapshot();
+    expect(isDashboardStatus(kosong)).toBe(true);
+
+    const sah = snapshot();
+    sah.penulis = [["abc1234", "Alif <alif@tugu-re.com>"]];
+    expect(isDashboardStatus(sah)).toBe(true);
+
+    const rusak = snapshot();
+    rusak.penulis = [["abc1234", 7]];
+    expect(isDashboardStatus(rusak)).toBe(false);
+  });
 });
 
 describe("kontrak runs", () => {

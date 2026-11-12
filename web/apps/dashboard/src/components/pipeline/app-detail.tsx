@@ -219,7 +219,8 @@ export function AppDetail({
             Pipeline terakhir di workspace ini bukan milik {app.name} (commit{" "}
             <span className="font-mono">{shortSha(pipeline.commit_sha)}</span> vs{" "}
             <span className="font-mono">{shortSha(app.commit_sha ?? "")}</span>
-            ). Tahapan dan lognya tidak ditampilkan supaya tidak menyesatkan.
+            ). Itu wajar kalau build terakhir dijalankan dari repo lain; tahapan dan lognya tidak
+            ditampilkan di sini supaya tidak tertukar dengan build {app.name} sendiri.
           </p>
           {jobUrl ? (
             <a

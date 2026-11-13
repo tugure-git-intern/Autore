@@ -53,7 +53,7 @@ export function useStatus(): StatusState {
  * bukan throw — supaya render tanpa kerangka (halaman auth, tes satuan) tetap
  * jalan, dengan sapaan yang hilang alih-alih nama palsu.
  */
-const UserContext = createContext<SessionUser>({ login: "", name: "", image: null });
+const UserContext = createContext<SessionUser>({ login: "", name: "", image: null, role: null });
 
 export function useCurrentUser(): SessionUser {
   return useContext(UserContext);

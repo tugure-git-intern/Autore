@@ -7,10 +7,11 @@ const signOut = vi.hoisted(() => vi.fn());
 vi.mock("next-auth/react", () => ({ signOut }));
 
 import { UserMenu } from "./user-menu";
+import type { SessionUser } from "@/lib/current-user";
 
 // jsdom menganggap isi <details> yang tertutup tidak terlihat; buka dulu supaya
 // assertion-nya bicara soal isi menu, bukan soal status buka/tutup.
-function tampilkan(user: { login: string; name: string; image: string | null }) {
+function tampilkan(user: SessionUser) {
   const hasil = render(<UserMenu user={user} />);
   const details = hasil.container.querySelector("details");
   if (details) details.open = true;
@@ -66,5 +67,18 @@ describe("UserMenu", () => {
 
     expect(screen.queryByLabelText(/sandi|password/i)).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("menampilkan badge role yang dibawa sesi", () => {
+    tampilkan({ login: "maliffadlan", name: "Alif", image: null, role: "dev" });
+
+    expect(screen.getByTestId("badge-role")).toHaveTextContent("Developer");
+    expect(screen.getByTestId("role-menu")).toHaveTextContent("Role: Developer");
+  });
+
+  it("menandai token tanpa role sebagai hanya baca, bukan admin", () => {
+    tampilkan({ login: "alif", name: "Alif", image: null, role: null });
+
+    expect(screen.getByTestId("badge-role")).toHaveTextContent("Hanya baca");
   });
 });

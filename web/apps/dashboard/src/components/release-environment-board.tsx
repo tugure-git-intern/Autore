@@ -1,4 +1,6 @@
-import type { Deployment, Environment, Release, StatusRelease } from "@autore/contracts";
+import type { Deployment, Environment, Release, Role, StatusRelease } from "@autore/contracts";
+import { roleAtLeast } from "@autore/contracts";
+import { ReleaseKeputusan } from "./release-keputusan";
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "./ui/badge";
 
@@ -47,11 +49,14 @@ export function ReleaseEnvironmentBoard({
   environments,
   deployments,
   appName = "Portal Klaim",
+  role = null,
 }: {
   releases: Release[];
   environments: Environment[];
   deployments: Deployment[];
   appName?: string;
+  /** Role efektif penampil; qa ke atas boleh melihat tombol approval. */
+  role?: Role | null;
 }) {
   for (const deployment of deployments) {
     const release = releases.find((item) => item.id === deployment.release_id);
@@ -98,7 +103,22 @@ export function ReleaseEnvironmentBoard({
               <span className="font-mono text-sm">{release.commit_sha.slice(0, 7)}</span>
               <Badge tone={TONE_RELEASE[release.status]}>{LABEL_RELEASE[release.status]}</Badge>
             </div>
+            {/* Jejak audit terlihat orang: pembuat commit dan approver terakhir. */}
+            <p className="text-xs text-muted">
+              Dibuat oleh <span data-testid="release-dibuat-oleh">{release.dibuat_oleh}</span>
+              {" - "}
+              {release.approved_by ? (
+                <>
+                  disetujui <span data-testid="release-approved-by">{release.approved_by}</span>
+                </>
+              ) : (
+                <span data-testid="release-approved-by">belum disetujui</span>
+              )}
+            </p>
             <code className="block break-all text-xs text-muted">{release.image_digest}</code>
+            {roleAtLeast(role ?? "dev", "qa") && release.status === "menunggu_persetujuan" ? (
+              <ReleaseKeputusan releaseId={release.id} />
+            ) : null}
           </div>
         ))}
       </BoardCard>

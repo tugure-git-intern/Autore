@@ -85,4 +85,60 @@ describe("ReleaseEnvironmentBoard", () => {
       <ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={salah} />,
     )).toThrow("digest deployment tidak sama dengan release");
   });
+
+  it("menampilkan pembuat dan status approval pada kartu release", () => {
+    render(<ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={deployments} />);
+
+    expect(screen.getByTestId("release-dibuat-oleh")).toHaveTextContent("developer");
+    expect(screen.getByTestId("release-approved-by")).toHaveTextContent("belum disetujui");
+  });
+
+  it("menampilkan approver yang sudah mencatat keputusan", () => {
+    const sudah = [{ ...releases[0], approved_by: "tugure-git-intern" }];
+    render(<ReleaseEnvironmentBoard releases={sudah} environments={environments} deployments={deployments} />);
+
+    expect(screen.getByTestId("release-approved-by")).toHaveTextContent("tugure-git-intern");
+  });
+
+  it("menyembunyikan tombol approval dari role dev", () => {
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments}
+        deployments={deployments}
+        role="dev"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tolak" })).toBeNull();
+  });
+
+  it("menampilkan tombol approval untuk role qa saat release menunggu persetujuan", () => {
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments}
+        deployments={deployments}
+        role="qa"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Setujui" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Tolak" })).toBeVisible();
+  });
+
+  it("tidak menawarkan approval untuk release yang sudah lewat gerbang", () => {
+    const aktif = [{ ...releases[0], status: "aktif" as const, approved_by: "qa-satu" }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={aktif}
+        environments={environments}
+        deployments={deployments}
+        role="admin"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
+  });
 });

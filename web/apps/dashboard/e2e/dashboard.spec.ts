@@ -34,11 +34,13 @@ test.describe("Autore dashboard visual contract @1280x720", () => {
 
   test("sesi dari storageState benar-benar terbaca", async ({ page }) => {
     await page.goto("/");
-    // UserMenu hanya dirender kalau `currentUser()` mengembalikan login (lihat
+    // Login harus SAMA dengan cookie di e2e/global-setup.ts dan ada di allowlist
+    // (fail-closed: login tak dikenal ditolak). UserMenu hanya dirender kalau
+    // `currentUser()` mengembalikan login (lihat
     // navbar.tsx:83). Jadi assert ini membuktikan cookie e2e diterima server,
     // bukan sekadar tidak error.
     await page.locator("header summary").click();
-    await expect(page.getByText("@alif")).toBeVisible();
+    await expect(page.getByText("@maliffadlan")).toBeVisible();
     await expect(page.getByRole("button", { name: "Keluar" })).toBeVisible();
   });
 

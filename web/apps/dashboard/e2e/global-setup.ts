@@ -35,8 +35,11 @@ export default async function globalSetup() {
   // CJS — import statis langsung meledak "require() of ES Module ... not supported".
   const { encode } = await import("next-auth/jwt");
 
+  // Login e2e harus ada di allowlist (fail-closed: login tak dikenal ditolak),
+  // jadi pakai akun dev nyata, bukan nama karangan. Role ikut supaya UI role
+  // teruji di jalur yang sama dengan produksi.
   const nilai = await encode({
-    token: { sub: "e2e", login: "alif", name: "E2E Playwright" },
+    token: { sub: "e2e", login: "maliffadlan", name: "E2E Playwright", role: "dev" },
     secret: rahasia,
     salt: NAMA_COOKIE,
     maxAge: MAX_AGE,

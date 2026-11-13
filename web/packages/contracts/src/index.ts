@@ -5,3 +5,4 @@ export * from "./runs";
 export * from "./active";
 export * from "./sbom";
 export * from "./responses";
+export * from "./releases";

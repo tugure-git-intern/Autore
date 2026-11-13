@@ -71,13 +71,15 @@ ditolak dan diaudit sebagai percobaan. `menunggu_persetujuan → production_berj
 wajib `approved_by` terisi; `ditolak` wajib `alasan` non-kosong; tidak ada transisi
 langsung build→production.
 
-Klarifikasi wajib (disetujui 2026-11-12):
+Klarifikasi wajib (disetujui 2026-11-12, direvisi 2026-11-13):
 1. `staging_berjalan → menunggu_persetujuan` hanya sah jika deployment staging berstatus
    `sehat`. Health check staging yang gagal mengarah ke `gagal` dan tidak membuka approval.
-2. Rollback menggeser `environment.active_deployment_id` ke deployment sehat milik release
-   LAMA. Release baru yang gagal tetap `gagal`, lalu `rolled_back` setelah rollback selesai;
-   statusnya tidak pernah diubah menjadi `aktif`. Hanya release yang deployment
-   production-nya sehat yang boleh menjadi `aktif`.
+2. `environment.active_deployment_id` adalah pointer deployment sehat milik environment,
+   terpisah dari status release. Release staging yang sehat berstatus `menunggu_persetujuan`,
+   bukan `aktif`; status `aktif` hanya untuk release yang deployment production-nya sehat.
+3. Rollback staging mengembalikan pointer staging ke deployment sehat lama dan menandai
+   deployment/release baru sesuai fakta (`gagal` atau `rolled_back`), tanpa mengaktifkan
+   production. Release baru yang gagal tidak pernah menjadi `aktif`.
 
 ## 5. Scope Bertahap
 
@@ -85,8 +87,14 @@ Klarifikasi wajib (disetujui 2026-11-12):
   Deployment/Approval; kontrak API di `@autore/contracts`; unit test transisi state
   machine; mockup UI satu dashboard dengan tab environment dan label "Belum dikonfigurasi".
   Tidak ada deployment nyata.
-- **Fase 2**: deploy staging nyata di VPS saat ini (environment `staging` menunjuk
-  runner/container yang sudah ada), health check HTTP, history deployment per aplikasi.
+- **Fase 2A** (vertical slice, dashboard read-only): deploy staging nyata untuk satu
+  aplikasi uji lewat pipeline yang ada, health check HTTP, event log append-only, fold
+  state machine di TypeScript, dan dashboard yang hanya membaca hasil. Deploy dari
+  dashboard tidak termasuk 2A. Tidak ada tombol deploy/redeploy/rollback, endpoint POST,
+  approval, atau production.
+- **Fase 2B** (aksi dashboard): deploy/redeploy/rollback staging dari dashboard memakai
+  digest, audit actor sesi, lock deploy per `app:environment`, dan rekonsiliasi build
+  Jenkins. 2B dimulai hanya setelah 2A terbukti.
 - **Fase 3**: autentikasi/role minimal (developer, approver, admin) memanfaatkan sesi
   Auth.js yang sudah ada; endpoint approve/reject dengan alasan wajib; audit trail
   untuk semua mutasi (memperluas `audit.ts`).
@@ -106,20 +114,27 @@ CLI Autore; API Hono mengorkestrasi CLI, bukan mesin pipeline kedua di Next.js.
   `menunggu_persetujuan` | `production_berjalan` | `aktif` | `gagal` |
   `ditolak` | `rolled_back`), `approved_by` (opsional, wajib saat production
   berjalan), `alasan` (wajib saat `ditolak`), `dibuat_oleh`, `dibuat_pada`.
-  Satu release = satu digest; `image_digest` tidak boleh berubah setelah build sukses.
+  `image_digest` boleh `null` hanya pada `draft`/`build_berjalan` dan wajib terisi
+  sejak `siap_staging`. Satu release = satu digest; digest tidak boleh berubah setelah
+  build sukses.
 - **Environment**: `id`, `application_id`, `nama` (`staging`|`production`),
   `target` (host/runner tujuan), `status_konfigurasi` (`terkonfigurasi`|
-  `belum_dikonfigurasi`), `active_deployment_id`. Production baru dibuat dengan
-  `belum_dikonfigurasi` sampai admin mengisi target.
+  `belum_dikonfigurasi`), `active_deployment_id` (pointer deployment sehat milik
+  environment, bukan status release). Production baru dibuat dengan
+  `belum_dikonfigurasi` sampai admin mengisi target. Staging sehat menunjuk deployment
+  sehat terakhir tanpa membuat release staging menjadi `aktif`.
 - **Deployment**: `id`, `release_id`, `environment_id`, `image_digest`, `status`,
   `health_check_url`, `mulai_pada`, `selesai_pada`, `error`. Invariant:
   `deployment.image_digest == release.image_digest` (diuji).
 - **Approval**: `id`, `release_id`, `keputusan` (`approve`|`reject`), `alasan`
   (wajib untuk reject), `actor`, `pada`. Append-only; tidak ada UPDATE/DELETE.
 
-Penyimpanan Fase 1: **[Asumsi]** file JSON per workspace (`autore-workspace/`) mengikuti
-pola `dashboard-status.json` yang sudah ada, dengan penulisan atomik dan lock — cukup
-untuk satu VPS; migrasi ke database hanya jika konkurensi menuntut (lihat Risiko).
+Penyimpanan Fase 2A: **[Asumsi]** file event log JSON per workspace
+(`autore-workspace/release-state.json`) mengikuti pola `dashboard-status.json` yang sudah
+ada. Penulisan memakai lock append terpisah yang dipegang hanya selama read-modify-write,
+lalu atomic rename; atomic rename saja tidak mencegah lost update. Lock deploy
+`app:environment` bukan lock append. Migrasi ke database hanya jika konkurensi menuntut
+(lihat Risiko).
 
 ## 7. Aturan Keamanan
 
@@ -147,9 +162,15 @@ untuk satu VPS; migrasi ke database hanya jika konkurensi menuntut (lihat Risiko
   state machine mencakup semua transisi legal + minimal 5 transisi ilegal ditolak;
   mockup menampilkan production "Belum dikonfigurasi"; `vitest` dan `tsc` hijau; tanpa
   perubahan pada service yang berjalan.
-- **Fase 2**: satu aplikasi uji ter-deploy ke staging dari dashboard; health check
-  gagal menandai deployment `gagal` dan tidak menggeser `active_deployment_id`;
-  history menampilkan minimal 2 deployment berurutan dengan digest yang benar.
+- **Fase 2A**: satu aplikasi uji ter-deploy ke staging lewat pipeline yang ada; health
+  check 200; digest registry terverifikasi dan sama dengan image container; event log
+  mencatat minimal dua deployment berurutan; dashboard read-only menampilkan staging dan
+  production `Belum dikonfigurasi`; tidak ada tombol deploy/redeploy/rollback, endpoint
+  POST, approval, atau production. Release staging sehat berstatus `menunggu_persetujuan`,
+  bukan `aktif`; `active_deployment_id` staging tetap pointer deployment sehat.
+- **Fase 2B**: deploy/redeploy/rollback staging dari dashboard berfungsi; audit actor
+  sesi; lock deploy per `app:environment` dibuat sebelum trigger Jenkins dan bertahan
+  saat API restart; response request tidak mengklaim deployment sudah aktif.
 - **Fase 3**: user tanpa role approver mendapat 403 pada approve/reject; reject tanpa
   alasan ditolak (400); setiap approve/reject menghasilkan baris audit ber-actor;
   release `ditolak` tetap muncul di history.
@@ -162,8 +183,11 @@ untuk satu VPS; migrasi ke database hanya jika konkurensi menuntut (lihat Risiko
 
 - **Migrasi database**: jika JSON tidak lagi cukup, migrasi harus menyediakan skrip
   konversi + uji round-trip; jangan mulai dengan database (YAGNI).
-- **Deploy bersamaan**: lock per aplikasi (satu deploy aktif per environment);
-  pola lock tunggal `actions.ts` diperluas per-target.
+- **Deploy bersamaan**: lock deploy per `app:environment`, bukan satu lock global;
+  event terminal harus tetap bisa ditulis saat lock deploy dipegang. Penulisan event
+  memakai lock append terpisah yang hanya dipegang selama read-modify-write.
+- **Lost update event log**: atomic rename saja tidak mencegah dua penulis saling
+  menimpa; lock append wajib, dan lock deploy tidak boleh dipakai untuk append.
 - **Rollback database aplikasi**: rollback image tidak me-rollback skema DB milik
   aplikasi; PRD ini tidak menjanjikan rollback DB — dokumentasikan sebagai batasan,
   aplikasi wajib migrasi yang kompatibel mundur.

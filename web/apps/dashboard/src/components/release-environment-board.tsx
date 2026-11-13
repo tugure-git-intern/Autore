@@ -44,10 +44,12 @@ export function ReleaseEnvironmentBoard({
   releases,
   environments,
   deployments,
+  appName = "Portal Klaim",
 }: {
   releases: Release[];
   environments: Environment[];
   deployments: Deployment[];
+  appName?: string;
 }) {
   for (const deployment of deployments) {
     const release = releases.find((item) => item.id === deployment.release_id);
@@ -57,10 +59,10 @@ export function ReleaseEnvironmentBoard({
   }
 
   return (
-    <section aria-label="Environment Portal Klaim" className="space-y-4">
+    <section aria-label={`Environment ${appName}`} className="space-y-4">
       <header>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Mockup Fase 1</p>
-        <h2 className="text-lg font-semibold">Portal Klaim</h2>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">Staging</p>
+        <h2 className="text-lg font-semibold">{appName}</h2>
       </header>
       <div className="grid gap-4 md:grid-cols-2">
         {environments.map((environment) => {

@@ -10,6 +10,7 @@ import { dash } from "@/lib/format";
 import { formatDuration, relativeTime, shortSha } from "@/lib/format";
 import { cocokPipeline } from "@/lib/pilih-app";
 import { StatusBadge, type AppStatus } from "../status-badge";
+import { ReleasePanel } from "@/components/release-panel";
 import { WorkspacePipeline } from "./workspace-pipeline";
 
 const MAKS_RUN = 5;
@@ -106,6 +107,8 @@ export function AppDetail({
           onDone={onSelesai}
         />
       </div>
+
+      <ReleasePanel appId={app.id} appName={app.name} />
 
       {sedangAktif.length > 0 ? (
         <div

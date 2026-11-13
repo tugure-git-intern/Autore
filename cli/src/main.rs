@@ -11,6 +11,7 @@ mod scanner;
 mod workspace;
 mod status;
 mod pipeline_record;
+mod release;
 mod runs;
 mod sbom;
 mod templates;
@@ -716,6 +717,12 @@ enum Commands {
         lines: usize,
     },
 
+    /// Kelola event release staging (fakta mentah, bukan status turunan)
+    Release {
+        #[command(subcommand)]
+        action: release::ReleaseAction,
+    },
+
     /// Daftarkan project ke Jenkins CI/CD & langsung jalankan build otomatis
     #[command(visible_alias = "dep")]
     Deploy {
@@ -1417,6 +1424,8 @@ fn execute_command(
                 1
             }
         },
+
+        Commands::Release { action } => release::run(action),
 
         Commands::Deploy {
             path,

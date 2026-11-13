@@ -25,7 +25,7 @@ export type Release = {
   id: string;
   application_id: string;
   commit_sha: string;
-  image_digest: string;
+  image_digest: string | null;
   status: StatusRelease;
   approved_by: string | null;
   alasan: string | null;
@@ -66,13 +66,15 @@ export type Approval = {
 export type AksiRelease =
   | "build_mulai"
   | "build_sukses"
+  | "build_gagal"
   | "staging_mulai"
   | "staging_sehat"
   | "staging_gagal"
   | "approve"
   | "reject"
   | "production_sehat"
-  | "production_gagal";
+  | "production_gagal"
+  | "rollback_selesai";
 
 export type KonteksTransisi = {
   actor?: string;
@@ -84,6 +86,7 @@ export type KonteksTransisi = {
 const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = {
   build_mulai: { dari: "draft", ke: "build_berjalan" },
   build_sukses: { dari: "build_berjalan", ke: "siap_staging" },
+  build_gagal: { dari: "build_berjalan", ke: "gagal" },
   staging_mulai: { dari: "siap_staging", ke: "staging_berjalan" },
   staging_sehat: { dari: "staging_berjalan", ke: "menunggu_persetujuan" },
   staging_gagal: { dari: "staging_berjalan", ke: "gagal" },
@@ -91,6 +94,7 @@ const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = 
   reject: { dari: "menunggu_persetujuan", ke: "ditolak" },
   production_sehat: { dari: "production_berjalan", ke: "aktif" },
   production_gagal: { dari: "production_berjalan", ke: "gagal" },
+  rollback_selesai: { dari: "gagal", ke: "rolled_back" },
 };
 
 function validasiDeploymentSehat(
@@ -193,10 +197,12 @@ export function isRelease(value: unknown): value is Release {
   ])) return false;
   if (!isNonEmpty(value.id) || !isNonEmpty(value.application_id) ||
     !/^[0-9a-f]{40}$/.test(String(value.commit_sha)) ||
-    !/^sha256:[0-9a-f]{64}$/.test(String(value.image_digest)) ||
+    (value.image_digest !== null && !/^sha256:[0-9a-f]{64}$/.test(String(value.image_digest))) ||
     !STATUS_RELEASE.includes(value.status as StatusRelease) ||
     !isNullableString(value.approved_by) || !isNullableString(value.alasan) ||
     !isNonEmpty(value.dibuat_oleh) || !isNonEmpty(value.dibuat_pada)) return false;
+  if (value.status === "draft" || value.status === "build_berjalan") return true;
+  if (value.image_digest === null) return false;
   if (value.status === "ditolak") return isNonEmpty(value.alasan);
   if (value.status === "production_berjalan" || value.status === "aktif") {
     return isNonEmpty(value.approved_by);

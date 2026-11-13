@@ -6,3 +6,5 @@ export * from "./active";
 export * from "./sbom";
 export * from "./responses";
 export * from "./releases";
+
+export * from "./release-events";

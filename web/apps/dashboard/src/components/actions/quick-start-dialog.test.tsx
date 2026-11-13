@@ -32,8 +32,6 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const dialog = () => screen.getByRole("heading", { name: /Buat Aplikasi Baru|Konfirmasi/ }).closest("dialog") as HTMLDialogElement;
-
 /** Langkah 1 yang sudah valid → masuk langkah konfirmasi. */
 function sampaiKonfirmasi(nama = "coba-web") {
   fireEvent.change(screen.getByLabelText("Nama Aplikasi"), { target: { value: nama } });

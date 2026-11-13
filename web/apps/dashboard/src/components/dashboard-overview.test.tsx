@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
-import type { ApiStatusResponse, DashboardStatus } from "@/lib/contracts";
+import type { DashboardStatus } from "@/lib/contracts";
 import { StatusProvider } from "./app-shell";
 import { DashboardOverview } from "./dashboard-overview";
 

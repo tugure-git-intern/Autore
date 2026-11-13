@@ -1,4 +1,4 @@
-import { type SbomPayload, type SbomResult, isSbomPayload } from "@autore/contracts";
+import { type SbomResult, isSbomPayload } from "@autore/contracts";
 import type { SpawnAction, SpawnResult } from "./actions";
 import { loadDashboardStatus, type RunAutore } from "./status";
 

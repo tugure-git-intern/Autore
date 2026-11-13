@@ -5,7 +5,7 @@ import type { Identitas } from "./session";
 
 describe("rateLimit middleware", () => {
   it("mengizinkan hingga batas maksimum dalam satu jendela waktu", async () => {
-    let now = 1000;
+    const now = 1000;
     const app = new Hono<{ Variables: { sesi: Identitas } }>();
     app.use("*", async (c, next) => {
       c.set("sesi", { login: "alif", nama: "Alif", email: "alif@test.local" });

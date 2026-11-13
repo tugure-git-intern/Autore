@@ -11,6 +11,7 @@ import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom } from "./sbom";
 import { parseAllowed, requireSession, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
+import { loadReleases, type ReleaseLoader } from "./releases";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
@@ -110,6 +111,7 @@ export function createApp(
   sbom: SbomLoader = configuredSbom(run),
   clock: () => number = () => Date.now(),
   audit: AuditLoader = (max = 100) => bacaAudit(max),
+  releases: ReleaseLoader = (app) => loadReleases(app),
   rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
@@ -132,6 +134,16 @@ export function createApp(
   app.get("/api/active", async (c) => {
     c.header("Cache-Control", "no-store");
     return c.json(await active());
+  });
+
+  app.get("/api/releases", async (c) => {
+    const app = c.req.query("app")?.trim();
+    if (!app) return c.json({ error: "app wajib diisi" }, 400);
+    try {
+      return c.json(await releases(app));
+    } catch {
+      return c.json({ error: "gagal membaca event release" }, 502);
+    }
   });
 
   app.get("/api/status", async (c) => {

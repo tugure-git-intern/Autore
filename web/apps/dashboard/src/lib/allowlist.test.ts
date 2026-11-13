@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import berkas from "../../../../allowed-users.json";
-import { allowedList, isAllowed, normalizeLogin, parseAllowedUsers } from "./allowlist";
+import { allowedList, allowlistMap, isAllowed, normalizeLogin, parseAllowedUsers } from "./allowlist";
+import { parseRole } from "./roles";
 
 describe("normalizeLogin", () => {
   it("memangkas spasi tepi dan menurunkan jadi huruf kecil", () => {
@@ -62,13 +63,22 @@ describe("isAllowed", () => {
 });
 
 describe("berkas allowed-users.json", () => {
-  it("berisi array nama yang sudah ternormalisasi dan tidak kosong", () => {
-    expect(Array.isArray(berkas)).toBe(true);
-    expect(berkas.length).toBeGreaterThan(0);
-    for (const nama of berkas) {
-      expect(typeof nama).toBe("string");
-      expect(nama).toBe(normalizeLogin(nama));
-      expect(nama).not.toBe("");
+  it("berisi peta login → role yang ternormalisasi dan ber-role dikenal", () => {
+    expect(Array.isArray(berkas)).toBe(false);
+    const peta = allowlistMap(berkas, undefined);
+    expect(peta.size).toBeGreaterThan(0);
+    for (const [login, role] of peta) {
+      expect(login).toBe(normalizeLogin(login));
+      expect(login).not.toBe("");
+      expect(parseRole(role)).toBe(role);
     }
+    expect(peta.get("tugure-git-intern")).toBe("admin");
+    expect(peta.get("maliffadlan")).toBe("dev");
+  });
+
+  it("tidak memuat entri qa selama username GitHub-nya belum ada", () => {
+    // Menulis username karangan supaya peran qa "ada" hanya membuat whitelist
+    // terlihat lebih lengkap daripada kenyataannya.
+    expect([...allowlistMap(berkas, undefined).values()]).not.toContain("qa");
   });
 });

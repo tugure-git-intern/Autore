@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { catatAudit, type PencatatAudit } from "./audit";
 import { bacaRegistry, catatAplikasi } from "./registry";
+import { aksiBerjalan, ambilKunci, pemegangKunci } from "./kunci";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
 import type { Identitas } from "./session";
@@ -138,10 +139,9 @@ export function hatchActions(deps: {
   const bin = deps.bin || process.env.AUTORE_BIN || "autore";
   const workspace = deps.workspace.trim();
   const audit = deps.audit ?? catatAudit;
-  // Satu lock untuk semua aksi: dua git push/deploy bersamaan ke repo yang sama
-  // bukan sesuatu yang bisa diselamatkan di sisi klien.
-  const busyByTarget = new Map<string, ActionKind>();
-  let busyQuickStart = false;
+  // Kunci tulis tinggal di kunci.ts supaya deploy, scan, quick-start, dan approval
+  // berbagi SATU ruang kunci per aplikasi (K2) — bukan satu map per modul, yang
+  // akan membuat approve dan deploy bisa menyentuh aplikasi sama bersamaan.
 
   async function resolveTarget(
     id: string,
@@ -205,15 +205,21 @@ export function hatchActions(deps: {
           : "body harus memuat app id aplikasi yang akan dipindai",
       );
     }
-    if (busyQuickStart) {
+    // quick-start menyentuh registry dan Jenkins, bukan cuma satu folder: aturan
+    // lama (aksi lain menunggu selama quick-start jalan) dipertahankan.
+    const globalsedang = aksiBerjalan();
+    if (globalsedang === "quick-start") {
       return failed(409, "aksi quick-start masih berjalan, tunggu sampai selesai");
     }
-    const sedang = busyByTarget.get(id);
+    const sedang = pemegangKunci(id);
     if (sedang) {
       return failed(409, `aksi ${sedang} masih berjalan, tunggu sampai selesai`);
     }
 
-    busyByTarget.set(id, kind);
+    const lepas = ambilKunci(id, kind);
+    if (!lepas) {
+      return failed(409, `aksi ${pemegangKunci(id) ?? kind} masih berjalan, tunggu sampai selesai`);
+    }
     try {
       const target = await resolveTarget(id);
       if (!target.ok) return failed(target.status, target.error);
@@ -254,7 +260,7 @@ export function hatchActions(deps: {
         ? { ok: true, status: 200, action: kind, target: id, output }
         : failed(422, `aksi ${kind} keluar dengan kode ${res.exitCode}`, output);
     } finally {
-      busyByTarget.delete(id);
+      lepas();
     }
   }
 
@@ -269,8 +275,8 @@ export function hatchActions(deps: {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
-    if (busyQuickStart || busyByTarget.size > 0) {
-      const berjalan = busyQuickStart ? "quick-start" : busyByTarget.values().next().value!;
+    const berjalan = aksiBerjalan();
+    if (berjalan) {
       return failed(409, `aksi ${berjalan} masih berjalan, tunggu sampai selesai`);
     }
 
@@ -286,7 +292,15 @@ export function hatchActions(deps: {
       // Belum ada: itu keadaan yang diinginkan.
     }
 
-    busyQuickStart = true;
+    // Kunci per aplikasi (K2): aplikasi lama atau sedang deploy juga ikut menahan
+    // nama ini. Spawn yang benar-benar jalan sudah ditolak `aksiBerjalan` di atas.
+    const lepas = ambilKunci(input.nama, "quick-start");
+    if (!lepas) {
+      return failed(
+        409,
+        `aksi ${pemegangKunci(input.nama) ?? "quick-start"} masih berjalan, tunggu sampai selesai`,
+      );
+    }
     try {
       let res: SpawnResult;
       try {
@@ -336,7 +350,7 @@ export function hatchActions(deps: {
           }
         : failed(422, `quick-start keluar dengan kode ${res.exitCode}`, output);
     } finally {
-      busyQuickStart = false;
+      lepas();
     }
   }
 

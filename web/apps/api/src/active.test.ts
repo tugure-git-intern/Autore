@@ -29,8 +29,6 @@ const PAYLOAD = {
   counts: { running: 1, queued: 1 },
 };
 
-const DETIK = 1_000;
-
 /** Cache modul disegarkan tiap tes supaya `lastGood` satu tes tidak menular ke tes lain. */
 async function activeModule() {
   vi.resetModules();

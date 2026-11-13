@@ -156,7 +156,7 @@ async function testApp(
     bin: "autore",
     // Tes tidak boleh menulis ke audit log sungguhan milik mesin ini.
     audit: vi.fn(),
-  }), runs, { secret: TEST_SECRET }, active);
+  }), runs, { secret: TEST_SECRET, allowed: ["alif"] }, active);
 }
 
 async function workspace() {
@@ -200,7 +200,7 @@ describe("GET /api/sbom/:app", () => {
         bin: "autore",
       }),
       async () => ({ data: RUNS, stale: false }),
-      { secret: TEST_SECRET },
+      { secret: TEST_SECRET, allowed: ["alif"] },
       async () => ({ data: ACTIVE, stale: false }),
       sbom,
     );
@@ -414,7 +414,7 @@ describe("POST /api/actions/deploy", () => {
       async () => status,
       hatchActions({ workspace: dir, run: async () => status, spawn, bin: "autore", audit }),
       undefined,
-      { secret: TEST_SECRET },
+      { secret: TEST_SECRET, allowed: ["alif"] },
     );
     return { app, dir, spawn, audit };
   }
@@ -481,7 +481,7 @@ describe("POST /api/actions/deploy", () => {
       run: async () => STATUS,
       spawn: vi.fn(async () => ok()),
       bin: "autore",
-    }), undefined, { secret: TEST_SECRET });
+    }), undefined, { secret: TEST_SECRET, allowed: ["alif"] });
 
     const response = await post(app, "/api/actions/deploy", { app: "tes-web" });
 
@@ -692,7 +692,7 @@ describe("Full Action Matrix Audit Log (quick-start, deploy, scan, jalankan-ulan
         audit: (masukan) => catatAudit(masukan, auditFile),
       }),
       async () => ({ data: RUNS, stale: false }),
-      { secret: TEST_SECRET },
+      { secret: TEST_SECRET, allowed: ["alif"] },
       async () => ({ data: ACTIVE, stale: false }),
     );
 

@@ -19,6 +19,7 @@ const LABEL_RELEASE: Record<StatusRelease, string> = {
   siap_staging: "Siap Staging",
   staging_berjalan: "Staging Berjalan",
   menunggu_persetujuan: "Menunggu Persetujuan",
+  disetujui: "Disetujui",
   production_berjalan: "Production Berjalan",
   aktif: "Aktif",
   gagal: "Gagal",
@@ -32,6 +33,7 @@ const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
   siap_staging: "blue",
   staging_berjalan: "blue",
   menunggu_persetujuan: "amber",
+  disetujui: "green",
   production_berjalan: "blue",
   aktif: "green",
   gagal: "red",
@@ -103,4 +105,3 @@ export function ReleaseEnvironmentBoard({
     </section>
   );
 }
-

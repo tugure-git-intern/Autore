@@ -86,7 +86,8 @@ describe("state machine release", () => {
       ["build_sukses", "siap_staging"],
       ["staging_mulai", "staging_berjalan"],
       ["staging_sehat", "menunggu_persetujuan"],
-      ["approve", "production_berjalan"],
+      ["approve", "disetujui"],
+      ["production_mulai", "production_berjalan"],
       ["production_sehat", "aktif"],
     ] as const) {
       const env = aksi === "staging_sehat" ? staging : production;

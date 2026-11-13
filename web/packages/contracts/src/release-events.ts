@@ -16,7 +16,8 @@ export type ActiveDeploymentRef = {
 export type ReleaseEvent = {
   id: string;
   ts: string;
-  kind: "requested" | "build_started" | "digest_verified" | "deploy_result" | "build_failed";
+  kind: "requested" | "build_started" | "digest_verified" | "deploy_result" | "build_failed" |
+    "approved" | "rejected";
   app: string;
   environment: "staging" | "production";
   request_id: string;
@@ -32,6 +33,9 @@ export type ReleaseEvent = {
   health?: string;
   health_url?: string;
   error?: string;
+  // Self-approval diizinkan lewat flag eksplisit supaya jejaknya tetap tercatat
+  // di ledger, bukan hilang begitu saja saat approver menyetujui release sendiri.
+  self_approval?: boolean;
 };
 
 export type ReleaseEventsPayload = {
@@ -65,14 +69,15 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     value,
     ["id", "ts", "kind", "app", "environment", "request_id", "commit", "build_number"],
     ["actor", "digest", "image_ref", "deployment_id", "outcome", "active_before",
-      "active_after", "health", "health_url", "error"],
+      "active_after", "health", "health_url", "error", "self_approval"],
   )) {
     return false;
   }
   if (!nonEmpty(value.id) || !nonEmpty(value.ts) || !nonEmpty(value.app) ||
     (value.environment !== "staging" && value.environment !== "production") || !nonEmpty(value.request_id) ||
     !SHA.test(String(value.commit)) || !Number.isInteger(value.build_number)) return false;
-  if (!["requested", "build_started", "digest_verified", "deploy_result", "build_failed"].includes(String(value.kind))) {
+  if (!["requested", "build_started", "digest_verified", "deploy_result", "build_failed",
+    "approved", "rejected"].includes(String(value.kind))) {
     return false;
   }
   if (value.kind === "digest_verified" || value.kind === "deploy_result") {
@@ -86,6 +91,13 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     if (!isRef(value.active_before) || !isRef(value.active_after)) return false;
   }
   if (value.kind === "build_failed" && !nonEmpty(value.error)) return false;
+  // approval selalu butuh actor supaya siapa yang memutuskan tetap terlacak.
+  if ((value.kind === "approved" || value.kind === "rejected") && !nonEmpty(value.actor)) return false;
+  // rejected memakai field error yang sudah ada sebagai alasan penolakan; tidak
+  // menambah field baru karena ledger Rust memakai bentuk event yang sama.
+  if (value.kind === "rejected" && !nonEmpty(value.error)) return false;
+  // self_approval hanya bermakna untuk approved, tapi bila hadir tetap harus boolean.
+  if (value.self_approval !== undefined && typeof value.self_approval !== "boolean") return false;
   return true;
 }
 
@@ -179,10 +191,47 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
       release = { ...release, status: release.status === "draft" ? "gagal" : release.status };
     }
 
+    if (event.kind === "approved") {
+      // approve kedua pada release yang sudah disetujui idempoten: tidak mengubah
+      // apa pun (termasuk approved_by) supaya event ganda tidak merusak jejak.
+      if (release.status === "menunggu_persetujuan") {
+        const pembuat = release.dibuat_oleh.trim().toLowerCase();
+        const approver = event.actor!.trim().toLowerCase();
+        if (pembuat === approver && event.self_approval !== true) {
+          throw new Error("approve tidak boleh oleh pembuat release");
+        }
+        release = transisiRelease(release, "approve", { actor: event.actor });
+      } else if (release.status !== "disetujui") {
+        throw new Error("approve hanya untuk release menunggu_persetujuan");
+      }
+    }
+
+    if (event.kind === "rejected") {
+      // ditolak tidak punya transisi keluar: satu-satunya jalan masuk adalah dari
+      // menunggu_persetujuan, sehingga tidak ada rute ditolak -> disetujui.
+      if (release.status !== "menunggu_persetujuan") {
+        throw new Error("reject hanya untuk release menunggu_persetujuan");
+      }
+      release = transisiRelease(release, "reject", { alasan: event.error });
+    }
+
     if (event.kind === "deploy_result") {
       const isProduction = event.environment === "production";
-      if (isProduction && release.status !== "menunggu_persetujuan" && release.status !== "production_berjalan") {
-        throw new Error("production deploy hanya untuk release menunggu_persetujuan");
+      // K1: promosi production hanya dari release yang sudah disetujui; menunggu_
+      // persetujuan tidak boleh langsung men-deploy production.
+      if (isProduction && release.status !== "disetujui" && release.status !== "production_berjalan") {
+        throw new Error("production deploy hanya untuk release disetujui");
+      }
+      if (isProduction) {
+        // Digest production wajib sama dengan deployment sehat yang sedang aktif di
+        // staging aplikasi itu: produksi memakai gambar yang sudah lolos staging,
+        // bukan hasil build ulang yang belum diuji.
+        const aktifStaging = environments.get(`${event.app}:staging`)?.active_deployment_id;
+        const deploymentStaging = aktifStaging ? deployments.get(aktifStaging) : undefined;
+        if (!deploymentStaging || deploymentStaging.image_digest !== event.digest) {
+          throw new Error("digest production harus sama dengan deployment staging aktif");
+        }
+        if (release.status === "disetujui") release = transisiRelease(release, "production_mulai");
       }
       if (!isProduction && release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
       const deploymentId = event.deployment_id!;

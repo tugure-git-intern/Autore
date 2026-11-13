@@ -6,6 +6,7 @@ export const STATUS_RELEASE = [
   "siap_staging",
   "staging_berjalan",
   "menunggu_persetujuan",
+  "disetujui",
   "production_berjalan",
   "aktif",
   "gagal",
@@ -72,6 +73,7 @@ export type AksiRelease =
   | "staging_gagal"
   | "approve"
   | "reject"
+  | "production_mulai"
   | "production_sehat"
   | "production_gagal"
   | "rollback_selesai";
@@ -90,8 +92,9 @@ const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = 
   staging_mulai: { dari: "siap_staging", ke: "staging_berjalan" },
   staging_sehat: { dari: "staging_berjalan", ke: "menunggu_persetujuan" },
   staging_gagal: { dari: "staging_berjalan", ke: "gagal" },
-  approve: { dari: "menunggu_persetujuan", ke: "production_berjalan" },
+  approve: { dari: "menunggu_persetujuan", ke: "disetujui" },
   reject: { dari: "menunggu_persetujuan", ke: "ditolak" },
+  production_mulai: { dari: "disetujui", ke: "production_berjalan" },
   production_sehat: { dari: "production_berjalan", ke: "aktif" },
   production_gagal: { dari: "production_berjalan", ke: "gagal" },
   rollback_selesai: { dari: "gagal", ke: "rolled_back" },
@@ -204,7 +207,7 @@ export function isRelease(value: unknown): value is Release {
   if (value.status === "draft" || value.status === "build_berjalan") return true;
   if (value.image_digest === null) return false;
   if (value.status === "ditolak") return isNonEmpty(value.alasan);
-  if (value.status === "production_berjalan" || value.status === "aktif") {
+  if (value.status === "disetujui" || value.status === "production_berjalan" || value.status === "aktif") {
     return isNonEmpty(value.approved_by);
   }
   return true;

@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import daftarBerkas from "../../../allowed-users.json";
 import { authConfig } from "./auth.config";
 import { authSecret } from "./lib/auth-secret";
-import { allowedList, isAllowed } from "./lib/allowlist";
+import { allowlistMap, isAllowed } from "./lib/allowlist";
 
-const daftar = allowedList(daftarBerkas as string[], process.env.AUTORE_ALLOWED_USERS);
+const daftar = allowlistMap(daftarBerkas, process.env.AUTORE_ALLOWED_USERS);
 const TANPA_SESI = new Set(["/login", "/403"]);
 
 const { auth } = NextAuth({ ...authConfig, secret: authSecret(), trustHost: true });

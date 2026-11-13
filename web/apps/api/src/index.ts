@@ -9,9 +9,10 @@ import { getRuns } from "./runs";
 import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom } from "./sbom";
-import { parseAllowed, requireSession, type Identitas } from "./session";
+import { requireSession, type AuthApi, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
 import { loadReleases, type ReleaseLoader } from "./releases";
+import { hatchApprovals, type ApprovalHandler, type HasilKeputusan } from "./release-approval";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
@@ -96,6 +97,36 @@ async function readQuickStartBody(request: Request): Promise<HasilBaca> {
   return bacaBodyQuickStart(parsed);
 }
 
+/** Body reject wajib `{"alasan":"..."}`: satu kunci, string tidak kosong. */
+async function readAlasanBody(
+  request: Request,
+): Promise<{ ok: true; alasan: string } | { ok: false; error: string }> {
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return { ok: false, error: 'body harus JSON {"alasan":"<alasan penolakan>"}' };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, error: 'body harus JSON {"alasan":"<alasan penolakan>"}' };
+  }
+  const record = parsed as Record<string, unknown>;
+  if (Object.keys(record).length !== 1 || !Object.hasOwn(record, "alasan")) {
+    return { ok: false, error: "body hanya boleh memuat kunci alasan" };
+  }
+  const alasan = record.alasan;
+  if (typeof alasan !== "string" || !alasan.trim()) {
+    return { ok: false, error: "alasan harus string yang tidak kosong" };
+  }
+  return { ok: true, alasan: alasan.trim() };
+}
+
+/** HTTP status mengikuti hasil aksi; body-nya sama persis dengan hasil itu. */
+function replyKeputusan(c: Context, hasil: HasilKeputusan) {
+  c.header("Cache-Control", "no-store");
+  return c.json(hasil, hasil.status);
+}
+
 /** HTTP status mengikuti hasil aksi; body-nya sama persis dengan hasil itu. */
 function reply(c: Context, result: ActionResult) {
   c.header("Cache-Control", "no-store");
@@ -106,21 +137,23 @@ export function createApp(
   run: RunAutore = runAutore,
   actions: Actions = configuredActions(run),
   runs: RunsLoader = () => getRuns(),
-  auth: { secret?: string; allowed?: string[] } = {},
+  auth: AuthApi = {},
   active: ActiveLoader = () => getActive(),
   sbom: SbomLoader = configuredSbom(run),
   clock: () => number = () => Date.now(),
   audit: AuditLoader = (max = 100) => bacaAudit(max),
   releases: ReleaseLoader = (app) => loadReleases(app),
   rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
+  approvals: ApprovalHandler = hatchApprovals(),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
 
   // Hanya aksi yang butuh identitas; halaman read-only tetap terbuka dan unit
-  // ini hanya listen di 127.0.0.1.
-  app.use("/api/actions/*", requireSession(auth));
+  // ini hanya listen di 127.0.0.1. Semua aksi (deploy, scan, quick-start) minimum
+  // role `dev`; approve/reject punya gerbang sendiri di bawah.
+  app.use("/api/actions/*", requireSession(auth, "dev"));
   app.use("/api/actions/*", rateLimiter);
 
   // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
@@ -144,6 +177,26 @@ export function createApp(
     } catch {
       return c.json({ error: "gagal membaca event release" }, 502);
     }
+  });
+
+  // Keputusan approval: minimum role `qa`, dan role dihitung ulang dari allowlist
+  // tiap request (bukan dari token) — demosi langsung berlaku tanpa login ulang.
+  app.use("/api/releases/:id/approve", requireSession(auth, "qa"));
+  app.use("/api/releases/:id/reject", requireSession(auth, "qa"));
+  app.use("/api/releases/*", rateLimiter);
+
+  // Approve idempoten: release yang sudah disetujui tetap 200 tanpa event kedua.
+  app.post("/api/releases/:id/approve", async (c) => {
+    return replyKeputusan(c, await approvals.approve(c.req.param("id"), c.get("sesi")));
+  });
+
+  // Reject wajib beralasan: alasan ditulis ke field `error` event rejected, jadi
+  // tanpa alasan tidak ada yang bisa dicatat.
+  app.post("/api/releases/:id/reject", async (c) => {
+    const body = await readAlasanBody(c.req.raw);
+    c.header("Cache-Control", "no-store");
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    return replyKeputusan(c, await approvals.reject(c.req.param("id"), c.get("sesi"), body.alasan));
   });
 
   app.get("/api/status", async (c) => {
@@ -208,9 +261,9 @@ export function createApp(
 }
 
 export const app = createApp(undefined, undefined, undefined, {
-  // Rahasia dibaca saat start; unit di-restart kalau `.env` berubah.
+  // Rahasia dibaca saat start; unit di-restart kalau `.env` berubah. Allowlist
+  // tidak diambil di sini: `bacaAllowlist` membacanya ULANG tiap request.
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
-  allowed: parseAllowed(process.env.AUTORE_ALLOWED_USERS),
 });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -146,7 +146,7 @@ describe("production environment", () => {
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
-    ])).toThrow("transisi ilegal: menunggu_persetujuan -> production_sehat");
+    ])).toThrow("production deploy hanya untuk release disetujui");
   });
 
   it("production deploy tanpa menunggu_persetujuan ditolak", () => {
@@ -161,7 +161,7 @@ describe("production environment", () => {
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
-    ])).toThrow("production deploy hanya untuk release menunggu_persetujuan");
+    ])).toThrow("production deploy hanya untuk release disetujui");
   });
 });
 

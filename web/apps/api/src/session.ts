@@ -1,5 +1,14 @@
 import { webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { getToken } from "@auth/core/jwt";
+import {
+  parseAllowlist,
+  parseAllowlistEnv,
+  roleAtLeast,
+  roleFor,
+  type Role,
+} from "@autore/contracts";
 import type { MiddlewareHandler } from "hono";
 
 // Node 18 di unit ini belum punya `globalThis.crypto`, sedangkan `jose` (dipakai
@@ -73,24 +82,60 @@ export async function verifySession(request: Request, secret: string): Promise<I
   return null;
 }
 
-/** Daftar koma dari env; kosong berarti tidak ada batasan tambahan di sisi API. */
-export function parseAllowed(raw: string | undefined): string[] | undefined {
-  const daftar = (raw ?? "")
-    .split(",")
-    .map(normal)
-    .filter(Boolean);
-  return daftar.length ? daftar : undefined;
+/** Sumber peta login → role; dibaca ulang tiap request, tanpa cache. */
+export type SumberAllowlist = () => ReadonlyMap<string, Role>;
+
+/**
+ * Berkas allowlist ada di root monorepo web/ (sebelah apps/). Dibuat relatif ke
+ * modul ini supaya hasilnya sama dari mana pun proses dijalankan — unit systemd,
+ * `node --run`, atau vitest dari root monorepo.
+ */
+export function jalurAllowlist(): string {
+  return fileURLToPath(new URL("../../../allowed-users.json", import.meta.url));
 }
+
+/**
+ * Allowlist dibaca ULANG tiap request, tanpa cache mtime: demosi admin jadi dev
+ * harus berlaku pada request tulis berikutnya tanpa login ulang, dan izin basi
+ * yang membeku di cache adalah cara paling halus kehilangan gerbang. Berkasnya
+ * kecil, jadi biaya bacanya sepadan.
+ *
+ * `AUTORE_ALLOWED_USERS` tetap menimpa berkas. Bentuk yang tidak dikenali
+ * (berkas hilang, JSON rusak, larik berisi angka) jadi peta KOSONG: semua login
+ * ditolak, bukan semua login diterima.
+ */
+export function bacaAllowlist(jalur: string = jalurAllowlist()): Map<string, Role> {
+  const dariEnv = parseAllowlistEnv(process.env.AUTORE_ALLOWED_USERS ?? "");
+  if (dariEnv.size > 0) return dariEnv;
+  try {
+    return parseAllowlist(JSON.parse(readFileSync(jalur, "utf8")) as unknown);
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * `allowed` = bentuk lama (larik login = semua admin) atau peta login → role;
+ * `allowlist` = sumber peta untuk unit produksi (berkas, dibaca tiap request).
+ */
+export type AuthApi = {
+  secret?: string;
+  allowed?: readonly string[] | ReadonlyMap<string, Role>;
+  allowlist?: SumberAllowlist;
+};
 
 /**
  * Fail closed: tanpa rahasia, aksi tidak boleh jalan sama sekali — 503, bukan
  * 200 tanpa pemeriksaan.
  *
- * Sesi yang lolos disimpan di context (`sesi`) supaya aksi yang butuh identitas
- * (quick-start) tidak memverifikasi cookie untuk kedua kalinya.
+ * Cookie diverifikasi SEKALI di sini dan sesinya disimpan di context (`sesi`).
+ * Role TIDAK disimpan: ia dihitung ulang dari allowlist untuk tiap request, jadi
+ * role di dalam token tidak pernah dipercaya — token lama tanpa role tetap
+ * read-only dan aksi tulisnya 403, dan demosi/promosi berlaku seketika.
  */
 export function requireSession(
-  options: { secret?: string; allowed?: string[] } = {},
+  options: AuthApi = {},
+  minimum: Role = "dev",
 ): MiddlewareHandler<{ Variables: { sesi: Identitas } }> {
   return async (c, next) => {
     const secret = options.secret ?? process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
@@ -103,8 +148,19 @@ export function requireSession(
       return c.json({ ok: false, status: 401, error: "Session tidak sah. Login ulang di dashboard." }, 401);
     }
 
-    if (options.allowed && !options.allowed.includes(normal(sesi.login))) {
+    const users =
+      options.allowed !== undefined
+        ? parseAllowlist(options.allowed)
+        : (options.allowlist ?? bacaAllowlist)();
+    const role = roleFor(users, sesi.login);
+    if (role === null) {
       return c.json({ ok: false, status: 403, error: "Akun GitHub ini tidak ada di whitelist." }, 403);
+    }
+    if (!roleAtLeast(role, minimum)) {
+      return c.json(
+        { ok: false, status: 403, error: `Aksi ini butuh role ${minimum}; role Anda ${role}.` },
+        403,
+      );
     }
 
     c.set("sesi", sesi);

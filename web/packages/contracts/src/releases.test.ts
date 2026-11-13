@@ -9,7 +9,6 @@ import {
   isDeployment,
   isEnvironment,
   isRelease,
-  transisiRelease,
 } from "./index";
 
 const waktu = "2026-11-12T06:00:00.000Z";
@@ -46,7 +45,7 @@ export function deployment(
     id: `dep-${environment_id}`,
     release_id,
     environment_id,
-    image_digest: release().image_digest,
+    image_digest: release().image_digest ?? "sha256:" + "a".repeat(64),
     status,
     health_check_url: "http://staging.internal/health",
     mulai_pada: waktu,

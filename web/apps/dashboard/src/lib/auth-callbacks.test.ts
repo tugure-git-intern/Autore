@@ -90,3 +90,30 @@ describe("exposeLogin", () => {
     expect(hasil.user).toMatchObject({ login: "" });
   });
 });
+
+describe("role di token dan sesi (tampilan UI)", () => {
+  it("mengambil role dari peta allowlist saat login, tanpa mengubah casing login", () => {
+    const daftar = new Map([
+      ["maliffadlan", "dev"] as const,
+      ["tugure-git-intern", "admin"] as const,
+    ]);
+    const token = stampLogin({ token: {}, profile: { login: "MAliffadlan" }, daftar });
+    expect(token).toMatchObject({ login: "MAliffadlan", role: "dev" });
+  });
+
+  it("login di luar whitelist ber-role null, bukan default admin", () => {
+    const daftar = new Map([["alif", "qa"] as const]);
+    expect(stampLogin({ token: {}, profile: { login: "orang-luar" }, daftar }).role).toBeNull();
+  });
+
+  it("mempertahankan role lama saat sesi dibaca ulang tanpa profil", () => {
+    const token = { login: "alif", role: "qa", sub: "1" };
+    expect(stampLogin({ token })).toMatchObject({ login: "alif", role: "qa", sub: "1" });
+  });
+
+  it("token lama tanpa role jadi null di token dan di session.user", () => {
+    expect(stampLogin({ token: { login: "alif" } }).role).toBeNull();
+    const hasil = exposeLogin({ session: { user: {} }, token: { login: "alif", role: "dev" } });
+    expect(hasil.user).toMatchObject({ login: "alif", role: "dev" });
+  });
+});

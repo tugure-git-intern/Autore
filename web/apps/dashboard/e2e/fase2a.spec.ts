@@ -21,7 +21,12 @@ test.describe("Fase 2A read-only", () => {
     const second = await request.get("/api/releases?app=tes-testing");
     const b = await second.json();
     expect(b).toEqual(a);
-    expect(a.data.deployments).toHaveLength(1);
+    // Jumlah deployment bukan konstanta: ledger 2A sudah memuat dua deployment
+    // staging sehat (tes-testing-9 dan tes-testing-11), jadi yang diperiksa adalah
+    // bahwa keduanya memang milik staging aplikasi ini dan sehat.
+    expect(a.data.deployments.length).toBeGreaterThan(0);
+    expect(a.data.deployments.every((d: { environment_id: string; status: string }) =>
+      d.environment_id === "tes-testing:staging" && d.status === "sehat")).toBe(true);
     expect(a.data.releases[0].status).toBe("menunggu_persetujuan");
     expect(a.data.environments.find((e: { nama: string }) => e.nama === "production")?.status_konfigurasi)
       .toBe("terkonfigurasi");

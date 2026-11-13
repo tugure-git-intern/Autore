@@ -40,7 +40,9 @@ async function app(name: string, auth: { secret?: string; allowed?: string[] }) 
     async () => STATUS,
     hatchActions({ workspace: dir, run: async () => STATUS, spawn, bin: "autore" }),
     async () => ({ data: RUNS, stale: false }),
-    auth,
+    // Allowlist eksplisit: tes sesi tidak boleh bergantung pada isi berkas
+    // web/allowed-users.json, dan larik string = semua admin (bentuk lama).
+    { allowed: ["alif", "MAliffadlan", "tugure-git-intern"], ...auth },
   );
   return { app, spawn };
 }

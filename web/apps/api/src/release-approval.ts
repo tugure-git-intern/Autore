@@ -64,13 +64,6 @@ function appDariId(id: string): string | null {
   return app ? app : null;
 }
 
-/** Env `AUTORE_ALLOW_SELF_APPROVAL` = 1/true melonggarkan larangan self-approval;
- *  jejaknya tetap wajib terbawa di event (`self_approval: true`). */
-function bacaSelfApproval(): boolean {
-  const nilai = (process.env.AUTORE_ALLOW_SELF_APPROVAL ?? "").trim().toLowerCase();
-  return nilai === "1" || nilai === "true";
-}
-
 function bangunEvent(input: {
   kind: "approved" | "rejected";
   release: Release;
@@ -78,7 +71,6 @@ function bangunEvent(input: {
   actor: string;
   ts: string;
   alasan?: string;
-  selfApproval: boolean;
 }): ReleaseEvent {
   const { kind, release, build, actor, ts } = input;
   const dasar = {
@@ -94,19 +86,16 @@ function bangunEvent(input: {
     actor,
   };
   if (kind === "rejected") return { ...dasar, error: (input.alasan ?? "").trim() };
-  return input.selfApproval ? { ...dasar, self_approval: true } : dasar;
+  return dasar;
 }
 
-/** Pesan fold kontrak → kode HTTP: self-approval 403, sisanya soal status = 409. */
+/** Pesan fold kontrak → kode HTTP: keputusan yang ditolak fold selalu soal status (409). */
 function terjemah(error: unknown): HasilKeputusan {
   const pesan = error instanceof Error ? error.message : String(error);
-  const self = pesan.includes("pembuat release");
   return {
     ok: false,
-    status: self ? 403 : 409,
-    error: self
-      ? "approve oleh pembuat commit itu sendiri ditolak; set AUTORE_ALLOW_SELF_APPROVAL=1 bila memang disengaja"
-      : `status release tidak mengizinkan keputusan ini: ${pesan}`,
+    status: 409,
+    error: `status release tidak mengizinkan keputusan ini: ${pesan}`,
   };
 }
 
@@ -140,18 +129,16 @@ export type ApprovalDeps = {
   /** Path ledger; default `jalurLedger()`. */
   ledger?: () => string;
   clock?: () => string;
-  allowSelfApproval?: () => boolean;
 };
 
 /**
  * Approval release: `POST /api/releases/:id/{approve,reject}`. Handler ini tidak
  * menyentuh HTTP — gerbang role ada di middleware, jadi keputusan di sini hanya
- * soal status release, self-approval, dan kunci aplikasi.
+ * soal status release dan kunci aplikasi.
  */
 export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
   const jalur = deps.ledger ?? (() => jalurLedger());
   const jam = deps.clock ?? (() => new Date().toISOString());
-  const bolehSendiri = deps.allowSelfApproval ?? bacaSelfApproval;
 
   async function keputusan(
     kind: "approved" | "rejected",
@@ -204,8 +191,6 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
         return { ok: true, status: 200, release };
       }
 
-      const sama =
-        release.dibuat_oleh.trim().toLowerCase() === actor.login.trim().toLowerCase();
       const event = bangunEvent({
         kind,
         release,
@@ -213,15 +198,14 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
         actor: actor.login,
         ts: jam(),
         alasan,
-        selfApproval: kind === "approved" && sama && bolehSendiri(),
       });
 
       let sesudah: FoldResult;
       try {
         sesudah = foldReleaseEvents([...relevan, event]);
       } catch (error) {
-        // Fold adalah validatornya: self-approval dan status yang salah ditolak di
-        // sana, jadi tidak ada jalur yang bisa menulis event tidak sah.
+        // Fold adalah validatornya: status yang salah ditolak di sana, jadi tidak
+        // ada jalur yang bisa menulis event tidak sah.
         return terjemah(error);
       }
 

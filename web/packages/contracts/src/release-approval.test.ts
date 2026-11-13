@@ -100,24 +100,15 @@ describe("siklus approval release", () => {
     expect(hasil.releases[0]).toEqual(sekali.releases[0]);
   });
 
-  it("self-approval ditolak walau beda huruf besar/kecil dan spasi", () => {
-    expect(() => foldReleaseEvents([
-      ...sampaiStagingSehat(DIGEST_1, "operator"),
-      approveEvent({ actor: "operator" }),
-    ])).toThrow("approve tidak boleh oleh pembuat release");
-    expect(() => foldReleaseEvents([
-      ...sampaiStagingSehat(DIGEST_1, "Operator"),
-      approveEvent({ actor: "  operator  " }),
-    ])).toThrow("approve tidak boleh oleh pembuat release");
-  });
-
-  it("self-approval diterima bila self_approval true", () => {
+  it("approve oleh pembuat release tetap diproses (kontrol self-approval ditidakkan, lihat Batasan yang diketahui)", () => {
     const hasil = foldReleaseEvents([
       ...sampaiStagingSehat(DIGEST_1, "operator"),
-      approveEvent({ actor: "operator", self_approval: true }),
+      approveEvent({ actor: "  Operator  " }),
     ]);
     expect(hasil.releases[0].status).toBe("disetujui");
-    expect(hasil.releases[0].approved_by).toBe("operator");
+    // approved_by disimpan ter-trim oleh transisiRelease; yang dibuktikan di sini
+    // hanya bahwa approve oleh pembuat release tidak lagi ditolak.
+    expect(hasil.releases[0].approved_by).toBe("Operator");
   });
 
   it("approve pada release ditolak ditolak (tidak ada jalan ditolak -> disetujui)", () => {
@@ -246,8 +237,39 @@ describe("validator event approval", () => {
     expect(isReleaseEvent(dasar({ kind: "rejected", error: "Regresi klaim." }))).toBe(true);
   });
 
-  it("menerima approved dengan self_approval true dan menolak self_approval bukan boolean", () => {
-    expect(isReleaseEvent(dasar({ self_approval: true }))).toBe(true);
-    expect(isReleaseEvent(dasar({ self_approval: "ya" }))).toBe(false);
+  const deployResultEvent = (overrides: Record<string, unknown> = {}) => dasar({
+    kind: "deploy_result",
+    digest: DIGEST_1,
+    deployment_id: "dep-stg-1",
+    outcome: "success",
+    active_before: null,
+    active_after: null,
+    ...overrides,
+  });
+
+  it("menolak rolled_back tanpa active_before, menerimanya dengan active_before", () => {
+    expect(isReleaseEvent(deployResultEvent({ outcome: "rolled_back" }))).toBe(false);
+    expect(isReleaseEvent(deployResultEvent({
+      outcome: "rolled_back",
+      active_before: { deployment_id: "dep-stg-0", digest: DIGEST_2 },
+    }))).toBe(true);
+  });
+
+  it("menolak rollback_failed tanpa active_before, menerimanya dengan active_before", () => {
+    expect(isReleaseEvent(deployResultEvent({ outcome: "rollback_failed" }))).toBe(false);
+    expect(isReleaseEvent(deployResultEvent({
+      outcome: "rollback_failed",
+      active_before: { deployment_id: "dep-stg-0", digest: DIGEST_2 },
+    }))).toBe(true);
+  });
+
+  it("menolak failed_no_active yang membawa active_before, dan tetap menerima deploy pertama yang sukses", () => {
+    expect(isReleaseEvent(deployResultEvent({ outcome: "failed_no_active" }))).toBe(true);
+    expect(isReleaseEvent(deployResultEvent({
+      outcome: "failed_no_active",
+      active_before: { deployment_id: "dep-stg-0", digest: DIGEST_2 },
+    }))).toBe(false);
+    // Deploy pertama yang berhasil memang belum punya deployment sebelumnya.
+    expect(isReleaseEvent(deployResultEvent())).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ReleaseEvent } from "@autore/contracts";
 import { ambilKunci, lepasSemuaKunci } from "./kunci";
 import { hatchApprovals, jalurLedger } from "./release-approval";
@@ -153,29 +153,22 @@ describe("approve", () => {
     expect(hasil.ok === false && hasil.status).toBe(404);
   });
 
-  it("403 bila approver adalah pembuat commit release itu, tanpa menulis event", async () => {
+  it("approve oleh pembuat commit tetap diproses dan tercatat (kontrol self-approval ditidakkan)", async () => {
     const berkas = ledgerTemp(menungguPersetujuan(1, "operator"));
-    const handler = hatchApprovals({ ledger: () => berkas });
-    const hasil = await handler.approve(ID, orang("  Operator  "));
-
-    expect(hasil.ok === false && hasil.status).toBe(403);
-    expect(eventsDi(berkas)).toHaveLength(4);
-  });
-
-  it("self-approval diizinkan lewat env dan jejaknya wajib terbawa di event", async () => {
-    const berkas = ledgerTemp(menungguPersetujuan(1, "operator"));
-    vi.stubEnv("AUTORE_ALLOW_SELF_APPROVAL", "1");
-    const hasil = await hatchApprovals({ ledger: () => berkas }).approve(ID, orang("operator"));
-    vi.unstubAllEnvs();
+    const hasil = await hatchApprovals({ ledger: () => berkas }).approve(ID, orang("  Operator  "));
 
     expect(hasil.ok && hasil.release.status).toBe("disetujui");
-    expect(eventsDi(berkas)[4]).toMatchObject({ actor: "operator", self_approval: true });
+    expect(hasil.ok && hasil.release.approved_by).toBe("Operator");
+    expect(eventsDi(berkas)).toHaveLength(5);
   });
 
-  it("tanpa env self-approval, event approved tidak membawa flag itu", async () => {
+  it("keputusan status yang salah tetap 409 (bukan 403) lewat handler", async () => {
     const berkas = ledgerTemp(menungguPersetujuan(1, "operator"));
-    await hatchApprovals({ ledger: () => berkas }).approve(ID, orang("budi"));
-    expect(eventsDi(berkas)[4].self_approval).toBeUndefined();
+    const handler = hatchApprovals({ ledger: () => berkas });
+    await handler.reject(ID, orang("budi"), "Regresi klaim.");
+    const hasil = await handler.approve(ID, orang("budi"));
+
+    expect(hasil.ok === false && hasil.status).toBe(409);
   });
 
   it("409 saat kunci aplikasi masih dipegang aksi lain", async () => {

@@ -33,9 +33,6 @@ export type ReleaseEvent = {
   health?: string;
   health_url?: string;
   error?: string;
-  // Self-approval diizinkan lewat flag eksplisit supaya jejaknya tetap tercatat
-  // di ledger, bukan hilang begitu saja saat approver menyetujui release sendiri.
-  self_approval?: boolean;
 };
 
 export type ReleaseEventsPayload = {
@@ -69,7 +66,7 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     value,
     ["id", "ts", "kind", "app", "environment", "request_id", "commit", "build_number"],
     ["actor", "digest", "image_ref", "deployment_id", "outcome", "active_before",
-      "active_after", "health", "health_url", "error", "self_approval"],
+      "active_after", "health", "health_url", "error"],
   )) {
     return false;
   }
@@ -89,6 +86,15 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     }
     if (!nonEmpty(value.deployment_id)) return false;
     if (!isRef(value.active_before) || !isRef(value.active_after)) return false;
+    // Koherensi outcome vs deployment sebelumnya: rollback hanya bermakna bila ada
+    // deployment sehat (kandidatnya) yang menampung hasil rollback; kegagalan tanpa
+    // deployment sebelumnya justru harus TIDAK membawa active_before, supaya
+    // "tidak ada yang bisa di-rollback" tidak tersamar sebagai rollback.
+    const adaSebelum = value.active_before !== null && value.active_before !== undefined;
+    if ((value.outcome === "rolled_back" || value.outcome === "rollback_failed") && !adaSebelum) {
+      return false;
+    }
+    if (value.outcome === "failed_no_active" && adaSebelum) return false;
   }
   if (value.kind === "build_failed" && !nonEmpty(value.error)) return false;
   // approval selalu butuh actor supaya siapa yang memutuskan tetap terlacak.
@@ -96,8 +102,6 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
   // rejected memakai field error yang sudah ada sebagai alasan penolakan; tidak
   // menambah field baru karena ledger Rust memakai bentuk event yang sama.
   if (value.kind === "rejected" && !nonEmpty(value.error)) return false;
-  // self_approval hanya bermakna untuk approved, tapi bila hadir tetap harus boolean.
-  if (value.self_approval !== undefined && typeof value.self_approval !== "boolean") return false;
   return true;
 }
 
@@ -195,11 +199,6 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
       // approve kedua pada release yang sudah disetujui idempoten: tidak mengubah
       // apa pun (termasuk approved_by) supaya event ganda tidak merusak jejak.
       if (release.status === "menunggu_persetujuan") {
-        const pembuat = release.dibuat_oleh.trim().toLowerCase();
-        const approver = event.actor!.trim().toLowerCase();
-        if (pembuat === approver && event.self_approval !== true) {
-          throw new Error("approve tidak boleh oleh pembuat release");
-        }
         release = transisiRelease(release, "approve", { actor: event.actor });
       } else if (release.status !== "disetujui") {
         throw new Error("approve hanya untuk release menunggu_persetujuan");

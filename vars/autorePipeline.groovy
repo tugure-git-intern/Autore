@@ -20,6 +20,7 @@ def call(Map config = [:]) {
     // Pipeline Autore sendiri memanggil `autorePipeline()` tanpa argumen; tanpa
     // penjaga ini ia akan mengaku sebagai aplikasi dan menggembungkan registry.
     def appReported = config.appName ?: ''
+    def healthEndpoint = releaseEnvironment ? '/health' : ''
 
     // Kutip satu argumen shell dengan aman: author/pesan commit bisa berisi spasi, <, >, dan apostrof.
     def q = { String v -> "'" + (v ?: '').replace("'", "'\\''") + "'" }
@@ -62,7 +63,7 @@ def call(Map config = [:]) {
             AUTORE_RELEASE_ENV = "${releaseEnvironment}"
             AUTORE_WORKSPACE = "${workspace}"
             AUTORE_BIN = "${autoreBin}"
-            HEALTH_ENDPOINT = releaseEnvironment ? '/health' : ''
+            HEALTH_ENDPOINT = "${healthEndpoint}"
             DOCKERFILE_DIR = "${dockerfileDir}"
             SONAR_PROJECT_KEY = "${sonarProjectKey}"
             NEXUS_DOCKER_REGISTRY = "${nexusRegistry}"

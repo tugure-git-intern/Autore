@@ -74,7 +74,7 @@ export function ReleaseEnvironmentBoard({
                 {environment.status_konfigurasi === "belum_dikonfigurasi" ? (
                   <Badge tone="gray">Belum dikonfigurasi</Badge>
                 ) : aktif?.status === "sehat" ? (
-                  <Badge tone="green">Sehat</Badge>
+                  <Badge tone="green">{environment.nama === "production" ? "Aktif" : "Sehat"}</Badge>
                 ) : (
                   <Badge tone="gray">Belum ada deployment</Badge>
                 )}
@@ -82,7 +82,7 @@ export function ReleaseEnvironmentBoard({
               {environment.status_konfigurasi === "belum_dikonfigurasi" ? (
                 <p className="mt-3 text-sm text-muted">Target production belum diisi oleh admin.</p>
               ) : (
-                <p className="mt-3 text-sm text-muted">Target: {environment.target}</p>
+                <p className="mt-3 text-sm text-muted">Target: {environment.target || "-"}</p>
               )}
             </BoardCard>
           );
@@ -103,3 +103,4 @@ export function ReleaseEnvironmentBoard({
     </section>
   );
 }
+

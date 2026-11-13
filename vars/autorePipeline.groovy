@@ -7,6 +7,8 @@ def call(Map config = [:]) {
     def deployPort = config.deployPort ?: 8081
     def deployName = config.deployName ?: appName
     def releaseEnvironment = config.releaseEnvironment ?: ''
+    def productionDeployPort = config.productionDeployPort ?: 8154
+    def productionDeployName = config.productionDeployName ?: (appName + "-production")
     def dockerfileDir = config.dockerfileDir ?: '.'
     def sonarProjectKey = config.sonarProjectKey ?: (appName == 'autore-dummy' ? 'autore-cli' : appName)
     def sonarCreds = config.sonarCredentialsId ?: 'sonarqube-token'
@@ -64,6 +66,8 @@ def call(Map config = [:]) {
             AUTORE_WORKSPACE = "${workspace}"
             AUTORE_BIN = "${autoreBin}"
             HEALTH_ENDPOINT = "${healthEndpoint}"
+            PRODUCTION_DEPLOY_PORT = "${productionDeployPort}"
+            PRODUCTION_DEPLOY_NAME = "${productionDeployName}"
             DOCKERFILE_DIR = "${dockerfileDir}"
             SONAR_PROJECT_KEY = "${sonarProjectKey}"
             NEXUS_DOCKER_REGISTRY = "${nexusRegistry}"
@@ -252,6 +256,43 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('11. Deploy Production (Optional)') {
+                when {
+                    expression { releaseEnvironment == 'production' }
+                }
+                steps {
+                    script { env.FAILED_STAGE = '11. Deploy Production' }
+                    sh '''
+                        verified_digest="$(cat .verified-image-digest)"
+                        deploy_cmd="/usr/local/lib/autore-ci/ci-deploy-by-digest.sh"
+                        export CONTAINER_PORT="${APP_PORT}"
+                        export DEPLOY_PORT="${PRODUCTION_DEPLOY_PORT}"
+                        export ACTIVE_CONTAINER_NAME="${PRODUCTION_DEPLOY_NAME}"
+                        export CANDIDATE_CONTAINER_NAME="${PRODUCTION_DEPLOY_NAME}-candidate"
+                        export RESULT_JSON="${WORKSPACE}/.deploy-production-result.json"
+                        set +e
+                        "${deploy_cmd}" "${verified_digest}"
+                        deploy_code=$?
+                        set -e
+                        if [ -f "${RESULT_JSON}" ]; then
+                          "${AUTORE_BIN}" release record \
+                            --from-deploy-result "${RESULT_JSON}" \
+                            --app "${APP_NAME}" \
+                            --environment production \
+                            --build "${BUILD_NUMBER}" \
+                            --commit "${FULL_GIT_COMMIT}" \
+                            --request-id "build-${BUILD_NUMBER}" >/dev/null
+                        fi
+                        exit "${deploy_code}"
+                    '''
+                    script {
+                        def verified = sh(script: 'cat .verified-image-digest', returnStdout: true).trim()
+                        record(status: 'running', stages: ['periksa'],
+                               logs: ["[deploy-production] digest ${verified}".toString()])
+                    }
+                }
+            }
+
             stage('10. Deploy by Verified Digest') {
                 steps {
                     script { env.FAILED_STAGE = '10. Deploy by Verified Digest' }
@@ -329,3 +370,4 @@ def call(Map config = [:]) {
         }
     }
 }
+

@@ -113,3 +113,56 @@ describe("fold event release", () => {
     );
   });
 });
+
+
+describe("production environment", () => {
+  it("tes-testing production environment is configured with target 127.0.0.1:8154", () => {
+    const hasil = foldReleaseEvents([...sukses(1, DIGEST_1, "dep-1")]);
+    const prod = hasil.environments.find((e) => e.nama === "production");
+    expect(prod?.status_konfigurasi).toBe("terkonfigurasi");
+    expect(prod?.target).toBe("127.0.0.1:8154");
+    expect(prod?.active_deployment_id).toBeNull();
+  });
+
+  it("aplikasi lain production environment belum dikonfigurasi", () => {
+    const hasil = foldReleaseEvents([
+      event({ id: "req-1", kind: "requested", app: "java-tes" }),
+    ]);
+    const prod = hasil.environments.find((e) => e.nama === "production");
+    expect(prod?.status_konfigurasi).toBe("belum_dikonfigurasi");
+    expect(prod?.target).toBeNull();
+  });
+
+  it("production deploy tanpa approval ditolak (state machine)", () => {
+    expect(() => foldReleaseEvents([
+      ...sukses(1, DIGEST_1, "dep-stg-1"),
+      event({
+        id: "dep-prod-1",
+        kind: "deploy_result",
+        environment: "production",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-1",
+        outcome: "success",
+        active_before: null,
+        active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+      }),
+    ])).toThrow("transisi ilegal: menunggu_persetujuan -> production_sehat");
+  });
+
+  it("production deploy tanpa menunggu_persetujuan ditolak", () => {
+    expect(() => foldReleaseEvents([
+      event({
+        id: "dep-prod-1",
+        kind: "deploy_result",
+        environment: "production",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-1",
+        outcome: "success",
+        active_before: null,
+        active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+      }),
+    ])).toThrow("production deploy hanya untuk release menunggu_persetujuan");
+  });
+});
+
+

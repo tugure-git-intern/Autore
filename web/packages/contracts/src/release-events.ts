@@ -18,7 +18,7 @@ export type ReleaseEvent = {
   ts: string;
   kind: "requested" | "build_started" | "digest_verified" | "deploy_result" | "build_failed";
   app: string;
-  environment: "staging";
+  environment: "staging" | "production";
   request_id: string;
   commit: string;
   build_number: number;
@@ -70,7 +70,7 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     return false;
   }
   if (!nonEmpty(value.id) || !nonEmpty(value.ts) || !nonEmpty(value.app) ||
-    value.environment !== "staging" || !nonEmpty(value.request_id) ||
+    (value.environment !== "staging" && value.environment !== "production") || !nonEmpty(value.request_id) ||
     !SHA.test(String(value.commit)) || !Number.isInteger(value.build_number)) return false;
   if (!["requested", "build_started", "digest_verified", "deploy_result", "build_failed"].includes(String(value.kind))) {
     return false;
@@ -119,6 +119,8 @@ function releaseAwal(event: ReleaseEvent): Release {
 }
 
 function lingkungan(app: string): Environment[] {
+  const productionTarget = app === "tes-testing" ? "127.0.0.1:8154" : null;
+  const productionConfigured = productionTarget !== null;
   return [
     {
       id: `${app}:staging`,
@@ -132,8 +134,8 @@ function lingkungan(app: string): Environment[] {
       id: `${app}:production`,
       application_id: app,
       nama: "production",
-      target: null,
-      status_konfigurasi: "belum_dikonfigurasi",
+      target: productionTarget,
+      status_konfigurasi: productionConfigured ? "terkonfigurasi" : "belum_dikonfigurasi",
       active_deployment_id: null,
     },
   ];
@@ -178,16 +180,21 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
     }
 
     if (event.kind === "deploy_result") {
-      if (release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
+      const isProduction = event.environment === "production";
+      if (isProduction && release.status !== "menunggu_persetujuan" && release.status !== "production_berjalan") {
+        throw new Error("production deploy hanya untuk release menunggu_persetujuan");
+      }
+      if (!isProduction && release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
       const deploymentId = event.deployment_id!;
       const sukses = event.outcome === "success";
+      const envTarget = isProduction ? environments.get(`${event.app}:production`)! : staging;
       const deployment: Deployment = {
         id: deploymentId,
         release_id: release.id,
-        environment_id: staging.id,
+        environment_id: envTarget.id,
         image_digest: event.digest!,
         status: sukses ? "sehat" : "gagal",
-        health_check_url: event.health_url || "http://127.0.0.1:8153/health",
+        health_check_url: event.health_url || (isProduction ? "http://127.0.0.1:8154/health" : "http://127.0.0.1:8153/health"),
         mulai_pada: event.ts,
         selesai_pada: event.ts,
         error: sukses ? null : (event.error || event.outcome || "deploy gagal"),
@@ -199,13 +206,18 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
           event.active_after?.deployment_id !== deployment.id) {
           throw new Error("active_after tidak cocok dengan deployment sukses");
         }
-        release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
-        environments.set(staging.id, { ...staging, active_deployment_id: deployment.id });
+        if (isProduction) {
+          release = transisiRelease(release, "production_sehat", { deployment, environment: envTarget });
+        } else {
+          release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
+        }
+        environments.set(envTarget.id, { ...envTarget, active_deployment_id: deployment.id });
       } else {
-        if (release.status === "staging_berjalan") release = transisiRelease(release, "staging_gagal");
+        if (isProduction && release.status === "production_berjalan") release = transisiRelease(release, "production_gagal");
+        if (!isProduction && release.status === "staging_berjalan") release = transisiRelease(release, "staging_gagal");
         if (event.outcome === "rolled_back") release = transisiRelease(release, "rollback_selesai");
-        const lama = event.active_before?.deployment_id ?? staging.active_deployment_id;
-        environments.set(staging.id, { ...staging, active_deployment_id: lama ?? null });
+        const lama = event.active_before?.deployment_id ?? envTarget.active_deployment_id;
+        environments.set(envTarget.id, { ...envTarget, active_deployment_id: lama ?? null });
       }
     }
 
@@ -218,3 +230,4 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
     environments: [...environments.values()],
   };
 }
+

@@ -5,6 +5,8 @@ def call(Map config = [:]) {
     def appName = config.appName ?: 'autore-dummy'
     def appPort = config.appPort ?: 8000
     def deployPort = config.deployPort ?: 8081
+    def deployName = config.deployName ?: appName
+    def releaseEnvironment = config.releaseEnvironment ?: ''
     def dockerfileDir = config.dockerfileDir ?: '.'
     def sonarProjectKey = config.sonarProjectKey ?: (appName == 'autore-dummy' ? 'autore-cli' : appName)
     def sonarCreds = config.sonarCredentialsId ?: 'sonarqube-token'
@@ -56,6 +58,11 @@ def call(Map config = [:]) {
             APP_NAME = "${appName}"
             APP_PORT = "${appPort}"
             DEPLOY_PORT = "${deployPort}"
+            DEPLOY_NAME = "${deployName}"
+            AUTORE_RELEASE_ENV = "${releaseEnvironment}"
+            AUTORE_WORKSPACE = "${workspace}"
+            AUTORE_BIN = "${autoreBin}"
+            HEALTH_ENDPOINT = releaseEnvironment ? '/health' : ''
             DOCKERFILE_DIR = "${dockerfileDir}"
             SONAR_PROJECT_KEY = "${sonarProjectKey}"
             NEXUS_DOCKER_REGISTRY = "${nexusRegistry}"
@@ -252,9 +259,23 @@ def call(Map config = [:]) {
                         deploy_cmd="/usr/local/lib/autore-ci/ci-deploy-by-digest.sh"
                         export CONTAINER_PORT="${APP_PORT}"
                         export DEPLOY_PORT="${DEPLOY_PORT}"
-                        export ACTIVE_CONTAINER_NAME="${APP_NAME}"
-                        export CANDIDATE_CONTAINER_NAME="${APP_NAME}-candidate"
+                        export ACTIVE_CONTAINER_NAME="${DEPLOY_NAME}"
+                        export CANDIDATE_CONTAINER_NAME="${DEPLOY_NAME}-candidate"
+                        export RESULT_JSON="${WORKSPACE}/.deploy-result.json"
+                        set +e
                         "${deploy_cmd}" "${verified_digest}"
+                        deploy_code=$?
+                        set -e
+                        if [ -n "${AUTORE_RELEASE_ENV}" ] && [ -f "${RESULT_JSON}" ]; then
+                          "${AUTORE_BIN}" release record \
+                            --from-deploy-result "${RESULT_JSON}" \
+                            --app "${APP_NAME}" \
+                            --environment "${AUTORE_RELEASE_ENV}" \
+                            --build "${BUILD_NUMBER}" \
+                            --commit "${FULL_GIT_COMMIT}" \
+                            --request-id "build-${BUILD_NUMBER}" >/dev/null
+                        fi
+                        exit "${deploy_code}"
                     '''
                     script {
                         def verified = sh(script: 'cat .verified-image-digest', returnStdout: true).trim()
@@ -283,6 +304,15 @@ def call(Map config = [:]) {
                         kode = record(status: 'failed',
                                       message: "Gagal di tahap: ${env.FAILED_STAGE ?: 'tidak diketahui'}".toString(),
                                       logs: ["[done] build #${BUILD_NUMBER} ${currentBuild.currentResult}".toString()])
+                        if (releaseEnvironment) {
+                            def releaseKode = sh(
+                                script: "AUTORE_WORKSPACE=${q(workspace)} ${autoreBin} release record --event build_failed --app ${q(appName)} --environment ${q(releaseEnvironment)} --build ${BUILD_NUMBER} --commit ${q(env.FULL_GIT_COMMIT ?: '')} --error ${q(env.FAILED_STAGE ?: 'pipeline gagal')}",
+                                returnStatus: true
+                            )
+                            if (releaseKode != 0) {
+                                echo "WARNING: release record build_failed exit ${releaseKode}"
+                            }
+                        }
                     }
                     echo "POST-ALWAYS: record status akhir ditulis, exit=${kode}"
                 }

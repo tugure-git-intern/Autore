@@ -104,6 +104,15 @@ fn docker_base(ctx: &ScanContext) -> Vec<String> {
     ]
 }
 
+/// Cache Trivy dipisah per uid pemakai container: jalur image scan berjalan
+/// sebagai root (perlu docker.sock) sedangkan jalur fs scan sebagai uid
+/// pemanggil. Direktori bersama membuat berkas root-owned memblokir update DB
+/// di jalur non-root (`open /cache/db/trivy.db: permission denied`).
+fn cache_trivy(home: Option<PathBuf>, uid: u32, fallback: PathBuf) -> PathBuf {
+    home.map(|h| h.join(format!(".cache/autore/trivy-{uid}")))
+        .unwrap_or(fallback)
+}
+
 fn read_report(ctx: &ScanContext, name: &str) -> Option<String> {
     std::fs::read_to_string(ctx.out_dir.join(name)).ok()
 }
@@ -519,10 +528,11 @@ pub fn run_trivy_image(
         std::env::temp_dir().join(format!("autore-image-scan-{}-{nanos}", std::process::id()));
     std::fs::create_dir_all(&out_dir)
         .map_err(|e| format!("Gagal membuat direktori laporan image: {e}"))?;
-    let cache_dir = match std::env::var_os("HOME") {
-        Some(h) => PathBuf::from(h).join(".cache/autore/trivy"),
-        None => out_dir.join("cache"),
-    };
+    let cache_dir = cache_trivy(
+        std::env::var_os("HOME").map(PathBuf::from),
+        0,
+        out_dir.join("cache"),
+    );
     let _ = std::fs::create_dir_all(&cache_dir);
 
     let report_file = out_dir.join("trivy-image.json");
@@ -696,10 +706,13 @@ pub fn run_authoritative_scan(target: &Path, severity: &str) -> Result<(), Strin
             .map_err(|e| format!("Gagal membuat direktori laporan: {e}"))?;
         (1000u32, 1000u32)
     };
-    let cache_dir = match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
-        Some(h) => PathBuf::from(h).join(".cache/autore/trivy"),
-        None => out_dir.join("cache"),
-    };
+    let cache_dir = cache_trivy(
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(PathBuf::from),
+        uid,
+        out_dir.join("cache"),
+    );
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("Gagal membuat cache Trivy: {e}"))?;
 
     let first_run = !cache_dir.join("db/trivy.db").exists();
@@ -748,6 +761,20 @@ pub fn run_authoritative_image_scan(opts: &ImageScanOptions) -> Result<(), Strin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cache_trivy_dipisah_per_uid() {
+        let home = Some(PathBuf::from("/home/uji"));
+        let non_root = cache_trivy(home.clone(), 1000, PathBuf::from("/tmp/x"));
+        let root = cache_trivy(home, 0, PathBuf::from("/tmp/x"));
+        assert!(non_root.ends_with(".cache/autore/trivy-1000"), "{non_root:?}");
+        assert!(root.ends_with(".cache/autore/trivy-0"), "{root:?}");
+        assert_ne!(non_root, root);
+        assert_eq!(
+            cache_trivy(None, 1000, PathBuf::from("/tmp/x")),
+            PathBuf::from("/tmp/x")
+        );
+    }
+
     use super::*;
     use std::cell::RefCell;
     use std::fs;

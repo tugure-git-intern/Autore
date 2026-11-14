@@ -1,0 +1,14 @@
+// App buangan untuk menguji rollback by digest. Bukan aplikasi produksi:
+// hanya hidup di port 8160, dipakai sekali saat memverifikasi Jenkinsfile.rollback
+// + ci-deploy-by-digest.sh. Pipeline yang sama dengan app sungguhan (Shared Library
+// 'autore'), supaya yang diuji benar-benar jalur deploy yang dipakai selanjutnya.
+@Library('autore') _
+autorePipeline(
+    appName: 'uji-rollback',
+    appPort: 8000,
+    deployPort: 8160,
+    releaseEnvironment: 'staging',
+    dockerfileDir: 'sandbox/dummy-app',
+    // Project Sonar yang sudah ada: uji rollback tidak boleh menuntut setup baru.
+    sonarProjectKey: 'autore-cli',
+)

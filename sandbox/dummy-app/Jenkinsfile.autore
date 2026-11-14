@@ -7,6 +7,10 @@ autorePipeline(
     appName: 'uji-rollback',
     appPort: 8000,
     deployPort: 8160,
+    // Nama container harus sama dengan yang dicari Jenkinsfile.rollback:
+    // <app>-<environment>. Pipeline deploy memakai config.deployName, job rollback
+    // menyusun namanya sendiri, jadi keduanya harus bertemu di sini.
+    deployName: 'uji-rollback-staging',
     releaseEnvironment: 'staging',
     dockerfileDir: 'sandbox/dummy-app',
     // Project Sonar yang sudah ada: uji rollback tidak boleh menuntut setup baru.

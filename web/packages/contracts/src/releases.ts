@@ -76,7 +76,12 @@ export type AksiRelease =
   | "production_mulai"
   | "production_sehat"
   | "production_gagal"
-  | "rollback_selesai";
+  | "rollback_selesai"
+  | "rollback_staging_dari_menunggu_persetujuan"
+  | "rollback_staging_dari_disetujui"
+  | "rollback_staging_dari_ditolak"
+  | "rollback_staging_dari_aktif"
+  | "rollback_production_dari_aktif";
 
 export type KonteksTransisi = {
   actor?: string;
@@ -98,6 +103,16 @@ const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = 
   production_sehat: { dari: "production_berjalan", ke: "aktif" },
   production_gagal: { dari: "production_berjalan", ke: "gagal" },
   rollback_selesai: { dari: "gagal", ke: "rolled_back" },
+  // Rollback sengaja (mode AUTORE_DEPLOY_MODE=rollback). Semua menuju status
+  // terminal `rolled_back`; dipanggil TANPA konteks deployment supaya
+  // validasiDeploymentSehat tidak pernah jalan dan image_digest release tidak
+  // disentuh. Environment staging hanya boleh dari status staging, production
+  // hanya dari `aktif` — supaya tidak ada rollback production yang tidak sengaja.
+  rollback_staging_dari_menunggu_persetujuan: { dari: "menunggu_persetujuan", ke: "rolled_back" },
+  rollback_staging_dari_disetujui: { dari: "disetujui", ke: "rolled_back" },
+  rollback_staging_dari_ditolak: { dari: "ditolak", ke: "rolled_back" },
+  rollback_staging_dari_aktif: { dari: "aktif", ke: "rolled_back" },
+  rollback_production_dari_aktif: { dari: "aktif", ke: "rolled_back" },
 };
 
 function validasiDeploymentSehat(

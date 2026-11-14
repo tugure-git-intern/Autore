@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldReleaseEvents, isReleaseEvent, type ReleaseEvent } from "./release-events";
+import { aksiRollback, foldReleaseEvents, isReleaseEvent, type ReleaseEvent } from "./release-events";
 
 const COMMIT = "a".repeat(40);
 const DIGEST_1 = "sha256:" + "1".repeat(64);
@@ -162,6 +162,92 @@ describe("production environment", () => {
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
     ])).toThrow("production deploy hanya untuk release disetujui");
+  });
+});
+
+/** Rantai sampai release aktif: staging sehat, disetujui, production sehat. */
+function aktif(digest = DIGEST_1): ReleaseEvent[] {
+  return [
+    ...sukses(1, digest, "dep-stg-1"),
+    event({ id: "approve-1", kind: "approved", actor: "budi" }),
+    event({
+      id: "deploy-prod-1",
+      kind: "deploy_result",
+      environment: "production",
+      digest,
+      deployment_id: "dep-prod-1",
+      outcome: "success",
+      active_before: null,
+      active_after: { deployment_id: "dep-prod-1", digest },
+      health: "ok",
+    }),
+  ];
+}
+
+/** Event rollback sengaja: digest target deployment sehat lama, bukan build baru. */
+function rollback(environment: "staging" | "production"): ReleaseEvent {
+  return event({
+    id: "rb-1",
+    kind: "deploy_result",
+    environment,
+    digest: DIGEST_1,
+    deployment_id: environment === "staging" ? "dep-stg-1" : "dep-prod-1",
+    outcome: "rolled_back",
+    active_before: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+    ...(environment === "staging"
+      ? { active_after: { deployment_id: "dep-stg-1", digest: DIGEST_1 } }
+      : {}),
+    health: "ok",
+  });
+}
+
+describe("rollback sengaja (mode rollback skrip emitor)", () => {
+  it("R26 rollback staging dari release aktif menandai rolled_back dan mengembalikan pointer staging", () => {
+    const hasil = foldReleaseEvents([...aktif(DIGEST_1), rollback("staging")]);
+    const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
+    expect(rel?.status).toBe("rolled_back");
+    expect(hasil.diabaikan).toEqual([]);
+    expect(hasil.environments.find((environment) => environment.nama === "staging")?.active_deployment_id)
+      .toBe("dep-stg-1");
+  });
+
+  it("R27 rollback production dari release aktif tidak lewat gerbang promosi dan tetap rolled_back", () => {
+    const hasil = foldReleaseEvents([...aktif(DIGEST_1), rollback("production")]);
+    const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
+    expect(rel?.status).toBe("rolled_back");
+    expect(hasil.diabaikan).toEqual([]);
+    expect(hasil.environments.find((environment) => environment.nama === "production")?.active_deployment_id)
+      .toBe("dep-prod-1");
+  });
+
+  it("R28 pemilihan aksi rollback mengikuti status dan environment yang eksplisit", () => {
+    expect(aksiRollback("aktif", false)).toBe("rollback_staging_dari_aktif");
+    expect(aksiRollback("aktif", true)).toBe("rollback_production_dari_aktif");
+    expect(aksiRollback("menunggu_persetujuan", false)).toBe("rollback_staging_dari_menunggu_persetujuan");
+    expect(aksiRollback("disetujui", false)).toBe("rollback_staging_dari_disetujui");
+    expect(aksiRollback("ditolak", false)).toBe("rollback_staging_dari_ditolak");
+    expect(aksiRollback("gagal", false)).toBe("rollback_selesai");
+    expect(aksiRollback("menunggu_persetujuan", true)).toBeNull();
+    expect(aksiRollback("staging_berjalan", false)).toBeNull();
+  });
+
+  it("R29 rollback tanpa transisi sah dicatat diabaikan, bukan melempar", () => {
+    const hasil = foldReleaseEvents([
+      event({ id: "req-1", kind: "requested" }),
+      event({ id: "build-1", kind: "build_started" }),
+      event({ id: "digest-1", kind: "digest_verified", digest: DIGEST_1 }),
+      rollback("staging"),
+    ]);
+    expect(hasil.releases[0]?.status).toBe("staging_berjalan");
+    expect(hasil.diabaikan).toHaveLength(1);
+    expect(hasil.diabaikan[0].event_id).toBe("rb-1");
+    expect(hasil.diabaikan[0].alasan).toContain("rollback tanpa transisi sah");
+  });
+
+  it("R30 rollback tidak menimpa image_digest release yang di-rollback", () => {
+    const hasil = foldReleaseEvents([...aktif(DIGEST_2), rollback("staging")]);
+    const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
+    expect(rel?.image_digest).toBe(DIGEST_2);
   });
 });
 

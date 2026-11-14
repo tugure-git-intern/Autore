@@ -1,8 +1,10 @@
 import { hasKeys } from "./guards";
 import {
+  type AksiRelease,
   type Deployment,
   type Environment,
   type Release,
+  type StatusRelease,
   transisiRelease,
 } from "./releases";
 
@@ -44,6 +46,17 @@ export type FoldResult = {
   releases: Release[];
   deployments: Deployment[];
   environments: Environment[];
+  /**
+   * Event yang TIDAK dipakai fold beserta alasannya (abaikan-dan-catat): hanya
+   * dipakai jalur rollback sengaja, di mana status release tidak punya transisi
+   * menuju `rolled_back`. Dicatat supaya kejadiannya terlihat, bukan hilang.
+   */
+  diabaikan: DiabaikanEvent[];
+};
+
+export type DiabaikanEvent = {
+  event_id: string;
+  alasan: string;
 };
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -158,6 +171,26 @@ function lingkungan(app: string): Environment[] {
 }
 
 /**
+ * Pemilihan aksi rollback: status + environment yang dipanggil. `null` = tidak ada
+ * transisi sah, jadi event itu diabaikan-dan-dicatat, bukan dilempar (jangan sampai
+ * satu event tak sah membuat seluruh GET /api/releases jadi 502).
+ */
+export function aksiRollback(
+  status: StatusRelease,
+  isProduction: boolean,
+): AksiRelease | null {
+  if (status === "gagal") return "rollback_selesai";
+  if (!isProduction && status === "menunggu_persetujuan") {
+    return "rollback_staging_dari_menunggu_persetujuan";
+  }
+  if (!isProduction && status === "disetujui") return "rollback_staging_dari_disetujui";
+  if (!isProduction && status === "ditolak") return "rollback_staging_dari_ditolak";
+  if (!isProduction && status === "aktif") return "rollback_staging_dari_aktif";
+  if (isProduction && status === "aktif") return "rollback_production_dari_aktif";
+  return null;
+}
+
+/**
  * Melipat event mentah menjadi model release/deployment. TypeScript tetap satu-
  * satunya pemilik transisi; event dari Rust/Jenkins tidak membawa status turunan.
  */
@@ -165,6 +198,11 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
   const releases = new Map<string, Release>();
   const deployments = new Map<string, Deployment>();
   const environments = new Map<string, Environment>();
+  const diabaikan: DiabaikanEvent[] = [];
+  const abaikan = (event: ReleaseEvent, alasan: string): boolean => {
+    diabaikan.push({ event_id: event.id, alasan });
+    return true;
+  };
 
   for (const event of events) {
     if (!isReleaseEvent(event)) throw new Error("invalid release event");
@@ -186,7 +224,9 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
 
     if (event.kind === "digest_verified" || event.kind === "deploy_result") {
       if (release.status === "build_berjalan") release = transisiRelease(release, "build_sukses");
-      release = { ...release, image_digest: event.digest! };
+      // Rollback sengaja men-deploy digest LAMA: image_digest release yang di-rollback
+      // tidak boleh ditimpa digest target, kalau tidak riwayat build jadi dusta.
+      if (event.outcome !== "rolled_back") release = { ...release, image_digest: event.digest! };
       if (release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
     }
 
@@ -217,11 +257,13 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
     if (event.kind === "deploy_result") {
       const isProduction = event.environment === "production";
       // K1: promosi production hanya dari release yang sudah disetujui; menunggu_
-      // persetujuan tidak boleh langsung men-deploy production.
-      if (isProduction && release.status !== "disetujui" && release.status !== "production_berjalan") {
+      // persetujuan tidak boleh langsung men-deploy production. Rollback sengaja
+      // bukan promosi, jadi tidak lewat gerbang ini.
+      if (isProduction && event.outcome !== "rolled_back" &&
+        release.status !== "disetujui" && release.status !== "production_berjalan") {
         throw new Error("production deploy hanya untuk release disetujui");
       }
-      if (isProduction) {
+      if (isProduction && event.outcome !== "rolled_back") {
         // Digest production wajib sama dengan deployment sehat yang sedang aktif di
         // staging aplikasi itu: produksi memakai gambar yang sudah lolos staging,
         // bukan hasil build ulang yang belum diuji.
@@ -261,11 +303,49 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
         }
         environments.set(envTarget.id, { ...envTarget, active_deployment_id: deployment.id });
       } else {
-        if (isProduction && release.status === "production_berjalan") release = transisiRelease(release, "production_gagal");
-        if (!isProduction && release.status === "staging_berjalan") release = transisiRelease(release, "staging_gagal");
-        if (event.outcome === "rolled_back") release = transisiRelease(release, "rollback_selesai");
-        const lama = event.active_before?.deployment_id ?? envTarget.active_deployment_id;
-        environments.set(envTarget.id, { ...envTarget, active_deployment_id: lama ?? null });
+        let abaikanIni = false;
+        if (event.outcome === "rolled_back") {
+          // Rollback sengaja ber-outcome bukan "success": jangan ditandai gagal dulu,
+          // karena rollback yang sehat justru mengembalikan layanan lama.
+          const aksi = aksiRollback(release.status, isProduction);
+          const kandidatGagal =
+            !aksi &&
+            event.active_after !== undefined &&
+            event.active_after !== null &&
+            event.active_after.deployment_id !== event.deployment_id;
+          if (aksi) {
+            // Tanpa konteks deployment: validasiDeploymentSehat hanya untuk
+            // staging_sehat/production_sehat, dan image_digest release yang di-rollback
+            // sengaja tidak disentuh.
+            release = transisiRelease(release, aksi);
+          } else if (kandidatGagal) {
+            // Build baru gagal sehat lalu di-rollback: penanda kegagalan dulu, baru
+            // status akhir rolled_back.
+            if (isProduction && release.status === "production_berjalan") {
+              release = transisiRelease(release, "production_gagal");
+            }
+            if (!isProduction && release.status === "staging_berjalan") {
+              release = transisiRelease(release, "staging_gagal");
+            }
+            const mundur = aksiRollback(release.status, isProduction);
+            if (mundur) release = transisiRelease(release, mundur);
+            else abaikanIni = abaikan(event, `rollback tanpa transisi sah dari status ${release.status}`);
+          } else {
+            abaikanIni = abaikan(event, `rollback tanpa transisi sah dari status ${release.status}`);
+          }
+        } else {
+          if (isProduction && release.status === "production_berjalan") release = transisiRelease(release, "production_gagal");
+          if (!isProduction && release.status === "staging_berjalan") release = transisiRelease(release, "staging_gagal");
+        }
+        // Event yang diabaikan tidak boleh menggeser pointer: dia memang tidak
+        // menggambarkan perubahan nyata di environment mana pun.
+        if (!abaikanIni) {
+          const lama = event.outcome === "failed_no_active"
+            ? null
+            : (event.active_after?.deployment_id ?? event.active_before?.deployment_id ??
+              envTarget.active_deployment_id);
+          environments.set(envTarget.id, { ...envTarget, active_deployment_id: lama ?? null });
+        }
       }
     }
 
@@ -276,6 +356,7 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
     releases: [...releases.values()],
     deployments: [...deployments.values()],
     environments: [...environments.values()],
+    diabaikan,
   };
 }
 

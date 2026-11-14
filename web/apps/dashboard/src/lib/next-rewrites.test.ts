@@ -32,7 +32,16 @@ describe("rewrites /api ke unit Hono", () => {
     const sumber = (await rewrites()).map((r) => r.source);
 
     expect(sumber).toEqual(
-      expect.arrayContaining(["/api/status", "/api/runs", "/api/active", "/api/actions/:path*"]),
+      expect.arrayContaining([
+        "/api/status",
+        "/api/runs",
+        "/api/active",
+        "/api/actions/:path*",
+        "/api/releases/:id/approve",
+        "/api/releases/:id/reject",
+        "/api/releases/:id/promote",
+        "/api/releases/:id/rollback",
+      ]),
     );
   });
 });

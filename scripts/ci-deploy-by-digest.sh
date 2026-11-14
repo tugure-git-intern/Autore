@@ -205,7 +205,13 @@ rollback() {
 }
 
 log "Memverifikasi manifest registry: ${IMAGE_REF}"
-retry_registry docker pull --quiet "${IMAGE_REF}" >/dev/null
+# Gambar yang sudah ada lokal (mis. promosi ulang digest yang baru di-deploy di
+# staging host yang sama) tidak perlu diunduh lagi; hemat registry dan tahan 429.
+if docker image inspect "${IMAGE_REF}" >/dev/null 2>&1; then
+  echo "Image ${IMAGE_REF} sudah ada lokal, lewati pull."
+else
+  retry_registry docker pull --quiet "${IMAGE_REF}" >/dev/null
+fi
 IMAGE_ID="$(docker image inspect "${IMAGE_REF}" --format '{{.Id}}')"
 if ! docker image inspect "${IMAGE_REF}" --format '{{json .RepoDigests}}' | grep -Fq "${IMAGE_REF}"; then
   echo "ERROR: RepoDigests tidak memuat ${IMAGE_REF}; verifikasi digest gagal." >&2

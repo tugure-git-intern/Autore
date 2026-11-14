@@ -124,7 +124,7 @@ export function hatchRollback(deps: RollbackDeps = {}): RollbackHandler {
       try {
         const events: ReleaseEvent[] = [];
         for (const baris of bacaLedgerMentah(jalur).events ?? []) {
-          if (isReleaseEvent(baris)) events.push(baris);
+          if (isReleaseEvent(baris) && baris.app === app) events.push(baris);
         }
         let hasilFold;
         try {

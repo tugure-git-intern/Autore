@@ -59,49 +59,64 @@ pipeline {
 
         stage('2. Rollback by Digest') {
             steps {
-                sh """
+                // Nilai Groovy dialirkan lewat environment, bukan interpolasi GString:
+                // di dalam GString Groovy, "${...}" milik shell harus di-escape dan
+                // escape itu justru ditolak parser (illegal string body character).
+                // Blok sh di bawah memakai kutip tunggal, jadi isinya murni shell.
+                withEnv([
+                    "DEPLOY_SCRIPT=${DEPLOY_SCRIPT}",
+                    "AUTORE_BIN=${AUTORE_BIN}",
+                    "AUTORE_REGISTRY=${AUTORE_REGISTRY}",
+                    "RB_APP=${params.ROLLBACK_APP}",
+                    "RB_ENV=${params.ROLLBACK_ENVIRONMENT}",
+                    "RB_DIGEST=${params.ROLLBACK_DIGEST}",
+                    "RB_DEPLOYMENT_ID=${params.ROLLBACK_DEPLOYMENT_ID}",
+                    "RB_RELEASE_ID=${params.ROLLBACK_RELEASE_ID}",
+                    "RB_ACTOR=${params.ROLLBACK_ACTOR}",
+                ]) {
+                    sh '''#!/bin/sh
                     set -e
-                    if [ ! -x '${DEPLOY_SCRIPT}' ]; then
-                      echo "ERROR: ${DEPLOY_SCRIPT} tidak ada atau tidak executable (milik admin runner)" >&2
+                    if [ ! -x "$DEPLOY_SCRIPT" ]; then
+                      echo "ERROR: $DEPLOY_SCRIPT tidak ada atau tidak executable (milik admin runner)" >&2
                       exit 1
                     fi
-                    if [ ! -x '${AUTORE_BIN}' ]; then
-                      echo "ERROR: ${AUTORE_BIN} tidak ada atau tidak executable (milik admin runner)" >&2
+                    if [ ! -x "$AUTORE_BIN" ]; then
+                      echo "ERROR: $AUTORE_BIN tidak ada atau tidak executable (milik admin runner)" >&2
                       exit 1
                     fi
 
                     export AUTORE_DEPLOY_MODE=rollback
-                    export APP_NAME="${ROLLBACK_APP}"
-                    export ACTIVE_CONTAINER_NAME="${ROLLBACK_APP}-${ROLLBACK_ENVIRONMENT}"
-                    export CANDIDATE_CONTAINER_NAME="${'$'}{ACTIVE_CONTAINER_NAME}-candidate"
-                    export DEPLOYMENT_ID="${ROLLBACK_DEPLOYMENT_ID}"
-                    export RESULT_JSON="${'$'}{WORKSPACE}/.deploy-rollback-result.json"
+                    export APP_NAME="$RB_APP"
+                    export ACTIVE_CONTAINER_NAME="$RB_APP-$RB_ENV"
+                    export CANDIDATE_CONTAINER_NAME="$ACTIVE_CONTAINER_NAME-candidate"
+                    export DEPLOYMENT_ID="$RB_DEPLOYMENT_ID"
+                    export RESULT_JSON="$WORKSPACE/.deploy-rollback-result.json"
 
-                    image_ref="${AUTORE_REGISTRY}/${ROLLBACK_APP}@${ROLLBACK_DIGEST}"
+                    image_ref="$AUTORE_REGISTRY/$RB_APP@$RB_DIGEST"
                     set +e
-                    '${DEPLOY_SCRIPT}' "${'$'}{image_ref}"
-                    deploy_code=\$?
+                    "$DEPLOY_SCRIPT" "$image_ref"
+                    deploy_code=$?
                     set -e
 
-                    if [ -f "${'$'}{RESULT_JSON}" ]; then
-                      build="$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f3)"
-                      id="$('${AUTORE_BIN}' release rollback-id --app '${ROLLBACK_APP}' --build "${'$'}{build}")"
-                      '${AUTORE_BIN}' release record \\
-                        --from-deploy-result "${'$'}{RESULT_JSON}" \\
-                        --app '${ROLLBACK_APP}' \\
-                        --environment '${ROLLBACK_ENVIRONMENT}' \\
-                        --build "${'$'}{build}" \\
-                        --commit "$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f2)" \\
-                        --request-id '${ROLLBACK_RELEASE_ID}' \\
-                        --id "${'$'}{id}" \\
-                        --actor '${ROLLBACK_ACTOR}' >/dev/null
+                    if [ -f "$RESULT_JSON" ]; then
+                      build=$(echo "$RB_RELEASE_ID" | cut -d: -f3)
+                      id=$("$AUTORE_BIN" release rollback-id --app "$RB_APP" --build "$build")
+                      "$AUTORE_BIN" release record \
+                        --from-deploy-result "$RESULT_JSON" \
+                        --app "$RB_APP" \
+                        --environment "$RB_ENV" \
+                        --build "$build" \
+                        --commit "$(echo "$RB_RELEASE_ID" | cut -d: -f2)" \
+                        --request-id "$RB_RELEASE_ID" \
+                        --id "$id" \
+                        --actor "$RB_ACTOR" >/dev/null
                     fi
 
-                    exit "${'$'}{deploy_code}"
-                """
+                    exit "$deploy_code"
+                    '''
+                }
             }
         }
-    }
 
     post {
         always {

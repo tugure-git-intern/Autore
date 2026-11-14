@@ -1,0 +1,105 @@
+// Jenkinsfile.rollback — rollback by digest, dipicu API (bukan SCM).
+// Job ini tidak membangun dan tidak mempromosikan apa pun: port aktif dikembalikan
+// ke digest lama, lalu fakta hasilnya dicatat CLI. Penulis event tetap skrip + CLI;
+// proses API tidak menulis ledger.
+//
+// Registry: satu literal di sini saja. Pindahkan ke parameter job kalau registry
+// pindah host.
+def AUTORE_REGISTRY = '127.0.0.1:5000'
+def AUTORE_BIN = '/usr/local/lib/autore-ci/autore'
+def DEPLOY_SCRIPT = '/usr/local/lib/autore-ci/ci-deploy-by-digest.sh'
+
+pipeline {
+    agent { label 'vps-runner-1' }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    parameters {
+        string(name: 'ROLLBACK_APP', defaultValue: '', description: 'Nama aplikasi')
+        string(name: 'ROLLBACK_ENVIRONMENT', defaultValue: '', description: 'staging atau production')
+        string(name: 'ROLLBACK_DIGEST', defaultValue: '', description: 'sha256:<64 hex> target rollback')
+        string(name: 'ROLLBACK_DEPLOYMENT_ID', defaultValue: '', description: 'Deployment ID target rollback')
+        string(name: 'ROLLBACK_RELEASE_ID', defaultValue: '', description: 'app:commit:build release yang di-rollback')
+        string(name: 'ROLLBACK_ACTOR', defaultValue: '', description: 'Login pelaku rollback')
+    }
+
+    stages {
+        stage('1. Validasi Parameter') {
+            steps {
+                script {
+                    if (!params.ROLLBACK_ENVIRONMENT?.trim()) {
+                        error('ROLLBACK_ENVIRONMENT wajib diisi: staging atau production')
+                    }
+                    if (!(params.ROLLBACK_ENVIRONMENT in ['staging', 'production'])) {
+                        error("ROLLBACK_ENVIRONMENT tidak dikenal: ${params.ROLLBACK_ENVIRONMENT}. Isi staging atau production (huruf kecil).")
+                    }
+                    if (!(params.ROLLBACK_DIGEST ==~ /sha256:[0-9a-f]{64}/)) {
+                        error("ROLLBACK_DIGEST bukan sha256:<64 hex>: ${params.ROLLBACK_DIGEST}")
+                    }
+                    if (!params.ROLLBACK_DEPLOYMENT_ID?.trim()) {
+                        error('ROLLBACK_DEPLOYMENT_ID wajib diisi')
+                    }
+                    def bagian = (params.ROLLBACK_RELEASE_ID ?: '').tokenize(':')
+                    if (bagian.size() != 3 || !(bagian[2] ==~ /\d+/)) {
+                        error("ROLLBACK_RELEASE_ID harus berbentuk app:commit:build, diterima: ${params.ROLLBACK_RELEASE_ID}")
+                    }
+                }
+            }
+        }
+
+        stage('2. Rollback by Digest') {
+            steps {
+                sh """
+                    set -e
+                    if [ ! -x '${DEPLOY_SCRIPT}' ]; then
+                      echo "ERROR: ${DEPLOY_SCRIPT} tidak ada atau tidak executable (milik admin runner)" >&2
+                      exit 1
+                    fi
+                    if [ ! -x '${AUTORE_BIN}' ]; then
+                      echo "ERROR: ${AUTORE_BIN} tidak ada atau tidak executable (milik admin runner)" >&2
+                      exit 1
+                    fi
+
+                    export AUTORE_DEPLOY_MODE=rollback
+                    export APP_NAME="${ROLLBACK_APP}"
+                    export ACTIVE_CONTAINER_NAME="${ROLLBACK_APP}-${ROLLBACK_ENVIRONMENT}"
+                    export CANDIDATE_CONTAINER_NAME="\${ACTIVE_CONTAINER_NAME}-candidate"
+                    export DEPLOYMENT_ID="${ROLLBACK_DEPLOYMENT_ID}"
+                    export RESULT_JSON="\${WORKSPACE}/.deploy-rollback-result.json"
+
+                    image_ref="${AUTORE_REGISTRY}/${ROLLBACK_APP}@${ROLLBACK_DIGEST}"
+                    set +e
+                    '${DEPLOY_SCRIPT}' "\${image_ref}"
+                    deploy_code=\$?
+                    set -e
+
+                    if [ -f "\${RESULT_JSON}" ]; then
+                      build="$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f3)"
+                      id="$('${AUTORE_BIN}' release rollback-id --app '${ROLLBACK_APP}' --build "\${build}")"
+                      '${AUTORE_BIN}' release record \\
+                        --from-deploy-result "\${RESULT_JSON}" \\
+                        --app '${ROLLBACK_APP}' \\
+                        --environment '${ROLLBACK_ENVIRONMENT}' \\
+                        --build "\${build}" \\
+                        --commit "$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f2)" \\
+                        --request-id '${ROLLBACK_RELEASE_ID}' \\
+                        --id "\${id}" \\
+                        --actor '${ROLLBACK_ACTOR}' >/dev/null
+                    fi
+
+                    exit "\${deploy_code}"
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "POST-ALWAYS: result=${currentBuild.currentResult}, app=${params.ROLLBACK_APP}, env=${params.ROLLBACK_ENVIRONMENT}, digest=${params.ROLLBACK_DIGEST}"
+        }
+    }
+}

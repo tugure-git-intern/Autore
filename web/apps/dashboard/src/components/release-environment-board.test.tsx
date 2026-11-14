@@ -1,7 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Deployment, Environment, Release } from "@autore/contracts";
 import { ReleaseEnvironmentBoard } from "./release-environment-board";
+
+const fetchMock = vi.fn();
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  fetchMock.mockReset();
+});
 
 const digest = "sha256:" + "a".repeat(64);
 
@@ -140,5 +147,121 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
+  });
+
+  it("menampilkan tombol promosi untuk admin saat release disetujui", () => {
+    const disetujui = [{ ...releases[0], status: "disetujui" as const, approved_by: "qa-satu" }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={disetujui}
+        environments={environments}
+        deployments={deployments}
+        role="admin"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Rollback Production" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
+  });
+
+  it("menyembunyikan tombol promosi dari role qa", () => {
+    const disetujui = [{ ...releases[0], status: "disetujui" as const }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={disetujui}
+        environments={environments}
+        deployments={deployments}
+        role="qa"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Promosikan ke Production" })).toBeNull();
+  });
+
+  it("menampilkan tombol rollback production untuk qa saat release aktif", () => {
+    const aktif = [{ ...releases[0], status: "aktif" as const }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={aktif}
+        environments={environments}
+        deployments={deployments}
+        role="qa"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Rollback Production" })).toBeVisible();
+  });
+
+  it("menyembunyikan tombol rollback dari role dev", () => {
+    const aktif = [{ ...releases[0], status: "aktif" as const }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={aktif}
+        environments={environments}
+        deployments={deployments}
+        role="dev"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Rollback Production" })).toBeNull();
+  });
+
+  it("tidak menawarkan promosi atau rollback saat masih menunggu persetujuan", () => {
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments}
+        deployments={deployments}
+        role="admin"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Promosikan ke Production" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rollback Production" })).toBeNull();
+  });
+
+  it("mengirim POST promosi ke endpoint release", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ job: "tes-testing-promote" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const disetujui = [{ ...releases[0], status: "disetujui" as const }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={disetujui}
+        environments={environments}
+        deployments={deployments}
+        role="admin"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Promosikan ke Production" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, opsi] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/releases/rel-1/promote");
+    expect(opsi.method).toBe("POST");
+    expect(JSON.parse(String(opsi.body))).toEqual({});
+    expect(await screen.findByRole("status")).toHaveTextContent("tes-testing-promote");
+  });
+
+  it("mengirim rollback dengan environment production", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ job: "tes-testing-rollback" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const aktif = [{ ...releases[0], status: "aktif" as const }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={aktif}
+        environments={environments}
+        deployments={deployments}
+        role="qa"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Rollback Production" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, opsi] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/releases/rel-1/rollback");
+    expect(JSON.parse(String(opsi.body))).toEqual({ environment: "production" });
   });
 });

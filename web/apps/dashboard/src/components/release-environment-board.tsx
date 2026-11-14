@@ -1,5 +1,4 @@
 import type { Deployment, Environment, Release, Role, StatusRelease } from "@autore/contracts";
-import { roleAtLeast } from "@autore/contracts";
 import { ReleaseKeputusan } from "./release-keputusan";
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "./ui/badge";
@@ -116,9 +115,8 @@ export function ReleaseEnvironmentBoard({
               )}
             </p>
             <code className="block break-all text-xs text-muted">{release.image_digest}</code>
-            {roleAtLeast(role ?? "dev", "qa") && release.status === "menunggu_persetujuan" ? (
-              <ReleaseKeputusan releaseId={release.id} />
-            ) : null}
+            {/* Komponen sendiri yang memutuskan aksi mana yang boleh tampil. */}
+            <ReleaseKeputusan releaseId={release.id} role={role} status={release.status} />
           </div>
         ))}
       </BoardCard>

@@ -11,7 +11,7 @@ import type { ActionKind } from "./actions";
 // atomik tmp+rename. Approval diputuskan lewat dashboard di luar jendela build,
 // jadi tumpang tindih lintas proses itu diterima.
 
-export type LabelAksi = ActionKind | "approval";
+export type LabelAksi = ActionKind | "approval" | "rollback";
 
 const sibuk = new Map<string, LabelAksi>();
 

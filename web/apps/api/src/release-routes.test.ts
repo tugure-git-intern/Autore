@@ -10,6 +10,7 @@ import type { ActionResult } from "./actions";
 import { createApp, type ActiveLoader, type RunsLoader, type SbomLoader } from "./index";
 import { lepasSemuaKunci } from "./kunci";
 import { hatchApprovals } from "./release-approval";
+import { hatchRollback } from "./release-rollback";
 
 const SECRET = randomBytes(40).toString("hex");
 const COMMIT = "b".repeat(40);
@@ -111,6 +112,12 @@ function api(berkas: string) {
     undefined,
     tanpaLimit,
     hatchApprovals({ ledger: () => berkas, clock: () => "2026-11-13T05:00:00Z" }),
+    // Rollback diuji sampai batas spawn: tidak menyentuh Jenkins sungguhan.
+    hatchRollback({
+      ledger: () => berkas,
+      bin: "autore",
+      spawn: async () => ({ code: 0, stderr: "" }),
+    }),
   );
 }
 
@@ -335,5 +342,93 @@ describe("approve bersamaan lewat HTTP", () => {
 
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(eventsDi(berkas).filter((event) => event.kind === "approved")).toHaveLength(1);
+  });
+});
+
+describe("rollback lewat HTTP", () => {
+  /** Dua release promosi penuh: build 2 aktif di staging+production, build 1 jadi target lama. */
+  function duaRelease(digest1 = DIGEST, digest2 = "sha256:" + "3".repeat(64)): ReleaseEvent[] {
+    const satu = (build: number, digest: string): ReleaseEvent[] => [
+      ...menungguPersetujuan(build).map((event) =>
+        event.kind === "digest_verified" || event.kind === "deploy_result"
+          ? { ...event, digest, active_after: { deployment_id: `dep-stg-${build}`, digest } }
+          : event,
+      ),
+      ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "budi" }),
+      ev({
+        id: `deploy-prod-${build}`,
+        kind: "deploy_result",
+        environment: "production",
+        digest,
+        deployment_id: `dep-prod-${build}`,
+        outcome: "success",
+        active_before: null,
+        active_after: { deployment_id: `dep-prod-${build}`, digest },
+        build_number: build,
+        health: "ok",
+      }),
+    ];
+    return [...satu(1, digest1), ...satu(2, digest2)];
+  }
+
+  const kirim = async (berkas: string, build: number, body: unknown, login = "budi") => {
+    const sesi = `authjs.session-token=${await cookie(login)}`;
+    return api(berkas).request(`http://localhost/api/releases/${idRelease(build)}/rollback`, {
+      method: "POST",
+      headers: {
+        cookie: sesi,
+        "content-type": "application/json",
+      },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  };
+
+  it("R40 body tanpa environment ditolak 400 tanpa menyentuh ledger", async () => {
+    const berkas = ledgerTemp(duaRelease());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const awal = eventsDi(berkas).length;
+
+    for (const body of [{}, { environment: "Prod" }, "bukan json"]) {
+      const res = await kirim(berkas, 2, body);
+      expect(res.status).toBe(400);
+    }
+    expect(eventsDi(berkas)).toHaveLength(awal);
+  });
+
+  it("R41 dev ditolak rollback (403) dan tidak ada event tertulis", async () => {
+    const berkas = ledgerTemp(duaRelease());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:dev");
+    const awal = eventsDi(berkas).length;
+
+    const res = await kirim(berkas, 2, { environment: "staging" });
+    expect(res.status).toBe(403);
+    expect(eventsDi(berkas)).toHaveLength(awal);
+  });
+
+  it("R42 release tidak dikenal 404, tanpa deployment sehat sebelumnya 409", async () => {
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const asing = ledgerTemp(duaRelease());
+    expect((await kirim(asing, 9, { environment: "staging" })).status).toBe(404);
+
+    const sepi = ledgerTemp(menungguPersetujuan(1));
+    expect((await kirim(sepi, 1, { environment: "staging" })).status).toBe(409);
+    expect(eventsDi(sepi)).toHaveLength(4);
+  });
+
+  it("R43 rollback staging mengembalikan 202 + job + target digest lama", async () => {
+    const berkas = ledgerTemp(duaRelease());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const awal = eventsDi(berkas).length;
+
+    const res = await kirim(berkas, 2, { environment: "staging" });
+    expect(res.status).toBe(202);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      job: `${APP}-rollback`,
+      environment: "staging",
+      target_deployment_id: "dep-stg-1",
+      target_digest: DIGEST,
+    });
+    expect(eventsDi(berkas)).toHaveLength(awal);
   });
 });

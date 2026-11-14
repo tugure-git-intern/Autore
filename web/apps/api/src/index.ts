@@ -13,6 +13,11 @@ import { requireSession, type AuthApi, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
 import { loadReleases, type ReleaseLoader } from "./releases";
 import { hatchApprovals, type ApprovalHandler, type HasilKeputusan } from "./release-approval";
+import {
+  bacaBodyRollback,
+  hatchRollback,
+  type RollbackHandler,
+} from "./release-rollback";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
@@ -145,6 +150,7 @@ export function createApp(
   releases: ReleaseLoader = (app) => loadReleases(app),
   rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
   approvals: ApprovalHandler = hatchApprovals(),
+  rollback: RollbackHandler = hatchRollback(),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -183,6 +189,9 @@ export function createApp(
   // tiap request (bukan dari token) — demosi langsung berlaku tanpa login ulang.
   app.use("/api/releases/:id/approve", requireSession(auth, "qa"));
   app.use("/api/releases/:id/reject", requireSession(auth, "qa"));
+  // Rollback digerakkan environment dari BODY, jadi gerbang role dipasang di sini:
+  // minimum `qa`, sama seperti approve/reject yang juga menggerakkan production.
+  app.use("/api/releases/:id/rollback", requireSession(auth, "qa"));
   app.use("/api/releases/*", rateLimiter);
 
   // Approve idempoten: release yang sudah disetujui tetap 200 tanpa event kedua.
@@ -197,6 +206,16 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     return replyKeputusan(c, await approvals.reject(c.req.param("id"), c.get("sesi"), body.alasan));
+  });
+
+  // Rollback by digest: environment WAJIB eksplisit di body (tanpa default), dan
+  // job Jenkins-nya dipicu lewat CLI supaya kredensial Jenkins tetap satu tempat.
+  app.post("/api/releases/:id/rollback", async (c) => {
+    const body = await bacaBodyRollback(c.req.raw);
+    c.header("Cache-Control", "no-store");
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    const hasil = await rollback.rollback(c.req.param("id"), body.environment, c.get("sesi"));
+    return c.json(hasil, hasil.status);
   });
 
   app.get("/api/status", async (c) => {

@@ -38,14 +38,14 @@ export type ApprovalHandler = {
   reject(id: string, actor: Identitas, alasan: string): Promise<HasilKeputusan>;
 };
 
-type Ledger = { version: 1; events: unknown[] };
+export type Ledger = { version: 1; events: unknown[] };
 
 /**
  * Ledger mentah. Berkas hilang/rusak/versi lain dibaca sebagai KOSONG: tanpa
  * event, release tidak ditemukan dan keputusannya ditolak — tidak ada yang
  * ditulis ke berkas yang tidak kita pahami, apalagi ke path tebakan.
  */
-function bacaLedgerMentah(jalur: string): Ledger {
+export function bacaLedgerMentah(jalur: string): Ledger {
   try {
     const record = JSON.parse(readFileSync(jalur, "utf8")) as { version?: unknown; events?: unknown };
     if (record.version === 1 && Array.isArray(record.events)) {
@@ -58,7 +58,7 @@ function bacaLedgerMentah(jalur: string): Ledger {
 }
 
 /** Id release = `<app>:<commit>:<build>`; yang dibutuhkan kunci hanya bagian app. */
-function appDariId(id: string): string | null {
+export function appDariId(id: string): string | null {
   const pisah = id.indexOf(":");
   const app = pisah === -1 ? "" : id.slice(0, pisah).trim();
   return app ? app : null;

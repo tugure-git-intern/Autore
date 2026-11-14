@@ -71,7 +71,7 @@ describe("GET /api/releases", () => {
 
   it("tidak menyediakan endpoint POST release", async () => {
     const app = appDengan(async () => ({
-      data: { releases: [], deployments: [], environments: [] },
+      data: { releases: [], deployments: [], environments: [], diabaikan: [] },
       stale: false,
     }));
     const response = await app.request("http://localhost/api/releases", { method: "POST" });

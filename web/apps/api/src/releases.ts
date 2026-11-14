@@ -32,5 +32,9 @@ export async function loadReleases(
 ): Promise<ReleaseResult> {
   const payload = parseReleaseEvents(JSON.parse(await run()) as unknown);
   const events: ReleaseEvent[] = payload.events.filter((event) => event.app === app);
-  return { data: foldReleaseEvents(events), stale: false };
+  const folded = foldReleaseEvents(events);
+  // Dashboard merender daftar apa adanya; rilis terbaru harus di atas supaya
+  // tombol approval jatuh di build terakhir, bukan build lama yang belum diputuskan.
+  const terbaruDulu = [...folded.releases].sort((a, b) => b.dibuat_pada.localeCompare(a.dibuat_pada));
+  return { data: { ...folded, releases: terbaruDulu }, stale: false };
 }

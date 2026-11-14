@@ -61,6 +61,22 @@ describe("GET /api/releases", () => {
     expect(hasil.data.releases[0]?.status).toBe("menunggu_persetujuan");
   });
 
+  it("mengurutkan rilis terbaru di atas", async () => {
+    const build2 = EVENTS.events.map((event) => ({
+      ...event,
+      id: event.id.replace("-1", "-2"),
+      request_id: "req-2",
+      build_number: 2,
+      ts: event.ts.replace("04:0", "05:0"),
+    }));
+    const run = vi.fn(async () => JSON.stringify({ version: 1, events: [...EVENTS.events, ...build2] }));
+    const hasil = await loadReleases("tes-testing", run);
+    expect(hasil.data.releases.map((release) => release.id)).toEqual([
+      `tes-testing:${COMMIT}:2`,
+      `tes-testing:${COMMIT}:1`,
+    ]);
+  });
+
   it("mengembalikan 400 tanpa app dan 502 saat CLI gagal", async () => {
     const app = appDengan(async () => {
       throw new Error("gagal");

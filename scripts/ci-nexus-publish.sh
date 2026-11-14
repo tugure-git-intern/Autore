@@ -2,6 +2,36 @@
 # scripts/ci-nexus-publish.sh — Push Docker image to Nexus (Disable redeploy) & verify digest via authenticated HEAD.
 set -euo pipefail
 
+# Registry bisa membalas 429 saat banyak build; ulangi HANYA 429/5xx,
+# maksimal 3 percobaan (5/15/45 detik). 4xx lain langsung gagal.
+retry_registry() {
+  local attempt=1 jeda=5 out
+  while true; do
+    if out="$("$@" 2>&1)"; then
+      [[ -n "$out" ]] && printf '%s\n' "$out"
+      return 0
+    fi
+    case "$out" in
+      *" 429 "*|*"429 Too Many"*|*" 500 "*|*" 502 "*|*" 503 "*|*" 504 "*)
+        if (( attempt >= 3 )); then
+          printf '%s\n' "$out" >&2
+          echo "ERROR: registry masih menolak setelah 3 percobaan (429/5xx): $*" >&2
+          return 1
+        fi
+        echo "Registry sibuk (percobaan ${attempt}/3), ulangi dalam ${jeda} detik: $*" >&2
+        sleep "$jeda"
+        attempt=$((attempt + 1))
+        jeda=$((jeda * 3))
+        ;;
+      *)
+        printf '%s\n' "$out" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+
 log() { printf '\n==> [Nexus Publish] %s\n' "$*"; }
 
 WORKSPACE="${WORKSPACE:-$(pwd)}"
@@ -58,7 +88,7 @@ log "Melakukan docker login ke registry ${NEXUS_DOCKER_REGISTRY} (credential via
 printf '%s' "${NEXUS_PASS}" | docker login "${NEXUS_DOCKER_REGISTRY}" -u "${NEXUS_USER}" --password-stdin
 
 log "Mendorong image ${IMAGE_TAG} ke Nexus..."
-docker push "${IMAGE_TAG}"
+retry_registry docker push "${IMAGE_TAG}"
 
 # ---------------------------------------------------------------------------
 # 4. Ambil LOCAL_DIGEST dari RepoDigests (Tanpa Menghapus Image Lokal)

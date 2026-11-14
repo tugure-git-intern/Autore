@@ -50,15 +50,35 @@ IMAGE_ID=""
 ACTIVE_AFTER_ID=""
 ACTIVE_AFTER_DIGEST=""
 
+# Smoke sebenarnya: 2xx saja tidak cukup. Untuk /health, body harus JSON
+# dengan status "ok"; path lain cukup menjawab 2xx (app lama tanpa /health).
 health_at() {
-  local port="$1" i path
+  local port="$1" i path body
   for i in {1..10}; do
-    for path in "${HEALTH_PATHS[@]}"; do
-      curl -fsS --max-time 2 "http://127.0.0.1:${port}${path}" >/dev/null 2>&1 && return 0
-    done
+    # /health adalah kontrak utama: kalau menjawab, body WAJIB JSON status "ok".
+    # Jangan jatuh ke path lain saat body salah, itu justru meloloskan app rusak.
+    if body="$(curl -fsS --max-time 2 "http://127.0.0.1:${port}/health" 2>/dev/null)"; then
+      if printf '%s' "$body" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("status") == "ok" else 1)' 2>/dev/null; then
+        return 0
+      fi
+    else
+      # App lama tanpa /health: cukup 2xx di path yang disepakati.
+      for path in "${HEALTH_PATHS[@]}"; do
+        [[ "$path" == "/health" ]] && continue
+        curl -fsS --max-time 2 "http://127.0.0.1:${port}${path}" >/dev/null 2>&1 && return 0
+      done
+    fi
     sleep 1
   done
   return 1
+}
+
+# Container aktif harus benar-benar memakai image yang baru diverifikasi,
+# bukan image lain yang kebetulan menjawab di port itu.
+image_aktif_sesuai() {
+  local id
+  id="$(docker inspect -f '{{.Image}}' "${ACTIVE_CONTAINER}" 2>/dev/null || true)"
+  [[ -n "${id}" && "${id}" == "${IMAGE_ID}" ]]
 }
 
 write_result() {
@@ -112,6 +132,35 @@ with open(os.environ["RESULT_JSON"], "w", encoding="utf-8") as handle:
 PY
 }
 
+# Registry bisa membalas 429 saat banyak build; ulangi HANYA 429/5xx,
+# maksimal 3 percobaan (5/15/45 detik). 4xx lain langsung gagal.
+retry_registry() {
+  local attempt=1 jeda=5 out
+  while true; do
+    if out="$("$@" 2>&1)"; then
+      [[ -n "$out" ]] && printf '%s\n' "$out"
+      return 0
+    fi
+    case "$out" in
+      *" 429 "*|*"429 Too Many"*|*" 500 "*|*" 502 "*|*" 503 "*|*" 504 "*)
+        if (( attempt >= 3 )); then
+          printf '%s\n' "$out" >&2
+          echo "ERROR: registry masih menolak setelah 3 percobaan (429/5xx): $*" >&2
+          return 1
+        fi
+        echo "Registry sibuk (percobaan ${attempt}/3), ulangi dalam ${jeda} detik: $*" >&2
+        sleep "$jeda"
+        attempt=$((attempt + 1))
+        jeda=$((jeda * 3))
+        ;;
+      *)
+        printf '%s\n' "$out" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
 start_container() {
   local name="$1" image="$2" port="$3" label="$4"
   docker run -d --name "${name}" \
@@ -156,7 +205,7 @@ rollback() {
 }
 
 log "Memverifikasi manifest registry: ${IMAGE_REF}"
-docker pull --quiet "${IMAGE_REF}" >/dev/null
+retry_registry docker pull --quiet "${IMAGE_REF}" >/dev/null
 IMAGE_ID="$(docker image inspect "${IMAGE_REF}" --format '{{.Id}}')"
 if ! docker image inspect "${IMAGE_REF}" --format '{{json .RepoDigests}}' | grep -Fq "${IMAGE_REF}"; then
   echo "ERROR: RepoDigests tidak memuat ${IMAGE_REF}; verifikasi digest gagal." >&2
@@ -248,6 +297,7 @@ start_container "${ACTIVE_CONTAINER}" "${IMAGE_REF}" "${DEPLOY_PORT}" "${DEPLOYM
 
 log "Verifikasi akhir port ${DEPLOY_PORT}${HEALTH_PATHS[*]}..."
 health_at "${DEPLOY_PORT}" || rollback "verifikasi port akhir gagal."
+image_aktif_sesuai || rollback "digest container aktif tidak sama dengan ${IMAGE_REF}."
 
 ACTIVE_AFTER_ID="${DEPLOYMENT_ID}"
 ACTIVE_AFTER_DIGEST="${IMAGE_REF##*@}"

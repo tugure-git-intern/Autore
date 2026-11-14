@@ -111,6 +111,7 @@ fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
                 // Build output and local scratch checkouts: bundles inside these
                 // contain `exec(` strings that are artifacts, not source.
                 | ".next"
+                | ".next-e2e"
                 | ".worktrees"
         );
     }
@@ -682,7 +683,7 @@ mod tests {
     #[test]
     fn skip_build_dirs_covers_next_and_worktrees() {
         let tmp = TempDir::new().unwrap();
-        for dir in [".next/cache", ".worktrees/app"] {
+        for dir in [".next/cache", ".next-e2e/cache", ".worktrees/app"] {
             fs::create_dir_all(tmp.path().join(dir)).unwrap();
             fs::write(tmp.path().join(dir).join("bundle.js"), OS_SYSTEM).unwrap();
         }

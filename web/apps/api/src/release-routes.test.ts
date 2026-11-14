@@ -480,5 +480,6 @@ describe("gerbang role endpoint promosi", () => {
     expect(panggilan).toHaveLength(1);
     expect(panggilan[0]).toContain("trigger-promote");
     expect(panggilan[0]).toContain(DIGEST);
+    expect(panggilan[0]).toContain("--deploy-port");
   });
 });

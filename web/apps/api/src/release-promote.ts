@@ -138,6 +138,12 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
           release.id.split(":")[2] ?? "",
           "--actor",
           aktor.login,
+          // Port production bisa diarahkan lewat env (uji memakai port bebas),
+          // default tetap produksi sebenarnya.
+          "--container-port",
+          process.env.AUTORE_PROMOTE_CONTAINER_PORT ?? "8080",
+          "--deploy-port",
+          process.env.AUTORE_PROMOTE_DEPLOY_PORT ?? "8154",
         ];
         const keluaran = await spawn(bin, args);
         if (keluaran.code !== 0) {

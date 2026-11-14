@@ -131,6 +131,10 @@ describe("handler promosi production", () => {
         "1",
         "--actor",
         "budi",
+        "--container-port",
+        "8080",
+        "--deploy-port",
+        "8154",
       ]);
     } finally {
       lepasSemuaKunci();

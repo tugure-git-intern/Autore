@@ -1,0 +1,124 @@
+// Jenkinsfile.promote — promosi production by digest, dipicu API (bukan SCM).
+// Tidak membangun ulang: image yang sama dengan staging dipasang di port
+// production, lalu fakta hasilnya dicatat CLI. Penulis event tetap skrip + CLI;
+// proses API tidak menulis ledger.
+
+def AUTORE_REGISTRY = '127.0.0.1:5000'
+def AUTORE_BIN = '/usr/local/lib/autore-ci/autore'
+def DEPLOY_SCRIPT = '/usr/local/lib/autore-ci/ci-deploy-by-digest.sh'
+
+pipeline {
+    agent { label 'vps-runner-1' }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    environment {
+        AUTORE_WORKSPACE = '/home/tugure/autore-workspace'
+    }
+
+    parameters {
+        string(name: 'PROMOTE_APP', defaultValue: '', description: 'Nama aplikasi')
+        string(name: 'PROMOTE_DIGEST', defaultValue: '', description: 'sha256:<64 hex> yang sudah lolos staging')
+        string(name: 'PROMOTE_RELEASE_ID', defaultValue: '', description: 'app:commit:build release yang dipromosikan')
+        string(name: 'PROMOTE_BUILD', defaultValue: '', description: 'Nomor build release')
+        string(name: 'PROMOTE_ACTOR', defaultValue: '', description: 'Login pelaku promosi')
+        string(name: 'PROMOTE_JOB', defaultValue: '', description: 'Nama job promosi (diisi API)')
+        string(name: 'PROMOTE_CONTAINER_PORT', defaultValue: '8080', description: 'Port container di dalam image')
+        string(name: 'PROMOTE_DEPLOY_PORT', defaultValue: '8154', description: 'Port host production')
+    }
+
+    stages {
+        stage('1. Validasi Parameter') {
+            steps {
+                script {
+                    if (!params.PROMOTE_APP?.trim()) {
+                        error('PROMOTE_APP wajib diisi')
+                    }
+                    if (!(params.PROMOTE_DIGEST ==~ /sha256:[0-9a-f]{64}/)) {
+                        error("PROMOTE_DIGEST bukan sha256:<64 hex>: ${params.PROMOTE_DIGEST}")
+                    }
+                    def bagian = (params.PROMOTE_RELEASE_ID ?: '').tokenize(':')
+                    if (bagian.size() != 3 || !(bagian[2] ==~ /\d+/)) {
+                        error("PROMOTE_RELEASE_ID harus berbentuk app:commit:build, diterima: ${params.PROMOTE_RELEASE_ID}")
+                    }
+                    if (!(params.PROMOTE_BUILD ==~ /\d+/)) {
+                        error("PROMOTE_BUILD bukan angka: ${params.PROMOTE_BUILD}")
+                    }
+                    if (!(params.PROMOTE_DEPLOY_PORT ==~ /\d+/)) {
+                        error("PROMOTE_DEPLOY_PORT bukan angka: ${params.PROMOTE_DEPLOY_PORT}")
+                    }
+                }
+            }
+        }
+
+        stage('2. Promosi by Digest') {
+            steps {
+                // Nilai Groovy dialirkan lewat environment, bukan interpolasi GString;
+                // blok sh memakai kutip tunggal supaya isinya murni shell.
+                withEnv([
+                    "DEPLOY_SCRIPT=${DEPLOY_SCRIPT}",
+                    "AUTORE_BIN=${AUTORE_BIN}",
+                    "AUTORE_REGISTRY=${AUTORE_REGISTRY}",
+                    "PR_APP=${params.PROMOTE_APP}",
+                    "PR_DIGEST=${params.PROMOTE_DIGEST}",
+                    "PR_RELEASE_ID=${params.PROMOTE_RELEASE_ID}",
+                    "PR_BUILD=${params.PROMOTE_BUILD}",
+                    "PR_ACTOR=${params.PROMOTE_ACTOR}",
+                    "PR_CONTAINER_PORT=${params.PROMOTE_CONTAINER_PORT}",
+                    "PR_DEPLOY_PORT=${params.PROMOTE_DEPLOY_PORT}",
+                ]) {
+                    sh '''#!/bin/sh
+                    set -e
+                    if [ ! -x "$DEPLOY_SCRIPT" ]; then
+                      echo "ERROR: $DEPLOY_SCRIPT tidak ada atau tidak executable (milik admin runner)" >&2
+                      exit 1
+                    fi
+                    if [ ! -x "$AUTORE_BIN" ]; then
+                      echo "ERROR: $AUTORE_BIN tidak ada atau tidak executable (milik admin runner)" >&2
+                      exit 1
+                    fi
+
+                    export APP_NAME="$PR_APP"
+                    export CONTAINER_PORT="$PR_CONTAINER_PORT"
+                    export DEPLOY_PORT="$PR_DEPLOY_PORT"
+                    export ACTIVE_CONTAINER_NAME="$PR_APP-production"
+                    export CANDIDATE_CONTAINER_NAME="$ACTIVE_CONTAINER_NAME-candidate"
+                    export DEPLOYMENT_ID="$PR_APP-production-$PR_BUILD"
+                    export RESULT_JSON="$WORKSPACE/.deploy-promote-result.json"
+
+                    image_ref="$AUTORE_REGISTRY/$PR_APP@$PR_DIGEST"
+                    set +e
+                    "$DEPLOY_SCRIPT" "$image_ref"
+                    deploy_code=$?
+                    set -e
+
+                    if [ -f "$RESULT_JSON" ]; then
+                      id=$("$AUTORE_BIN" release promote-id --app "$PR_APP" --build "$PR_BUILD")
+                      "$AUTORE_BIN" release record \
+                        --from-deploy-result "$RESULT_JSON" \
+                        --app "$PR_APP" \
+                        --environment production \
+                        --build "$PR_BUILD" \
+                        --commit "$(echo "$PR_RELEASE_ID" | cut -d: -f2)" \
+                        --request-id "$PR_RELEASE_ID" \
+                        --id "$id" \
+                        --actor "$PR_ACTOR" >/dev/null
+                    fi
+
+                    exit "$deploy_code"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "POST-ALWAYS: result=${currentBuild.currentResult}, app=${params.PROMOTE_APP}, digest=${params.PROMOTE_DIGEST}"
+        }
+    }
+}

@@ -67,6 +67,10 @@ pub enum ReleaseAction {
     TriggerRollback(TriggerRollbackArgs),
     /// Cetak id event rollback berikutnya untuk satu build
     RollbackId(RollbackIdArgs),
+    /// Picu job Jenkins promosi production by digest (dipanggil API)
+    TriggerPromote(TriggerPromoteArgs),
+    /// Cetak id event promosi berikutnya untuk satu build
+    PromoteId(PromoteIdArgs),
 }
 
 #[derive(Args)]
@@ -92,6 +96,41 @@ pub struct TriggerRollbackArgs {
     git_url: Option<String>,
     #[arg(long, default_value = "main")]
     branch: String,
+}
+
+#[derive(Args)]
+pub struct TriggerPromoteArgs {
+    #[arg(long)]
+    job: String,
+    #[arg(long)]
+    app: String,
+    #[arg(long)]
+    digest: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    build: u64,
+    #[arg(long)]
+    actor: String,
+    /// Port container di dalam image
+    #[arg(long, default_value_t = 8080)]
+    container_port: u16,
+    /// Port host untuk production
+    #[arg(long, default_value_t = 8154)]
+    deploy_port: u16,
+    /// Daftarkan job dari `Jenkinsfile.promote` kalau job-nya belum ada
+    #[arg(long)]
+    git_url: Option<String>,
+    #[arg(long, default_value = "main")]
+    branch: String,
+}
+
+#[derive(Args)]
+pub struct PromoteIdArgs {
+    #[arg(long)]
+    app: String,
+    #[arg(long)]
+    build: u64,
 }
 
 #[derive(Args)]
@@ -169,6 +208,26 @@ pub fn run(action: ReleaseAction) -> i32 {
                 1
             }
         },
+        ReleaseAction::TriggerPromote(args) => match trigger_promote(args) {
+            Ok(url) => {
+                println!("{url}");
+                0
+            }
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                1
+            }
+        },
+        ReleaseAction::PromoteId(args) => match promote_id_at(&workspace::workspace_dir(), &args) {
+            Ok(id) => {
+                println!("{id}");
+                0
+            }
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                1
+            }
+        },
         ReleaseAction::RollbackId(args) => match rollback_id_at(&workspace::workspace_dir(), &args) {
             Ok(id) => {
                 println!("{id}");
@@ -216,6 +275,57 @@ fn trigger_rollback(args: TriggerRollbackArgs) -> Result<String, String> {
             jenkins::trigger_parameterized(&cfg, &args.job, &params)
         }
     }
+}
+
+fn trigger_promote(args: TriggerPromoteArgs) -> Result<String, String> {
+    if !args.digest.starts_with("sha256:") || args.digest.len() != 71 {
+        return Err("digest promosi bukan sha256:64hex".into());
+    }
+    let conf_path = jenkins::default_config_path();
+    let cfg = jenkins::load_config_from(&conf_path).ok_or_else(|| {
+        format!(
+            "konfigurasi Jenkins belum ada di {}",
+            conf_path.display()
+        )
+    })?;
+    let build = args.build.to_string();
+    let container_port = args.container_port.to_string();
+    let deploy_port = args.deploy_port.to_string();
+    let params = [
+        ("PROMOTE_APP", args.app.as_str()),
+        ("PROMOTE_DIGEST", args.digest.as_str()),
+        ("PROMOTE_RELEASE_ID", args.release_id.as_str()),
+        ("PROMOTE_BUILD", build.as_str()),
+        ("PROMOTE_ACTOR", args.actor.as_str()),
+        ("PROMOTE_JOB", args.job.as_str()),
+        ("PROMOTE_CONTAINER_PORT", container_port.as_str()),
+        ("PROMOTE_DEPLOY_PORT", deploy_port.as_str()),
+    ];
+    match jenkins::trigger_parameterized(&cfg, &args.job, &params) {
+        Ok(url) => Ok(url),
+        Err(e) => {
+            // Job belum ada: daftarkan dari Jenkinsfile.promote lalu picu sekali lagi.
+            let Some(ref git_url) = args.git_url else {
+                return Err(e);
+            };
+            if !e.contains("404") {
+                return Err(e);
+            }
+            jenkins::register_promote_job(&cfg, &args.job, git_url, &args.branch)?;
+            jenkins::trigger_parameterized(&cfg, &args.job, &params)
+        }
+    }
+}
+
+fn promote_id_at(dir: &Path, args: &PromoteIdArgs) -> Result<String, String> {
+    let ledger = read_ledger_at(dir)?;
+    let awalan = format!("{}-{}-promote-", args.app, args.build);
+    let terpakai = ledger
+        .events
+        .iter()
+        .filter(|event| event.id.starts_with(&awalan))
+        .count();
+    Ok(format!("{awalan}{}", terpakai + 1))
 }
 
 /// Id event rollback `<app>-<build>-rollback-<n>`. `n` dihitung dari ledger,
@@ -503,6 +613,42 @@ mod tests {
             build: 8,
         };
         assert_eq!(rollback_id_at(tmp.path(), &lain).unwrap(), "tes-testing-8-rollback-1");
+    }
+
+    #[test]
+    fn id_promote_berurutan_per_build() {
+        let tmp = TempDir::new().unwrap();
+        let args = PromoteIdArgs {
+            app: "tes-testing".into(),
+            build: 4,
+        };
+        assert_eq!(
+            promote_id_at(tmp.path(), &args).unwrap(),
+            "tes-testing-4-promote-1"
+        );
+        append_event_at(tmp.path(), event("tes-testing-4-promote-1")).unwrap();
+        assert_eq!(
+            promote_id_at(tmp.path(), &args).unwrap(),
+            "tes-testing-4-promote-2"
+        );
+    }
+
+    #[test]
+    fn trigger_promote_menolak_digest_bukan_sha256() {
+        let args = TriggerPromoteArgs {
+            job: "tes-testing-promote".into(),
+            app: "tes-testing".into(),
+            digest: "latest".into(),
+            release_id: "tes-testing:abc:1".into(),
+            build: 1,
+            actor: "budi".into(),
+            container_port: 8080,
+            deploy_port: 8154,
+            git_url: None,
+            branch: "main".into(),
+        };
+        let err = trigger_promote(args).unwrap_err();
+        assert!(err.contains("sha256"), "pesan harus menyebut sha256: {err}");
     }
 
     #[test]

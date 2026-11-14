@@ -105,6 +105,19 @@ pub const ROLLBACK_PARAMS: [&str; 6] = [
     "ROLLBACK_ACTOR",
 ];
 
+/// Parameter job promosi production. Sama seperti rollback, harus terdaftar
+/// di XML job atau Jenkins membuang nilainya.
+pub const PROMOTE_PARAMS: [&str; 8] = [
+    "PROMOTE_APP",
+    "PROMOTE_DIGEST",
+    "PROMOTE_RELEASE_ID",
+    "PROMOTE_BUILD",
+    "PROMOTE_ACTOR",
+    "PROMOTE_JOB",
+    "PROMOTE_CONTAINER_PORT",
+    "PROMOTE_DEPLOY_PORT",
+];
+
 /// Persen-encode nilai query curl. Hanya karakter yang bisa memecah query yang
 /// diubah; sisanya diteruskan apa adanya supaya URL tetap terbaca.
 pub fn url_encode(input: &str) -> String {
@@ -202,6 +215,12 @@ pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
 /// API), dengan parameter ROLLBACK_* yang sudah terdaftar sejak job dibuat.
 pub fn render_rollback_job_xml(git_url: &str, branch: &str) -> String {
     render_job_xml(git_url, branch, "Jenkinsfile.rollback", &ROLLBACK_PARAMS, false)
+}
+
+/// Job promosi production: pipeline `Jenkinsfile.promote`, tanpa pemicu SCM,
+/// dengan parameter PROMOTE_* terdaftar sejak job dibuat.
+pub fn render_promote_job_xml(git_url: &str, branch: &str) -> String {
+    render_job_xml(git_url, branch, "Jenkinsfile.promote", &PROMOTE_PARAMS, false)
 }
 
 /// Picu build berparameter. Job harus sudah ada; kalau belum, Jenkins menjawab
@@ -569,7 +588,7 @@ pub fn register_and_trigger_jenkins(
     let xml_file = tmp_dir.join("config.xml");
 
     let xml = render_pipeline_job_xml(git_url, branch);
-    fs::write(&xml_file, &xml)
+    fs::write(&xml_file, xml)
         .map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
 
     let result = (|| -> Result<String, String> {
@@ -701,9 +720,28 @@ pub fn register_rollback_job(
     git_url: &str,
     branch: &str,
 ) -> Result<String, String> {
+    daftarkan_job(cfg, job_name, &render_rollback_job_xml(git_url, branch), "rollback")
+}
+
+/// Daftarkan job promosi production dari `Jenkinsfile.promote`.
+pub fn register_promote_job(
+    cfg: &JenkinsConfig,
+    job_name: &str,
+    git_url: &str,
+    branch: &str,
+) -> Result<String, String> {
+    daftarkan_job(cfg, job_name, &render_promote_job_xml(git_url, branch), "promote")
+}
+
+/// Inti pendaftaran job pipeline berparameter; dipakai rollback dan promosi.
+fn daftarkan_job(
+    cfg: &JenkinsConfig,
+    job_name: &str,
+    xml: &str,
+    label: &str,
+) -> Result<String, String> {
     let base = normalize_jenkins_url(&cfg.url)?;
-    let xml = render_rollback_job_xml(git_url, branch);
-    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-rollback-xml-{}", std::process::id()));
+    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-{label}-xml-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
@@ -790,7 +828,7 @@ pub fn register_rollback_job(
         let (code, body) = curl_with_stdin_config(&post_args, &user_cfg)?;
         if code >= 400 {
             return Err(format!(
-                "Gagal mendaftarkan job rollback '{job_name}' (HTTP {code}): {}",
+                "Gagal mendaftarkan job {label} '{job_name}' (HTTP {code}): {}",
                 body.lines().next().unwrap_or("")
             ));
         }

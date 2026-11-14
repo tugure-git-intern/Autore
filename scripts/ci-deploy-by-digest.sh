@@ -28,6 +28,10 @@ fi
 
 APP_NAME="${APP_NAME:-autore-dummy}"
 CONTAINER_PORT="${CONTAINER_PORT:-8080}"
+DEPLOY_PORT_DIISI=1
+if [[ -z "${DEPLOY_PORT:-}" ]]; then
+  DEPLOY_PORT_DIISI=""
+fi
 DEPLOY_PORT="${DEPLOY_PORT:-8081}"
 HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-}"
 if [[ -n "${HEALTH_ENDPOINT}" ]]; then
@@ -69,6 +73,7 @@ write_result() {
   RESULT_ACTIVE_BEFORE_DIGEST="$OLD_DIGEST" \
   RESULT_ACTIVE_AFTER_ID="$ACTIVE_AFTER_ID" \
   RESULT_ACTIVE_AFTER_DIGEST="$ACTIVE_AFTER_DIGEST" \
+  RESULT_HEALTH="${RESULT_HEALTH:-}" \
   RESULT_HEALTH_URL="http://127.0.0.1:${DEPLOY_PORT}${HEALTH_PATHS[0]}" \
   python3 - <<'PY'
 import json
@@ -81,13 +86,21 @@ def ref(prefix):
         return None
     return {"deployment_id": ident, "digest": digest}
 
+# Health dari FAKTA cek, bukan dari outcome: jalur rollback yang sehat juga
+# ber-outcome "rolled_back", jadi turunan lama ("ok" hanya saat "success")
+# akan mencatat rollback sehat sebagai "gagal". Pemanggil mengisi RESULT_HEALTH
+# saat tahu hasil ceknya sendiri; sisanya jatuh ke turunan lama.
+health = os.environ.get("RESULT_HEALTH") or (
+    "ok" if os.environ["RESULT_OUTCOME"] == "success" else "gagal"
+)
+
 payload = {
     "requested_digest": os.environ["RESULT_IMAGE_REF"].split("@", 1)[1],
     "image_ref": os.environ["RESULT_IMAGE_REF"],
     "image_id": os.environ.get("RESULT_IMAGE_ID", ""),
     "deployment_id": os.environ.get("RESULT_DEPLOYMENT_ID", ""),
     "outcome": os.environ["RESULT_OUTCOME"],
-    "health": "ok" if os.environ["RESULT_OUTCOME"] == "success" else "gagal",
+    "health": health,
     "health_url": os.environ["RESULT_HEALTH_URL"],
     "active_before": ref("RESULT_ACTIVE_BEFORE"),
     "active_after": ref("RESULT_ACTIVE_AFTER"),
@@ -131,12 +144,12 @@ rollback() {
   if start_container "${ACTIVE_CONTAINER}" "${OLD_IMAGE}" "${DEPLOY_PORT}" "${OLD_DEPLOYMENT_ID}" && health_at "${DEPLOY_PORT}"; then
     ACTIVE_AFTER_ID="${OLD_DEPLOYMENT_ID}"
     ACTIVE_AFTER_DIGEST="${OLD_DIGEST}"
-    write_result "rolled_back" "$1"
+    RESULT_HEALTH="ok" write_result "rolled_back" "$1"
     echo "Rollback SUKSES: layanan lama sehat kembali di port ${DEPLOY_PORT}." >&2
   else
     ACTIVE_AFTER_ID=""
     ACTIVE_AFTER_DIGEST=""
-    write_result "rollback_failed" "$1"
+    RESULT_HEALTH="gagal" write_result "rollback_failed" "$1"
     echo "Rollback GAGAL: layanan lama juga tidak sehat — perlu intervensi manual." >&2
   fi
   return 1
@@ -150,6 +163,46 @@ if ! docker image inspect "${IMAGE_REF}" --format '{{json .RepoDigests}}' | grep
   exit 1
 fi
 log "Digest terverifikasi: image ID ${IMAGE_ID}"
+
+# Mode rollback: port aktif dikembalikan ke digest lama. Tidak ada kandidat,
+# tidak ada promosi — hanya container aktif diganti dan dicek sehat.
+if [[ "${AUTORE_DEPLOY_MODE:-deploy}" == "rollback" ]]; then
+  # ponytail: kalau DEPLOY_PORT tidak diisi, port diambil dari container aktif
+  # (aplikasi satu port). Aplikasi multiport wajib mengirim DEPLOY_PORT.
+  if [[ -z "${DEPLOY_PORT_DIISI}" ]]; then
+    peta="$(docker inspect -f '{{range $p, $c := .NetworkSettings.Ports}}{{range $c}}{{.HostPort}} {{$p}}{{"\n"}}{{end}}{{end}}' "${ACTIVE_CONTAINER}" 2>/dev/null | head -n1 || true)"
+    if [[ -n "${peta}" ]]; then
+      DEPLOY_PORT="${peta%% *}"
+      CONTAINER_PORT="${peta##* }"
+      CONTAINER_PORT="${CONTAINER_PORT%%/*}"
+    fi
+  fi
+  if [[ -z "${DEPLOY_PORT_DIISI}" && -z "${peta:-}" ]]; then
+    ACTIVE_AFTER_ID=""
+    ACTIVE_AFTER_DIGEST=""
+    write_result "rollback_failed" "port aktif ${ACTIVE_CONTAINER} tidak ditemukan; isi DEPLOY_PORT"
+    echo "ERROR: port aktif tidak bisa ditentukan dari ${ACTIVE_CONTAINER}; isi DEPLOY_PORT." >&2
+    exit 1
+  fi
+  inspect_old
+  log "Mode rollback: mengembalikan port ${DEPLOY_PORT} ke ${IMAGE_REF} (digantikan: ${OLD_DEPLOYMENT_ID:-tidak ada})"
+  docker stop "${CANDIDATE_CONTAINER}" >/dev/null 2>&1 || true
+  docker rm -f "${CANDIDATE_CONTAINER}" >/dev/null 2>&1 || true
+  docker stop "${ACTIVE_CONTAINER}" >/dev/null 2>&1 || true
+  docker rm -f "${ACTIVE_CONTAINER}" >/dev/null 2>&1 || true
+  if start_container "${ACTIVE_CONTAINER}" "${IMAGE_REF}" "${DEPLOY_PORT}" "${DEPLOYMENT_ID}" && health_at "${DEPLOY_PORT}"; then
+    ACTIVE_AFTER_ID="${DEPLOYMENT_ID}"
+    ACTIVE_AFTER_DIGEST="${IMAGE_REF##*@}"
+    RESULT_HEALTH="ok" write_result "rolled_back" "rollback by digest ke ${IMAGE_REF}"
+    log "SUKSES: rollback ${DEPLOYMENT_ID} aktif di port ${DEPLOY_PORT} dari ${IMAGE_REF}"
+    exit 0
+  fi
+  ACTIVE_AFTER_ID=""
+  ACTIVE_AFTER_DIGEST=""
+  write_result "rollback_failed" "rollback by digest gagal: ${DEPLOYMENT_ID} tidak sehat di port ${DEPLOY_PORT}"
+  echo "ERROR: rollback GAGAL — port ${DEPLOY_PORT} tidak sehat, perlu intervensi manual." >&2
+  exit 1
+fi
 
 inspect_old
 log "Menyiapkan deployment ${DEPLOYMENT_ID}; container lama: ${OLD_DEPLOYMENT_ID:-tidak ada}"
@@ -174,7 +227,9 @@ if ! health_at "${CANDIDATE_PORT}"; then
   if [[ -n "${OLD_IMAGE}" ]]; then
     ACTIVE_AFTER_ID="${OLD_DEPLOYMENT_ID}"
     ACTIVE_AFTER_DIGEST="${OLD_DIGEST}"
-    write_result "rolled_back" "kandidat gagal health; container lama tetap aktif"
+    # Container lama tidak disentuh dan masih melayani port aktif, jadi sehat:
+    # health diisi fakta, bukan turunan outcome "rolled_back".
+    RESULT_HEALTH="ok" write_result "rolled_back" "kandidat gagal health; container lama tetap aktif"
   else
     ACTIVE_AFTER_ID=""
     ACTIVE_AFTER_DIGEST=""

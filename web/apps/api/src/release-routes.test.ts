@@ -11,6 +11,7 @@ import { createApp, type ActiveLoader, type RunsLoader, type SbomLoader } from "
 import { lepasSemuaKunci } from "./kunci";
 import { hatchApprovals } from "./release-approval";
 import { hatchRollback } from "./release-rollback";
+import { hatchPromote } from "./release-promote";
 
 const SECRET = randomBytes(40).toString("hex");
 const COMMIT = "b".repeat(40);
@@ -83,7 +84,7 @@ const tanpaLimit = (async (_c: Context, next: () => Promise<void>) => {
   await next();
 }) as unknown as MiddlewareHandler;
 
-function api(berkas: string) {
+function api(berkas: string, panggilanPromote: string[][] = []) {
   const run = async (kind: "deploy" | "scan" | "quick-start"): Promise<ActionResult> => ({
     ok: true,
     status: 200,
@@ -117,6 +118,14 @@ function api(berkas: string) {
       ledger: () => berkas,
       bin: "autore",
       spawn: async () => ({ code: 0, stderr: "" }),
+    }),
+    hatchPromote({
+      ledger: () => berkas,
+      bin: "autore",
+      spawn: async (_bin, args) => {
+        panggilanPromote.push(args);
+        return { code: 0, stderr: "" };
+      },
     }),
   );
 }
@@ -430,5 +439,46 @@ describe("rollback lewat HTTP", () => {
       target_digest: DIGEST,
     });
     expect(eventsDi(berkas)).toHaveLength(awal);
+  });
+});
+
+describe("gerbang role endpoint promosi", () => {
+  const disetujui = (build: number): ReleaseEvent[] => [
+    ...menungguPersetujuan(build),
+    ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "budi" }),
+  ];
+
+  const kirim = async (berkas: string, build: number, panggilan: string[][] = []) =>
+    api(berkas, panggilan).request(`http://localhost/api/releases/${idRelease(build)}/promote`, {
+      method: "POST",
+      headers: { cookie: `authjs.session-token=${await cookie("budi")}` },
+    });
+
+  it("R47 qa ditolak promosi (403) dan job tidak dipicu", async () => {
+    const berkas = ledgerTemp(disetujui(1));
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const panggilan: string[][] = [];
+
+    const res = await kirim(berkas, 1, panggilan);
+    expect(res.status).toBe(403);
+    expect(panggilan).toHaveLength(0);
+  });
+
+  it("R48 admin boleh promosi (202) dan CLI dipanggil dengan digest release", async () => {
+    const berkas = ledgerTemp(disetujui(1));
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:admin");
+    const panggilan: string[][] = [];
+
+    const res = await kirim(berkas, 1, panggilan);
+    expect(res.status).toBe(202);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      job: `${APP}-promote`,
+      environment: "production",
+      digest: DIGEST,
+    });
+    expect(panggilan).toHaveLength(1);
+    expect(panggilan[0]).toContain("trigger-promote");
+    expect(panggilan[0]).toContain(DIGEST);
   });
 });

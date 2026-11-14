@@ -1,7 +1,7 @@
 import type { ActionKind } from "./actions";
 
 // K2: SATU ruang kunci untuk semua aksi tulis yang menyentuh satu aplikasi —
-// deploy, scan, quick-start, approve, reject (nanti rollback/promote). Kuncinya
+// deploy, scan, quick-start, approve, reject, rollback, promote. Kuncinya
 // id aplikasi, bukan nama modul, supaya dua jalur kode berbeda tidak bisa
 // menyentuh aplikasi yang sama tanpa saling melihat.
 //
@@ -11,7 +11,7 @@ import type { ActionKind } from "./actions";
 // atomik tmp+rename. Approval diputuskan lewat dashboard di luar jendela build,
 // jadi tumpang tindih lintas proses itu diterima.
 
-export type LabelAksi = ActionKind | "approval" | "rollback";
+export type LabelAksi = ActionKind | "approval" | "rollback" | "promote";
 
 const sibuk = new Map<string, LabelAksi>();
 

@@ -18,6 +18,7 @@ import {
   hatchRollback,
   type RollbackHandler,
 } from "./release-rollback";
+import { hatchPromote, type PromoteHandler } from "./release-promote";
 
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
@@ -151,6 +152,7 @@ export function createApp(
   rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
   approvals: ApprovalHandler = hatchApprovals(),
   rollback: RollbackHandler = hatchRollback(),
+  promote: PromoteHandler = hatchPromote(),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -192,6 +194,8 @@ export function createApp(
   // Rollback digerakkan environment dari BODY, jadi gerbang role dipasang di sini:
   // minimum `qa`, sama seperti approve/reject yang juga menggerakkan production.
   app.use("/api/releases/:id/rollback", requireSession(auth, "qa"));
+  // Promosi ke production adalah gerbang manual terakhir: hanya admin.
+  app.use("/api/releases/:id/promote", requireSession(auth, "admin"));
   app.use("/api/releases/*", rateLimiter);
 
   // Approve idempoten: release yang sudah disetujui tetap 200 tanpa event kedua.
@@ -215,6 +219,13 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     const hasil = await rollback.rollback(c.req.param("id"), body.environment, c.get("sesi"));
+    return c.json(hasil, hasil.status);
+  });
+
+  // Promosi production by digest: job Jenkins terpisah, tidak membangun ulang.
+  app.post("/api/releases/:id/promote", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const hasil = await promote.promote(c.req.param("id"), c.get("sesi"));
     return c.json(hasil, hasil.status);
   });
 

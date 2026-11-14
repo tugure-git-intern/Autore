@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+// Cookie uji harus menempel di host yang benar-benar dibuka suite; di mode
+// hermetik host-nya 127.0.0.1, bukan VPS.
+const HOST = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://100.80.3.14:9120").hostname;
+
 // Keluhan yang dijaga tes ini: sidebar melayang (fixed) sementara topbar
 // membentang ujung-ke-ujung tanpa terputus. Karena sidebar keluar dari alur flex,
 // kolom konten mengisi lebar viewport penuh dan topbar benar-benar w-full.
@@ -423,7 +427,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     // sah — state provider tetap "light" dan class itu dilepas lagi saat re-render
     // navigasi, sehingga tes kadang melihat latar terang (flaky).
     await context.addCookies([
-      { name: "autore-theme", value: "dark", domain: "100.80.3.14", path: "/" },
+      { name: "autore-theme", value: "dark", domain: HOST, path: "/" },
     ]);
     await context.addInitScript(() => {
       localStorage.setItem("autore-theme", "dark");
@@ -520,7 +524,7 @@ test.describe("kerangka melayang di layar lebar", () => {
       {
         name: "autore-theme",
         value: "dark",
-        domain: "100.80.3.14",
+        domain: HOST,
         path: "/",
       },
     ]);
@@ -548,7 +552,7 @@ test.describe("kerangka melayang di layar lebar", () => {
       {
         name: "autore-theme",
         value: "dark",
-        domain: "100.80.3.14",
+        domain: HOST,
         path: "/",
       },
     ]);
@@ -612,7 +616,7 @@ test.describe("kerangka melayang di layar lebar", () => {
       {
         name: "autore-theme",
         value: "dark",
-        domain: "100.80.3.14",
+        domain: HOST,
         path: "/",
       },
     ]);

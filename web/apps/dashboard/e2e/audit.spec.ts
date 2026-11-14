@@ -1,6 +1,11 @@
 import { readFile, rm } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
+// Jalur nyata dipakai mode live; mode hermetik mengarahkan keduanya ke workspace
+// sementara lewat env, jadi tes tidak pernah menulis atau menghapus data VPS.
+const AUDIT_LOG = process.env.AUTORE_AUDIT_LOG ?? "/home/tugure/.local/state/autore/audit.log";
+const WORKSPACE = process.env.AUTORE_WORKSPACE ?? "/home/tugure/autore-workspace";
+
 test.describe("Audit Log Feature", () => {
   test("halaman /audit merender heading, filter, dan activity feed", async ({ page }) => {
     // Kunjungi langsung halaman /audit
@@ -130,7 +135,7 @@ test.describe("Audit Log — garis timeline", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    const auditLogPath = "/home/tugure/.local/state/autore/audit.log";
+    const auditLogPath = AUDIT_LOG;
     const bacaAuditTerakhir = async () => {
       const isi = await readFile(auditLogPath, "utf8");
       const baris = isi.trim().split("\n").filter(Boolean);
@@ -172,7 +177,7 @@ test.describe("Audit Log — garis timeline", () => {
     expect(logDeploy.exit).toBe(0);
 
     // 3. Klik Buat Aplikasi Baru (nama audit-test-app) -> cek log -> action: "quick-start", target: "audit-test-app"
-    await rm("/home/tugure/autore-workspace/audit-test-app", { recursive: true, force: true });
+    await rm(`${WORKSPACE}/audit-test-app`, { recursive: true, force: true });
     await page.goto("/applications");
     await page.getByRole("button", { name: "Buat Aplikasi Baru" }).click();
     await page.getByLabel("Nama Aplikasi").fill("audit-test-app");

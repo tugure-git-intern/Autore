@@ -16,7 +16,8 @@
     "start:dashboard": "dotenv -e .env -- npm run start --workspace @autore/dashboard",
     "start:api": "npm run start --workspace @autore/api",
     "test": "vitest",
-    "test:e2e": "dotenv -e .env -- npm run test:e2e --workspace @autore/dashboard",
+    "test:e2e": "npm run test:e2e --workspace @autore/dashboard",
+    "test:e2e:live": "E2E_LIVE=1 dotenv -e .env -- npm run test:e2e --workspace @autore/dashboard",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p apps/api/tsconfig.json && tsc --noEmit -p apps/dashboard/tsconfig.json && tsc --noEmit -p packages/contracts/tsconfig.json"
   },

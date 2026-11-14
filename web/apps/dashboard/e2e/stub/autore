@@ -1,0 +1,25 @@
+#!/bin/sh
+# Binari CLI palsu untuk suite e2e hermetik. Perintah baca menjawab dari
+# e2e/fixtures; perintah tulis hanya mencetak keluaran yang bentuknya benar lalu
+# keluar 0, jadi tidak ada repo, job Jenkins, atau ledger yang benar-benar dibuat.
+# Perintah mutasi release tetap ditolak: suite tidak boleh menyentuh jalur itu.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../fixtures" && pwd) || exit 2
+
+case "$*" in
+  "status --json") cat "$DIR/status.json" ;;
+  "active --json") cat "$DIR/active.json" ;;
+  "runs --json --days 7 --limit 5") cat "$DIR/runs.json" ;;
+  "release status --json") cat "$DIR/releases.json" ;;
+  "sbom --app "*" --json") cat "$DIR/sbom.json" ;;
+  deploy\ --path\ *) echo "deploy selesai (stub): $*" ;;
+  scan\ --no-docker\ --path\ *) echo "scan selesai (stub): 0 temuan" ;;
+  quick-start\ --path\ *) echo "Repo GitHub tugure-git-intern/audit-test-app (baru dibuat)" ;;
+  "release trigger-rollback"*|"release approve"*|"release reject"*)
+    echo "stub: perintah mutasi release tidak dijalankan: $*" >&2
+    exit 1
+    ;;
+  *)
+    echo "stub: argv tidak dikenal: $*" >&2
+    exit 2
+    ;;
+esac

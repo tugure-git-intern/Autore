@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+// Cookie uji harus menempel di host yang benar-benar dibuka suite; di mode
+// hermetik host-nya 127.0.0.1, bukan VPS.
+const HOST = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://100.80.3.14:9120").hostname;
+
 test.describe("Aksesibilitas Otomatis (WCAG 2.1 AA)", () => {
   const rute = [
     { nama: "Dashboard Overview", path: "/" },
@@ -34,7 +38,7 @@ test.describe("Aksesibilitas Otomatis (WCAG 2.1 AA)", () => {
       {
         name: "autore-theme",
         value: "dark",
-        domain: "100.80.3.14",
+        domain: HOST,
         path: "/",
       },
     ]);

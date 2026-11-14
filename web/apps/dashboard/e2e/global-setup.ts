@@ -59,7 +59,9 @@ export default async function globalSetup() {
     origins: [],
   };
 
-  const dir = path.join(process.cwd(), "e2e", ".auth");
+  // Jalur absolut dari config supaya berkas sesi tidak mendarat di cwd pemanggil
+  // (npm workspace menjalankan globalSetup dari web/, bukan apps/dashboard/).
+  const dir = process.env.AUTORE_E2E_AUTH_DIR ?? path.join(process.cwd(), "e2e", ".auth");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify(state, null, 2));
 }

@@ -25,10 +25,15 @@ function versiCli(): string {
  * ada dan sehat. Apa pun yang bertambah di sini harus lewat daftar ini, jangan
  * kembali ke pola liar.
  */
-const API_ASAL = "http://127.0.0.1:9121";
+// Bisa digeser lewat env supaya suite e2e hermetik menyalakan API-nya sendiri
+// di port lain tanpa mengubah nilai produksi.
+const API_ASAL = process.env.AUTORE_API_ASAL ?? "http://127.0.0.1:9121";
 
 const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_APP_VERSION: versiCli() },
+  // Build e2e memakai direktori keluaran terpisah supaya `.next` milik dashboard
+  // live tidak tertimpa saat suite jalan di mesin yang sama.
+  distDir: process.env.AUTORE_NEXT_DIST ?? ".next",
   // Paket kontrak dikirim sebagai sumber TypeScript, bukan hasil build.
   transpilePackages: ["@autore/contracts"],
   async rewrites() {

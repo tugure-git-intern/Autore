@@ -1,6 +1,7 @@
 //! Event log staging. Modul ini hanya menulis fakta mentah; status release
 //! dihitung oleh fold TypeScript, bukan di sini.
 
+use crate::jenkins;
 use crate::workspace;
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -62,6 +63,55 @@ pub enum ReleaseAction {
         #[arg(long)]
         json: bool,
     },
+    /// Picu job Jenkins rollback by digest (dipanggil API; kredensial tetap di CLI)
+    TriggerRollback(TriggerRollbackArgs),
+    /// Cetak id event rollback berikutnya untuk satu build
+    RollbackId(RollbackIdArgs),
+}
+
+#[derive(Args)]
+pub struct TriggerRollbackArgs {
+    #[arg(long)]
+    job: String,
+    #[arg(long)]
+    app: String,
+    #[arg(long)]
+    environment: String,
+    #[arg(long)]
+    digest: String,
+    #[arg(long)]
+    deployment_id: String,
+    #[arg(long)]
+    release_id: String,
+    #[arg(long)]
+    build: u64,
+    #[arg(long)]
+    actor: String,
+    /// Daftarkan job dari `Jenkinsfile.rollback` kalau job-nya belum ada
+    #[arg(long)]
+    git_url: Option<String>,
+    #[arg(long, default_value = "main")]
+    branch: String,
+}
+
+#[derive(Args)]
+pub struct RollbackIdArgs {
+    #[arg(long)]
+    app: String,
+    #[arg(long)]
+    build: u64,
+}
+
+/// Environment rollback tidak punya default: nilai asing ditolak di sini juga,
+/// supaya job tidak pernah menerima environment yang tidak dikenal.
+pub fn validasi_environment_rollback(environment: &str) -> Result<(), String> {
+    match environment {
+        "staging" | "production" => Ok(()),
+        "" => Err("environment rollback wajib: \"staging\" atau \"production\"".into()),
+        lain => Err(format!(
+            "environment rollback tidak dikenal: {lain:?} (hanya \"staging\" atau \"production\")"
+        )),
+    }
 }
 
 #[derive(Args)]
@@ -82,6 +132,12 @@ pub struct RecordArgs {
     request_id: String,
     #[arg(long)]
     error: Option<String>,
+    /// Id event eksplisit (rollback: `<app>-<build>-rollback-<n>`)
+    #[arg(long)]
+    id: Option<String>,
+    /// Pelaku atas nama dashboard; dipakai event rollback
+    #[arg(long)]
+    actor: Option<String>,
 }
 
 pub fn run(action: ReleaseAction) -> i32 {
@@ -103,7 +159,77 @@ pub fn run(action: ReleaseAction) -> i32 {
                 1
             }
         },
+        ReleaseAction::TriggerRollback(args) => match trigger_rollback(args) {
+            Ok(url) => {
+                println!("{url}");
+                0
+            }
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                1
+            }
+        },
+        ReleaseAction::RollbackId(args) => match rollback_id_at(&workspace::workspace_dir(), &args) {
+            Ok(id) => {
+                println!("{id}");
+                0
+            }
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                1
+            }
+        },
     }
+}
+
+fn trigger_rollback(args: TriggerRollbackArgs) -> Result<String, String> {
+    validasi_environment_rollback(&args.environment)?;
+    if !args.digest.starts_with("sha256:") || args.digest.len() != 71 {
+        return Err("digest rollback bukan sha256:64hex".into());
+    }
+    let conf_path = jenkins::default_config_path();
+    let cfg = jenkins::load_config_from(&conf_path).ok_or_else(|| {
+        format!(
+            "konfigurasi Jenkins belum ada di {}",
+            conf_path.display()
+        )
+    })?;
+    let params = [
+        ("ROLLBACK_APP", args.app.as_str()),
+        ("ROLLBACK_ENVIRONMENT", args.environment.as_str()),
+        ("ROLLBACK_DIGEST", args.digest.as_str()),
+        ("ROLLBACK_DEPLOYMENT_ID", args.deployment_id.as_str()),
+        ("ROLLBACK_RELEASE_ID", args.release_id.as_str()),
+        ("ROLLBACK_ACTOR", args.actor.as_str()),
+    ];
+    match jenkins::trigger_parameterized(&cfg, &args.job, &params) {
+        Ok(url) => Ok(url),
+        Err(e) => {
+            // Job belum ada: daftarkan dari Jenkinsfile.rollback lalu picu sekali lagi.
+            let Some(ref git_url) = args.git_url else {
+                return Err(e);
+            };
+            if !e.contains("404") {
+                return Err(e);
+            }
+            jenkins::register_rollback_job(&cfg, &args.job, git_url, &args.branch)?;
+            jenkins::trigger_parameterized(&cfg, &args.job, &params)
+        }
+    }
+}
+
+/// Id event rollback `<app>-<build>-rollback-<n>`. `n` dihitung dari ledger,
+/// jadi dua job paralel bisa memakai `n` yang sama; append idempoten di
+/// `append_event_at` menahan duplikatnya (hanya satu yang tercatat).
+fn rollback_id_at(dir: &Path, args: &RollbackIdArgs) -> Result<String, String> {
+    let ledger = read_ledger_at(dir)?;
+    let awalan = format!("{}-{}-rollback-", args.app, args.build);
+    let terpakai = ledger
+        .events
+        .iter()
+        .filter(|event| event.id.starts_with(&awalan))
+        .count();
+    Ok(format!("{awalan}{}", terpakai + 1))
 }
 
 fn record(args: RecordArgs) -> Result<Event, String> {
@@ -111,7 +237,10 @@ fn record(args: RecordArgs) -> Result<Event, String> {
         from_result(path, &args)?
     } else if args.event.as_deref() == Some("build_failed") {
         Event {
-            id: format!("{}-{}-build_failed", args.app, args.build),
+            id: args
+                .id
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}-build_failed", args.app, args.build)),
             ts: now(),
             kind: "build_failed".into(),
             app: args.app,
@@ -119,7 +248,7 @@ fn record(args: RecordArgs) -> Result<Event, String> {
             request_id: args.request_id,
             commit: args.commit,
             build_number: args.build,
-            actor: None,
+            actor: args.actor.clone(),
             digest: None,
             image_ref: None,
             deployment_id: None,
@@ -157,7 +286,10 @@ fn from_result(path: &Path, args: &RecordArgs) -> Result<Event, String> {
         .and_then(Value::as_str)
         .ok_or("result tanpa deployment_id")?;
     Ok(Event {
-        id: format!("{}-{}-deploy_result", args.app, args.build),
+        id: args
+            .id
+            .clone()
+            .unwrap_or_else(|| format!("{}-{}-deploy_result", args.app, args.build)),
         ts: now(),
         kind: "deploy_result".into(),
         app: args.app.clone(),
@@ -165,7 +297,7 @@ fn from_result(path: &Path, args: &RecordArgs) -> Result<Event, String> {
         request_id: args.request_id.clone(),
         commit: args.commit.clone(),
         build_number: args.build,
-        actor: None,
+        actor: args.actor.clone(),
         digest: Some(digest.into()),
         image_ref: value
             .get("image_ref")
@@ -344,6 +476,76 @@ mod tests {
         append_event_at(tmp.path(), event("sama")).unwrap();
         append_event_at(tmp.path(), event("sama")).unwrap();
         assert_eq!(read_ledger_at(tmp.path()).unwrap().events.len(), 1);
+    }
+
+    #[test]
+    fn id_rollback_berurutan_per_build() {
+        let tmp = TempDir::new().unwrap();
+        let args = RollbackIdArgs {
+            app: "tes-testing".into(),
+            build: 7,
+        };
+        assert_eq!(rollback_id_at(tmp.path(), &args).unwrap(), "tes-testing-7-rollback-1");
+
+        append_event_at(tmp.path(), event("tes-testing-7-rollback-1")).unwrap();
+        append_event_at(tmp.path(), event("tes-testing-7-deploy_result")).unwrap();
+        assert_eq!(rollback_id_at(tmp.path(), &args).unwrap(), "tes-testing-7-rollback-2");
+
+        // Build lain punya deret sendiri.
+        let lain = RollbackIdArgs {
+            app: "tes-testing".into(),
+            build: 8,
+        };
+        assert_eq!(rollback_id_at(tmp.path(), &lain).unwrap(), "tes-testing-8-rollback-1");
+    }
+
+    #[test]
+    fn environment_rollback_tanpa_default() {
+        assert!(validasi_environment_rollback("staging").is_ok());
+        assert!(validasi_environment_rollback("production").is_ok());
+        for asing in ["", "Prod", "PRODUCTION", "prod", "staging "] {
+            assert!(
+                validasi_environment_rollback(asing).is_err(),
+                "{asing:?} seharusnya ditolak"
+            );
+        }
+    }
+
+    #[test]
+    fn record_rollback_memakai_id_dan_actor_eksplisit() {
+        let tmp = TempDir::new().unwrap();
+        let hasil = tmp.path().join("result.json");
+        fs::write(
+            &hasil,
+            serde_json::json!({
+                "requested_digest": "sha256:".to_string() + &"a".repeat(64),
+                "outcome": "rolled_back",
+                "deployment_id": "dep-lama",
+                "health": "ok",
+                "active_before": { "deployment_id": "dep-baru", "digest": "sha256:".to_string() + &"b".repeat(64) },
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let args = RecordArgs {
+            from_deploy_result: Some(hasil),
+            event: None,
+            app: "tes-testing".into(),
+            environment: "staging".into(),
+            build: 7,
+            commit: "a".repeat(40),
+            request_id: "pipeline".into(),
+            error: None,
+            id: Some("tes-testing-7-rollback-1".into()),
+            actor: Some("budi".into()),
+        };
+
+        let event = record(args).unwrap();
+        assert_eq!(event.id, "tes-testing-7-rollback-1");
+        assert_eq!(event.actor.as_deref(), Some("budi"));
+        assert_eq!(event.environment, "staging");
+        assert_eq!(event.outcome.as_deref(), Some("rolled_back"));
+        assert_eq!(event.health.as_deref(), Some("ok"));
     }
 
     #[test]

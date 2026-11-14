@@ -94,9 +94,61 @@ pub fn xml_escape(input: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
+/// Parameter job rollback. Didaftarkan di XML job supaya `buildWithParameters`
+/// benar-benar mengantarkan nilainya (parameter yang tidak terdaftar diabaikan Jenkins).
+pub const ROLLBACK_PARAMS: [&str; 6] = [
+    "ROLLBACK_APP",
+    "ROLLBACK_ENVIRONMENT",
+    "ROLLBACK_DIGEST",
+    "ROLLBACK_DEPLOYMENT_ID",
+    "ROLLBACK_RELEASE_ID",
+    "ROLLBACK_ACTOR",
+];
+
+/// Persen-encode nilai query curl. Hanya karakter yang bisa memecah query yang
+/// diubah; sisanya diteruskan apa adanya supaya URL tetap terbaca.
+pub fn url_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b':' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+fn render_job_xml(
+    git_url: &str,
+    branch: &str,
+    script_path: &str,
+    params: &[&str],
+    pemicu_scm: bool,
+) -> String {
     let safe_url = xml_escape(git_url.trim());
     let safe_branch = xml_escape(branch.trim().trim_start_matches("*/"));
+    let definisi_param = if params.is_empty() {
+        String::new()
+    } else {
+        let mut blok = String::from(
+            "    <hudson.model.ParametersDefinitionProperty>\n      <parameterDefinitions>\n",
+        );
+        for nama in params {
+            blok.push_str(&format!(
+                "        <hudson.model.StringParameterDefinition>\n          <name>{}</name>\n          <description>Diisi API rollback; jangan diubah manual.</description>\n          <defaultValue></defaultValue>\n          <trim>false</trim>\n        </hudson.model.StringParameterDefinition>\n",
+                xml_escape(nama)
+            ));
+        }
+        blok.push_str("      </parameterDefinitions>\n    </hudson.model.ParametersDefinitionProperty>\n");
+        blok
+    };
+    let pemicu = if pemicu_scm {
+        "    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>\n      <triggers>\n        <hudson.triggers.SCMTrigger>\n          <spec>H/5 * * * *</spec>\n          <ignorePostCommitHooks>false</ignorePostCommitHooks>\n        </hudson.triggers.SCMTrigger>\n      </triggers>\n    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>\n"
+    } else {
+        ""
+    };
     format!(
         r#"<?xml version="1.1" encoding="UTF-8"?>
 <flow-definition plugin="workflow-job">
@@ -115,15 +167,7 @@ pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
     <org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>
       <abortPrevious>false</abortPrevious>
     </org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>
-    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
-      <triggers>
-        <hudson.triggers.SCMTrigger>
-          <spec>H/5 * * * *</spec>
-          <ignorePostCommitHooks>false</ignorePostCommitHooks>
-        </hudson.triggers.SCMTrigger>
-      </triggers>
-    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
-  </properties>
+{pemicu}{definisi_param}  </properties>
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
     <scm class="hudson.plugins.git.GitSCM" plugin="git">
       <configVersion>2</configVersion>
@@ -141,13 +185,99 @@ pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
       <submoduleCfg class="empty-list"/>
       <extensions/>
     </scm>
-    <scriptPath>Jenkinsfile</scriptPath>
+    <scriptPath>{script_path}</scriptPath>
     <lightweight>true</lightweight>
   </definition>
   <disabled>false</disabled>
 </flow-definition>
 "#
     )
+}
+
+pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
+    render_job_xml(git_url, branch, "Jenkinsfile", &[], true)
+}
+
+/// Job rollback: pipeline `Jenkinsfile.rollback`, tanpa pemicu SCM (hanya dipicu
+/// API), dengan parameter ROLLBACK_* yang sudah terdaftar sejak job dibuat.
+pub fn render_rollback_job_xml(git_url: &str, branch: &str) -> String {
+    render_job_xml(git_url, branch, "Jenkinsfile.rollback", &ROLLBACK_PARAMS, false)
+}
+
+/// Picu build berparameter. Job harus sudah ada; kalau belum, Jenkins menjawab
+/// 404 dan pemanggil mendapat pesan yang menyebutkan itu (bukan build tanpa parameter).
+pub fn trigger_parameterized(
+    cfg: &JenkinsConfig,
+    job_name: &str,
+    params: &[(&str, &str)],
+) -> Result<String, String> {
+    let base = normalize_jenkins_url(&cfg.url)?;
+    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-rollback-{}", std::process::id()));
+    fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
+    let cookie_jar = tmp_dir.join("cookies.txt");
+
+    let result = (|| -> Result<String, String> {
+        let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+        let jar_str = cookie_jar.to_string_lossy().to_string();
+
+        let crumb_url = format!("{base}/crumbIssuer/api/json");
+        let (crumb_code, crumb_body) = curl_with_stdin_config(
+            &[
+                "-sS",
+                "--max-time",
+                "15",
+                "-c",
+                &jar_str,
+                "-w",
+                "\n__HTTP_CODE__:%{http_code}",
+                "--config",
+                "-",
+                &crumb_url,
+            ],
+            &user_cfg,
+        )?;
+        if crumb_code == 401 || crumb_code == 403 {
+            return Err(
+                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password."
+                    .to_string(),
+            );
+        }
+        let crumb_header = if crumb_code == 200 {
+            extract_crumb_pair(&crumb_body).map(|(k, v)| format!("{k}: {v}"))
+        } else {
+            None
+        };
+
+        let query: Vec<String> = params
+            .iter()
+            .map(|(k, v)| format!("{}={}", url_encode(k), url_encode(v)))
+            .collect();
+        let url = format!(
+            "{base}/job/{job_name}/buildWithParameters?{}",
+            query.join("&")
+        );
+
+        let mut args = vec!["-sS", "--max-time", "20", "-b", &jar_str, "-X", "POST"];
+        if let Some(ref h) = crumb_header {
+            args.push("-H");
+            args.push(h);
+        }
+        args.extend_from_slice(&["-w", "\n__HTTP_CODE__:%{http_code}", "--config", "-", &url]);
+
+        let (code, body) = curl_with_stdin_config(&args, &user_cfg)?;
+        if code >= 400 {
+            return Err(format!(
+                "Gagal memicu job '{job_name}' (HTTP {code}): {}",
+                body.lines().next().unwrap_or("")
+            ));
+        }
+
+        Ok(format!("{base}/job/{job_name}/"))
+    })();
+
+    let _ = fs::remove_dir_all(&tmp_dir);
+    result
 }
 
 pub fn infer_project_job_name(project_dir: &Path) -> String {
@@ -563,6 +693,115 @@ pub fn register_and_trigger_jenkins(
     result
 }
 
+/// Daftarkan job rollback dari `Jenkinsfile.rollback` (idempoten: XML job yang
+/// sudah ada ditimpa supaya daftar parameter ROLLBACK_* ikut terpasang).
+pub fn register_rollback_job(
+    cfg: &JenkinsConfig,
+    job_name: &str,
+    git_url: &str,
+    branch: &str,
+) -> Result<String, String> {
+    let base = normalize_jenkins_url(&cfg.url)?;
+    let xml = render_rollback_job_xml(git_url, branch);
+    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-rollback-xml-{}", std::process::id()));
+    fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
+    let cookie_jar = tmp_dir.join("cookies.txt");
+    let xml_file = tmp_dir.join("config.xml");
+    fs::write(&xml_file, &xml)
+        .map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
+
+    let result = (|| -> Result<u16, String> {
+        let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+        let jar_str = cookie_jar.to_string_lossy().to_string();
+        let xml_str = xml_file.to_string_lossy().to_string();
+
+        let crumb_url = format!("{base}/crumbIssuer/api/json");
+        let (crumb_code, crumb_body) = curl_with_stdin_config(
+            &[
+                "-sS",
+                "--max-time",
+                "15",
+                "-c",
+                &jar_str,
+                "-w",
+                "\n__HTTP_CODE__:%{http_code}",
+                "--config",
+                "-",
+                &crumb_url,
+            ],
+            &user_cfg,
+        )?;
+        if crumb_code == 401 || crumb_code == 403 {
+            return Err(
+                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password."
+                    .to_string(),
+            );
+        }
+        let crumb_header = if crumb_code == 200 {
+            extract_crumb_pair(&crumb_body).map(|(k, v)| format!("{k}: {v}"))
+        } else {
+            None
+        };
+
+        let check_url = format!("{base}/job/{job_name}/api/json");
+        let (check_code, _) = curl_with_stdin_config(
+            &[
+                "-sS",
+                "--max-time",
+                "15",
+                "-b",
+                &jar_str,
+                "-w",
+                "\n__HTTP_CODE__:%{http_code}",
+                "--config",
+                "-",
+                &check_url,
+            ],
+            &user_cfg,
+        )?;
+
+        let post_url = if check_code == 200 {
+            format!("{base}/job/{job_name}/config.xml")
+        } else {
+            format!("{base}/createItem?name={job_name}")
+        };
+
+        let data_arg = format!("@{xml_str}");
+        let mut post_args = vec![
+            "-sS",
+            "--max-time",
+            "20",
+            "-b",
+            &jar_str,
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/xml; charset=UTF-8",
+            "--data-binary",
+            &data_arg,
+        ];
+        if let Some(ref h) = crumb_header {
+            post_args.push("-H");
+            post_args.push(h);
+        }
+        post_args.extend_from_slice(&["-w", "\n__HTTP_CODE__:%{http_code}", "--config", "-", &post_url]);
+
+        let (code, body) = curl_with_stdin_config(&post_args, &user_cfg)?;
+        if code >= 400 {
+            return Err(format!(
+                "Gagal mendaftarkan job rollback '{job_name}' (HTTP {code}): {}",
+                body.lines().next().unwrap_or("")
+            ));
+        }
+        Ok(code)
+    })();
+
+    let _ = fs::remove_dir_all(&tmp_dir);
+    result?;
+    Ok(format!("{base}/job/{job_name}/"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,6 +825,28 @@ mod tests {
         fs::create_dir_all(&repo).unwrap();
         fs::write(repo.join("app.py"), "print('hai')\n").unwrap();
         (tmp, repo)
+    }
+
+    #[test]
+    fn job_rollback_punya_script_path_dan_parameter() {
+        let xml = render_rollback_job_xml("https://github.com/x/y.git", "main");
+        assert!(xml.contains("<scriptPath>Jenkinsfile.rollback</scriptPath>"));
+        for nama in ROLLBACK_PARAMS {
+            assert!(
+                xml.contains(&format!("<name>{nama}</name>")),
+                "parameter {nama} hilang dari XML job"
+            );
+        }
+        // Tanpa pemicu SCM: rollback hanya dipicu API, bukan tiap lima menit.
+        assert!(!xml.contains("SCMTrigger"));
+    }
+
+    #[test]
+    fn url_encode_mengunci_pemisah_query() {
+        assert_eq!(
+            url_encode("sha256:abc/def+ghi=jkl"),
+            "sha256:abc%2Fdef%2Bghi%3Djkl"
+        );
     }
 
     #[test]

@@ -499,6 +499,13 @@ pub(crate) fn append_event_at(dir: &Path, event: Event) -> Result<(), String> {
     serde_json::to_writer_pretty(&mut file, &ledger).map_err(|e| e.to_string())?;
     file.write_all(b"\n").map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Jenkins (grup tugure) dan API web (tugure) bergantian menulis ledger:
+        // mode 0664 + setgid direktori mencegah salah satu terkunci setelah rename.
+        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o664));
+    }
     fs::rename(&tmp, dir.join(EVENTS)).map_err(|e| format!("gagal rename ledger: {e}"))?;
     Ok(())
 }

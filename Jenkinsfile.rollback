@@ -73,31 +73,31 @@ pipeline {
                     export AUTORE_DEPLOY_MODE=rollback
                     export APP_NAME="${ROLLBACK_APP}"
                     export ACTIVE_CONTAINER_NAME="${ROLLBACK_APP}-${ROLLBACK_ENVIRONMENT}"
-                    export CANDIDATE_CONTAINER_NAME="\${ACTIVE_CONTAINER_NAME}-candidate"
+                    export CANDIDATE_CONTAINER_NAME="${'$'}{ACTIVE_CONTAINER_NAME}-candidate"
                     export DEPLOYMENT_ID="${ROLLBACK_DEPLOYMENT_ID}"
-                    export RESULT_JSON="\${WORKSPACE}/.deploy-rollback-result.json"
+                    export RESULT_JSON="${'$'}{WORKSPACE}/.deploy-rollback-result.json"
 
                     image_ref="${AUTORE_REGISTRY}/${ROLLBACK_APP}@${ROLLBACK_DIGEST}"
                     set +e
-                    '${DEPLOY_SCRIPT}' "\${image_ref}"
+                    '${DEPLOY_SCRIPT}' "${'$'}{image_ref}"
                     deploy_code=\$?
                     set -e
 
-                    if [ -f "\${RESULT_JSON}" ]; then
+                    if [ -f "${'$'}{RESULT_JSON}" ]; then
                       build="$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f3)"
-                      id="$('${AUTORE_BIN}' release rollback-id --app '${ROLLBACK_APP}' --build "\${build}")"
+                      id="$('${AUTORE_BIN}' release rollback-id --app '${ROLLBACK_APP}' --build "${'$'}{build}")"
                       '${AUTORE_BIN}' release record \\
-                        --from-deploy-result "\${RESULT_JSON}" \\
+                        --from-deploy-result "${'$'}{RESULT_JSON}" \\
                         --app '${ROLLBACK_APP}' \\
                         --environment '${ROLLBACK_ENVIRONMENT}' \\
-                        --build "\${build}" \\
+                        --build "${'$'}{build}" \\
                         --commit "$(echo '${ROLLBACK_RELEASE_ID}' | cut -d: -f2)" \\
                         --request-id '${ROLLBACK_RELEASE_ID}' \\
-                        --id "\${id}" \\
+                        --id "${'$'}{id}" \\
                         --actor '${ROLLBACK_ACTOR}' >/dev/null
                     fi
 
-                    exit "\${deploy_code}"
+                    exit "${'$'}{deploy_code}"
                 """
             }
         }

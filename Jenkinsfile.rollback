@@ -18,6 +18,12 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
 
+    // Ledger yang dibaca API (deploy/autore-web-api.service). Tanpa baris ini CLI
+    // menulis ke $HOME runner dan API tidak pernah melihat event rollback.
+    environment {
+        AUTORE_WORKSPACE = '/home/tugure/autore-workspace'
+    }
+
     parameters {
         string(name: 'ROLLBACK_APP', defaultValue: '', description: 'Nama aplikasi')
         string(name: 'ROLLBACK_ENVIRONMENT', defaultValue: '', description: 'staging atau production')

@@ -277,17 +277,20 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
       if (!isProduction && release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
       const deploymentId = event.deployment_id!;
       const sukses = event.outcome === "success";
+      // Rollback yang sehat mengembalikan layanan lama: deployment target memang
+      // sehat, jadi jangan ditandai gagal hanya karena outcome-nya bukan "success".
+      const sehat = sukses || (event.outcome === "rolled_back" && event.health === "ok");
       const envTarget = isProduction ? environments.get(`${event.app}:production`)! : staging;
       const deployment: Deployment = {
         id: deploymentId,
         release_id: release.id,
         environment_id: envTarget.id,
         image_digest: event.digest!,
-        status: sukses ? "sehat" : "gagal",
+        status: sehat ? "sehat" : "gagal",
         health_check_url: event.health_url || (isProduction ? "http://127.0.0.1:8154/health" : "http://127.0.0.1:8153/health"),
         mulai_pada: event.ts,
         selesai_pada: event.ts,
-        error: sukses ? null : (event.error || event.outcome || "deploy gagal"),
+        error: sehat ? null : (event.error || event.outcome || "deploy gagal"),
       };
       deployments.set(deployment.id, deployment);
 

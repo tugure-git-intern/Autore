@@ -209,6 +209,7 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
     expect(hasil.diabaikan).toEqual([]);
     expect(hasil.environments.find((environment) => environment.nama === "staging")?.active_deployment_id)
       .toBe("dep-stg-1");
+    expect(hasil.deployments.find((deployment) => deployment.id === "dep-stg-1")?.status).toBe("sehat");
   });
 
   it("R27 rollback production dari release aktif tidak lewat gerbang promosi dan tetap rolled_back", () => {

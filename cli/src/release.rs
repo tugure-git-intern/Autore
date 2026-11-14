@@ -233,6 +233,12 @@ fn rollback_id_at(dir: &Path, args: &RollbackIdArgs) -> Result<String, String> {
 }
 
 fn record(args: RecordArgs) -> Result<Event, String> {
+    record_at(&workspace::workspace_dir(), args)
+}
+
+/// Inti `record`, tapi arah workspace eksplisit supaya tes tidak menulis ke
+/// ledger nyata `~/autore-workspace/release-state.json`.
+fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
     let event = if let Some(ref path) = args.from_deploy_result {
         from_result(path, &args)?
     } else if args.event.as_deref() == Some("build_failed") {
@@ -262,7 +268,7 @@ fn record(args: RecordArgs) -> Result<Event, String> {
     } else {
         return Err("pakai --from-deploy-result atau --event build_failed".into());
     };
-    append_event_at(&workspace::workspace_dir(), event.clone())?;
+    append_event_at(dir, event.clone())?;
     Ok(event)
 }
 
@@ -540,7 +546,8 @@ mod tests {
             actor: Some("budi".into()),
         };
 
-        let event = record(args).unwrap();
+        let tmp_ws = TempDir::new().unwrap();
+        let event = record_at(tmp_ws.path(), args).unwrap();
         assert_eq!(event.id, "tes-testing-7-rollback-1");
         assert_eq!(event.actor.as_deref(), Some("budi"));
         assert_eq!(event.environment, "staging");

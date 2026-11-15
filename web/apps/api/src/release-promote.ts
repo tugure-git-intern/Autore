@@ -96,6 +96,14 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
             error: `promosi production hanya untuk release disetujui (status ${release.status})`,
           };
         }
+        // Dua orang untuk production: penyetuju tidak boleh menekan tombol promosi.
+        if (release.approved_by && release.approved_by.toLowerCase() === aktor.login.toLowerCase()) {
+          return {
+            ok: false,
+            status: 403,
+            error: `promosi production harus oleh orang berbeda dari penyetuju (${release.approved_by})`,
+          };
+        }
         const digest = release.image_digest;
         if (!digest) {
           return { ok: false, status: 409, error: `release ${id} belum punya digest` };

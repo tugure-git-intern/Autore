@@ -60,7 +60,7 @@ function menunggu(build: number, digest: string): ReleaseEvent[] {
 }
 
 function disetujui(build: number, digest: string): ReleaseEvent[] {
-  return [...dasar(build, digest), ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "budi" })];
+  return [...dasar(build, digest), ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "sari" })];
 }
 
 type Panggilan = { bin: string; args: string[] };
@@ -199,6 +199,17 @@ describe("handler promosi production", () => {
       const kedua = await tahan.hatch.promote(`${APP}:${COMMIT}:1`, orang("budi"));
       expect(kedua).toMatchObject({ ok: false, status: 409 });
       await pertama;
+    } finally {
+      lepasSemuaKunci();
+    }
+  });
+
+  it("R47 promotor yang sama dengan penyetuju ditolak (403) tanpa memicu job", async () => {
+    const h = handler(disetujui(1, DIGEST_1));
+    try {
+      const hasil = await h.hatch.promote(`${APP}:${COMMIT}:1`, orang("SARI"));
+      expect(hasil).toMatchObject({ ok: false, status: 403 });
+      expect(h.panggilan).toHaveLength(0);
     } finally {
       lepasSemuaKunci();
     }

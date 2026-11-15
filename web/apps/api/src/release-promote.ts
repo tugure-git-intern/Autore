@@ -7,6 +7,7 @@ import {
   type ReleaseEvent,
 } from "@autore/contracts";
 import { ambilKunci } from "./kunci";
+import { bacaLingkungan, type KonfigLingkungan } from "./lingkungan";
 import { appDariId, bacaLedgerMentah, jalurLedger } from "./release-approval";
 import type { Identitas } from "./session";
 
@@ -26,6 +27,8 @@ export type PromoteDeps = {
   bin?: string;
   job?: (app: string) => string | undefined;
   spawn?: (bin: string, args: string[]) => Promise<{ code: number; stderr: string }>;
+  /** Konfigurasi environment per app; default membaca `environments.json`. */
+  lingkungan?: (app: string) => KonfigLingkungan;
 };
 
 export type PromoteHandler = {
@@ -60,6 +63,7 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
   const bin = deps.bin ?? process.env.AUTORE_BIN ?? "autore";
   const job = deps.job ?? ((app: string) => process.env.AUTORE_PROMOTE_JOB ?? jobPromote(app));
   const spawn = deps.spawn ?? jalankanAutore;
+  const konfig = deps.lingkungan ?? bacaLingkungan;
 
   return {
     async promote(id, aktor) {
@@ -80,7 +84,7 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
         }
         let hasilFold;
         try {
-          hasilFold = foldReleaseEvents(events);
+          hasilFold = foldReleaseEvents(events, konfig(app).productionTarget);
         } catch {
           return { ok: false, status: 409, error: "ledger release tidak konsisten" };
         }
@@ -149,9 +153,9 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
           // Port production bisa diarahkan lewat env (uji memakai port bebas),
           // default tetap produksi sebenarnya.
           "--container-port",
-          process.env.AUTORE_PROMOTE_CONTAINER_PORT ?? "8080",
+          process.env.AUTORE_PROMOTE_CONTAINER_PORT ?? String(konfig(app).productionContainerPort ?? 8080),
           "--deploy-port",
-          process.env.AUTORE_PROMOTE_DEPLOY_PORT ?? "8154",
+          process.env.AUTORE_PROMOTE_DEPLOY_PORT ?? String(konfig(app).productionDeployPort ?? 8154),
         ];
         const keluaran = await spawn(bin, args);
         if (keluaran.code !== 0) {

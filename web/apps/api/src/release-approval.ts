@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   foldReleaseEvents,
@@ -9,6 +8,8 @@ import {
   type ReleaseEvent,
 } from "@autore/contracts";
 import { ambilKunci, pemegangKunci } from "./kunci";
+import { bacaLingkungan, type KonfigLingkungan } from "./lingkungan";
+import { jalurWorkspace } from "./workspace";
 import type { Identitas } from "./session";
 
 /** Batas event sama dengan CLI Rust (`release.rs`): yang lama dipangkas dari depan. */
@@ -25,8 +26,7 @@ const MAX_EVENTS = 500;
  * tanpa restart dan tes bisa mengarahkannya ke direktori sementara.
  */
 export function jalurLedger(env: NodeJS.ProcessEnv = process.env): string {
-  const workspace = (env.AUTORE_WORKSPACE ?? "").trim();
-  return join(workspace || join(env.HOME || homedir(), "autore-workspace"), "release-state.json");
+  return join(jalurWorkspace(env), "release-state.json");
 }
 
 export type HasilKeputusan =
@@ -129,6 +129,8 @@ export type ApprovalDeps = {
   /** Path ledger; default `jalurLedger()`. */
   ledger?: () => string;
   clock?: () => string;
+  /** Konfigurasi environment per app; default membaca `environments.json`. */
+  lingkungan?: (app: string) => KonfigLingkungan;
 };
 
 /**
@@ -139,6 +141,7 @@ export type ApprovalDeps = {
 export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
   const jalur = deps.ledger ?? (() => jalurLedger());
   const jam = deps.clock ?? (() => new Date().toISOString());
+  const konfig = deps.lingkungan ?? bacaLingkungan;
 
   async function keputusan(
     kind: "approved" | "rejected",
@@ -171,7 +174,7 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
 
       let sebelum: FoldResult;
       try {
-        sebelum = foldReleaseEvents(relevan);
+        sebelum = foldReleaseEvents(relevan, konfig(app).productionTarget);
       } catch {
         // Ledger aplikasi ini sudah tidak konsisten sebelum kita menulis: keputusan
         // apa pun hanya menambah kekacauan, jadi ditolak.
@@ -202,7 +205,7 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
 
       let sesudah: FoldResult;
       try {
-        sesudah = foldReleaseEvents([...relevan, event]);
+        sesudah = foldReleaseEvents([...relevan, event], konfig(app).productionTarget);
       } catch (error) {
         // Fold adalah validatornya: status yang salah ditolak di sana, jadi tidak
         // ada jalur yang bisa menulis event tidak sah.

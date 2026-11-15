@@ -9,6 +9,7 @@ import {
   type ReleaseEvent,
 } from "@autore/contracts";
 import { ambilKunci } from "./kunci";
+import { bacaLingkungan, type KonfigLingkungan } from "./lingkungan";
 import { appDariId, bacaLedgerMentah, jalurLedger } from "./release-approval";
 import type { Identitas } from "./session";
 
@@ -31,6 +32,8 @@ export type RollbackDeps = {
   bin?: string;
   job?: (app: string) => string | undefined;
   spawn?: (bin: string, args: string[]) => Promise<{ code: number; stderr: string }>;
+  /** Konfigurasi environment per app; default membaca `environments.json`. */
+  lingkungan?: (app: string) => KonfigLingkungan;
 };
 
 const PESAN_BODY = 'body wajib JSON {"environment":"staging"|"production"}';
@@ -107,6 +110,7 @@ export function hatchRollback(deps: RollbackDeps = {}): RollbackHandler {
   const bin = deps.bin ?? process.env.AUTORE_BIN ?? "autore";
   const job = deps.job ?? ((app: string) => process.env.AUTORE_ROLLBACK_JOB ?? jobRollback(app));
   const spawn = deps.spawn ?? jalankanAutore;
+  const konfig = deps.lingkungan ?? bacaLingkungan;
 
   return {
     async rollback(id, environment, aktor) {
@@ -128,7 +132,7 @@ export function hatchRollback(deps: RollbackDeps = {}): RollbackHandler {
         }
         let hasilFold;
         try {
-          hasilFold = foldReleaseEvents(events);
+          hasilFold = foldReleaseEvents(events, konfig(app).productionTarget);
         } catch {
           return { ok: false, status: 409, error: "ledger release tidak konsisten" };
         }

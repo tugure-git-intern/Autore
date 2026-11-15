@@ -445,7 +445,8 @@ describe("rollback lewat HTTP", () => {
 describe("gerbang role endpoint promosi", () => {
   const disetujui = (build: number): ReleaseEvent[] => [
     ...menungguPersetujuan(build),
-    ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "budi" }),
+    // Penyetuju sengaja bukan `budi`: promosi production harus oleh orang lain.
+    ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "sari" }),
   ];
 
   const kirim = async (berkas: string, build: number, panggilan: string[][] = []) =>

@@ -147,8 +147,10 @@ function releaseAwal(event: ReleaseEvent): Release {
   };
 }
 
-function lingkungan(app: string): Environment[] {
-  const productionTarget = app === "tes-testing" ? "127.0.0.1:8154" : null;
+/** Target production datang dari konfigurasi pemanggil: core tidak tahu app mana
+ * yang punya production. `null` = app ini belum dikonfigurasi, jadi promosinya
+ * ditolak sebelum ada job yang dijalankan. */
+function lingkungan(app: string, productionTarget: string | null): Environment[] {
   const productionConfigured = productionTarget !== null;
   return [
     {
@@ -194,7 +196,10 @@ export function aksiRollback(
  * Melipat event mentah menjadi model release/deployment. TypeScript tetap satu-
  * satunya pemilik transisi; event dari Rust/Jenkins tidak membawa status turunan.
  */
-export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
+export function foldReleaseEvents(
+  events: ReleaseEvent[],
+  productionTarget: string | null = null,
+): FoldResult {
   const releases = new Map<string, Release>();
   const deployments = new Map<string, Deployment>();
   const environments = new Map<string, Environment>();
@@ -206,7 +211,7 @@ export function foldReleaseEvents(events: ReleaseEvent[]): FoldResult {
 
   for (const event of events) {
     if (!isReleaseEvent(event)) throw new Error("invalid release event");
-    for (const env of lingkungan(event.app)) {
+    for (const env of lingkungan(event.app, productionTarget)) {
       environments.set(env.id, environments.get(env.id) ?? env);
     }
     const key = releaseId(event);

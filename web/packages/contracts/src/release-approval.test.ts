@@ -146,12 +146,15 @@ describe("siklus approval release", () => {
   });
 });
 
+/** Target production dipasok pemanggil (API), bukan hardcode di core. */
+const PROD = "127.0.0.1:8154";
+
 describe("promosi production", () => {
   it("deploy production pada release menunggu_persetujuan ditolak (K1)", () => {
     expect(() => foldReleaseEvents([
       ...sampaiStagingSehat(),
       productionDeploy(),
-    ])).toThrow("production deploy hanya untuk release disetujui");
+    ], PROD)).toThrow("production deploy hanya untuk release disetujui");
   });
 
   it("deploy production pada release disetujui dengan digest sama menjadi aktif", () => {
@@ -159,7 +162,7 @@ describe("promosi production", () => {
       ...sampaiStagingSehat(DIGEST_1),
       approveEvent({ actor: "budi" }),
       productionDeploy({ digest: DIGEST_1 }),
-    ]);
+    ], PROD);
     expect(hasil.releases[0].status).toBe("aktif");
     expect(hasil.environments.find((e) => e.nama === "production")?.active_deployment_id).toBe("dep-prod-1");
   });

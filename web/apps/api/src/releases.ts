@@ -5,6 +5,7 @@ import {
   type ReleaseEvent,
 } from "@autore/contracts";
 import { execFile } from "node:child_process";
+import { bacaLingkungan, type KonfigLingkungan } from "./lingkungan";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -29,10 +30,11 @@ export async function runReleaseStatus(): Promise<string> {
 export async function loadReleases(
   app: string,
   run: () => Promise<string> = runReleaseStatus,
+  konfig: (app: string) => KonfigLingkungan = bacaLingkungan,
 ): Promise<ReleaseResult> {
   const payload = parseReleaseEvents(JSON.parse(await run()) as unknown);
   const events: ReleaseEvent[] = payload.events.filter((event) => event.app === app);
-  const folded = foldReleaseEvents(events);
+  const folded = foldReleaseEvents(events, konfig(app).productionTarget);
   // Dashboard merender daftar apa adanya; rilis terbaru harus di atas supaya
   // tombol approval jatuh di build terakhir, bukan build lama yang belum diputuskan.
   const terbaruDulu = [...folded.releases].sort((a, b) => b.dibuat_pada.localeCompare(a.dibuat_pada));

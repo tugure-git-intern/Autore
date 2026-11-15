@@ -4,6 +4,13 @@ import { aksiRollback, foldReleaseEvents, isReleaseEvent, type ReleaseEvent } fr
 const COMMIT = "a".repeat(40);
 const DIGEST_1 = "sha256:" + "1".repeat(64);
 const DIGEST_2 = "sha256:" + "2".repeat(64);
+/** Target production dipasok pemanggil (API) sejak konfigurasi pindah keluar core. */
+const PROD = "127.0.0.1:8154";
+
+/** Fold dengan production tes-testing terkonfigurasi, seperti di produksi. */
+function fold(events: ReleaseEvent[]) {
+  return foldReleaseEvents(events, PROD);
+}
 
 function event(overrides: Partial<ReleaseEvent> = {}): ReleaseEvent {
   return {
@@ -49,7 +56,7 @@ function sukses(build: number, digest: string, deploymentId: string): ReleaseEve
 
 describe("fold event release", () => {
   it("membuat dua deployment dan pointer staging, tanpa status aktif", () => {
-    const hasil = foldReleaseEvents([...sukses(1, DIGEST_1, "dep-1"), ...sukses(2, DIGEST_2, "dep-2")]);
+    const hasil = fold([...sukses(1, DIGEST_1, "dep-1"), ...sukses(2, DIGEST_2, "dep-2")]);
 
     expect(hasil.releases).toHaveLength(2);
     expect(hasil.releases.every((release) => release.status === "menunggu_persetujuan")).toBe(true);
@@ -60,7 +67,7 @@ describe("fold event release", () => {
   });
 
   it("rollback mempertahankan pointer lama dan menandai release baru rolled_back", () => {
-    const hasil = foldReleaseEvents([
+    const hasil = fold([
       ...sukses(1, DIGEST_1, "dep-1"),
       event({
         id: "deploy-2",
@@ -86,7 +93,7 @@ describe("fold event release", () => {
   });
 
   it("kegagalan tanpa deployment lama tidak membuat pointer palsu", () => {
-    const hasil = foldReleaseEvents([
+    const hasil = fold([
       event({
         id: "deploy-1",
         kind: "deploy_result",
@@ -108,7 +115,7 @@ describe("fold event release", () => {
   it("menolak field asing dan event yang tidak lengkap", () => {
     expect(isReleaseEvent({ ...event(), asing: true })).toBe(false);
     expect(isReleaseEvent({ ...event(), kind: "deploy_result" })).toBe(false);
-    expect(() => foldReleaseEvents([{ ...event(), asing: true } as ReleaseEvent])).toThrow(
+    expect(() => fold([{ ...event(), asing: true } as ReleaseEvent])).toThrow(
       "invalid release event",
     );
   });
@@ -116,25 +123,33 @@ describe("fold event release", () => {
 
 
 describe("production environment", () => {
-  it("tes-testing production environment is configured with target 127.0.0.1:8154", () => {
-    const hasil = foldReleaseEvents([...sukses(1, DIGEST_1, "dep-1")]);
+  it("target production dari pemanggil dipakai apa adanya", () => {
+    const hasil = foldReleaseEvents([...sukses(1, DIGEST_1, "dep-1")], "127.0.0.1:8160");
     const prod = hasil.environments.find((e) => e.nama === "production");
     expect(prod?.status_konfigurasi).toBe("terkonfigurasi");
-    expect(prod?.target).toBe("127.0.0.1:8154");
+    expect(prod?.target).toBe("127.0.0.1:8160");
     expect(prod?.active_deployment_id).toBeNull();
   });
 
+  it("tanpa target dari pemanggil production belum dikonfigurasi, termasuk tes-testing", () => {
+    const hasil = foldReleaseEvents([...sukses(1, DIGEST_1, "dep-1")]);
+    const prod = hasil.environments.find((e) => e.nama === "production");
+    expect(prod?.status_konfigurasi).toBe("belum_dikonfigurasi");
+    expect(prod?.target).toBeNull();
+  });
+
   it("aplikasi lain production environment belum dikonfigurasi", () => {
+    // App tanpa entri di environments.json: pemanggil tidak memasok target.
     const hasil = foldReleaseEvents([
       event({ id: "req-1", kind: "requested", app: "java-tes" }),
-    ]);
+    ], null);
     const prod = hasil.environments.find((e) => e.nama === "production");
     expect(prod?.status_konfigurasi).toBe("belum_dikonfigurasi");
     expect(prod?.target).toBeNull();
   });
 
   it("production deploy tanpa approval ditolak (state machine)", () => {
-    expect(() => foldReleaseEvents([
+    expect(() => fold([
       ...sukses(1, DIGEST_1, "dep-stg-1"),
       event({
         id: "dep-prod-1",
@@ -150,7 +165,7 @@ describe("production environment", () => {
   });
 
   it("production deploy tanpa menunggu_persetujuan ditolak", () => {
-    expect(() => foldReleaseEvents([
+    expect(() => fold([
       event({
         id: "dep-prod-1",
         kind: "deploy_result",
@@ -203,7 +218,7 @@ function rollback(environment: "staging" | "production"): ReleaseEvent {
 
 describe("rollback sengaja (mode rollback skrip emitor)", () => {
   it("R26 rollback staging dari release aktif menandai rolled_back dan mengembalikan pointer staging", () => {
-    const hasil = foldReleaseEvents([...aktif(DIGEST_1), rollback("staging")]);
+    const hasil = fold([...aktif(DIGEST_1), rollback("staging")]);
     const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
     expect(rel?.status).toBe("rolled_back");
     expect(hasil.diabaikan).toEqual([]);
@@ -213,7 +228,7 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
   });
 
   it("R27 rollback production dari release aktif tidak lewat gerbang promosi dan tetap rolled_back", () => {
-    const hasil = foldReleaseEvents([...aktif(DIGEST_1), rollback("production")]);
+    const hasil = fold([...aktif(DIGEST_1), rollback("production")]);
     const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
     expect(rel?.status).toBe("rolled_back");
     expect(hasil.diabaikan).toEqual([]);
@@ -233,7 +248,7 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
   });
 
   it("R29 rollback tanpa transisi sah dicatat diabaikan, bukan melempar", () => {
-    const hasil = foldReleaseEvents([
+    const hasil = fold([
       event({ id: "req-1", kind: "requested" }),
       event({ id: "build-1", kind: "build_started" }),
       event({ id: "digest-1", kind: "digest_verified", digest: DIGEST_1 }),
@@ -246,7 +261,7 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
   });
 
   it("R30 rollback tidak menimpa image_digest release yang di-rollback", () => {
-    const hasil = foldReleaseEvents([...aktif(DIGEST_2), rollback("staging")]);
+    const hasil = fold([...aktif(DIGEST_2), rollback("staging")]);
     const rel = hasil.releases.find((release) => release.id.endsWith(":1"));
     expect(rel?.image_digest).toBe(DIGEST_2);
   });

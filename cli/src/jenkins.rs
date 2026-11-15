@@ -746,7 +746,7 @@ fn daftarkan_job(
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
     let xml_file = tmp_dir.join("config.xml");
-    fs::write(&xml_file, &xml)
+    fs::write(&xml_file, xml)
         .map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
 
     let result = (|| -> Result<u16, String> {

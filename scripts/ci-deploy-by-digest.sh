@@ -173,7 +173,13 @@ start_container() {
 inspect_old() {
   OLD_IMAGE="$(docker inspect -f '{{.Config.Image}}' "${ACTIVE_CONTAINER}" 2>/dev/null || true)"
   OLD_DEPLOYMENT_ID="$(docker inspect -f '{{ index .Config.Labels "autore.deployment_id" }}' "${ACTIVE_CONTAINER}" 2>/dev/null || true)"
+  # Container lama bisa dijalankan dari tag (bukan digest), mis. sisa deploy lama.
+  # Nilai tag tidak lolos skema event, dan satu event rusak membuat seluruh
+  # /api/releases gagal parse — jadi pakai image ID (sha256:...) sebagai gantinya.
   OLD_DIGEST="${OLD_IMAGE##*@}"
+  if [[ -n "${OLD_IMAGE}" && "${OLD_DIGEST}" != sha256:* ]]; then
+    OLD_DIGEST="$(docker inspect -f '{{.Image}}' "${ACTIVE_CONTAINER}" 2>/dev/null || true)"
+  fi
   if [[ -z "${OLD_DEPLOYMENT_ID}" && -n "${OLD_IMAGE}" ]]; then
     OLD_DEPLOYMENT_ID="legacy-${ACTIVE_CONTAINER}"
   fi

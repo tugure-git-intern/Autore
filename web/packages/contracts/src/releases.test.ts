@@ -9,6 +9,7 @@ import {
   isDeployment,
   isEnvironment,
   isRelease,
+  digantikanDiStaging,
 } from "./index";
 
 const waktu = "2026-11-12T06:00:00.000Z";
@@ -113,5 +114,40 @@ describe("model data environment dan release", () => {
     };
     expect(isApproval({ ...dasar, alasan: null })).toBe(false);
     expect(isApproval({ ...dasar, keputusan: "mungkin" })).toBe(false);
+  });
+});
+
+function stagingAktif(aktif: string | null): Environment {
+  return {
+    id: "env-staging",
+    application_id: "app-1",
+    nama: "staging",
+    target: "vps-staging",
+    status_konfigurasi: "terkonfigurasi",
+    active_deployment_id: aktif,
+  };
+}
+
+function depDari(release_id: string, id = "dep-stg"): Deployment {
+  return { ...deployment("env-staging", "sehat", release_id), id };
+}
+
+describe("digantikanDiStaging", () => {
+  it("D1 rilis yang deployment staging-nya masih aktif tidak digantikan", () => {
+    expect(digantikanDiStaging("rel-1", [stagingAktif("dep-stg")], [depDari("rel-1")])).toBeNull();
+  });
+
+  it("D2 pointer staging sudah pindah ke build lain: kembalikan id release pengganti", () => {
+    const hasil = digantikanDiStaging(
+      "rel-1",
+      [stagingAktif("dep-stg-2")],
+      [depDari("rel-1", "dep-stg-1"), depDari("rel-2", "dep-stg-2")],
+    );
+    expect(hasil).toBe("rel-2");
+  });
+
+  it("D3 belum ada deployment aktif maupun environment staging: tidak digantikan", () => {
+    expect(digantikanDiStaging("rel-1", [stagingAktif(null)], [depDari("rel-1")])).toBeNull();
+    expect(digantikanDiStaging("rel-1", [], [depDari("rel-1")])).toBeNull();
   });
 });

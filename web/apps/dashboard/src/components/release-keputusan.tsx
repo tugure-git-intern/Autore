@@ -16,10 +16,13 @@ export function ReleaseKeputusan({
   releaseId,
   role,
   status,
+  digantikan = false,
 }: {
   releaseId: string;
   role: Role | null;
   status: StatusRelease;
+  /** Rilis yang sudah digantikan build lebih baru di staging: cuma boleh ditolak. */
+  digantikan?: boolean;
 }) {
   const [alasan, setAlasan] = useState("");
   const [tanyaAlasan, setTanyaAlasan] = useState(false);
@@ -28,7 +31,8 @@ export function ReleaseKeputusan({
   const [kirim, setKirim] = useState(false);
 
   const efektif = role ?? "dev";
-  const bolehSetujui = status === "menunggu_persetujuan" && roleAtLeast(efektif, "qa");
+  const bolehTolak = status === "menunggu_persetujuan" && roleAtLeast(efektif, "qa");
+  const bolehSetujui = bolehTolak && !digantikan;
   const bolehPromosi = status === "disetujui" && roleAtLeast(efektif, "admin");
   const bolehRollback = status === "aktif" && roleAtLeast(efektif, "qa");
 
@@ -63,20 +67,20 @@ export function ReleaseKeputusan({
     }
   }
 
-  if (!bolehSetujui && !bolehPromosi && !bolehRollback) return null;
+  if (!bolehSetujui && !bolehTolak && !bolehPromosi && !bolehRollback) return null;
 
   return (
     <div className="mt-2 space-y-2">
       <div className="flex flex-wrap gap-2">
         {bolehSetujui ? (
-          <>
-            <Button disabled={kirim} onClick={() => void jalankan("approve", {})}>
-              Setujui
-            </Button>
-            <Button variant="ghost" disabled={kirim} onClick={() => setTanyaAlasan((lama) => !lama)}>
-              Tolak
-            </Button>
-          </>
+          <Button disabled={kirim} onClick={() => void jalankan("approve", {})}>
+            Setujui
+          </Button>
+        ) : null}
+        {bolehTolak ? (
+          <Button variant="ghost" disabled={kirim} onClick={() => setTanyaAlasan((lama) => !lama)}>
+            Tolak
+          </Button>
         ) : null}
         {bolehPromosi ? (
           <Button disabled={kirim} onClick={() => void jalankan("promote", {})}>
@@ -93,7 +97,7 @@ export function ReleaseKeputusan({
           </Button>
         ) : null}
       </div>
-      {bolehSetujui && tanyaAlasan ? (
+      {bolehTolak && tanyaAlasan ? (
         <div className="space-y-2">
           <label className="block text-xs text-muted" htmlFor={`alasan-${releaseId}`}>
             Alasan penolakan (wajib)

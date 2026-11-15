@@ -244,6 +244,31 @@ describe("ReleaseEnvironmentBoard", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("tes-testing-promote");
   });
 
+  it("menandai release yang sudah digantikan build baru dan mematikan tombol Setujui", () => {
+    const digestB = "sha256:" + "c".repeat(64);
+    const duaRelease: Release[] = [
+      { ...releases[0], id: "tes-testing:550e8400:36" },
+      { ...releases[0], id: "tes-testing:550e8400:37", image_digest: digestB },
+    ];
+    const duaDeployment: Deployment[] = [
+      { ...deployments[0], id: "dep-36", release_id: "tes-testing:550e8400:36", image_digest: digest },
+      { ...deployments[0], id: "dep-staging", release_id: "tes-testing:550e8400:37", image_digest: digestB },
+    ];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={duaRelease}
+        environments={environments}
+        deployments={duaDeployment}
+        role="qa"
+      />,
+    );
+
+    // Kartu rilis dirender di luar kartu environment, jadi kueri tanpa pembatas.
+    expect(screen.getByTestId("release-digantikan")).toHaveTextContent("Digantikan build 37");
+    expect(screen.queryAllByRole("button", { name: "Setujui" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Tolak" })).toHaveLength(2);
+  });
+
   it("mengirim rollback dengan environment production", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ job: "tes-testing-rollback" }) });
     vi.stubGlobal("fetch", fetchMock);

@@ -225,14 +225,15 @@ describe("gerbang role endpoint approval", () => {
     const app = api(berkas);
     const sesi = `authjs.session-token=${await cookie("budi")}`;
 
-    const pertama = await app.request(`http://localhost/api/releases/${idRelease(1)}/approve`, {
+    // Build 2 yang sedang aktif di staging: build 1 sudah digantikan.
+    const pertama = await app.request(`http://localhost/api/releases/${idRelease(2)}/approve`, {
       method: "POST",
       headers: { cookie: sesi },
     });
     expect(pertama.status).toBe(200);
 
     vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:dev");
-    const kedua = await app.request(`http://localhost/api/releases/${idRelease(2)}/approve`, {
+    const kedua = await app.request(`http://localhost/api/releases/${idRelease(1)}/approve`, {
       method: "POST",
       headers: { cookie: sesi },
     });
@@ -482,5 +483,61 @@ describe("gerbang role endpoint promosi", () => {
     expect(panggilan[0]).toContain("trigger-promote");
     expect(panggilan[0]).toContain(DIGEST);
     expect(panggilan[0]).toContain("--deploy-port");
+  });
+});
+
+describe("rilis yang sudah digantikan di staging", () => {
+  /** Dua build berturut-turut: staging menunjuk deployment build 2, build 1 gugur. */
+  const duaMenunggu = (): ReleaseEvent[] => [...menungguPersetujuan(1), ...menungguPersetujuan(2)];
+
+  it("R49 approve rilis lama ditolak 409 tanpa menulis event, tolak tetap boleh", async () => {
+    const berkas = ledgerTemp(duaMenunggu());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const app = api(berkas);
+    const sesi = `authjs.session-token=${await cookie("budi")}`;
+    const awal = eventsDi(berkas).length;
+
+    const ditolak = await app.request(`http://localhost/api/releases/${idRelease(1)}/approve`, {
+      method: "POST",
+      headers: { cookie: sesi },
+    });
+    expect(ditolak.status).toBe(409);
+    expect(eventsDi(berkas)).toHaveLength(awal);
+
+    // Rilis gugur tetap bisa ditolak: itu jalur membersihkan tumpukan di dashboard.
+    const bersih = await app.request(`http://localhost/api/releases/${idRelease(1)}/reject`, {
+      method: "POST",
+      headers: { cookie: sesi, "content-type": "application/json" },
+      body: JSON.stringify({ alasan: "sudah digantikan build 2" }),
+    });
+    expect(bersih.status).toBe(200);
+  });
+
+  it("R50 rilis yang sedang aktif di staging tetap boleh approve", async () => {
+    const berkas = ledgerTemp(duaMenunggu());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+
+    const res = await api(berkas).request(`http://localhost/api/releases/${idRelease(2)}/approve`, {
+      method: "POST",
+      headers: { cookie: `authjs.session-token=${await cookie("budi")}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("R51 promote rilis lama ditolak 409 dan job tidak dipicu", async () => {
+    const berkas = ledgerTemp([
+      ...duaMenunggu(),
+      ev({ id: "approve-1", kind: "approved", build_number: 1, actor: "sari" }),
+      ev({ id: "approve-2", kind: "approved", build_number: 2, actor: "sari" }),
+    ]);
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:admin");
+    const panggilan: string[][] = [];
+
+    const res = await api(berkas, panggilan).request(`http://localhost/api/releases/${idRelease(1)}/promote`, {
+      method: "POST",
+      headers: { cookie: `authjs.session-token=${await cookie("budi")}` },
+    });
+    expect(res.status).toBe(409);
+    expect(panggilan).toHaveLength(0);
   });
 });

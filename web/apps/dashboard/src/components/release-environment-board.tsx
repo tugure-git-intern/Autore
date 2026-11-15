@@ -1,4 +1,11 @@
-import type { Deployment, Environment, Release, Role, StatusRelease } from "@autore/contracts";
+import {
+  digantikanDiStaging,
+  type Deployment,
+  type Environment,
+  type Release,
+  type Role,
+  type StatusRelease,
+} from "@autore/contracts";
 import { ReleaseKeputusan } from "./release-keputusan";
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "./ui/badge";
@@ -96,11 +103,21 @@ export function ReleaseEnvironmentBoard({
       </div>
       <BoardCard>
         <h3 className="font-medium">Release Terbaru</h3>
-        {releases.map((release) => (
+        {releases.map((release) => {
+          // Rilis yang pointer staging-nya sudah pindah: badged, tombolnya dimatikan.
+          const pengganti = digantikanDiStaging(release.id, environments, deployments);
+          return (
           <div key={release.id} className="mt-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm">{release.commit_sha.slice(0, 7)}</span>
               <Badge tone={TONE_RELEASE[release.status]}>{LABEL_RELEASE[release.status]}</Badge>
+              {pengganti ? (
+                <Badge tone="gray">
+                  <span data-testid="release-digantikan">
+                    Digantikan build {pengganti.slice(pengganti.lastIndexOf(":") + 1)}
+                  </span>
+                </Badge>
+              ) : null}
             </div>
             {/* Jejak audit terlihat orang: pembuat commit dan approver terakhir. */}
             <p className="text-xs text-muted">
@@ -116,9 +133,15 @@ export function ReleaseEnvironmentBoard({
             </p>
             <code className="block break-all text-xs text-muted">{release.image_digest}</code>
             {/* Komponen sendiri yang memutuskan aksi mana yang boleh tampil. */}
-            <ReleaseKeputusan releaseId={release.id} role={role} status={release.status} />
+            <ReleaseKeputusan
+              releaseId={release.id}
+              role={role}
+              status={release.status}
+              digantikan={pengganti !== null}
+            />
           </div>
-        ))}
+          );
+        })}
       </BoardCard>
     </section>
   );

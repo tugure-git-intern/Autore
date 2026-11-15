@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  digantikanDiStaging,
   foldReleaseEvents,
   isReleaseEvent,
   type FoldResult,
@@ -192,6 +193,20 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
       // apa pun (termasuk approved_by) dan tidak menulis event kedua.
       if (kind === "approved" && release.status === "disetujui") {
         return { ok: true, status: 200, release };
+      }
+
+      // Rilis yang sudah digantikan build lebih baru di staging tidak disetujui:
+      // menyetujuinya hanya menumpuk rilis mati di dashboard. Menolak tetap boleh
+      // supaya rilis lama bisa dibersihkan.
+      if (kind === "approved") {
+        const pengganti = digantikanDiStaging(release.id, sebelum.environments, sebelum.deployments);
+        if (pengganti) {
+          return {
+            ok: false,
+            status: 409,
+            error: `rilis ${release.id} sudah digantikan ${pengganti} di staging; setujui rilis yang sedang aktif`,
+          };
+        }
       }
 
       const event = bangunEvent({

@@ -1,5 +1,6 @@
 import { spawn as spawnProses } from "node:child_process";
 import {
+  digantikanDiStaging,
   type Deployment,
   type Environment,
   foldReleaseEvents,
@@ -106,6 +107,16 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
             ok: false,
             status: 403,
             error: `promosi production harus oleh orang berbeda dari penyetuju (${release.approved_by})`,
+          };
+        }
+        // Production hanya menerima build yang benar-benar sedang jalan di staging:
+        // rilis lama yang pointer staging-nya sudah pindah tidak dipromosikan.
+        const pengganti = digantikanDiStaging(release.id, hasilFold.environments, hasilFold.deployments);
+        if (pengganti) {
+          return {
+            ok: false,
+            status: 409,
+            error: `rilis ${id} sudah digantikan ${pengganti} di staging; promosikan rilis yang sedang aktif`,
           };
         }
         const digest = release.image_digest;

@@ -194,6 +194,23 @@ export function rollbackRelease(
   };
 }
 
+/**
+ * Rilis yang sudah digantikan build yang lebih baru di staging. Pointer deployment
+ * staging aktif yang bukan milik rilis ini berarti rilis itu sudah gugur: tidak
+ * boleh disetujui lagi dan tidak boleh dipromosikan ke production. Kembaliannya id
+ * release pengganti, atau null bila rilis ini memang yang sedang aktif.
+ */
+export function digantikanDiStaging(
+  releaseId: string,
+  environments: Environment[],
+  deployments: Deployment[],
+): string | null {
+  const staging = environments.find((item) => item.nama === "staging");
+  const aktif = deployments.find((item) => item.id === staging?.active_deployment_id);
+  if (!aktif || aktif.release_id === releaseId) return null;
+  return aktif.release_id;
+}
+
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }

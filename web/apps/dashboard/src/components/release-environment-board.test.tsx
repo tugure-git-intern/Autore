@@ -86,11 +86,11 @@ describe("ReleaseEnvironmentBoard", () => {
     expect(screen.getByText(digest)).toBeVisible();
   });
 
-  it("menolak pasangan deployment dan release dengan digest berbeda", () => {
+  it("menandai deployment dengan digest berbeda tanpa melempar", () => {
     const salah = [{ ...deployments[0], image_digest: "sha256:" + "b".repeat(64) }];
-    expect(() => render(
-      <ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={salah} />,
-    )).toThrow("digest deployment tidak sama dengan release");
+    render(<ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={salah} />);
+
+    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent(deployments[0].id);
   });
 
   it("menampilkan pembuat dan status approval pada kartu release", () => {

@@ -64,12 +64,12 @@ export function ReleaseEnvironmentBoard({
   /** Role efektif penampil; qa ke atas boleh melihat tombol approval. */
   role?: Role | null;
 }) {
-  for (const deployment of deployments) {
+  // Satu record lama yang tidak konsisten tidak boleh mematikan seluruh halaman:
+  // dilaporkan sebagai peringatan, bukan throw yang memicu error boundary.
+  const inkonsisten = deployments.filter((deployment) => {
     const release = releases.find((item) => item.id === deployment.release_id);
-    if (!release || release.image_digest !== deployment.image_digest) {
-      throw new Error("digest deployment tidak sama dengan release");
-    }
-  }
+    return !release || release.image_digest !== deployment.image_digest;
+  });
 
   return (
     <section aria-label={`Environment ${appName}`} className="space-y-4">
@@ -77,6 +77,15 @@ export function ReleaseEnvironmentBoard({
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Staging</p>
         <h2 className="text-lg font-semibold">{appName}</h2>
       </header>
+      {inkonsisten.length > 0 ? (
+        <div
+          data-testid="deployment-inkonsisten"
+          className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+        >
+          {inkonsisten.length} deployment lama tidak cocok dengan release-nya (digest kosong atau berbeda):{" "}
+          <span className="font-mono text-xs">{inkonsisten.map((item) => item.id).join(", ")}</span>
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         {environments.map((environment) => {
           const aktif = deployments.find((item) => item.id === environment.active_deployment_id);

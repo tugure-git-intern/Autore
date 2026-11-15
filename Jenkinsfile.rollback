@@ -122,6 +122,23 @@ pipeline {
     post {
         always {
             echo "POST-ALWAYS: result=${currentBuild.currentResult}, app=${params.ROLLBACK_APP}, env=${params.ROLLBACK_ENVIRONMENT}, digest=${params.ROLLBACK_DIGEST}"
+            script {
+                // Job rollback bukan job SCM, jadi tidak lewat notify-telegram.sh: kirim kabar sendiri.
+                // Nilai parameter dibersihkan ke charset aman supaya bisa disisipkan ke shell satu kutip.
+                def bersih = { String nilai -> (nilai ?: '').replaceAll('[^A-Za-z0-9 ._:/@#=-]', '') }
+                def kabar = """Rollback ${bersih(params.ROLLBACK_ENVIRONMENT)} ${currentBuild.currentResult}
+App: ${bersih(params.ROLLBACK_APP)}
+Release: ${bersih(params.ROLLBACK_RELEASE_ID)}
+Digest target: ${bersih(params.ROLLBACK_DIGEST).take(19)}
+Deployment target: ${bersih(params.ROLLBACK_DEPLOYMENT_ID)}
+Pelaku: ${bersih(params.ROLLBACK_ACTOR)}
+Log: ${env.BUILD_URL}console"""
+                withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
+                    withEnv(['TELEGRAM_CHAT_ID=5868902139']) {
+                        sh(script: "/usr/local/lib/autore-ci/notify-kabar.sh --teks '${kabar}' || true", label: "Kabar Telegram rollback")
+                    }
+                }
+            }
         }
     }
 }

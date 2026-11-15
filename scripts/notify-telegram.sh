@@ -88,7 +88,10 @@ if [[ "${BUILD_STATUS}" == "SUCCESS" ]]; then
 • Digest: <code>${E_DIGEST}</code>
 • Binary SHA: <code>${E_BIN_SHA}</code> (<code>autore-linux-x86_64-musl</code>)
 • SBOM: <code>${E_SBOM}</code>
-• Health: <code>HTTP 200 OK</code> (<code>127.0.0.1:${DEPLOY_PORT}/health</code>)"
+• Health: <code>HTTP 200 OK</code> (<code>127.0.0.1:${DEPLOY_PORT}/health</code>)
+
+<b>Gerbang</b>
+• Rilis build <code>#${E_BUILD}</code> menunggu persetujuan qa/admin — setujui di <a href=\"http://100.80.3.14:9120\">dashboard 9120</a>"
 else
   HEADLINE="❌ <b>AUTORE CI/CD — ${E_APP} (GAGAL)</b>"
   if [[ -n "${GATE_REASON}" ]]; then

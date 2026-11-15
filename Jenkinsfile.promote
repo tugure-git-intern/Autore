@@ -119,6 +119,23 @@ pipeline {
     post {
         always {
             echo "POST-ALWAYS: result=${currentBuild.currentResult}, app=${params.PROMOTE_APP}, digest=${params.PROMOTE_DIGEST}"
+            script {
+                // Job promosi bukan job SCM, jadi tidak lewat notify-telegram.sh: kirim kabar sendiri.
+                // Nilai parameter dibersihkan ke charset aman supaya bisa disisipkan ke shell satu kutip.
+                def bersih = { String nilai -> (nilai ?: '').replaceAll('[^A-Za-z0-9 ._:/@#=-]', '') }
+                def kabar = """Promosi production ${currentBuild.currentResult}
+App: ${bersih(params.PROMOTE_APP)}
+Release: ${bersih(params.PROMOTE_RELEASE_ID)} (build ${bersih(params.PROMOTE_BUILD)})
+Digest: ${bersih(params.PROMOTE_DIGEST).take(19)}
+Pelaku: ${bersih(params.PROMOTE_ACTOR)}
+Port production: ${bersih(params.PROMOTE_DEPLOY_PORT)}
+Log: ${env.BUILD_URL}console"""
+                withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
+                    withEnv(['TELEGRAM_CHAT_ID=5868902139']) {
+                        sh(script: "/usr/local/lib/autore-ci/notify-kabar.sh --teks '${kabar}' || true", label: "Kabar Telegram promosi")
+                    }
+                }
+            }
         }
     }
 }

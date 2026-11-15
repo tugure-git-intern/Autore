@@ -27,7 +27,11 @@ pub(crate) const UNIT_DASHBOARD: &str = "autore-web-dashboard";
 /// tanpa systemd di `launcher.rs` dan `admin.rs`.
 pub(crate) const PROSES: [([&str; 3], &str, &str); 2] = [
     (["npm", "run", "start:api"], "api.log", "api.pid"),
-    (["npm", "run", "start:dashboard"], "dashboard.log", "dashboard.pid"),
+    (
+        ["npm", "run", "start:dashboard"],
+        "dashboard.log",
+        "dashboard.pid",
+    ),
 ];
 const PORT_DASHBOARD: u16 = 9120;
 const PORT_API: u16 = 9121;
@@ -145,7 +149,11 @@ fn jalankan_tanpa_systemd(
                 pid_dashboard = Some(pid_file);
             }
             Err(galat) => {
-                let _ = writeln!(keluar, "[!] Gagal menjalankan {}: {galat}", perintah.join(" "));
+                let _ = writeln!(
+                    keluar,
+                    "[!] Gagal menjalankan {}: {galat}",
+                    perintah.join(" ")
+                );
                 return 1;
             }
         }
@@ -366,9 +374,11 @@ impl Sistem for SistemNyata {
         pid_file: &Path,
     ) -> Result<u32, String> {
         if let Some(induk) = log.parent() {
-            std::fs::create_dir_all(induk).map_err(|galat| format!("{}: {galat}", induk.display()))?;
+            std::fs::create_dir_all(induk)
+                .map_err(|galat| format!("{}: {galat}", induk.display()))?;
         }
-        let berkas = std::fs::File::create(log).map_err(|galat| format!("{}: {galat}", log.display()))?;
+        let berkas =
+            std::fs::File::create(log).map_err(|galat| format!("{}: {galat}", log.display()))?;
         let salinan = berkas.try_clone().map_err(|galat| galat.to_string())?;
         let argv: Vec<&str> = perintah.to_vec();
         // `setsid` memisahkan proses dari terminal; tanpa itu, menutup terminal mengirim SIGHUP.
@@ -626,7 +636,11 @@ mod tests {
             self.unit_terdaftar
         }
         fn status(&self, units: &[&str]) -> Vec<String> {
-            assert_eq!(units.len(), 2, "kedua unit harus ditanya dalam satu panggilan");
+            assert_eq!(
+                units.len(),
+                2,
+                "kedua unit harus ditanya dalam satu panggilan"
+            );
             self.statuses.clone()
         }
         fn start(&self, unit: &str) -> Result<(), String> {
@@ -731,15 +745,18 @@ mod tests {
     fn port_dipakai_proses_lain_tidak_start_unit() {
         let mut sis = palsu("tugure");
         sis.statuses = vec!["active".to_string(), "inactive".to_string()];
-        sis.ports = RefCell::new(HashMap::from([(
-            (host_ikat_palsu(), PORT_DASHBOARD),
-            true,
-        )]));
+        sis.ports = RefCell::new(HashMap::from([((host_ikat_palsu(), PORT_DASHBOARD), true)]));
         let mut keluaran = Vec::new();
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 1, "{teks}");
-        assert!(teks.contains("[!] Port 9120 sudah dipakai proses lain"), "{teks}");
-        assert!(sis.start_calls.borrow().is_empty(), "jangan start di atas port yang terpakai");
+        assert!(
+            teks.contains("[!] Port 9120 sudah dipakai proses lain"),
+            "{teks}"
+        );
+        assert!(
+            sis.start_calls.borrow().is_empty(),
+            "jangan start di atas port yang terpakai"
+        );
     }
 
     #[test]
@@ -754,7 +771,11 @@ mod tests {
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 0, "localhost bukan host ikat dashboard: {teks}");
         assert!(!teks.contains("sudah dipakai proses lain"), "{teks}");
-        assert_eq!(sis.start_calls.borrow().len(), 1, "unit tetap dijalankan: {teks}");
+        assert_eq!(
+            sis.start_calls.borrow().len(),
+            1,
+            "unit tetap dijalankan: {teks}"
+        );
     }
 
     #[test]
@@ -764,22 +785,37 @@ mod tests {
         let host = host_ikat_palsu();
         let target = [(host.as_str(), PORT_DASHBOARD), (IP_LOCALHOST, PORT_API)];
         let sisa = tunggu_siap(&sis, &target, Duration::from_secs(5), JEDA_TES);
-        assert!(sisa.is_empty(), "port terbuka setelah 3 panggilan: {sisa:?}");
+        assert!(
+            sisa.is_empty(),
+            "port terbuka setelah 3 panggilan: {sisa:?}"
+        );
         let panggilan = *sis.panggilan_port.borrow();
-        assert!((3..10).contains(&panggilan), "poll berhenti tepat saat siap: {panggilan}");
+        assert!(
+            (3..10).contains(&panggilan),
+            "poll berhenti tepat saat siap: {panggilan}"
+        );
     }
 
     #[test]
     fn habis_waktu_belum_siap_lapor_journalctl_dan_exit_1() {
         let sis = palsu("tugure");
-        for (host, port) in [(host_ikat_palsu(), PORT_DASHBOARD), (IP_LOCALHOST.to_string(), PORT_API)] {
+        for (host, port) in [
+            (host_ikat_palsu(), PORT_DASHBOARD),
+            (IP_LOCALHOST.to_string(), PORT_API),
+        ] {
             sis.ports.borrow_mut().insert((host, port), false);
         }
         let mut keluaran = Vec::new();
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 1, "{teks}");
-        assert!(teks.contains("journalctl --user -u autore-web-dashboard -n 30"), "{teks}");
-        assert!(teks.contains("[!] Dashboard belum menerima koneksi"), "{teks}");
+        assert!(
+            teks.contains("journalctl --user -u autore-web-dashboard -n 30"),
+            "{teks}"
+        );
+        assert!(
+            teks.contains("[!] Dashboard belum menerima koneksi"),
+            "{teks}"
+        );
         assert!(
             *sis.panggilan_port.borrow() >= 5,
             "harus polling berkali-kali, bukan sekali: {}",
@@ -793,7 +829,10 @@ mod tests {
         let mut keluaran = Vec::new();
         let (kode, teks) = jalankan_cepat(&sis, &mut keluaran);
         assert_eq!(kode, 0, "{teks}");
-        assert!(teks.contains("[OK] Dashboard menerima koneksi pada port 9120."), "{teks}");
+        assert!(
+            teks.contains("[OK] Dashboard menerima koneksi pada port 9120."),
+            "{teks}"
+        );
         assert!(
             teks.contains(
                 "Catatan: Anda dapat menutup terminal ini. Dashboard akan tetap berjalan di background."
@@ -832,7 +871,10 @@ mod tests {
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
         assert_eq!(kode, 1);
-        assert!(teks.contains("[!] Unit systemd pengguna belum terpasang"), "{teks}");
+        assert!(
+            teks.contains("[!] Unit systemd pengguna belum terpasang"),
+            "{teks}"
+        );
     }
 
     #[test]
@@ -850,7 +892,11 @@ mod tests {
         assert_eq!(kode, 0, "{teks}");
         assert!(teks.contains("[OK] autore-web-api: aktif"), "{teks}");
         assert!(teks.contains("[OK] autore-web-dashboard: aktif"), "{teks}");
-        assert!(sis.start_calls.borrow().is_empty(), "{:?}", sis.start_calls.borrow());
+        assert!(
+            sis.start_calls.borrow().is_empty(),
+            "{:?}",
+            sis.start_calls.borrow()
+        );
     }
 
     #[test]
@@ -881,8 +927,14 @@ mod tests {
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
         assert_eq!(kode, 0, "{teks}");
-        assert!(sis.start_calls.borrow().is_empty(), "activating bukan alasan start ulang");
-        assert!(teks.contains("[i] autore-web-api: activating. Menunggu."), "{teks}");
+        assert!(
+            sis.start_calls.borrow().is_empty(),
+            "activating bukan alasan start ulang"
+        );
+        assert!(
+            teks.contains("[i] autore-web-api: activating. Menunggu."),
+            "{teks}"
+        );
     }
 
     #[test]
@@ -898,14 +950,23 @@ mod tests {
         let mut keluaran = Vec::new();
         let (kode, teks) = teks(jalankan_web(&sis, &mut keluaran), &keluaran);
         assert_eq!(kode, 1);
-        assert!(teks.contains("[!] Gagal menjalankan autore-web-api"), "{teks}");
-        assert!(teks.contains("not found"), "pesan systemctl diteruskan: {teks}");
+        assert!(
+            teks.contains("[!] Gagal menjalankan autore-web-api"),
+            "{teks}"
+        );
+        assert!(
+            teks.contains("not found"),
+            "pesan systemctl diteruskan: {teks}"
+        );
     }
 
     #[test]
     fn tailscale_dipakai_lebih_dulu() {
         assert_eq!(
-            pilih_ip(Some("100.80.3.14\n".to_string()), Some("192.168.0.89\n".to_string())),
+            pilih_ip(
+                Some("100.80.3.14\n".to_string()),
+                Some("192.168.0.89\n".to_string())
+            ),
             "100.80.3.14"
         );
     }
@@ -920,7 +981,8 @@ mod tests {
 
     #[test]
     fn hostname_i_diambil_satu_ipv4_abaikan_docker_dan_ipv6() {
-        let keluaran = "192.168.0.89 172.18.0.1 172.19.0.1 172.17.0.1 100.80.3.14 fd7a:115c:a1e0::1\n";
+        let keluaran =
+            "192.168.0.89 172.18.0.1 172.19.0.1 172.17.0.1 100.80.3.14 fd7a:115c:a1e0::1\n";
         assert_eq!(pilih_ip(None, Some(keluaran.to_string())), "192.168.0.89");
     }
 
@@ -935,7 +997,10 @@ mod tests {
     #[test]
     fn tanpa_tailscale_dan_hostname_jatuh_ke_localhost() {
         assert_eq!(pilih_ip(None, None), "127.0.0.1");
-        assert_eq!(pilih_ip(Some(String::new()), Some("   \n".to_string())), "127.0.0.1");
+        assert_eq!(
+            pilih_ip(Some(String::new()), Some("   \n".to_string())),
+            "127.0.0.1"
+        );
     }
 
     #[test]
@@ -948,7 +1013,10 @@ mod tests {
 
     #[test]
     fn url_localhost_tidak_diulang() {
-        assert_eq!(susun_url("127.0.0.1"), vec!["http://localhost:9120".to_string()]);
+        assert_eq!(
+            susun_url("127.0.0.1"),
+            vec!["http://localhost:9120".to_string()]
+        );
     }
 
     #[test]
@@ -989,7 +1057,12 @@ mod tests {
     #[test]
     fn panduan_subcommand_menyebut_admin() {
         let teks = panduan_subcommand();
-        for baris in ["autore start", "autore stop", "autore restart", "autore logs"] {
+        for baris in [
+            "autore start",
+            "autore stop",
+            "autore restart",
+            "autore logs",
+        ] {
             assert!(teks.contains(baris), "{baris} hilang dari panduan");
         }
     }
@@ -1026,8 +1099,14 @@ mod tests {
         let teks = String::from_utf8(keluaran).unwrap();
         assert_eq!(kode, 0, "{teks}");
         assert!(teks.contains("[i] systemd tidak tersedia"), "{teks}");
-        assert!(teks.contains("[OK] npm run start:dashboard: dijalankan di latar (PID 4242)."), "{teks}");
-        assert!(teks.contains("kill $(cat /tmp/autore-tes/dashboard.pid)"), "{teks}");
+        assert!(
+            teks.contains("[OK] npm run start:dashboard: dijalankan di latar (PID 4242)."),
+            "{teks}"
+        );
+        assert!(
+            teks.contains("kill $(cat /tmp/autore-tes/dashboard.pid)"),
+            "{teks}"
+        );
 
         let catatan = sis.latar.borrow();
         assert_eq!(catatan.len(), 2, "api dan dashboard dijalankan");
@@ -1046,7 +1125,10 @@ mod tests {
         let teks = String::from_utf8(keluaran).unwrap();
         assert_eq!(kode, 1);
         assert!(teks.contains("AUTORE_WEB_DIR"), "{teks}");
-        assert!(sis.latar.borrow().is_empty(), "jangan menjalankan apa pun tanpa repo web");
+        assert!(
+            sis.latar.borrow().is_empty(),
+            "jangan menjalankan apa pun tanpa repo web"
+        );
     }
 
     #[test]
@@ -1056,14 +1138,20 @@ mod tests {
         std::fs::create_dir_all(&web).unwrap();
         std::fs::write(web.join("package.json"), "{}").unwrap();
 
-        assert_eq!(pilih_web_dir(Some(web.display().to_string()), &[]), Some(web.clone()));
+        assert_eq!(
+            pilih_web_dir(Some(web.display().to_string()), &[]),
+            Some(web.clone())
+        );
         assert_eq!(
             pilih_web_dir(None, &[dasar.join("bukan"), web.clone()]),
             Some(web.clone())
         );
         assert_eq!(pilih_web_dir(None, &[dasar.join("bukan")]), None);
         assert_eq!(
-            pilih_web_dir(Some(dasar.join("bukan").display().to_string()), std::slice::from_ref(&web)),
+            pilih_web_dir(
+                Some(dasar.join("bukan").display().to_string()),
+                std::slice::from_ref(&web)
+            ),
             None,
             "AUTORE_WEB_DIR salah tidak boleh diam-diam jatuh ke kandidat"
         );
@@ -1107,24 +1195,30 @@ mod tests {
     fn pilihan_tidak_dikenal_ditanya_ulang() {
         let mut jawaban = vec![Some(9usize), Some(2)].into_iter();
         let mut keluhan: Vec<String> = Vec::new();
-        let hasil = baca_pilihan(
-            &mut || jawaban.next().unwrap_or(None),
-            &mut |t: &str| keluhan.push(t.to_string()),
-        );
+        let hasil = baca_pilihan(&mut || jawaban.next().unwrap_or(None), &mut |t: &str| {
+            keluhan.push(t.to_string())
+        });
         assert_eq!(hasil, 2, "pilihan sah kedua harus diterima");
         assert_eq!(keluhan.len(), 1, "harus ada tepat satu keluhan");
-        assert!(keluhan[0].contains('9'), "keluhan menyebut pilihan: {}", keluhan[0]);
-        assert!(keluhan[0].starts_with("[!]"), "keluhan berawalan [!]: {}", keluhan[0]);
+        assert!(
+            keluhan[0].contains('9'),
+            "keluhan menyebut pilihan: {}",
+            keluhan[0]
+        );
+        assert!(
+            keluhan[0].starts_with("[!]"),
+            "keluhan berawalan [!]: {}",
+            keluhan[0]
+        );
     }
 
     #[test]
     fn sumber_habis_dianggap_keluar() {
         let mut jawaban = Vec::<Option<usize>>::new().into_iter();
         let mut keluhan: Vec<String> = Vec::new();
-        let hasil = baca_pilihan(
-            &mut || jawaban.next().unwrap_or(None),
-            &mut |t: &str| keluhan.push(t.to_string()),
-        );
+        let hasil = baca_pilihan(&mut || jawaban.next().unwrap_or(None), &mut |t: &str| {
+            keluhan.push(t.to_string())
+        });
         assert_eq!(hasil, 3, "batal = keluar");
         assert!(keluhan.is_empty(), "batal bukan kesalahan");
     }
@@ -1133,10 +1227,9 @@ mod tests {
     fn pilihan_keluar_tidak_menghasilkan_keluhan() {
         let mut jawaban = vec![Some(3usize)].into_iter();
         let mut keluhan: Vec<String> = Vec::new();
-        let hasil = baca_pilihan(
-            &mut || jawaban.next().unwrap_or(None),
-            &mut |t: &str| keluhan.push(t.to_string()),
-        );
+        let hasil = baca_pilihan(&mut || jawaban.next().unwrap_or(None), &mut |t: &str| {
+            keluhan.push(t.to_string())
+        });
         assert_eq!(hasil, 3);
         assert!(keluhan.is_empty());
     }

@@ -147,9 +147,8 @@ fn kumpulkan(komponen: &[Value], keluar: &mut Vec<Paket>, warisan_os: bool) {
 }
 
 fn susun(app: &str, isi: &str, asal: &str) -> Result<LaporanSbom, String> {
-    let dokumen: Value = serde_json::from_str(isi).map_err(|e| {
-        format!("bukan SBOM CycloneDX: {asal} bukan JSON sah: {e}")
-    })?;
+    let dokumen: Value = serde_json::from_str(isi)
+        .map_err(|e| format!("bukan SBOM CycloneDX: {asal} bukan JSON sah: {e}"))?;
     let komponen = dokumen
         .get("components")
         .and_then(|c| c.as_array())
@@ -231,7 +230,11 @@ pub fn jalankan(app: &str, json: bool) -> i32 {
         laporan.app, laporan.total, laporan.generated_at
     );
     for p in &laporan.packages {
-        let versi = if p.version.is_empty() { "-" } else { &p.version };
+        let versi = if p.version.is_empty() {
+            "-"
+        } else {
+            &p.version
+        };
         println!("  {:<44} {:<20} {}", p.name, versi, p.jenis);
     }
     println!();
@@ -255,8 +258,14 @@ mod tests {
 
     #[test]
     fn jenis_cyclonedx_dipetakan_ke_dua_kategori_dashboard() {
-        assert_eq!(jenis_paket("operating-system", "pkg:generic/debian@13.7"), "os");
-        assert_eq!(jenis_paket("library", "pkg:deb/debian/apt@3.0.4?arch=amd64"), "os");
+        assert_eq!(
+            jenis_paket("operating-system", "pkg:generic/debian@13.7"),
+            "os"
+        );
+        assert_eq!(
+            jenis_paket("library", "pkg:deb/debian/apt@3.0.4?arch=amd64"),
+            "os"
+        );
         assert_eq!(jenis_paket("library", "pkg:apk/alpine/busybox@1.36"), "os");
         assert_eq!(jenis_paket("library", "pkg:npm/express@5.1.0"), "language");
         assert_eq!(jenis_paket("library", ""), "language");
@@ -272,7 +281,8 @@ mod tests {
 
     #[test]
     fn sbom_dari_jenkins_memakai_nama_sumber_artifact() {
-        let isi = r#"{"components":[{"type":"operating-system","name":"openssl","version":"3.0.11"}]}"#;
+        let isi =
+            r#"{"components":[{"type":"operating-system","name":"openssl","version":"3.0.11"}]}"#;
         let laporan = susun("tes-web", isi, "jenkins:tes-web/lastSuccessfulBuild").unwrap();
 
         assert_eq!(laporan.source, "jenkins:tes-web/lastSuccessfulBuild");

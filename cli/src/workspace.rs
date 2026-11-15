@@ -107,12 +107,7 @@ pub(crate) fn pilih_port(
 
 /// Kunci port aplikasi di `registry.tsv` (tambah kalau baru, segarkan kalau sudah
 /// ada) supaya aplikasi berikutnya tidak diberi port yang sama.
-pub(crate) fn catat_port(
-    workspace: &Path,
-    nama: &str,
-    app_port: u16,
-    deploy_port: u16,
-) {
+pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_port: u16) {
     let mut baris = entri_registry(workspace);
     match baris.iter_mut().find(|(n, _, _)| n == nama) {
         Some(entri) => {
@@ -132,11 +127,7 @@ pub(crate) fn catat_port(
 }
 
 #[cfg(test)]
-fn alokasi_port(
-    workspace: &Path,
-    nama: &str,
-    pilihan: Option<u16>,
-) -> Result<(u16, u16), String> {
+fn alokasi_port(workspace: &Path, nama: &str, pilihan: Option<u16>) -> Result<(u16, u16), String> {
     let (app_port, deploy_port) = pilih_port(workspace, nama, pilihan)?;
     catat_port(workspace, nama, app_port, deploy_port);
     Ok((app_port, deploy_port))
@@ -165,12 +156,7 @@ fn saran_port_bebas(workspace: &Path, nama: &str) -> Option<u16> {
         .find(|p| !terkunci.contains(p) && port_bebas(*p))
 }
 
-fn pesan_port_bentrok(
-    workspace: &Path,
-    nama: &str,
-    port: u16,
-    sebab: &str,
-) -> String {
+fn pesan_port_bentrok(workspace: &Path, nama: &str, port: u16, sebab: &str) -> String {
     let saran = saran_port_bebas(workspace, nama)
         .map(|p| p.to_string())
         .unwrap_or_else(|| "(tidak ada)".to_string());
@@ -276,7 +262,10 @@ mod tests {
         std::fs::write(tmp.path().join("registry.tsv"), "lain\t8000\t8003\n").unwrap();
         let (app, deploy) = pilih_port(tmp.path(), "baru", None).unwrap();
         assert_eq!(app, 8000);
-        assert_ne!(deploy, 8003, "port yang sudah dikunci aplikasi lain dipakai ulang");
+        assert_ne!(
+            deploy, 8003,
+            "port yang sudah dikunci aplikasi lain dipakai ulang"
+        );
     }
 
     #[test]
@@ -294,7 +283,11 @@ mod tests {
         catat_port(tmp.path(), "dua", 8000, 8013);
         catat_port(tmp.path(), "satu", 8000, 8023);
         let daftar = baca_registry(tmp.path());
-        assert_eq!(daftar.len(), 2, "baris nama yang sama disegarkan, bukan digandakan");
+        assert_eq!(
+            daftar.len(),
+            2,
+            "baris nama yang sama disegarkan, bukan digandakan"
+        );
         assert_eq!(daftar[0].nama, "satu");
         assert_eq!(daftar[0].deploy_port, 8023);
         assert_eq!(daftar[1].nama, "dua");
@@ -313,7 +306,10 @@ mod tests {
             u.dedup();
             u.len()
         };
-        assert_eq!(jumlah_unik, 3, "tiap aplikasi baru harus dapat port sendiri: {dipakai:?}");
+        assert_eq!(
+            jumlah_unik, 3,
+            "tiap aplikasi baru harus dapat port sendiri: {dipakai:?}"
+        );
         assert_eq!(baca_registry(tmp.path()).len(), 3);
     }
 
@@ -333,7 +329,10 @@ mod tests {
             !dipakai.contains(&deploy),
             "port {deploy} sudah dipakai aplikasi lain"
         );
-        assert!((8000..=9000).contains(&deploy), "port di luar rentang wajar: {deploy}");
+        assert!(
+            (8000..=9000).contains(&deploy),
+            "port di luar rentang wajar: {deploy}"
+        );
     }
 
     #[test]

@@ -196,13 +196,20 @@ fn runs_tanpa_konfigurasi_jenkins_exit_1() {
     let ws = workspace(tmp.path());
 
     let out = jalankan(&tmp, &ws, &["--json"]);
-    assert_eq!(out.status.code(), Some(1), "harus gagal, bukan sukses palsu");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "harus gagal, bukan sukses palsu"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
         stderr.contains("Jenkins"),
         "stderr harus menyebut Jenkins: {stderr}"
     );
-    assert!(out.stdout.is_empty(), "stdout tidak boleh berisi data karangan");
+    assert!(
+        out.stdout.is_empty(),
+        "stdout tidak boleh berisi data karangan"
+    );
 }
 
 #[test]

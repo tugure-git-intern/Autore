@@ -185,7 +185,10 @@ fn active_json_memuat_pipeline_berjalan_dan_menunggu() {
     assert_eq!(aktif[1]["commit_sha"], "");
     assert_eq!(aktif[1]["branch"], "");
     assert_eq!(aktif[1]["author"], "");
-    assert_eq!(aktif[1]["url"], format!("http://127.0.0.1:{port}/job/ui-demo"));
+    assert_eq!(
+        aktif[1]["url"],
+        format!("http://127.0.0.1:{port}/job/ui-demo")
+    );
 
     assert_eq!(laporan["counts"]["running"], 1);
     assert_eq!(laporan["counts"]["queued"], 1);
@@ -216,7 +219,11 @@ fn active_tanpa_konfigurasi_jenkins_exit_1() {
 
     let out = jalankan(&tmp, &ws, &["--json"]);
 
-    assert_eq!(out.status.code(), Some(1), "harus gagal, bukan sukses palsu");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "harus gagal, bukan sukses palsu"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(stderr.contains("Jenkins"), "stderr: {stderr}");
     assert!(out.stdout.is_empty(), "stdout harus kosong saat gagal");

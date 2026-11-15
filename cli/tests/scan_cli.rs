@@ -27,11 +27,25 @@ fn scan_runs_gitleaks_and_trivy_even_without_repo_scripts() {
     let tmp = TempDir::new().unwrap();
     clean_project(tmp.path());
 
-    let out = autore().args(["scan", "--path"]).arg(tmp.path()).output().unwrap();
+    let out = autore()
+        .args(["scan", "--path"])
+        .arg(tmp.path())
+        .output()
+        .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout.contains("Gitleaks LULUS"), "Gitleaks did not run:\n{stdout}");
-    assert!(stdout.contains("Trivy LULUS"), "Trivy did not run:\n{stdout}");
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout.contains("Gitleaks LULUS"),
+        "Gitleaks did not run:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Trivy LULUS"),
+        "Trivy did not run:\n{stdout}"
+    );
 }
 
 #[test]
@@ -42,13 +56,24 @@ fn scan_never_executes_repo_controlled_security_script() {
     let marker = tmp.path().join("PWNED");
     fs::create_dir_all(tmp.path().join("scripts")).unwrap();
     let script = tmp.path().join("scripts/security-check.sh");
-    fs::write(&script, format!("#!/bin/sh\ntouch '{}'\nexit 0\n", marker.display())).unwrap();
+    fs::write(
+        &script,
+        format!("#!/bin/sh\ntouch '{}'\nexit 0\n", marker.display()),
+    )
+    .unwrap();
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
     // `--docker` is the old flag that used to delegate to the repo script.
-    let _ = autore().args(["scan", "--docker", "--path"]).arg(tmp.path()).output().unwrap();
-    assert!(!marker.exists(), "autore executed a script from the scanned repository");
+    let _ = autore()
+        .args(["scan", "--docker", "--path"])
+        .arg(tmp.path())
+        .output()
+        .unwrap();
+    assert!(
+        !marker.exists(),
+        "autore executed a script from the scanned repository"
+    );
 }
 
 #[test]
@@ -65,7 +90,10 @@ fn no_docker_mode_is_labelled_non_authoritative() {
         .output()
         .unwrap();
     assert!(!fail.status.success());
-    assert!(reason.exists(), "expected .security-gate-reason after failure");
+    assert!(
+        reason.exists(),
+        "expected .security-gate-reason after failure"
+    );
 
     // 2. Perbaiki lalu scan ulang -> .security-gate-reason wajib bersih
     fs::remove_file(tmp.path().join("bad.py")).unwrap();
@@ -74,10 +102,17 @@ fn no_docker_mode_is_labelled_non_authoritative() {
         .args(["scan", "--no-docker", "--path", "."])
         .output()
         .unwrap();
-    let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(out.status.success(), "{all}");
     assert!(all.contains("NON-AUTHORITATIVE"), "{all}");
-    assert!(!reason.exists(), ".security-gate-reason masih tertinggal setelah scan LULUS");
+    assert!(
+        !reason.exists(),
+        ".security-gate-reason masih tertinggal setelah scan LULUS"
+    );
 }
 
 #[test]
@@ -86,8 +121,15 @@ fn scan_image_rejects_latest_tag() {
         .args(["scan-image", "--image", "127.0.0.1:5000/app:latest"])
         .output()
         .unwrap();
-    let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert!(!out.status.success(), "scan-image should fail on :latest tag");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "scan-image should fail on :latest tag"
+    );
     assert!(all.contains("latest"), "{all}");
 }
 
@@ -102,7 +144,11 @@ fn scan_image_no_docker_mode_is_labelled_non_authoritative() {
         ])
         .output()
         .unwrap();
-    let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(out.status.success(), "{all}");
     assert!(all.contains("NON-AUTHORITATIVE"), "{all}");
 }

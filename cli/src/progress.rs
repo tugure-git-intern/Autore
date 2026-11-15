@@ -77,7 +77,8 @@ mod tests {
 
     #[test]
     fn ambil_membaca_kunci_dari_baris_data() {
-        let baris = "@@AUTORE {\"tahap\":\"repo\",\"status\":\"selesai\",\"pesan\":\"Repo GitHub a\\\"b\"}";
+        let baris =
+            "@@AUTORE {\"tahap\":\"repo\",\"status\":\"selesai\",\"pesan\":\"Repo GitHub a\\\"b\"}";
         assert_eq!(ambil(baris, "tahap").as_deref(), Some("repo"));
         assert_eq!(ambil(baris, "status").as_deref(), Some("selesai"));
         assert_eq!(ambil(baris, "pesan").as_deref(), Some("Repo GitHub a\"b"));

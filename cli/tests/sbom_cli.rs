@@ -74,16 +74,23 @@ fn sbom_menyusun_daftar_paket_ringkas_dan_terurut() {
     let nama: Vec<&str> = paket.iter().map(|p| p["name"].as_str().unwrap()).collect();
     assert_eq!(
         nama,
-        vec!["anak", "express", "induk", "libc6", "openssl", "tanpa-versi"],
+        vec![
+            "anak",
+            "express",
+            "induk",
+            "libc6",
+            "openssl",
+            "tanpa-versi"
+        ],
         "urut nama (case-insensitive), duplikat dibuang, komponen tanpa nama dilewati"
     );
-    assert_eq!(laporan["total"], 6, "total dihitung CLI, bukan dihitung ulang UI");
+    assert_eq!(
+        laporan["total"], 6,
+        "total dihitung CLI, bukan dihitung ulang UI"
+    );
 
     let type_dari = |n: &str| -> String {
-        paket
-            .iter()
-            .find(|p| p["name"] == n)
-            .unwrap()["type"]
+        paket.iter().find(|p| p["name"] == n).unwrap()["type"]
             .as_str()
             .unwrap()
             .to_string()
@@ -91,10 +98,17 @@ fn sbom_menyusun_daftar_paket_ringkas_dan_terurut() {
     assert_eq!(type_dari("openssl"), "os");
     assert_eq!(type_dari("libc6"), "os");
     assert_eq!(type_dari("express"), "language");
-    assert_eq!(type_dari("anak"), "language", "komponen bersarang ikut dibaca");
+    assert_eq!(
+        type_dari("anak"),
+        "language",
+        "komponen bersarang ikut dibaca"
+    );
 
     let tanpa_versi = paket.iter().find(|p| p["name"] == "tanpa-versi").unwrap();
-    assert_eq!(tanpa_versi["version"], "", "versi hilang jadi string kosong, bukan null");
+    assert_eq!(
+        tanpa_versi["version"], "",
+        "versi hilang jadi string kosong, bukan null"
+    );
 }
 
 #[test]
@@ -134,7 +148,10 @@ fn sbom_menolak_id_aplikasi_yang_bisa_kabur_dari_workspace() {
     for jahat in ["../rahasia", "a/b", "..", "te s"] {
         let out = jalankan(tmp.path(), Some(&ws), &["--app", jahat, "--json"]);
         assert_ne!(out.status.code(), Some(0), "id `{jahat}` harus ditolak");
-        assert!(out.stdout.is_empty(), "id `{jahat}` tidak boleh menghasilkan JSON");
+        assert!(
+            out.stdout.is_empty(),
+            "id `{jahat}` tidak boleh menghasilkan JSON"
+        );
     }
 }
 

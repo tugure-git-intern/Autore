@@ -51,7 +51,8 @@ fn health(ws: &Path) -> Value {
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let cetak: Value = serde_json::from_slice(&out.stdout).expect("stdout status --json harus JSON");
+    let cetak: Value =
+        serde_json::from_slice(&out.stdout).expect("stdout status --json harus JSON");
     cetak["repository_health"].clone()
 }
 
@@ -59,7 +60,9 @@ fn health(ws: &Path) -> Value {
 fn gold(ws: &Path, nama: &str) {
     rekam(
         ws,
-        &["--app", nama, "--reset", "--status", "running", "--stage", "checkout"],
+        &[
+            "--app", nama, "--reset", "--status", "running", "--stage", "checkout",
+        ],
     );
     rekam(
         ws,
@@ -79,7 +82,14 @@ fn skor_membagi_gold_seratus_dan_silver_lima_puluh() {
     rekam(ws, &["--app", "b", "--status", "passed"]);
     rekam(
         ws,
-        &["--app", "c", "--status", "failed", "--message", "Gagal di tahap: 5. Build"],
+        &[
+            "--app",
+            "c",
+            "--status",
+            "failed",
+            "--message",
+            "Gagal di tahap: 5. Build",
+        ],
     );
     // `d` tidak pernah dibangun → bronze.
 
@@ -94,7 +104,10 @@ fn skor_membagi_gold_seratus_dan_silver_lima_puluh() {
 #[test]
 fn repo_tanpa_build_dihitung_bronze() {
     let tmp = TempDir::new().unwrap();
-    daftarkan(tmp.path(), &["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
+    daftarkan(
+        tmp.path(),
+        &["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+    );
 
     let h = health(tmp.path());
     assert_eq!(h["total_repos"], 10);
@@ -152,10 +165,7 @@ fn simpanan_lama_tanpa_repository_health_tetap_dibaca() {
 
     let h = health(tmp.path());
     assert_eq!(h["total_repos"], 1);
-    assert_eq!(
-        h["gold"], 0,
-        "baris lama tanpa `deployed` dibaca `false`"
-    );
+    assert_eq!(h["gold"], 0, "baris lama tanpa `deployed` dibaca `false`");
     assert_eq!(h["silver"], 1, "lulus tapi belum tercatat pernah deploy");
     assert_eq!(h["bronze"], 0);
 }

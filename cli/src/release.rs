@@ -228,7 +228,8 @@ pub fn run(action: ReleaseAction) -> i32 {
                 1
             }
         },
-        ReleaseAction::RollbackId(args) => match rollback_id_at(&workspace::workspace_dir(), &args) {
+        ReleaseAction::RollbackId(args) => match rollback_id_at(&workspace::workspace_dir(), &args)
+        {
             Ok(id) => {
                 println!("{id}");
                 0
@@ -247,12 +248,8 @@ fn trigger_rollback(args: TriggerRollbackArgs) -> Result<String, String> {
         return Err("digest rollback bukan sha256:64hex".into());
     }
     let conf_path = jenkins::default_config_path();
-    let cfg = jenkins::load_config_from(&conf_path).ok_or_else(|| {
-        format!(
-            "konfigurasi Jenkins belum ada di {}",
-            conf_path.display()
-        )
-    })?;
+    let cfg = jenkins::load_config_from(&conf_path)
+        .ok_or_else(|| format!("konfigurasi Jenkins belum ada di {}", conf_path.display()))?;
     let params = [
         ("ROLLBACK_APP", args.app.as_str()),
         ("ROLLBACK_ENVIRONMENT", args.environment.as_str()),
@@ -282,12 +279,8 @@ fn trigger_promote(args: TriggerPromoteArgs) -> Result<String, String> {
         return Err("digest promosi bukan sha256:64hex".into());
     }
     let conf_path = jenkins::default_config_path();
-    let cfg = jenkins::load_config_from(&conf_path).ok_or_else(|| {
-        format!(
-            "konfigurasi Jenkins belum ada di {}",
-            conf_path.display()
-        )
-    })?;
+    let cfg = jenkins::load_config_from(&conf_path)
+        .ok_or_else(|| format!("konfigurasi Jenkins belum ada di {}", conf_path.display()))?;
     let build = args.build.to_string();
     let container_port = args.container_port.to_string();
     let deploy_port = args.deploy_port.to_string();
@@ -599,18 +592,27 @@ mod tests {
             app: "tes-testing".into(),
             build: 7,
         };
-        assert_eq!(rollback_id_at(tmp.path(), &args).unwrap(), "tes-testing-7-rollback-1");
+        assert_eq!(
+            rollback_id_at(tmp.path(), &args).unwrap(),
+            "tes-testing-7-rollback-1"
+        );
 
         append_event_at(tmp.path(), event("tes-testing-7-rollback-1")).unwrap();
         append_event_at(tmp.path(), event("tes-testing-7-deploy_result")).unwrap();
-        assert_eq!(rollback_id_at(tmp.path(), &args).unwrap(), "tes-testing-7-rollback-2");
+        assert_eq!(
+            rollback_id_at(tmp.path(), &args).unwrap(),
+            "tes-testing-7-rollback-2"
+        );
 
         // Build lain punya deret sendiri.
         let lain = RollbackIdArgs {
             app: "tes-testing".into(),
             build: 8,
         };
-        assert_eq!(rollback_id_at(tmp.path(), &lain).unwrap(), "tes-testing-8-rollback-1");
+        assert_eq!(
+            rollback_id_at(tmp.path(), &lain).unwrap(),
+            "tes-testing-8-rollback-1"
+        );
     }
 
     #[test]
@@ -699,7 +701,12 @@ mod tests {
         assert_eq!(event.health.as_deref(), Some("ok"));
         // Dashboard menolak seluruh muatan kalau ts bukan ISO-8601; ts berbentuk
         // "<epoch>Z" lolos ke ledger dan UI mati dengan kartu "Terjadi Kesalahan".
-        assert_eq!(event.ts.len(), 20, "ts harus ISO-8601, bukan epoch: {}", event.ts);
+        assert_eq!(
+            event.ts.len(),
+            20,
+            "ts harus ISO-8601, bukan epoch: {}",
+            event.ts
+        );
         assert!(event.ts.ends_with('Z'), "ts={}", event.ts);
     }
 

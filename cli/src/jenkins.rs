@@ -154,7 +154,9 @@ fn render_job_xml(
                 xml_escape(nama)
             ));
         }
-        blok.push_str("      </parameterDefinitions>\n    </hudson.model.ParametersDefinitionProperty>\n");
+        blok.push_str(
+            "      </parameterDefinitions>\n    </hudson.model.ParametersDefinitionProperty>\n",
+        );
         blok
     };
     let pemicu = if pemicu_scm {
@@ -214,13 +216,25 @@ pub fn render_pipeline_job_xml(git_url: &str, branch: &str) -> String {
 /// Job rollback: pipeline `Jenkinsfile.rollback`, tanpa pemicu SCM (hanya dipicu
 /// API), dengan parameter ROLLBACK_* yang sudah terdaftar sejak job dibuat.
 pub fn render_rollback_job_xml(git_url: &str, branch: &str) -> String {
-    render_job_xml(git_url, branch, "Jenkinsfile.rollback", &ROLLBACK_PARAMS, false)
+    render_job_xml(
+        git_url,
+        branch,
+        "Jenkinsfile.rollback",
+        &ROLLBACK_PARAMS,
+        false,
+    )
 }
 
 /// Job promosi production: pipeline `Jenkinsfile.promote`, tanpa pemicu SCM,
 /// dengan parameter PROMOTE_* terdaftar sejak job dibuat.
 pub fn render_promote_job_xml(git_url: &str, branch: &str) -> String {
-    render_job_xml(git_url, branch, "Jenkinsfile.promote", &PROMOTE_PARAMS, false)
+    render_job_xml(
+        git_url,
+        branch,
+        "Jenkinsfile.promote",
+        &PROMOTE_PARAMS,
+        false,
+    )
 }
 
 /// Picu build berparameter. Job harus sudah ada; kalau belum, Jenkins menjawab
@@ -417,7 +431,9 @@ fn email_polos(email: &str) -> bool {
                 && !domain.contains('@')
                 && user.len() <= 64
                 && domain.len() <= 190
-                && !email.chars().any(|c| c.is_whitespace() || c == '<' || c == '>')
+                && !email
+                    .chars()
+                    .any(|c| c.is_whitespace() || c == '<' || c == '>')
         }
         None => false,
     }
@@ -491,13 +507,7 @@ pub fn ensure_git_committed_and_remote(
             ]);
         }
         let _ = cmd
-            .args([
-                "commit",
-                "-q",
-                "--no-verify",
-                "-m",
-                PESAN_COMMIT_SCAFFOLD,
-            ])
+            .args(["commit", "-q", "--no-verify", "-m", PESAN_COMMIT_SCAFFOLD])
             .current_dir(project_dir)
             .status();
     } else if let Some(a) = author {
@@ -588,8 +598,7 @@ pub fn register_and_trigger_jenkins(
     let xml_file = tmp_dir.join("config.xml");
 
     let xml = render_pipeline_job_xml(git_url, branch);
-    fs::write(&xml_file, xml)
-        .map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
+    fs::write(&xml_file, xml).map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
 
     let result = (|| -> Result<String, String> {
         let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
@@ -720,7 +729,12 @@ pub fn register_rollback_job(
     git_url: &str,
     branch: &str,
 ) -> Result<String, String> {
-    daftarkan_job(cfg, job_name, &render_rollback_job_xml(git_url, branch), "rollback")
+    daftarkan_job(
+        cfg,
+        job_name,
+        &render_rollback_job_xml(git_url, branch),
+        "rollback",
+    )
 }
 
 /// Daftarkan job promosi production dari `Jenkinsfile.promote`.
@@ -730,7 +744,12 @@ pub fn register_promote_job(
     git_url: &str,
     branch: &str,
 ) -> Result<String, String> {
-    daftarkan_job(cfg, job_name, &render_promote_job_xml(git_url, branch), "promote")
+    daftarkan_job(
+        cfg,
+        job_name,
+        &render_promote_job_xml(git_url, branch),
+        "promote",
+    )
 }
 
 /// Inti pendaftaran job pipeline berparameter; dipakai rollback dan promosi.
@@ -741,13 +760,13 @@ fn daftarkan_job(
     label: &str,
 ) -> Result<String, String> {
     let base = normalize_jenkins_url(&cfg.url)?;
-    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-{label}-xml-{}", std::process::id()));
+    let tmp_dir =
+        std::env::temp_dir().join(format!("autore-jk-{label}-xml-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
     let xml_file = tmp_dir.join("config.xml");
-    fs::write(&xml_file, xml)
-        .map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
+    fs::write(&xml_file, xml).map_err(|e| format!("Gagal menulis XML konfigurasi Jenkins: {e}"))?;
 
     let result = (|| -> Result<u16, String> {
         let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
@@ -823,7 +842,13 @@ fn daftarkan_job(
             post_args.push("-H");
             post_args.push(h);
         }
-        post_args.extend_from_slice(&["-w", "\n__HTTP_CODE__:%{http_code}", "--config", "-", &post_url]);
+        post_args.extend_from_slice(&[
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            &post_url,
+        ]);
 
         let (code, body) = curl_with_stdin_config(&post_args, &user_cfg)?;
         if code >= 400 {
@@ -900,7 +925,10 @@ mod tests {
         );
         // Config lokal ditulis supaya dashboard bisa membaca pembuatnya tanpa GitHub API.
         assert_eq!(git(&repo, &["config", "--get", "user.name"]), "Alif Fadlan");
-        assert_eq!(git(&repo, &["config", "--get", "user.email"]), "alif@example.com");
+        assert_eq!(
+            git(&repo, &["config", "--get", "user.email"]),
+            "alif@example.com"
+        );
     }
 
     #[test]
@@ -962,12 +990,16 @@ mod tests {
         ensure_git_committed_and_remote(&repo, "", Some(&author)).unwrap();
 
         assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "2");
-        assert_eq!(git(&repo, &["log", "-1", "--format=%s"]), PESAN_COMMIT_SCAFFOLD);
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%s"]),
+            PESAN_COMMIT_SCAFFOLD
+        );
     }
 
     #[test]
     fn author_kotor_dibuang_bukan_digagalkan() {
-        let kotor = validasi_author(Some("Alif\n[user]\nevil = 1"), Some("alif@example.com")).unwrap();
+        let kotor =
+            validasi_author(Some("Alif\n[user]\nevil = 1"), Some("alif@example.com")).unwrap();
         assert_eq!(kotor.nama, "Alif [user] evil = 1");
 
         // Email tidak sah atau nama kosong = jatuh ke identitas bot, bukan error.

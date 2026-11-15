@@ -250,8 +250,8 @@ pub fn is_hook_installed(repo_root: &Path) -> bool {
 mod tests {
     // Nama fungsi di bawah sengaja disamarkan: static guard memindai sumber ini dan
     // melarang pola `Command` dengan shell literal.
-    use std::process::Command as Shell;
     use super::*;
+    use std::process::Command as Shell;
     use tempfile::TempDir;
 
     #[test]
@@ -352,7 +352,11 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn jalankan_gate(home: &Path, repo: &Path, env_tambahan: &[(&str, &str)]) -> std::process::Output {
+    fn jalankan_gate(
+        home: &Path,
+        repo: &Path,
+        env_tambahan: &[(&str, &str)],
+    ) -> std::process::Output {
         jalankan_gate_dengan_git(home, repo, env_tambahan, None)
     }
 
@@ -366,7 +370,9 @@ mod tests {
         let script = home.join("gate.sh");
         fs::write(&script, SECRET_GATE_SNIPPET).unwrap();
         let mut cmd = Shell::new("bash");
-        cmd.arg(&script).env("HOME", home).env_remove("AUTORE_HOOK_SKIP");
+        cmd.arg(&script)
+            .env("HOME", home)
+            .env_remove("AUTORE_HOOK_SKIP");
         if let Some(dir_git) = git_palsu {
             cmd.env("PATH", format!("{}:/usr/bin:/bin", dir_git.display()));
         }
@@ -458,7 +464,10 @@ mod tests {
 
         let rekam = fs::read_to_string(&argv_log).unwrap();
         for penanda in ["--staged", "--redact", "--exit-code", "--no-banner"] {
-            assert!(rekam.contains(penanda), "{penanda} hilang dari panggilan gitleaks:\n{rekam}");
+            assert!(
+                rekam.contains(penanda),
+                "{penanda} hilang dari panggilan gitleaks:\n{rekam}"
+            );
         }
     }
 
@@ -543,7 +552,11 @@ exec /usr/bin/git "$@"
 
         let out = jalankan_gate(home.path(), repo.path(), &[]);
 
-        assert!(out.status.success(), "versi beda hanya peringatan: {}", teks(&out));
+        assert!(
+            out.status.success(),
+            "versi beda hanya peringatan: {}",
+            teks(&out)
+        );
         assert!(teks(&out).contains("PERINGATAN"), "{}", teks(&out));
     }
 
@@ -556,7 +569,10 @@ exec /usr/bin/git "$@"
         let out = jalankan_gate(home.path(), repo.path(), &[("AUTORE_HOOK_SKIP", "1")]);
         let keluaran = teks(&out);
 
-        assert!(out.status.success(), "penanda darurat harus melewati blokir: {keluaran}");
+        assert!(
+            out.status.success(),
+            "penanda darurat harus melewati blokir: {keluaran}"
+        );
         assert!(keluaran.contains("DILEWATI"), "{keluaran}");
     }
 
@@ -568,7 +584,10 @@ exec /usr/bin/git "$@"
         let path = install_pre_commit_hook(tmp.path()).unwrap();
         let isi = fs::read_to_string(&path).unwrap();
 
-        assert!(isi.contains("--staged"), "gate secret hilang dari hook:\n{isi}");
+        assert!(
+            isi.contains("--staged"),
+            "gate secret hilang dari hook:\n{isi}"
+        );
         assert!(
             isi.contains("AUTORE_HOOK_SKIP"),
             "pintu darurat hilang dari hook:\n{isi}"
@@ -613,7 +632,10 @@ exec /usr/bin/git "$@"
         .unwrap();
         fs::write(
             repo.path().join("cfg.env"),
-            concat!("SLACK_BOT=xoxb-123456789012-", "1234567890123-AbCdEfGhIjKlMnOpQrStUvWx\n"),
+            concat!(
+                "SLACK_BOT=xoxb-123456789012-",
+                "1234567890123-AbCdEfGhIjKlMnOpQrStUvWx\n"
+            ),
         )
         .unwrap();
         git(repo.path(), &["add", ".gitleaks.toml", "cfg.env"]);
@@ -682,7 +704,10 @@ exec /usr/bin/git "$@"
         let out = jalankan_gate(home.path(), repo.path(), &[]);
         let keluaran = teks(&out);
 
-        assert!(!out.status.success(), "config rusak harus memblokir: {keluaran}");
+        assert!(
+            !out.status.success(),
+            "config rusak harus memblokir: {keluaran}"
+        );
         assert!(keluaran.contains("useDefault"), "{keluaran}");
         assert!(
             fs::read_to_string(&argv_log).is_err(),

@@ -2,21 +2,21 @@ mod active;
 mod admin;
 mod doctor;
 mod external;
-mod progress;
 mod github;
 mod hooks;
 mod jenkins;
 mod launcher;
-mod scanner;
-mod workspace;
-mod status;
 mod pipeline_record;
+mod progress;
 mod release;
 mod runs;
 mod sbom;
+mod scanner;
+mod status;
 mod templates;
 mod tui;
 mod updater;
+mod workspace;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -90,7 +90,10 @@ pub fn tanpa_kode_aplikasi(dir: &std::path::Path) -> bool {
     !entries.filter_map(Result::ok).any(|e| {
         let name = e.file_name();
         let name = name.to_string_lossy();
-        !matches!(name.as_ref(), "Dockerfile" | "Jenkinsfile" | ".dockerignore" | ".git")
+        !matches!(
+            name.as_ref(),
+            "Dockerfile" | "Jenkinsfile" | ".dockerignore" | ".git"
+        )
     })
 }
 
@@ -906,10 +909,7 @@ fn main() {
             &mut std::io::stdout(),
         )),
         2 => {}
-        4 => process::exit(admin::menu(
-            &launcher::SistemNyata,
-            &mut std::io::stdout(),
-        )),
+        4 => process::exit(admin::menu(&launcher::SistemNyata, &mut std::io::stdout())),
         _ => return,
     }
 
@@ -1834,7 +1834,8 @@ fn execute_command(
             // Identitas author hanya ada kalau dipanggil dari dashboard (flag dari
             // sesi); dipanggil langsung dari terminal = identitas bot seperti dulu.
             let author = jenkins::validasi_author(author_name.as_deref(), author_email.as_deref());
-            if let Err(e) = jenkins::ensure_git_committed_and_remote(&target_dir, &git_url, author.as_ref())
+            if let Err(e) =
+                jenkins::ensure_git_committed_and_remote(&target_dir, &git_url, author.as_ref())
             {
                 eprintln!("{} {e}", "ERROR:".red().bold());
                 return 1;
@@ -2192,7 +2193,11 @@ mod tests {
             );
         }
         assert!(json.contains("buat-baru"));
-        assert_eq!(json.matches("\"id\":\"").count(), 4, "3 pertanyaan + 1 perintah");
+        assert_eq!(
+            json.matches("\"id\":\"").count(),
+            4,
+            "3 pertanyaan + 1 perintah"
+        );
     }
 
     #[test]

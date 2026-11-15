@@ -766,7 +766,10 @@ mod tests {
         let home = Some(PathBuf::from("/home/uji"));
         let non_root = cache_trivy(home.clone(), 1000, PathBuf::from("/tmp/x"));
         let root = cache_trivy(home, 0, PathBuf::from("/tmp/x"));
-        assert!(non_root.ends_with(".cache/autore/trivy-1000"), "{non_root:?}");
+        assert!(
+            non_root.ends_with(".cache/autore/trivy-1000"),
+            "{non_root:?}"
+        );
         assert!(root.ends_with(".cache/autore/trivy-0"), "{root:?}");
         assert_ne!(non_root, root);
         assert_eq!(

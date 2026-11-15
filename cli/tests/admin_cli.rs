@@ -26,7 +26,8 @@ struct Shim {
 
 impl Shim {
     fn baru(nama: &str) -> Shim {
-        let akar = std::env::temp_dir().join(format!("autore-tes-admin-{}-{nama}", std::process::id()));
+        let akar =
+            std::env::temp_dir().join(format!("autore-tes-admin-{}-{nama}", std::process::id()));
         let _ = std::fs::remove_dir_all(&akar);
         let dir = akar.join("bin");
         let kerja = akar.join("kerja");
@@ -168,7 +169,10 @@ fn alias_st_membuka_bantuan_status() {
     let shim = Shim::baru("alias_st_membuka_bantuan_status");
     let (kode, teks) = shim.jalankan(&["st", "--help"]);
     assert_eq!(kode, 0, "{teks}");
-    assert!(teks.contains("--json"), "alias st tidak menunjuk status: {teks}");
+    assert!(
+        teks.contains("--json"),
+        "alias st tidak menunjuk status: {teks}"
+    );
 }
 
 #[test]
@@ -194,7 +198,10 @@ fn logs_no_follow_meneruskan_keluaran_journalctl() {
         log.contains("--user -u autore-web-api -u autore-web-dashboard"),
         "{log:?}"
     );
-    assert!(!log.contains("-f"), "mode no-follow tidak boleh memakai -f: {log:?}");
+    assert!(
+        !log.contains("-f"),
+        "mode no-follow tidak boleh memakai -f: {log:?}"
+    );
 }
 
 #[test]

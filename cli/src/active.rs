@@ -348,7 +348,11 @@ pub fn jalankan(json: bool) -> i32 {
         } else {
             p.commit_sha[..7.min(p.commit_sha.len())].to_string()
         };
-        let branch = if p.branch.is_empty() { "—" } else { &p.branch };
+        let branch = if p.branch.is_empty() {
+            "—"
+        } else {
+            &p.branch
+        };
         let penulis = if p.author.is_empty() {
             "—".to_string()
         } else {

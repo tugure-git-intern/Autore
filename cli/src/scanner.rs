@@ -274,7 +274,11 @@ const EXAMPLE_NAMA: &[&str] = &[
 /// berkas contoh, jadi kegagalan mencocokkan berarti tetap dipindai (fail-closed).
 fn trim_ascii_name(trimmed: &[u8]) -> Option<&str> {
     let text = std::str::from_utf8(trimmed).ok()?;
-    let nama = text.split(['/', '\\']).next_back()?.trim_start_matches('#').trim();
+    let nama = text
+        .split(['/', '\\'])
+        .next_back()?
+        .trim_start_matches('#')
+        .trim();
     EXAMPLE_NAMA.contains(&nama).then_some(nama)
 }
 

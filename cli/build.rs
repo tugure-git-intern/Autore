@@ -21,11 +21,19 @@ fn main() {
     let raw = from_env.or(from_git).unwrap_or_else(|| pkg.clone());
     let candidate = raw.trim().trim_start_matches('v');
     // Tag lama di induk commit kalah jika Cargo.toml sudah dinaikkan lebih tinggi.
-    let clean = if semver_tuple(candidate) >= semver_tuple(&pkg) { candidate } else { &pkg };
+    let clean = if semver_tuple(candidate) >= semver_tuple(&pkg) {
+        candidate
+    } else {
+        &pkg
+    };
     println!("cargo:rustc-env=AUTORE_VERSION={clean}");
 }
 
 fn semver_tuple(v: &str) -> (u64, u64, u64) {
     let mut it = v.split('.').map(|p| p.parse::<u64>().unwrap_or(0));
-    (it.next().unwrap_or(0), it.next().unwrap_or(0), it.next().unwrap_or(0))
+    (
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+    )
 }

@@ -450,7 +450,10 @@ mod tests {
 
         let snap = build(tmp.path());
 
-        assert_eq!(snap.applications[0].author, "Alif Fadlan <alif@example.com>");
+        assert_eq!(
+            snap.applications[0].author,
+            "Alif Fadlan <alif@example.com>"
+        );
     }
 
     #[test]
@@ -722,7 +725,8 @@ mod tests {
     #[test]
     fn load_default_menghasilkan_kontrak_json_dengan_teks_kosong() {
         let tmp = TempDir::new().unwrap();
-        let value: serde_json::Value = serde_json::from_str(&canonical(&build(tmp.path()))).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(&canonical(&build(tmp.path()))).unwrap();
         assert_eq!(value["latest_pipeline"]["failure_reason"], "");
         assert_eq!(value["latest_pipeline"]["security_summary"], "");
         assert_eq!(value["latest_pipeline"]["commit_sha"], "");

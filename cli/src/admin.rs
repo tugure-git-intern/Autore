@@ -119,7 +119,8 @@ pub fn jalankan(sis: &dyn Sistem, aksi: Aksi, keluar: &mut dyn Write) -> i32 {
                     let _ = writeln!(
                         keluar,
                         "[OK] systemctl --user {nama} {} {}",
-                        launcher::UNIT_API, launcher::UNIT_DASHBOARD
+                        launcher::UNIT_API,
+                        launcher::UNIT_DASHBOARD
                     );
                     cetak_status(sis, keluar);
                     0
@@ -128,7 +129,8 @@ pub fn jalankan(sis: &dyn Sistem, aksi: Aksi, keluar: &mut dyn Write) -> i32 {
                     let _ = writeln!(
                         keluar,
                         "[!] Gagal menjalankan systemctl --user {nama} {} {} (kode {kode}).",
-                        launcher::UNIT_API, launcher::UNIT_DASHBOARD
+                        launcher::UNIT_API,
+                        launcher::UNIT_DASHBOARD
                     );
                     1
                 }
@@ -142,7 +144,12 @@ pub fn jalankan(sis: &dyn Sistem, aksi: Aksi, keluar: &mut dyn Write) -> i32 {
 }
 
 /// Jalankan program pendamping (journalctl / tail) dan teruskan kode keluarnya.
-fn jalankan_program(sis: &dyn Sistem, program: &str, argv: &[String], keluar: &mut dyn Write) -> i32 {
+fn jalankan_program(
+    sis: &dyn Sistem,
+    program: &str,
+    argv: &[String],
+    keluar: &mut dyn Write,
+) -> i32 {
     match sis.warisi(program, argv) {
         Ok(kode) => kode,
         Err(galat) => {
@@ -219,7 +226,11 @@ fn mulai(sis: &dyn Sistem, keluar: &mut dyn Write, web_dir: Option<PathBuf>) -> 
                 );
             }
             Err(galat) => {
-                let _ = writeln!(keluar, "[!] Gagal menjalankan {}: {galat}", perintah.join(" "));
+                let _ = writeln!(
+                    keluar,
+                    "[!] Gagal menjalankan {}: {galat}",
+                    perintah.join(" ")
+                );
                 return 1;
             }
         }
@@ -449,12 +460,7 @@ mod tests {
         let argv = argv_systemctl("start", &[launcher::UNIT_API, launcher::UNIT_DASHBOARD]);
         assert_eq!(
             argv,
-            vec![
-                "--user",
-                "start",
-                "autore-web-api",
-                "autore-web-dashboard"
-            ]
+            vec!["--user", "start", "autore-web-api", "autore-web-dashboard"]
         );
     }
 
@@ -516,7 +522,10 @@ mod tests {
     fn sesudah_start_cetak_status_kedua_unit() {
         let sis = palsu("tugure");
         let (_, keluaran) = j(&sis, Aksi::Start);
-        assert!(keluaran.contains("[OK] autore-web-api: aktif"), "{keluaran}");
+        assert!(
+            keluaran.contains("[OK] autore-web-api: aktif"),
+            "{keluaran}"
+        );
         assert!(
             keluaran.contains("[OK] autore-web-dashboard: aktif"),
             "{keluaran}"
@@ -541,7 +550,11 @@ mod tests {
 
     #[test]
     fn logs_default_follow() {
-        let argv = argv_journal(&[launcher::UNIT_API, launcher::UNIT_DASHBOARD], true, BARIS_LOG);
+        let argv = argv_journal(
+            &[launcher::UNIT_API, launcher::UNIT_DASHBOARD],
+            true,
+            BARIS_LOG,
+        );
         assert_eq!(
             argv,
             vec![

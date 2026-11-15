@@ -378,12 +378,17 @@ mod tests {
         let dir = tmp.path();
         let dibuat = tulis_kode_contoh(dir, TechStack::Python).unwrap();
         assert_eq!(dibuat, vec!["app.py", "test_app.py"]);
-        assert!(fs::read_to_string(dir.join("app.py")).unwrap().contains("8000"));
+        assert!(fs::read_to_string(dir.join("app.py"))
+            .unwrap()
+            .contains("8000"));
 
         fs::write(dir.join("app.py"), "punya saya").unwrap();
         let lagi = tulis_kode_contoh(dir, TechStack::Python).unwrap();
         assert!(lagi.is_empty(), "file yang sudah ada tidak boleh ditimpa");
-        assert_eq!(fs::read_to_string(dir.join("app.py")).unwrap(), "punya saya");
+        assert_eq!(
+            fs::read_to_string(dir.join("app.py")).unwrap(),
+            "punya saya"
+        );
     }
 
     #[test]
@@ -417,8 +422,14 @@ mod tests {
 
         assert_eq!(dibuat, vec!["Main.java"]);
         let isi = fs::read_to_string(tmp.path().join("Main.java")).unwrap();
-        assert!(isi.contains("public static void main"), "butuh entrypoint:\n{isi}");
-        assert!(isi.contains("/health"), "health check deploy menembak /health");
+        assert!(
+            isi.contains("public static void main"),
+            "butuh entrypoint:\n{isi}"
+        );
+        assert!(
+            isi.contains("/health"),
+            "health check deploy menembak /health"
+        );
         // `scripts/ci-deploy-by-digest.sh` menjalankan container dan menembak port
         // aplikasi, jadi contoh wajib mendengarkan port bawaan stack-nya.
         assert!(
@@ -439,7 +450,10 @@ mod tests {
             .unwrap()
             .contains("module "));
         let main = fs::read_to_string(tmp.path().join("main.go")).unwrap();
-        assert!(main.contains("/health"), "health check deploy menembak /health");
+        assert!(
+            main.contains("/health"),
+            "health check deploy menembak /health"
+        );
         assert!(
             main.contains(&format!(":{}", TechStack::Go.default_port())),
             "contoh harus mendengarkan port bawaan ({})",
@@ -466,7 +480,9 @@ mod tests {
         assert_eq!(pkg["main"], "app.js");
         assert_eq!(pkg["scripts"]["start"], "node app.js");
         assert_eq!(pkg["scripts"]["test"], "node --test");
-        assert!(fs::read_to_string(dir.join("app.js")).unwrap().contains("/health"));
+        assert!(fs::read_to_string(dir.join("app.js"))
+            .unwrap()
+            .contains("/health"));
     }
 
     #[test]
@@ -523,7 +539,10 @@ mod tests {
             let created = generate_project_files(&cfg, tmp.path()).unwrap();
             assert_eq!(created.len(), 3);
             let contoh = tulis_kode_contoh(tmp.path(), stack).unwrap();
-            assert!(!contoh.is_empty(), "stack {stack:?} belum punya kode contoh");
+            assert!(
+                !contoh.is_empty(),
+                "stack {stack:?} belum punya kode contoh"
+            );
 
             let report = scan_directory(tmp.path()).unwrap();
             assert!(
@@ -731,7 +750,10 @@ mod tests {
         );
         // Pesan error wajib menyebut ketiga jalur supaya orang tahu apa yang kurang.
         for jalur in ["pom.xml", "gradlew", "Main.java"] {
-            assert!(df.contains(jalur), "percabangan/pesan tidak menyebut {jalur}");
+            assert!(
+                df.contains(jalur),
+                "percabangan/pesan tidak menyebut {jalur}"
+            );
         }
         assert!(
             df.contains("java -cp /app Main"),

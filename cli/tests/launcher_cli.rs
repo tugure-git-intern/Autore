@@ -59,10 +59,8 @@ struct Shim {
 impl Shim {
     fn baru(nama: &str) -> Shim {
         let kunci = PORT.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!(
-            "autore-tes-launcher-{}-{nama}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("autore-tes-launcher-{}-{nama}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         tulis_shim(
@@ -74,7 +72,11 @@ impl Shim {
              if [ \"$1\" = \"--user\" ] && [ \"$2\" = \"cat\" ]; then echo '[Unit]'; exit 0; fi\n\
              exit 0\n",
         );
-        tulis_shim(&dir, "tailscale", &format!("#!/bin/sh\necho {}\n", ip_ikat_tes()));
+        tulis_shim(
+            &dir,
+            "tailscale",
+            &format!("#!/bin/sh\necho {}\n", ip_ikat_tes()),
+        );
         tulis_shim(&dir, "id", "#!/bin/sh\nif [ \"$1\" = \"-un\" ]; then echo \"${AUTORE_TES_PENGGUNA:-tugure}\"; exit 0; fi\nexit 0\n");
 
         // Port siap: kalau bebas, tes sendiri yang memegangnya; kalau sudah dipakai layanan
@@ -98,7 +100,9 @@ impl Shim {
             std::env::var("PATH").unwrap_or_default()
         );
         let mut perintah = Command::new(env!("CARGO_BIN_EXE_autore"));
-        perintah.env("PATH", path).env("AUTORE_TES_PENGGUNA", pengguna);
+        perintah
+            .env("PATH", path)
+            .env("AUTORE_TES_PENGGUNA", pengguna);
         if let Some(pilihan) = pilihan {
             perintah.env("AUTORE_MENU_PILIHAN", pilihan);
         }
@@ -151,7 +155,10 @@ fn pengguna_lain_ditolak_tanpa_menyentuh_systemd() {
         teks.contains("[!] Akses ditolak. Silakan jalankan sebagai user yang sesuai."),
         "{teks}"
     );
-    assert!(!teks.contains("URL Dashboard:"), "jangan lanjut ke URL: {teks}");
+    assert!(
+        !teks.contains("URL Dashboard:"),
+        "jangan lanjut ke URL: {teks}"
+    );
 }
 
 #[test]

@@ -350,7 +350,10 @@ fn build_baru_mengosongkan_waktu_tahap_dan_gerbang() {
         &["--status", "passed", "--summary", "9/9 gerbang lolos"],
     );
     assert_eq!(
-        pipeline(tmp.path())["stage_times"].as_array().unwrap().len(),
+        pipeline(tmp.path())["stage_times"]
+            .as_array()
+            .unwrap()
+            .len(),
         1
     );
 
@@ -364,7 +367,10 @@ fn build_baru_mengosongkan_waktu_tahap_dan_gerbang() {
         1,
         "entri build lama harus hilang"
     );
-    assert_eq!(lp["gates_total"], 0, "gerbang build lama tidak boleh nyangkut");
+    assert_eq!(
+        lp["gates_total"], 0,
+        "gerbang build lama tidak boleh nyangkut"
+    );
     assert_eq!(lp["finished_at"], "", "build baru belum selesai");
 }
 
@@ -388,7 +394,8 @@ fn simpanan_lama_tanpa_field_baru_tetap_dimuat() {
 
     // Dibaca dari keluaran `status --json` (bukan berkas): yang diuji kontrak
     // yang dilihat web, dan berkas lama tidak ditulis ulang oleh perintah baca.
-    let cetak: Value = serde_json::from_slice(&out.stdout).expect("stdout status --json harus JSON");
+    let cetak: Value =
+        serde_json::from_slice(&out.stdout).expect("stdout status --json harus JSON");
     let lp = cetak["latest_pipeline"].clone();
     assert_eq!(lp["stage_times"].as_array().unwrap().len(), 0);
     assert_eq!(lp["finished_at"], "");
@@ -423,15 +430,8 @@ fn app_hanya_ditulis_pada_hasil_akhir() {
     rekam(
         ws,
         &[
-            "--app",
-            "tes-web",
-            "--reset",
-            "--status",
-            "running",
-            "--stage",
-            "checkout",
-            "--commit",
-            "abc123",
+            "--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout",
+            "--commit", "abc123",
         ],
     );
     // Build masih jalan: aplikasi belum boleh mengklaim apa pun.
@@ -445,7 +445,10 @@ fn app_hanya_ditulis_pada_hasil_akhir() {
 
     let a = app(ws, "tes-web");
     assert_eq!(a["status"], "passed");
-    assert_eq!(a["commit_sha"], "abc123", "commit dari panggilan sebelumnya");
+    assert_eq!(
+        a["commit_sha"], "abc123",
+        "commit dari panggilan sebelumnya"
+    );
     assert_eq!(a["deployed"], false, "belum lewat tahap deploy");
     assert_eq!(a["id"], "tes-web");
 }
@@ -457,11 +460,15 @@ fn tahap_deploy_menandai_deployed_dan_tahan_lintas_build() {
 
     rekam(
         ws,
-        &["--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout"],
+        &[
+            "--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout",
+        ],
     );
     rekam(
         ws,
-        &["--app", "tes-web", "--status", "running", "--stage", "periksa"],
+        &[
+            "--app", "tes-web", "--status", "running", "--stage", "periksa",
+        ],
     );
     assert_eq!(
         app(ws, "tes-web")["deployed"],
@@ -477,14 +484,23 @@ fn tahap_deploy_menandai_deployed_dan_tahan_lintas_build() {
     // Build baru: `--reset` tidak menghapus fakta "pernah deploy".
     rekam(
         ws,
-        &["--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout"],
+        &[
+            "--app", "tes-web", "--reset", "--status", "running", "--stage", "checkout",
+        ],
     );
     assert_eq!(app(ws, "tes-web")["deployed"], true);
 
     // Build yang gagal tetap "pernah deploy".
     rekam(
         ws,
-        &["--app", "tes-web", "--status", "failed", "--message", "Gagal di tahap: 5. Build"],
+        &[
+            "--app",
+            "tes-web",
+            "--status",
+            "failed",
+            "--message",
+            "Gagal di tahap: 5. Build",
+        ],
     );
     let a = app(ws, "tes-web");
     assert_eq!(a["status"], "failed");
@@ -500,7 +516,10 @@ fn tanpa_app_perintah_lama_tidak_menyentuh_aplikasi() {
         ws,
         &["--reset", "--status", "running", "--stage", "checkout"],
     );
-    rekam(ws, &["--status", "passed", "--summary", "9/9 gerbang lolos"]);
+    rekam(
+        ws,
+        &["--status", "passed", "--summary", "9/9 gerbang lolos"],
+    );
 
     assert!(
         aplikasi(ws).is_empty(),
@@ -508,4 +527,3 @@ fn tanpa_app_perintah_lama_tidak_menyentuh_aplikasi() {
         aplikasi(ws)
     );
 }
-

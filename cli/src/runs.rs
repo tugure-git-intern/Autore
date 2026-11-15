@@ -207,11 +207,7 @@ pub fn susun_laporan(
         }
     }
 
-    let runs: Vec<RunRecord> = kandidat
-        .into_iter()
-        .take(limit)
-        .map(|(_, r)| r)
-        .collect();
+    let runs: Vec<RunRecord> = kandidat.into_iter().take(limit).map(|(_, r)| r).collect();
 
     LaporanRuns {
         generated_at: crate::status::iso8601_from_unix(sekarang_ms / 1000),
@@ -355,7 +351,11 @@ pub fn jalankan(days: u32, limit: usize, json: bool) -> i32 {
         "APLIKASI", "BUILD", "STATUS", "DURASI"
     );
     for r in &laporan.runs {
-        let penulis = if r.author.is_empty() { "—" } else { &r.author };
+        let penulis = if r.author.is_empty() {
+            "—"
+        } else {
+            &r.author
+        };
         println!(
             "{:<16} {:<6} {:<8} {:>7.1}s  {}",
             r.app,
@@ -432,7 +432,10 @@ mod tes {
         // 2026-11-04T09:19:51Z
         let sekarang = 1_793_783_991_779u64;
         let laporan = susun_laporan(
-            vec![("tes-web".to_string(), vec![build(6, Some("SUCCESS"), sekarang - 3_600_000)])],
+            vec![(
+                "tes-web".to_string(),
+                vec![build(6, Some("SUCCESS"), sekarang - 3_600_000)],
+            )],
             &HashMap::new(),
             7,
             5,
@@ -466,7 +469,11 @@ mod tes {
             1,
             sekarang,
         );
-        assert_eq!(laporan.runs.len(), 1, "limit dipotong setelah filter jendela");
+        assert_eq!(
+            laporan.runs.len(),
+            1,
+            "limit dipotong setelah filter jendela"
+        );
         assert_eq!(laporan.runs[0].number, 3);
         assert_eq!(laporan.totals.passed, 1);
         assert_eq!(laporan.totals.failed, 1);
@@ -476,7 +483,10 @@ mod tes {
     fn author_hilang_jadi_string_kosong_dan_url_diisi_pemanggil() {
         let sekarang = 1_793_783_991_779u64;
         let laporan = susun_laporan(
-            vec![("tes-web".to_string(), vec![build(6, Some("SUCCESS"), sekarang)])],
+            vec![(
+                "tes-web".to_string(),
+                vec![build(6, Some("SUCCESS"), sekarang)],
+            )],
             &HashMap::new(),
             7,
             5,

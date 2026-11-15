@@ -110,7 +110,10 @@ fn fake_jenkins_server() -> (u16, Arc<AtomicUsize>) {
             }
 
             let (code, body) = if target.contains("crumbIssuer") {
-                (200, r#"{"crumb":"uji","crumbRequestField":"Jenkins-Crumb"}"#)
+                (
+                    200,
+                    r#"{"crumb":"uji","crumbRequestField":"Jenkins-Crumb"}"#,
+                )
             } else if target.contains("/build") {
                 (201, "created")
             } else {

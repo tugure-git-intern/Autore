@@ -357,7 +357,7 @@ fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
                 .id
                 .clone()
                 .unwrap_or_else(|| format!("{}-{}-build_failed", args.app, args.build)),
-            ts: now(),
+            ts: crate::status::now_iso8601(),
             kind: "build_failed".into(),
             app: args.app,
             environment: args.environment,
@@ -406,7 +406,7 @@ fn from_result(path: &Path, args: &RecordArgs) -> Result<Event, String> {
             .id
             .clone()
             .unwrap_or_else(|| format!("{}-{}-deploy_result", args.app, args.build)),
-        ts: now(),
+        ts: crate::status::now_iso8601(),
         kind: "deploy_result".into(),
         app: args.app.clone(),
         environment: args.environment.clone(),
@@ -535,15 +535,6 @@ fn acquire_append_lock(path: &Path) -> Result<LockGuard, String> {
         }
     }
     Err(format!("append lock sibuk: {}", path.display()))
-}
-
-fn now() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    format!("{secs}Z")
 }
 
 #[cfg(test)]
@@ -706,6 +697,10 @@ mod tests {
         assert_eq!(event.environment, "staging");
         assert_eq!(event.outcome.as_deref(), Some("rolled_back"));
         assert_eq!(event.health.as_deref(), Some("ok"));
+        // Dashboard menolak seluruh muatan kalau ts bukan ISO-8601; ts berbentuk
+        // "<epoch>Z" lolos ke ledger dan UI mati dengan kartu "Terjadi Kesalahan".
+        assert_eq!(event.ts.len(), 20, "ts harus ISO-8601, bukan epoch: {}", event.ts);
+        assert!(event.ts.ends_with('Z'), "ts={}", event.ts);
     }
 
     #[test]

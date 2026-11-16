@@ -76,9 +76,10 @@ describe("berkas allowed-users.json", () => {
     expect(peta.get("maliffadlan")).toBe("dev");
   });
 
-  it("tidak memuat entri qa selama username GitHub-nya belum ada", () => {
-    // Menulis username karangan supaya peran qa "ada" hanya membuat whitelist
-    // terlihat lebih lengkap daripada kenyataannya.
-    expect([...allowlistMap(berkas, undefined).values()]).not.toContain("qa");
+  it("entri qa hanya untuk username GitHub yang nyata", () => {
+    // ryusicode = akun QA yang benar-benar ada; username karangan tidak boleh
+    // masuk hanya supaya peran qa kelihatan terisi.
+    const qa = [...allowlistMap(berkas, undefined)].filter(([, role]) => role === "qa").map(([login]) => login);
+    expect(qa).toEqual(["ryusicode"]);
   });
 });

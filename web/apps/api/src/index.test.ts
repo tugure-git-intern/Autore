@@ -206,18 +206,31 @@ describe("GET /api/sbom/:app", () => {
     );
   }
 
-  it("mengembalikan payload SBOM apa adanya tanpa menuntut sesi", async () => {
+  it("mengembalikan payload SBOM apa adanya untuk sesi sah", async () => {
     const app = await appSbom(async (id) => ({
       ok: true,
       status: 200,
       data: { ...PAYLOAD, app: id },
     }));
 
-    const res = await app.request("http://localhost/api/sbom/tes-web");
+    const res = await app.request("http://localhost/api/sbom/tes-web", { headers: { cookie: await cookie() } });
 
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ ...PAYLOAD, app: "tes-web" });
+  });
+
+  it("menolak tanpa sesi dan tidak memanggil loader SBOM", async () => {
+    let dipanggil = false;
+    const app = await appSbom(async (id) => {
+      dipanggil = true;
+      return { ok: true, status: 200, data: { ...PAYLOAD, app: id } };
+    });
+
+    const res = await app.request("http://localhost/api/sbom/tes-web");
+
+    expect(res.status).toBe(401);
+    expect(dipanggil).toBe(false);
   });
 
   it("meneruskan alasan gagal dari CLI beserta statusnya", async () => {
@@ -227,7 +240,7 @@ describe("GET /api/sbom/:app", () => {
       error: "SBOM belum ada untuk `tes-web`",
     }));
 
-    const res = await app.request("http://localhost/api/sbom/tes-web");
+    const res = await app.request("http://localhost/api/sbom/tes-web", { headers: { cookie: await cookie() } });
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "SBOM belum ada untuk `tes-web`" });
@@ -619,18 +632,41 @@ describe("GET /api/audit/log", () => {
         quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
       },
       async () => ({ data: RUNS, stale: false }),
-      {},
+      { secret: TEST_SECRET, allowed: ["alif"] },
       async () => ({ data: ACTIVE, stale: false }),
       async () => ({ ok: true, status: 200, data: { app: "x", generated_at: "", source: "x", total: 0, packages: [] } }),
       () => 0,
       async () => auditData,
     );
 
-    const res = await app.request("http://localhost/api/audit/log");
+    const res = await app.request("http://localhost/api/audit/log", {
+      headers: { cookie: await cookie() },
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     const json = await res.json();
     expect(json).toEqual({ data: auditData, total: 1 });
+  });
+
+  it("menolak tanpa sesi: jejak audit memuat PII", async () => {
+    const { createApp } = await freshApp();
+    const app = createApp(
+      async () => "{}",
+      {
+        run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
+        quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
+      },
+      async () => ({ data: RUNS, stale: false }),
+      { secret: TEST_SECRET, allowed: ["alif"] },
+      async () => ({ data: ACTIVE, stale: false }),
+      async () => ({ ok: true, status: 200, data: { app: "x", generated_at: "", source: "x", total: 0, packages: [] } }),
+      () => 0,
+      async () => [],
+    );
+
+    const res = await app.request("http://localhost/api/audit/log");
+
+    expect(res.status).toBe(401);
   });
 });
 

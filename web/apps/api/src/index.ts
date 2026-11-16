@@ -240,15 +240,22 @@ export function createApp(
     }
   });
 
-  // Daftar dependensi dari SBOM build terakhir. Read-only: tanpa sesi,
-  // sama seperti GET /api/* lain (unit ini hanya listen di 127.0.0.1).
+  // SBOM memuat peta versi dependensi dan tiap request men-spawn `autore sbom`
+  // (timeout 30 detik), jadi route ini butuh sesi + limiter seperti aksi. Dashboard
+  // memanggilnya same-origin dengan cookie sesi, jadi alur UI tidak berubah.
+  app.use("/api/sbom/*", requireSession(auth, "dev"));
+  app.use("/api/sbom/*", rateLimiter);
+
   app.get("/api/sbom/:app", async (c) => {
     c.header("Cache-Control", "no-store");
     const hasil = await sbom(c.req.param("app"));
     return hasil.ok ? c.json(hasil.data, 200) : c.json({ error: hasil.error }, hasil.status);
   });
 
-  // Jejak aksi audit trail: read-only, tanpa sesi (sama seperti GET /api/* lain)
+  // Jejak audit memuat login dan email (PII), jadi butuh sesi walau read-only.
+  app.use("/api/audit/log", requireSession(auth, "dev"));
+  app.use("/api/audit/log", rateLimiter);
+
   app.get("/api/audit/log", async (c) => {
     c.header("Cache-Control", "no-store");
     const data = await audit(100);

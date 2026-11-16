@@ -7,6 +7,18 @@ set -euo pipefail
 
 log() { printf '\n==> [Deploy By Digest] %s\n' "$*"; }
 
+# Workspace bisa berisi symlink bernama sama yang di-commit repo; menulis
+# langsung ke RESULT_JSON berarti mengikuti symlink dan menimpa berkas di
+# luar workspace (mis. ledger rilis). Tulis ke berkas baru di direktori yang
+# sama lalu rename: rename mengganti symlink-nya, bukan tujuannya.
+tulis_hasil() {
+  local tmp
+  tmp="$(mktemp -- "${RESULT_JSON}.tmp.XXXXXX")" || return 1
+  cat >"${tmp}" || { rm -f -- "${tmp}"; return 1; }
+  chmod 0644 "${tmp}"
+  mv -f -- "${tmp}" "${RESULT_JSON}"
+}
+
 IMAGE_REF="${1:-}"
 RESULT_JSON="${RESULT_JSON:-${WORKSPACE:-$PWD}/.deploy-result.json}"
 DEPLOYMENT_ID="${DEPLOYMENT_ID:-${APP_NAME:-autore-dummy}-${BUILD_NUMBER:-manual}}"
@@ -95,7 +107,7 @@ write_result() {
   RESULT_ACTIVE_AFTER_DIGEST="$ACTIVE_AFTER_DIGEST" \
   RESULT_HEALTH="${RESULT_HEALTH:-}" \
   RESULT_HEALTH_URL="http://127.0.0.1:${DEPLOY_PORT}${HEALTH_PATHS[0]}" \
-  python3 - <<'PY'
+  python3 - <<'PY' | tulis_hasil
 import json
 import os
 
@@ -126,9 +138,7 @@ payload = {
     "active_after": ref("RESULT_ACTIVE_AFTER"),
     "error": os.environ.get("RESULT_ERROR", ""),
 }
-with open(os.environ["RESULT_JSON"], "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, sort_keys=True)
-    handle.write("\n")
+print(json.dumps(payload, sort_keys=True))
 PY
 }
 

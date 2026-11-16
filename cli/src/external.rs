@@ -128,7 +128,6 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
             GITLEAKS_IMAGE,
             "detect",
             "--source=/repo",
-            "--no-git",
             "--redact",
             "--no-banner",
             "--log-level",
@@ -142,6 +141,12 @@ pub fn run_gitleaks(ctx: &ScanContext, runner: &dyn Runner) -> Result<(), String
         ]
         .map(String::from),
     );
+    // Target berupa repo git: pindai riwayat commit, bukan hanya berkas yang
+    // tersisa di checkout (secret yang sempat di-commit lalu dihapus tetap
+    // terlihat). Direktori biasa tak punya riwayat: pindai berkasnya saja.
+    if !ctx.target.join(".git").exists() {
+        args.push("--no-git".into());
+    }
     let code = runner.run(&ctx.docker, &args)?;
     let body = read_report(ctx, "gitleaks.json").map(|s| s.trim().to_string());
     let well_formed = matches!(&body, Some(b) if b.starts_with('[') && b.ends_with(']'));
@@ -938,7 +943,20 @@ mod tests {
             "{args}"
         );
         assert!(args.contains("--network none"), "{args}");
+        // Target uji tanpa .git: tidak ada riwayat untuk dipindai.
+        assert!(args.contains("--no-git"), "{args}");
         assert!(!args.contains("security-check.sh"), "{args}");
+    }
+
+    #[test]
+    fn gitleaks_memindai_riwayat_saat_target_repo_git() {
+        let tmp = TempDir::new().unwrap();
+        let c = ctx(&tmp);
+        fs::create_dir_all(c.target.join(".git")).unwrap();
+        let r = fake(0, Some("[]"));
+        run_gitleaks(&c, &r).unwrap();
+        let args = r.calls.borrow()[0].join(" ");
+        assert!(!args.contains("--no-git"), "{args}");
     }
 
     // ---- trivy ------------------------------------------------------------

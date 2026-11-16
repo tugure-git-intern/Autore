@@ -114,10 +114,15 @@ fi
 # 2. Gitleaks Secret Scan (Docker Container)
 # ---------------------------------------------------------------------------
 log "Lapis 2/3: Menjalankan Gitleaks Secret Scanner (Docker)..."
+gitleaks_args=(detect --source="/repo" --redact -v)
+# Workspace hasil checkout Jenkins punya .git: pindai riwayat commit supaya
+# secret yang sempat di-commit lalu dihapus tetap terlihat. Direktori biasa
+# (tanpa .git) tetap dipindai sebagai kumpulan berkas.
+[[ -d "${WORKSPACE}/.git" ]] || gitleaks_args+=(--no-git)
 if ! docker run --rm \
   -v "${WORKSPACE}:/repo:ro" \
   zricethezav/gitleaks:v8.21.2 \
-  detect --source="/repo" --no-git --redact -v; then
+  "${gitleaks_args[@]}"; then
   fail_gate "Gitleaks mendeteksi kebocoran Secret / API Key / Password di dalam repositori"
 fi
 log "Lapis 2/3: LULUS (tidak ada secret bocor)."

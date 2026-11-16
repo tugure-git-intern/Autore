@@ -1,0 +1,14 @@
+// Jalur CI->staging untuk autore-dummy: build, push registry, deploy staging
+// by digest di :8190, lalu catat event rilis supaya kandidat promosi muncul
+// sendiri di dashboard. Promote/rollback tetap di job terpisah
+// (autore-dummy-promote / autore-dummy-rollback) dan tetap butuh approve manual.
+@Library('autore') _
+autorePipeline(
+    appName: 'autore-dummy',
+    appPort: 8000,
+    deployPort: 8190,
+    deployName: 'autore-dummy-staging',
+    releaseEnvironment: 'staging',
+    dockerfileDir: 'sandbox/dummy-app',
+    sonarProjectKey: 'autore-cli',
+)

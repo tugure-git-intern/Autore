@@ -142,6 +142,30 @@ describe("handler promosi production", () => {
     }
   });
 
+  it("R48 menolak promosi bila container_port production belum dikonfigurasi (409)", async () => {
+    const h = handler(disetujui(1, DIGEST_1));
+    const hatch = hatchPromote({
+      ledger: h.berkas,
+      bin: "autore",
+      spawn: async (bin, args) => {
+        h.panggilan.push({ bin, args });
+        return { code: 0, stderr: "" };
+      },
+      lingkungan: () => ({
+        productionTarget: "127.0.0.1:8154",
+        productionDeployPort: 8154,
+        productionContainerPort: null,
+      }),
+    });
+    try {
+      const hasil = await hatch.promote(`${APP}:${COMMIT}:1`, orang("budi"));
+      expect(hasil).toMatchObject({ ok: false, status: 409 });
+      expect(h.panggilan).toHaveLength(0);
+    } finally {
+      lepasSemuaKunci();
+    }
+  });
+
   it("R43 menolak bila staging aktif sudah bukan digest release (409)", async () => {
     const h = handler([
       ...disetujui(1, DIGEST_2),

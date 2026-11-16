@@ -145,6 +145,21 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
         if (sudahDiProduction(production, hasilFold.deployments, digest)) {
           return { ok: false, status: 409, error: `production ${app} sudah memakai digest ${digest}` };
         }
+        const konfigProd = konfig(app);
+        const containerPort = process.env.AUTORE_PROMOTE_CONTAINER_PORT ??
+          (konfigProd.productionContainerPort === null ? "" : String(konfigProd.productionContainerPort));
+        const deployPort = process.env.AUTORE_PROMOTE_DEPLOY_PORT ??
+          (konfigProd.productionDeployPort === null ? "" : String(konfigProd.productionDeployPort));
+        // Port wajib eksplisit: default diam-diam 8080 pernah memetakan container
+        // production ke port yang salah, health kandidat gagal, dan rilis tercatat
+        // gagal tanpa sebab yang kelihatan di dashboard.
+        if (!containerPort || !deployPort) {
+          return {
+            ok: false,
+            status: 409,
+            error: `port production ${app} belum dikonfigurasi (deploy_port/container_port)`,
+          };
+        }
         const namaJob = job(app) || jobPromote(app);
         const args = [
           "release",
@@ -161,12 +176,12 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
           release.id.split(":")[2] ?? "",
           "--actor",
           aktor.login,
-          // Port production bisa diarahkan lewat env (uji memakai port bebas),
-          // default tetap produksi sebenarnya.
+          // Port production bisa diarahkan lewat env (uji memakai port bebas);
+          // tanpa konfigurasi eksplisit promosi ditolak, bukan ditebak.
           "--container-port",
-          process.env.AUTORE_PROMOTE_CONTAINER_PORT ?? String(konfig(app).productionContainerPort ?? 8080),
+          containerPort,
           "--deploy-port",
-          process.env.AUTORE_PROMOTE_DEPLOY_PORT ?? String(konfig(app).productionDeployPort ?? 8154),
+          deployPort,
         ];
         const keluaran = await spawn(bin, args);
         if (keluaran.code !== 0) {

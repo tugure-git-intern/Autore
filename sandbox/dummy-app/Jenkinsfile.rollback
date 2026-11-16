@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    options { buildDiscarder(logRotator(numToKeepStr: '20')); disableConcurrentBuilds() }
+    parameters {
+        string(defaultValue: '', name: 'DIGEST', description: 'sha256:64-hex-digest immutable dari Nexus')
+        string(defaultValue: '', name: 'SOURCE_IMAGE', description: 'Nama repo image (localhost:<port>/<app>)')
+        string(defaultValue: '', name: 'RELEASE_ID', description: 'Namespace event deployment')
+        string(defaultValue: '', name: 'BUILD_NUMBER_PARAM', description: 'Nomor build source')
+        string(defaultValue: '', name: 'ROLLED_BY', description: 'Login admin yang menekan Rollback')
+        choice(choices: ['production', 'staging'], name: 'DEPLOY_ENV', description: 'Environment target rollback')
+        string(defaultValue: '8191', name: 'DEPLOY_PORT_PARAM', description: 'Port production dummy')
+        string(defaultValue: '8000', name: 'CONTAINER_PORT_PARAM', description: 'Port dalam container dummy')
+    }
+    environment {
+        APP_NAME = 'autore-dummy'
+        DEPLOY_SCRIPT = '/usr/local/lib/autore-ci/ci-deploy-by-digest.sh'
+        AUTORE_BIN = '/usr/local/lib/autore-ci/autore'
+        RESULT_JSON = '/usr/local/lib/autore-ci/.deploy-result.json'
+        WORKSPACE_ROOT = '/home/tugure/autore-workspace'
+        AUTORE_DEPLOY_MODE = 'rollback'
+    }
+    stages {
+        stage('Deploy rollback by digest') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-admin', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh '''
+                        set -eu
+                        export DOCKER_CONFIG="$(mktemp -d)"
+                        rm -f "$RESULT_JSON"
+                        set +e
+                        "$DEPLOY_SCRIPT" "${SOURCE_IMAGE}@${DIGEST}"
+                        DEPLOY_EXIT=$?
+                        set -e
+                        echo "deploy exit: $DEPLOY_EXIT"
+                        [ "$DEPLOY_EXIT" -eq 0 ] || exit "$DEPLOY_EXIT"
+                        echo '--- ROLLBACK RESULT ---'
+                        cat "$RESULT_JSON"
+                        HEALTH="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["health"])' "$RESULT_JSON")"
+                        [ "$HEALTH" = "ok" ] || { echo "rollback tidak sehat ($HEALTH) — job gagal, record tidak ditulis"; exit 1; }
+                        ROLLBACK_ID="$("$AUTORE_BIN" release rollback-id --app "$APP_NAME" --build "$BUILD_NUMBER_PARAM")"
+                        COMMIT="${RELEASE_ID#"$APP_NAME":}"
+                        COMMIT="${COMMIT%:*}"
+                        "$AUTORE_BIN" release record --from-deploy-result "$RESULT_JSON" --app "$APP_NAME" --environment "$DEPLOY_ENV" --build "$BUILD_NUMBER_PARAM" --commit "$COMMIT" --id "$ROLLBACK_ID" --actor "$ROLLED_BY"
+                    '''
+                }
+            }
+        }
+    }
+    post { always { cleanWs() } }
+}

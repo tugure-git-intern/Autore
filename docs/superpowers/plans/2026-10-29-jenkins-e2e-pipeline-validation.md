@@ -49,7 +49,7 @@ Expected: container `autore-jenkins` Up, service `active`, UI `jenkins-ui:200` (
 - [ ] **Step 2: Ambil kredensial admin Jenkins & cek node/label via API**
 
 ```bash
-J=http://127.0.0.1:8080
+J="${JENKINS_URL:?set JENKINS_URL mis. http://host:8080}"
 JP=$(docker exec autore-jenkins cat /var/jenkins_home/secrets/initialAdminPassword)
 echo "admin-pass: $JP"
 curl -s -u "${ADMIN_AUTH}" $J/computer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['displayName'], [l['name'] for l in c['assignedLabels']], c.get('offline')) for c in d['computer']]"

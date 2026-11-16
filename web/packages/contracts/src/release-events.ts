@@ -337,9 +337,16 @@ export function foldReleaseEvents(
       // sehat, jadi jangan ditandai gagal hanya karena outcome-nya bukan "success".
       const sehat = sukses || (event.outcome === "rolled_back" && event.health === "ok");
       const envTarget = isProduction ? environments.get(`${event.app}:production`)! : staging;
+      // Rollback men-deploy digest milik release lain: kepemilikan deployment ikut
+      // pemilik digest, bukan release yang memicu rollback. Tanpa ini deployment
+      // target tercatat milik release baru dan hilang sebagai kandidat rollback.
+      const pemilikDigest =
+        event.outcome === "rolled_back"
+          ? [...releases.values()].find((item) => item.image_digest === event.digest) ?? null
+          : null;
       const deployment: Deployment = {
         id: deploymentId,
-        release_id: release.id,
+        release_id: pemilikDigest?.id ?? release.id,
         environment_id: envTarget.id,
         image_digest: event.digest!,
         status: sehat ? "sehat" : "gagal",

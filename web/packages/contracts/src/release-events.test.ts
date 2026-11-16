@@ -243,6 +243,44 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
       .toBe("dep-prod-1");
   });
 
+  it("rollback ke digest release lama tidak memindahkan kepemilikan deployment", () => {
+    const hasil = fold([
+      ...aktif(DIGEST_1),
+      ...sukses(2, DIGEST_2, "dep-stg-2"),
+      event({ id: "approve-2", kind: "approved", build_number: 2, request_id: "req-2", actor: "budi" }),
+      event({
+        id: "deploy-prod-2",
+        kind: "deploy_result",
+        environment: "production",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_2,
+        deployment_id: "dep-prod-2",
+        outcome: "success",
+        active_before: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+        active_after: { deployment_id: "dep-prod-2", digest: DIGEST_2 },
+        health: "ok",
+      }),
+      event({
+        id: "rb-2",
+        kind: "deploy_result",
+        environment: "production",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-1",
+        outcome: "rolled_back",
+        active_before: { deployment_id: "dep-prod-2", digest: DIGEST_2 },
+        active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+        health: "ok",
+      }),
+    ]);
+
+    expect(hasil.diabaikan).toEqual([]);
+    expect(hasil.deployments.find((d) => d.id === "dep-prod-1")?.release_id.endsWith(":1")).toBe(true);
+    expect(hasil.releases.find((r) => r.id.endsWith(":2"))?.status).toBe("rolled_back");
+  });
+
   it("R28 pemilihan aksi rollback mengikuti status dan environment yang eksplisit", () => {
     expect(aksiRollback("aktif", false)).toBe("rollback_staging_dari_aktif");
     expect(aksiRollback("aktif", true)).toBe("rollback_production_dari_aktif");

@@ -334,3 +334,57 @@ describe("higiene fold", () => {
     expect(hasil.diabaikan.map((item) => item.alasan).join(" ")).toContain("dep-hantu");
   });
 });
+
+describe("promosi ulang setelah promosi gagal", () => {
+  const gagalPromosi = (id: string, ts: string): ReleaseEvent =>
+    event({
+      id,
+      ts,
+      kind: "deploy_result",
+      environment: "production",
+      digest: DIGEST_1,
+      deployment_id: "dep-prod-1",
+      outcome: "failed_no_active",
+      active_before: null,
+      active_after: null,
+      health: "gagal",
+      error: "kandidat gagal health; tidak ada container lama",
+    });
+  const disetujui = [
+    ...sukses(1, DIGEST_1, "dep-stg-1"),
+    event({ id: "approve-1", ts: "2026-11-13T04:30:00Z", kind: "approved", actor: "budi" }),
+  ];
+
+  it("promosi gagal kedua tidak melempar dan release tetap gagal", () => {
+    const hasil = fold([
+      ...disetujui,
+      gagalPromosi("promote-1", "2026-11-13T05:00:00Z"),
+      gagalPromosi("promote-2", "2026-11-13T05:01:00Z"),
+    ]);
+    expect(hasil.releases[0].status).toBe("gagal");
+    const prod = hasil.environments.find((e) => e.nama === "production");
+    expect(prod?.active_deployment_id).toBeNull();
+  });
+
+  it("promosi ulang yang sehat membawa release ke aktif", () => {
+    const hasil = fold([
+      ...disetujui,
+      gagalPromosi("promote-1", "2026-11-13T05:00:00Z"),
+      event({
+        id: "promote-2",
+        ts: "2026-11-13T05:01:00Z",
+        kind: "deploy_result",
+        environment: "production",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-1",
+        outcome: "success",
+        health: "ok",
+        active_before: null,
+        active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+      }),
+    ]);
+    expect(hasil.releases[0].status).toBe("aktif");
+    const prod = hasil.environments.find((e) => e.nama === "production");
+    expect(prod?.active_deployment_id).toBe("dep-prod-1");
+  });
+});

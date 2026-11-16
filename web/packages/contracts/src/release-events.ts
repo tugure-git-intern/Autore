@@ -295,8 +295,13 @@ export function foldReleaseEvents(
       // K1: promosi production hanya dari release yang sudah disetujui; menunggu_
       // persetujuan tidak boleh langsung men-deploy production. Rollback sengaja
       // bukan promosi, jadi tidak lewat gerbang ini.
-      if (isProduction && event.outcome !== "rolled_back" &&
-        release.status !== "disetujui" && release.status !== "production_berjalan") {
+      // Retry promosi setelah promosi pertama gagal health hanya boleh untuk
+      // release yang memang pernah lolos approval; `gagal` dari build gagal tidak
+      // boleh jadi pintu masuk production.
+      const bolehProduction =
+        release.status === "disetujui" || release.status === "production_berjalan" ||
+        (release.status === "gagal" && Boolean(release.approved_by));
+      if (isProduction && event.outcome !== "rolled_back" && !bolehProduction) {
         throw new Error("production deploy hanya untuk release disetujui");
       }
       if (isProduction && event.outcome !== "rolled_back") {
@@ -309,6 +314,9 @@ export function foldReleaseEvents(
           throw new Error("digest production harus sama dengan deployment staging aktif");
         }
         if (release.status === "disetujui") release = transisiRelease(release, "production_mulai");
+        else if (release.status === "gagal" && release.approved_by) {
+          release = transisiRelease(release, "production_ulang");
+        }
       }
       if (!isProduction && release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
       const deploymentId = event.deployment_id!;

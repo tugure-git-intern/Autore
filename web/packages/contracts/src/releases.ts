@@ -74,6 +74,7 @@ export type AksiRelease =
   | "approve"
   | "reject"
   | "production_mulai"
+  | "production_ulang"
   | "production_sehat"
   | "production_gagal"
   | "rollback_selesai"
@@ -100,6 +101,9 @@ const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = 
   approve: { dari: "menunggu_persetujuan", ke: "disetujui" },
   reject: { dari: "menunggu_persetujuan", ke: "ditolak" },
   production_mulai: { dari: "disetujui", ke: "production_berjalan" },
+  // Promosi ulang: promosi pertama gagal health, operator boleh mencoba lagi
+  // tanpa release tersangkut permanen di `gagal`.
+  production_ulang: { dari: "gagal", ke: "production_berjalan" },
   production_sehat: { dari: "production_berjalan", ke: "aktif" },
   production_gagal: { dari: "production_berjalan", ke: "gagal" },
   rollback_selesai: { dari: "gagal", ke: "rolled_back" },

@@ -281,6 +281,108 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
     expect(hasil.releases.find((r) => r.id.endsWith(":2"))?.status).toBe("rolled_back");
   });
 
+  it("promosi release baru menurunkan release lama dari aktif", () => {
+    const hasil = fold([
+      ...aktif(DIGEST_1),
+      ...sukses(2, DIGEST_2, "dep-stg-2"),
+      event({ id: "approve-2", kind: "approved", build_number: 2, request_id: "req-2", actor: "budi" }),
+      event({
+        id: "deploy-prod-2",
+        kind: "deploy_result",
+        environment: "production",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_2,
+        deployment_id: "dep-prod-2",
+        outcome: "success",
+        active_before: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+        active_after: { deployment_id: "dep-prod-2", digest: DIGEST_2 },
+        health: "ok",
+      }),
+    ]);
+
+    expect(hasil.releases.find((r) => r.id.endsWith(":1"))?.status).toBe("digantikan");
+    expect(hasil.releases.find((r) => r.id.endsWith(":2"))?.status).toBe("aktif");
+    expect(hasil.releases.filter((r) => r.status === "aktif")).toHaveLength(1);
+  });
+
+  it("rollback ke release yang digantikan mengaktifkannya kembali", () => {
+    const hasil = fold([
+      ...aktif(DIGEST_1),
+      ...sukses(2, DIGEST_2, "dep-stg-2"),
+      event({ id: "approve-2", kind: "approved", build_number: 2, request_id: "req-2", actor: "budi" }),
+      event({
+        id: "deploy-prod-2",
+        kind: "deploy_result",
+        environment: "production",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_2,
+        deployment_id: "dep-prod-2",
+        outcome: "success",
+        active_before: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+        active_after: { deployment_id: "dep-prod-2", digest: DIGEST_2 },
+        health: "ok",
+      }),
+      event({
+        id: "rb-2",
+        kind: "deploy_result",
+        environment: "production",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-1",
+        outcome: "rolled_back",
+        active_before: { deployment_id: "dep-prod-2", digest: DIGEST_2 },
+        active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
+        health: "ok",
+      }),
+    ]);
+
+    expect(hasil.releases.find((r) => r.id.endsWith(":1"))?.status).toBe("aktif");
+    expect(hasil.releases.find((r) => r.id.endsWith(":2"))?.status).toBe("rolled_back");
+  });
+
+  it("event deploy yang diabaikan tidak mendaftarkan deployment", () => {
+    const hasil = fold([
+      ...sukses(1, DIGEST_1, "dep-stg-1"),
+      event({
+        id: "dep-prod-x",
+        kind: "deploy_result",
+        environment: "production",
+        digest: DIGEST_1,
+        deployment_id: "dep-prod-x",
+        outcome: "success",
+        health: "ok",
+        active_before: null,
+        active_after: { deployment_id: "dep-prod-x", digest: DIGEST_1 },
+      }),
+    ]);
+
+    expect(hasil.diabaikan).toHaveLength(1);
+    expect(hasil.deployments.some((d) => d.id === "dep-prod-x")).toBe(false);
+  });
+
+  it("rollback tanpa transisi sah tidak mendaftarkan deployment", () => {
+    const hasil = fold([
+      ...sukses(1, DIGEST_1, "dep-stg-1"),
+      event({
+        id: "rb-x",
+        kind: "deploy_result",
+        environment: "production",
+        digest: DIGEST_1,
+        deployment_id: "dep-asing",
+        outcome: "rolled_back",
+        health: "ok",
+        active_before: { deployment_id: "dep-stg-1", digest: DIGEST_1 },
+        active_after: { deployment_id: "dep-asing", digest: DIGEST_1 },
+      }),
+    ]);
+
+    expect(hasil.diabaikan).toHaveLength(1);
+    expect(hasil.deployments.some((d) => d.id === "dep-asing")).toBe(false);
+  });
+
   it("R28 pemilihan aksi rollback mengikuti status dan environment yang eksplisit", () => {
     expect(aksiRollback("aktif", false)).toBe("rollback_staging_dari_aktif");
     expect(aksiRollback("aktif", true)).toBe("rollback_production_dari_aktif");

@@ -9,6 +9,7 @@ export const STATUS_RELEASE = [
   "disetujui",
   "production_berjalan",
   "aktif",
+  "digantikan",
   "gagal",
   "ditolak",
   "rolled_back",

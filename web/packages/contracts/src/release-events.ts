@@ -355,8 +355,6 @@ export function foldReleaseEvents(
         selesai_pada: event.ts,
         error: sehat ? null : (event.error || event.outcome || "deploy gagal"),
       };
-      deployments.set(deployment.id, deployment);
-
       if (sukses) {
         if (event.active_after?.digest !== event.digest ||
           event.active_after?.deployment_id !== deployment.id) {
@@ -365,8 +363,16 @@ export function foldReleaseEvents(
           abaikan(event, "active_after tidak cocok dengan deployment sukses");
           continue;
         } else {
+          deployments.set(deployment.id, deployment);
           if (isProduction) {
             release = transisiRelease(release, "production_sehat", { deployment, environment: envTarget });
+            // Satu app satu release aktif: release yang digest-nya baru digantikan
+            // tidak boleh tetap mengaku aktif.
+            for (const [id, lain] of releases) {
+              if (id !== release.id && lain.status === "aktif") {
+                releases.set(id, { ...lain, status: "digantikan" });
+              }
+            }
           } else {
             release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
           }
@@ -388,6 +394,11 @@ export function foldReleaseEvents(
             // staging_sehat/production_sehat, dan image_digest release yang di-rollback
             // sengaja tidak disentuh.
             release = transisiRelease(release, aksi);
+            // Layanan kembali ke digest release lama: release pemilik digest itu
+            // aktif lagi, bukan tinggal berstatus digantikan.
+            if (pemilikDigest && pemilikDigest.status === "digantikan") {
+              releases.set(pemilikDigest.id, { ...pemilikDigest, status: "aktif" });
+            }
           } else if (kandidatGagal) {
             // Build baru gagal sehat lalu di-rollback: penanda kegagalan dulu, baru
             // status akhir rolled_back.
@@ -410,6 +421,7 @@ export function foldReleaseEvents(
         // Event yang diabaikan tidak boleh menggeser pointer: dia memang tidak
         // menggambarkan perubahan nyata di environment mana pun.
         if (!abaikanIni) {
+          deployments.set(deployment.id, deployment);
           const kandidat = event.outcome === "failed_no_active"
             ? null
             : (event.active_after?.deployment_id ?? event.active_before?.deployment_id ??

@@ -64,6 +64,19 @@ def daftar_image():
     return [tuple(line.split("\t")) for line in out.splitlines() if line.count("\t") == 2]
 
 
+def dipakai_container(repo, tag):
+    """Image yang masih dirujuk container (termasuk yang berhenti) jangan di-rmi."""
+    hasil = subprocess.run(
+        ["docker", "ps", "-a", "--filter", f"ancestor={repo}:{tag}", "--format", "{{.ID}}"],
+        capture_output=True, text=True,
+    )
+    return hasil.stdout.strip() != ""
+
+
+def galat_dipakai(stderr):
+    return "image is being used" in stderr or "must be forced" in stderr
+
+
 def main():
     apply = "--apply" in sys.argv
     events = []
@@ -74,13 +87,22 @@ def main():
 
     baris = [f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} mode={'apply' if apply else 'dry-run'} kandidat={len(kandidat)}"]
     gagal = 0
+    ditahan = 0
     for repo, tag in kandidat:
         if not apply:
             baris.append(f"  akan hapus {repo}:{tag}")
             continue
+        # Container berhenti pun masih memakai image; itu bukan kegagalan retensi.
+        if dipakai_container(repo, tag):
+            ditahan += 1
+            baris.append(f"  tahan {repo}:{tag} (dipakai container)")
+            continue
         hasil = subprocess.run(["docker", "rmi", f"{repo}:{tag}"], capture_output=True, text=True)
         if hasil.returncode == 0:
             baris.append(f"  hapus {repo}:{tag}")
+        elif galat_dipakai(hasil.stderr):
+            ditahan += 1
+            baris.append(f"  tahan {repo}:{tag} (dipakai container)")
         else:
             gagal += 1
             baris.append(f"  lewati {repo}:{tag} ({hasil.stderr.strip().splitlines()[-1:]})")
@@ -88,7 +110,7 @@ def main():
         prune = subprocess.run(["docker", "image", "prune", "-f"], capture_output=True, text=True)
         terakhir = [b for b in prune.stdout.splitlines() if "Total reclaimed" in b]
         baris.append(f"  prune dangling: {terakhir[0] if terakhir else 'n/a'}")
-    baris.append(f"selesai kandidat={len(kandidat)} gagal={gagal}")
+    baris.append(f"selesai kandidat={len(kandidat)} ditahan={ditahan} gagal={gagal}")
 
     teks = "\n".join(baris)
     print(teks)
@@ -109,6 +131,8 @@ def self_test():
         {"kind": "deploy_result", "app": "a", "build_number": 8, "environment": "staging", "outcome": "success"},
         {"kind": "approved", "app": "a", "build_number": 3, "environment": "staging"},
     ]) == {("a", 8), ("a", 3)}
+    assert galat_dipakai("Error response from daemon: conflict: unable to delete abc (must be forced) - image is being used by stopped container def")
+    assert not galat_dipakai("permission denied while trying to connect to the Docker daemon socket")
     print("self-test ok")
 
 

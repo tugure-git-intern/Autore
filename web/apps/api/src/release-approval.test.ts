@@ -57,6 +57,7 @@ function menungguPersetujuan(build = 1, dibuatOleh = "operator"): ReleaseEvent[]
       digest: DIGEST,
       deployment_id: `dep-stg-${build}`,
       outcome: "success",
+      health: "ok",
       active_before: null,
       active_after: { deployment_id: `dep-stg-${build}`, digest: DIGEST },
       build_number: build,
@@ -153,13 +154,12 @@ describe("approve", () => {
     expect(hasil.ok === false && hasil.status).toBe(404);
   });
 
-  it("approve oleh pembuat commit tetap diproses dan tercatat (kontrol self-approval ditidakkan)", async () => {
+  it("approve oleh pembuat commit ditolak 403 tanpa menulis event", async () => {
     const berkas = ledgerTemp(menungguPersetujuan(1, "operator"));
     const hasil = await hatchApprovals({ ledger: () => berkas }).approve(ID, orang("  Operator  "));
 
-    expect(hasil.ok && hasil.release.status).toBe("disetujui");
-    expect(hasil.ok && hasil.release.approved_by).toBe("Operator");
-    expect(eventsDi(berkas)).toHaveLength(5);
+    expect(hasil.ok === false && hasil.status).toBe(403);
+    expect(eventsDi(berkas)).toHaveLength(4);
   });
 
   it("keputusan status yang salah tetap 409 (bukan 403) lewat handler", async () => {

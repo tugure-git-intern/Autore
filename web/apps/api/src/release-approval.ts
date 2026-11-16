@@ -195,6 +195,16 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
         return { ok: true, status: 200, release };
       }
 
+      // Empat mata: pembuat release tidak boleh menyetujui rilisnya sendiri.
+      if (kind === "approved" &&
+        release.dibuat_oleh.trim().toLowerCase() === actor.login.trim().toLowerCase()) {
+        return {
+          ok: false,
+          status: 403,
+          error: "pembuat release tidak boleh menyetujui rilisnya sendiri",
+        };
+      }
+
       // Rilis yang sudah digantikan build lebih baru di staging tidak disetujui:
       // menyetujuinya hanya menumpuk rilis mati di dashboard. Menolak tetap boleh
       // supaya rilis lama bisa dibersihkan.

@@ -48,6 +48,7 @@ function release(build: number, digest: string, dipromosikan = false): ReleaseEv
       digest,
       deployment_id: `dep-stg-${build}`,
       outcome: "success",
+      health: "ok",
       active_before: null,
       active_after: { deployment_id: `dep-stg-${build}`, digest },
       build_number: build,

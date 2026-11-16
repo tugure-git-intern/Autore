@@ -4,12 +4,12 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
-import type { ActivePayload, RunsPayload, SbomResult } from "@autore/contracts";
+import { roleAtLeast, roleFor, type ActivePayload, type RunsPayload, type SbomResult } from "@autore/contracts";
 import { getRuns } from "./runs";
 import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { hatchSbom } from "./sbom";
-import { requireSession, type AuthApi, type Identitas } from "./session";
+import { bacaAllowlist, requireSession, type AuthApi, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
 import { loadReleases, type ReleaseLoader } from "./releases";
 import { hatchApprovals, type ApprovalHandler, type HasilKeputusan } from "./release-approval";
@@ -218,6 +218,21 @@ export function createApp(
     const body = await bacaBodyRollback(c.req.raw);
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    // Rollback production mematikan layanan yang sedang dipakai: `qa` cukup untuk
+    // staging, production hanya admin. Role dibaca ulang dari allowlist saat ini.
+    if (body.environment === "production") {
+      const role = roleFor(bacaAllowlist(), c.get("sesi").login);
+      if (role === null || !roleAtLeast(role, "admin")) {
+        return c.json(
+          {
+            ok: false,
+            status: 403 as const,
+            error: `Rollback production butuh role admin; role Anda ${role ?? "tidak terdaftar"}.`,
+          },
+          403,
+        );
+      }
+    }
     const hasil = await rollback.rollback(c.req.param("id"), body.environment, c.get("sesi"));
     return c.json(hasil, hasil.status);
   });

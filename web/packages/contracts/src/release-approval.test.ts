@@ -245,6 +245,7 @@ describe("validator event approval", () => {
     digest: DIGEST_1,
     deployment_id: "dep-stg-1",
     outcome: "success",
+    health: "ok",
     active_before: null,
     active_after: null,
     ...overrides,

@@ -55,6 +55,7 @@ function menungguPersetujuan(build: number): ReleaseEvent[] {
       digest: DIGEST,
       deployment_id: `dep-stg-${build}`,
       outcome: "success",
+      health: "ok",
       active_before: null,
       active_after: { deployment_id: `dep-stg-${build}`, digest: DIGEST },
       build_number: build,
@@ -440,6 +441,23 @@ describe("rollback lewat HTTP", () => {
       target_digest: DIGEST,
     });
     expect(eventsDi(berkas)).toHaveLength(awal);
+  });
+
+  it("R44 rollback production ditolak untuk qa dan diterima untuk admin", async () => {
+    const berkas = ledgerTemp(duaRelease());
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:qa");
+    const awal = eventsDi(berkas).length;
+    expect((await kirim(berkas, 2, { environment: "production" })).status).toBe(403);
+    expect(eventsDi(berkas)).toHaveLength(awal);
+
+    vi.stubEnv("AUTORE_ALLOWED_USERS", "budi:admin");
+    const res = await kirim(berkas, 2, { environment: "production" });
+    expect(res.status).toBe(202);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      environment: "production",
+      target_deployment_id: "dep-prod-1",
+    });
   });
 });
 

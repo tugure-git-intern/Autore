@@ -47,6 +47,7 @@ function dasar(build: number, digest: string): ReleaseEvent[] {
       digest,
       deployment_id: `dep-stg-${build}`,
       outcome: "success",
+      health: "ok",
       active_before: null,
       active_after: { deployment_id: `dep-stg-${build}`, digest },
       build_number: build,

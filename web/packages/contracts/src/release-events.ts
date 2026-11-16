@@ -97,6 +97,9 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     if (!["success", "rolled_back", "failed_no_active", "rollback_failed"].includes(String(value.outcome))) {
       return false;
     }
+    // Sukses berarti aplikasi benar-benar sehat; tanpa bukti health `ok`, event
+    // tidak boleh membuat deployment sehat dan membuka gerbang promosi.
+    if (value.outcome === "success" && value.health !== "ok") return false;
     if (!nonEmpty(value.deployment_id)) return false;
     if (!isRef(value.active_before) || !isRef(value.active_after)) return false;
     // Koherensi outcome vs deployment sebelumnya: rollback hanya bermakna bila ada
@@ -193,6 +196,34 @@ export function aksiRollback(
 }
 
 /**
+ * Waktu event dalam milidetik. Ledger lama menulis ISO, ledger baru menulis Unix
+ * detik dengan akhiran `Z`; dua bentuk itu harus bisa dibandingkan.
+ */
+function waktuEvent(ts: string): number | null {
+  if (/^\d+Z?$/.test(ts)) return Number(ts.replace(/Z$/, "")) * 1000;
+  const nilai = Date.parse(ts);
+  return Number.isNaN(nilai) ? null : nilai;
+}
+
+/**
+ * Satu event per id (kemunculan pertama menang) dan urut waktu. Event ganda dari
+ * penulisan ulang akan menggeser status dua kali bila tidak dideduplikasi, dan
+ * urutan berkas tidak boleh menentukan hasil fold. Bila ada `ts` yang tidak bisa
+ * dibaca, urutan asli dipertahankan daripada mengurutkan asal-asalan.
+ */
+export function urutkanEvent(events: ReleaseEvent[]): ReleaseEvent[] {
+  const unik = new Map<string, ReleaseEvent>();
+  for (const event of events) if (!unik.has(event.id)) unik.set(event.id, event);
+  const hasil = [...unik.values()];
+  const waktu = hasil.map((event) => waktuEvent(event.ts));
+  if (waktu.some((nilai) => nilai === null)) return hasil;
+  return hasil
+    .map((event, indeks) => ({ event, waktu: waktu[indeks]! }))
+    .sort((kiri, kanan) => kiri.waktu - kanan.waktu)
+    .map((item) => item.event);
+}
+
+/**
  * Melipat event mentah menjadi model release/deployment. TypeScript tetap satu-
  * satunya pemilik transisi; event dari Rust/Jenkins tidak membawa status turunan.
  */
@@ -209,7 +240,7 @@ export function foldReleaseEvents(
     return true;
   };
 
-  for (const event of events) {
+  for (const event of urutkanEvent(events)) {
     if (!isReleaseEvent(event)) throw new Error("invalid release event");
     for (const env of lingkungan(event.app, productionTarget)) {
       environments.set(env.id, environments.get(env.id) ?? env);
@@ -348,10 +379,18 @@ export function foldReleaseEvents(
         // Event yang diabaikan tidak boleh menggeser pointer: dia memang tidak
         // menggambarkan perubahan nyata di environment mana pun.
         if (!abaikanIni) {
-          const lama = event.outcome === "failed_no_active"
+          const kandidat = event.outcome === "failed_no_active"
             ? null
             : (event.active_after?.deployment_id ?? event.active_before?.deployment_id ??
               envTarget.active_deployment_id);
+          // Pointer hantu membuat promosi membandingkan digest dengan deployment
+          // yang tidak pernah ada; referensi asing tidak boleh menggeser pointer.
+          const lama = kandidat !== null && !deployments.has(kandidat)
+            ? envTarget.active_deployment_id
+            : kandidat;
+          if (kandidat !== null && lama !== kandidat) {
+            abaikan(event, `pointer deployment ${kandidat} tidak dikenal`);
+          }
           environments.set(envTarget.id, { ...envTarget, active_deployment_id: lama ?? null });
         }
       }

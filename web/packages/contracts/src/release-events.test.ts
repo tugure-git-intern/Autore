@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aksiRollback, foldReleaseEvents, isReleaseEvent, type ReleaseEvent } from "./release-events";
+import { aksiRollback, foldReleaseEvents, isReleaseEvent, urutkanEvent, type ReleaseEvent } from "./release-events";
 
 const COMMIT = "a".repeat(40);
 const DIGEST_1 = "sha256:" + "1".repeat(64);
@@ -158,6 +158,7 @@ describe("production environment", () => {
         digest: DIGEST_1,
         deployment_id: "dep-prod-1",
         outcome: "success",
+        health: "ok",
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
@@ -173,6 +174,7 @@ describe("production environment", () => {
         digest: DIGEST_1,
         deployment_id: "dep-prod-1",
         outcome: "success",
+        health: "ok",
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
@@ -268,3 +270,67 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
 });
 
 
+
+describe("higiene fold", () => {
+  it("success tanpa health ok bukan event sah", () => {
+    const dasar = event({
+      kind: "deploy_result",
+      digest: DIGEST_1,
+      deployment_id: "dep-1",
+      outcome: "success",
+      active_before: null,
+      active_after: { deployment_id: "dep-1", digest: DIGEST_1 },
+    });
+    const tanpaHealth: Partial<ReleaseEvent> = { ...dasar };
+    delete tanpaHealth.health;
+    expect(isReleaseEvent(tanpaHealth)).toBe(false);
+    expect(isReleaseEvent({ ...dasar, health: "gagal" })).toBe(false);
+    expect(isReleaseEvent({ ...dasar, health: "ok" })).toBe(true);
+  });
+
+  it("mengurutkan lintas format waktu dan mendeduplikasi id", () => {
+    const hasil = urutkanEvent([
+      event({ id: "c", ts: "1794798355Z" }),
+      event({ id: "a", ts: "2026-11-13T04:00:00Z" }),
+      event({ id: "b", ts: "2026-11-14T04:00:00Z" }),
+      event({ id: "a", ts: "2026-11-15T04:00:00Z" }),
+    ]);
+    expect(hasil.map((item) => item.id)).toEqual(["a", "b", "c"]);
+    expect(hasil.find((item) => item.id === "a")?.ts).toBe("2026-11-13T04:00:00Z");
+  });
+
+  it("urutan event terbalik menghasilkan fold yang sama", () => {
+    const maju = [...sukses(1, DIGEST_1, "dep-1"), ...sukses(2, DIGEST_2, "dep-2")
+      .map((item) => ({ ...item, ts: "2026-11-13T05:00:00Z" }))];
+    expect(fold([...maju].reverse())).toEqual(fold(maju));
+  });
+
+  it("event ganda dengan id sama tidak menggeser status dua kali", () => {
+    const satu = sukses(1, DIGEST_1, "dep-1");
+    const hasil = fold([...satu, ...satu]);
+    expect(hasil.releases).toHaveLength(1);
+    expect(hasil.deployments).toHaveLength(1);
+  });
+
+  it("pointer ke deployment asing tidak dipakai dan dicatat diabaikan", () => {
+    const hasil = fold([
+      ...sukses(1, DIGEST_1, "dep-1"),
+      event({
+        id: "deploy-2",
+        kind: "deploy_result",
+        build_number: 2,
+        request_id: "req-2",
+        digest: DIGEST_2,
+        deployment_id: "dep-2",
+        outcome: "rolled_back",
+        active_before: { deployment_id: "dep-1", digest: DIGEST_1 },
+        active_after: { deployment_id: "dep-hantu", digest: DIGEST_1 },
+        health: "gagal",
+        error: "health gagal",
+      }),
+    ]);
+    expect(hasil.environments.find((environment) => environment.nama === "staging")?.active_deployment_id)
+      .toBe("dep-1");
+    expect(hasil.diabaikan.map((item) => item.alasan).join(" ")).toContain("dep-hantu");
+  });
+});

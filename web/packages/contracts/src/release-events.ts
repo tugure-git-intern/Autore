@@ -277,7 +277,9 @@ export function foldReleaseEvents(
       if (release.status === "menunggu_persetujuan") {
         release = transisiRelease(release, "approve", { actor: event.actor });
       } else if (release.status !== "disetujui") {
-        throw new Error("approve hanya untuk release menunggu_persetujuan");
+        // Approve untuk status selain menunggu_persetujuan: abaikan.
+        abaikan(event, "approve hanya untuk release menunggu_persetujuan");
+        continue;
       }
     }
 
@@ -285,9 +287,12 @@ export function foldReleaseEvents(
       // ditolak tidak punya transisi keluar: satu-satunya jalan masuk adalah dari
       // menunggu_persetujuan, sehingga tidak ada rute ditolak -> disetujui.
       if (release.status !== "menunggu_persetujuan") {
-        throw new Error("reject hanya untuk release menunggu_persetujuan");
+        // Reject untuk status selain menunggu_persetujuan: abaikan.
+        abaikan(event, "reject hanya untuk release menunggu_persetujuan");
+        continue;
+      } else {
+        release = transisiRelease(release, "reject", { alasan: event.error });
       }
-      release = transisiRelease(release, "reject", { alasan: event.error });
     }
 
     if (event.kind === "deploy_result") {
@@ -302,7 +307,10 @@ export function foldReleaseEvents(
         release.status === "disetujui" || release.status === "production_berjalan" ||
         (release.status === "gagal" && Boolean(release.approved_by));
       if (isProduction && event.outcome !== "rolled_back" && !bolehProduction) {
-        throw new Error("production deploy hanya untuk release disetujui");
+        // Release belum disetujui tapi ada event deploy production: abaikan.
+        // Bisa terjadi bila event tertulis sebelum approval, atau race condition.
+        abaikan(event, "production deploy hanya untuk release disetujui");
+        continue;
       }
       if (isProduction && event.outcome !== "rolled_back") {
         // Digest production wajib sama dengan deployment sehat yang sedang aktif di
@@ -311,11 +319,15 @@ export function foldReleaseEvents(
         const aktifStaging = environments.get(`${event.app}:staging`)?.active_deployment_id;
         const deploymentStaging = aktifStaging ? deployments.get(aktifStaging) : undefined;
         if (!deploymentStaging || deploymentStaging.image_digest !== event.digest) {
-          throw new Error("digest production harus sama dengan deployment staging aktif");
-        }
-        if (release.status === "disetujui") release = transisiRelease(release, "production_mulai");
-        else if (release.status === "gagal" && release.approved_by) {
-          release = transisiRelease(release, "production_ulang");
+          // Digest tidak cocok: event ini tidak valid untuk promosi, abaikan tapi catat.
+          // Bisa terjadi bila release disetujui lalu build baru deploy staging sebelum promosi.
+          abaikan(event, "digest production tidak cocok dengan deployment staging aktif");
+          continue;
+        } else {
+          if (release.status === "disetujui") release = transisiRelease(release, "production_mulai");
+          else if (release.status === "gagal" && release.approved_by) {
+            release = transisiRelease(release, "production_ulang");
+          }
         }
       }
       if (!isProduction && release.status === "siap_staging") release = transisiRelease(release, "staging_mulai");
@@ -341,14 +353,18 @@ export function foldReleaseEvents(
       if (sukses) {
         if (event.active_after?.digest !== event.digest ||
           event.active_after?.deployment_id !== deployment.id) {
-          throw new Error("active_after tidak cocok dengan deployment sukses");
-        }
-        if (isProduction) {
-          release = transisiRelease(release, "production_sehat", { deployment, environment: envTarget });
+          // active_after tidak cocok: abaikan event sukses ini.
+          // Tanpa validasi pointer, deployment bisa menunjuk ke hal yang tidak ada.
+          abaikan(event, "active_after tidak cocok dengan deployment sukses");
+          continue;
         } else {
-          release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
+          if (isProduction) {
+            release = transisiRelease(release, "production_sehat", { deployment, environment: envTarget });
+          } else {
+            release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
+          }
+          environments.set(envTarget.id, { ...envTarget, active_deployment_id: deployment.id });
         }
-        environments.set(envTarget.id, { ...envTarget, active_deployment_id: deployment.id });
       } else {
         let abaikanIni = false;
         if (event.outcome === "rolled_back") {

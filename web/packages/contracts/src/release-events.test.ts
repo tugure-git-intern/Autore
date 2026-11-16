@@ -149,7 +149,7 @@ describe("production environment", () => {
   });
 
   it("production deploy tanpa approval ditolak (state machine)", () => {
-    expect(() => fold([
+    const hasil = fold([
       ...sukses(1, DIGEST_1, "dep-stg-1"),
       event({
         id: "dep-prod-1",
@@ -162,11 +162,14 @@ describe("production environment", () => {
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
-    ])).toThrow("production deploy hanya untuk release disetujui");
+    ]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("production deploy hanya untuk release"))).toBe(true);
+    expect(hasil.releases[0].status).toBe("menunggu_persetujuan");
+    expect(hasil.environments.find(e => e.id.includes("production"))?.active_deployment_id).toBeNull();
   });
 
   it("production deploy tanpa menunggu_persetujuan ditolak", () => {
-    expect(() => fold([
+    const hasil = fold([
       event({
         id: "dep-prod-1",
         kind: "deploy_result",
@@ -178,7 +181,9 @@ describe("production environment", () => {
         active_before: null,
         active_after: { deployment_id: "dep-prod-1", digest: DIGEST_1 },
       }),
-    ])).toThrow("production deploy hanya untuk release disetujui");
+    ]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("production deploy hanya untuk release"))).toBe(true);
+    expect(hasil.releases.length).toBe(0);
   });
 });
 

@@ -83,9 +83,8 @@ describe("siklus approval release", () => {
   });
 
   it("approve dari status salah (staging_berjalan) ditolak", () => {
-    expect(() => foldReleaseEvents([...sampaiStagingBerjalan(), approveEvent({ actor: "budi" })])).toThrow(
-      "approve hanya untuk release menunggu_persetujuan",
-    );
+    const hasil = foldReleaseEvents([...sampaiStagingBerjalan(), approveEvent({ actor: "budi" })]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("approve hanya untuk release"))).toBe(true);
   });
 
   it("approve kedua idempoten: tetap disetujui tanpa perubahan lain", () => {
@@ -113,11 +112,12 @@ describe("siklus approval release", () => {
 
   it("approve pada release ditolak ditolak (tidak ada jalan ditolak -> disetujui)", () => {
     const rejected = event({ id: "reject-1", kind: "rejected", actor: "budi", error: "Regresi klaim." });
-    expect(() => foldReleaseEvents([
+    const hasil = foldReleaseEvents([
       ...sampaiStagingSehat(),
       rejected,
       approveEvent({ actor: "budi" }),
-    ])).toThrow("approve hanya untuk release menunggu_persetujuan");
+    ]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("approve hanya untuk release"))).toBe(true);
   });
 
   it("reject dari menunggu_persetujuan menuju ditolak dan memakai error sebagai alasan", () => {
@@ -130,10 +130,11 @@ describe("siklus approval release", () => {
   });
 
   it("reject dari status lain ditolak", () => {
-    expect(() => foldReleaseEvents([
+    const hasil = foldReleaseEvents([
       ...sampaiStagingBerjalan(),
       event({ id: "reject-1", kind: "rejected", actor: "budi", error: "coba" }),
-    ])).toThrow("reject hanya untuk release menunggu_persetujuan");
+    ]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("reject hanya untuk release"))).toBe(true);
   });
 
   it("deploy_result staging pada release ditolak ditolak", () => {
@@ -151,10 +152,11 @@ const PROD = "127.0.0.1:8154";
 
 describe("promosi production", () => {
   it("deploy production pada release menunggu_persetujuan ditolak (K1)", () => {
-    expect(() => foldReleaseEvents([
+    const hasil = foldReleaseEvents([
       ...sampaiStagingSehat(),
       productionDeploy(),
-    ], PROD)).toThrow("production deploy hanya untuk release disetujui");
+    ], PROD);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("production deploy hanya untuk release"))).toBe(true);
   });
 
   it("deploy production pada release disetujui dengan digest sama menjadi aktif", () => {
@@ -168,11 +170,12 @@ describe("promosi production", () => {
   });
 
   it("deploy production dengan digest berbeda dari deployment staging aktif ditolak", () => {
-    expect(() => foldReleaseEvents([
+    const hasil = foldReleaseEvents([
       ...sampaiStagingSehat(DIGEST_1),
       approveEvent({ actor: "budi" }),
       productionDeploy({ digest: DIGEST_2 }),
-    ])).toThrow("digest production harus sama dengan deployment staging aktif");
+    ]);
+    expect(hasil.diabaikan.some(d => d.alasan.includes("digest production tidak cocok"))).toBe(true);
   });
 });
 

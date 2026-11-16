@@ -237,6 +237,16 @@ export function hatchApprovals(deps: ApprovalDeps = {}): ApprovalHandler {
         return terjemah(error);
       }
 
+      // Cek apakah event diabaikan (status salah, digest tidak cocok, dll)
+      const diabaikan = sesudah.diabaikan.find(d => d.event_id === event.id);
+      if (diabaikan) {
+        return {
+          ok: true,
+          status: 200,
+          release: sesudah.releases.find((item) => item.id === release.id) ?? release,
+        };
+      }
+
       tulisEvent(berkas, event);
       return {
         ok: true,

@@ -130,12 +130,12 @@ describe("approve", () => {
     expect(eventsDi(berkas).filter((event) => event.kind === "approved")).toHaveLength(1);
   });
 
-  it("409 bila status bukan menunggu_persetujuan", async () => {
+  it("abaikan bila status bukan menunggu_persetujuan", async () => {
     const berkas = ledgerTemp(stagingBerjalan());
     const hasil = await hatchApprovals({ ledger: () => berkas }).approve(ID, orang("budi"));
 
-    expect(hasil.ok).toBe(false);
-    expect(hasil.ok === false && hasil.status).toBe(409);
+    // abaikan: event tidak ditulis, status tidak berubah
+    expect(hasil.ok).toBe(true);
     expect(eventsDi(berkas)).toHaveLength(3);
   });
 
@@ -162,13 +162,14 @@ describe("approve", () => {
     expect(eventsDi(berkas)).toHaveLength(4);
   });
 
-  it("keputusan status yang salah tetap 409 (bukan 403) lewat handler", async () => {
+  it("abaikan lewat handler, bukan 403", async () => {
     const berkas = ledgerTemp(menungguPersetujuan(1, "operator"));
     const handler = hatchApprovals({ ledger: () => berkas });
     await handler.reject(ID, orang("budi"), "Regresi klaim.");
     const hasil = await handler.approve(ID, orang("budi"));
 
-    expect(hasil.ok === false && hasil.status).toBe(409);
+    // abaikan: tidak menulis event baru
+    expect(hasil.ok).toBe(true);
   });
 
   it("409 saat kunci aplikasi masih dipegang aksi lain", async () => {
@@ -239,13 +240,14 @@ describe("reject", () => {
     });
   });
 
-  it("409 bila release sudah disetujui (tidak ada jalan disetujui -> ditolak)", async () => {
+  it("abaikan bila release sudah disetujui (tidak ada jalan disetujui -> ditolak)", async () => {
     const berkas = ledgerTemp(menungguPersetujuan());
     const handler = hatchApprovals({ ledger: () => berkas });
     await handler.approve(ID, orang("budi"));
     const hasil = await handler.reject(ID, orang("siti"), "berubah pikiran");
 
-    expect(hasil.ok === false && hasil.status).toBe(409);
+    // abaikan: tidak menulis event baru
+    expect(hasil.ok).toBe(true);
     expect(eventsDi(berkas)).toHaveLength(5);
   });
 

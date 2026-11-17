@@ -234,7 +234,8 @@ describe("AppShell — kerangka mobile", () => {
     // Padding ada di pembungkus isi, bukan di <main>: latar putih main selebar kolom.
     const isi = screen.getByRole("main").firstElementChild as HTMLElement;
     expect(isi.className).toContain("pb-24");
-    expect(isi.className).toContain("pt-6");
+    expect(isi.className).toContain("sm:pt-4");
+    expect(isi.className).toContain("lg:pt-1");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 

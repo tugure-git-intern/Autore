@@ -102,12 +102,12 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     if (value.outcome === "success" && value.health !== "ok") return false;
     if (!nonEmpty(value.deployment_id)) return false;
     if (!isRef(value.active_before) || !isRef(value.active_after)) return false;
-    // Koherensi outcome vs deployment sebelumnya: rollback hanya bermakna bila ada
-    // deployment sehat (kandidatnya) yang menampung hasil rollback; kegagalan tanpa
-    // deployment sebelumnya justru harus TIDAK membawa active_before, supaya
-    // "tidak ada yang bisa di-rollback" tidak tersamar sebagai rollback.
+    // Rollback sehat wajib menunjuk deployment yang menampung hasilnya. Rollback
+    // yang gagal boleh tanpa active_before: kegagalannya bisa terjadi sebelum
+    // deployment lama sempat dibaca (mis. port host tidak diketahui), dan event
+    // itu tetap harus terbaca dashboard, bukan mematikan seluruh ledger.
     const adaSebelum = value.active_before !== null && value.active_before !== undefined;
-    if ((value.outcome === "rolled_back" || value.outcome === "rollback_failed") && !adaSebelum) {
+    if (value.outcome === "rolled_back" && !adaSebelum) {
       return false;
     }
     if (value.outcome === "failed_no_active" && adaSebelum) return false;

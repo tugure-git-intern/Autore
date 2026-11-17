@@ -112,6 +112,21 @@ describe("fold event release", () => {
     expect(hasil.releases[0]?.status).toBe("gagal");
   });
 
+  it("R41 rollback_failed tanpa active_before diterima, rolled_back tanpa active_before ditolak", () => {
+    const gagal = event({
+      kind: "deploy_result",
+      digest: DIGEST_1,
+      deployment_id: "dep-prod-1",
+      outcome: "rollback_failed",
+      active_before: null,
+      active_after: null,
+      health: "gagal",
+      error: "port host tidak diketahui",
+    });
+    expect(isReleaseEvent(gagal)).toBe(true);
+    expect(isReleaseEvent({ ...gagal, outcome: "rolled_back" })).toBe(false);
+  });
+
   it("menolak field asing dan event yang tidak lengkap", () => {
     expect(isReleaseEvent({ ...event(), asing: true })).toBe(false);
     expect(isReleaseEvent({ ...event(), kind: "deploy_result" })).toBe(false);

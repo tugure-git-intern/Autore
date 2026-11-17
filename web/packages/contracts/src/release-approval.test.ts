@@ -262,8 +262,9 @@ describe("validator event approval", () => {
     }))).toBe(true);
   });
 
-  it("menolak rollback_failed tanpa active_before, menerimanya dengan active_before", () => {
-    expect(isReleaseEvent(deployResultEvent({ outcome: "rollback_failed" }))).toBe(false);
+  it("menerima rollback_failed tanpa active_before, rollback yang berhasil tetap wajib punya", () => {
+    // Rollback bisa gagal sebelum deployment lama terbaca (port host tidak diketahui).
+    expect(isReleaseEvent(deployResultEvent({ outcome: "rollback_failed" }))).toBe(true);
     expect(isReleaseEvent(deployResultEvent({
       outcome: "rollback_failed",
       active_before: { deployment_id: "dep-stg-0", digest: DIGEST_2 },

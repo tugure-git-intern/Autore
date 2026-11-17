@@ -91,6 +91,10 @@ pub struct TriggerRollbackArgs {
     build: u64,
     #[arg(long)]
     actor: String,
+    /// Port host untuk container rollback; wajib kalau container aktif sudah hilang
+    /// (port tidak bisa disimpulkan lagi oleh ci-deploy-by-digest.sh)
+    #[arg(long)]
+    deploy_port: Option<u16>,
     /// Daftarkan job dari `Jenkinsfile.rollback` kalau job-nya belum ada
     #[arg(long)]
     git_url: Option<String>,
@@ -250,7 +254,8 @@ fn trigger_rollback(args: TriggerRollbackArgs) -> Result<String, String> {
     let conf_path = jenkins::default_config_path();
     let cfg = jenkins::load_config_from(&conf_path)
         .ok_or_else(|| format!("konfigurasi Jenkins belum ada di {}", conf_path.display()))?;
-    let params = [
+    let port = args.deploy_port.map(|p| p.to_string());
+    let mut params = vec![
         ("ROLLBACK_APP", args.app.as_str()),
         ("ROLLBACK_ENVIRONMENT", args.environment.as_str()),
         ("ROLLBACK_DIGEST", args.digest.as_str()),
@@ -258,6 +263,9 @@ fn trigger_rollback(args: TriggerRollbackArgs) -> Result<String, String> {
         ("ROLLBACK_RELEASE_ID", args.release_id.as_str()),
         ("ROLLBACK_ACTOR", args.actor.as_str()),
     ];
+    if let Some(ref port) = port {
+        params.push(("ROLLBACK_DEPLOY_PORT", port.as_str()));
+    }
     match jenkins::trigger_parameterized(&cfg, &args.job, &params) {
         Ok(url) => Ok(url),
         Err(e) => {

@@ -228,6 +228,31 @@ describe("handler rollback", () => {
     }
   });
 
+  it("R40 rollback production mengirim --deploy-port dari konfigurasi lingkungan", async () => {
+    const berkas = ledgerTemp(duaRelease());
+    const panggilan: Panggilan[] = [];
+    const hatch = hatchRollback({
+      ledger: berkas,
+      bin: "autore",
+      lingkungan: () => ({
+        productionTarget: `${APP}-production`,
+        productionDeployPort: 8191,
+        productionContainerPort: 3000,
+      }),
+      spawn: async (bin, args) => {
+        panggilan.push({ bin, args });
+        return { code: 0, stderr: "" };
+      },
+    });
+    try {
+      const hasil = await hatch.rollback(`${APP}:${COMMIT}:2`, "production", orang("budi"));
+      expect(hasil).toMatchObject({ ok: true });
+      expect(panggilan[0].args.slice(-2)).toEqual(["--deploy-port", "8191"]);
+    } finally {
+      lepasSemuaKunci();
+    }
+  });
+
   it("R38 kegagalan CLI jadi 502 dan tidak ada klaim sukses", async () => {
     const h = handler(duaRelease(), [], 1);
     try {

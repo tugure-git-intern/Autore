@@ -5,7 +5,12 @@
  *
  * Dijalankan timer systemd tiap menit:
  *   AUTORE_WATCHDOG_APP=autore-dummy node_modules/.bin/tsx apps/api/scripts/watchdog.ts
+ *
+ * Notifikasi Telegram best-effort pada tiga transisi: rollback dipicu (atau akan
+ * dipicu saat dry-run), rollback gagal, dan production pulih. Token dibaca dari
+ * EnvironmentFile systemd (`/etc/autore/watchdog.env`), tidak pernah dari repo.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { foldReleaseEvents, isReleaseEvent } from "@autore/contracts";
@@ -32,6 +37,21 @@ const WATCHDOG: Identitas = {
 
 function catat(baris: Record<string, unknown>): void {
   console.log(JSON.stringify({ app: APP, mode: MODE, ...baris }));
+}
+
+const NOTIFY_BIN = process.env.AUTORE_NOTIFY_BIN ?? "/usr/local/lib/autore-ci/notify-kabar.sh";
+
+/** Kabar Telegram best-effort; kegagalan notifikasi tidak boleh menggagalkan watchdog. */
+function kabar(teks: string): void {
+  if (!process.env.TELEGRAM_CHAT_ID) return;
+  const hasil = spawnSync(NOTIFY_BIN, ["--teks", teks], {
+    env: process.env,
+    timeout: 20_000,
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  if (hasil.error || hasil.status !== 0) {
+    catat({ kabar: "gagal", error: hasil.error?.message ?? `exit ${hasil.status}` });
+  }
 }
 
 function statusPath(ledger: string): string {
@@ -91,12 +111,18 @@ tulisStatus(berkas, putusan.status);
 
 if (putusan.aksi !== "rollback") {
   catat({ sehat, gagal_beruntun: putusan.status.gagal_beruntun, aksi: "biarkan" });
+  if (sehat && sebelumnya.gagal_beruntun > 0) {
+    kabar(
+      `[Autore] ${APP} production pulih setelah ${sebelumnya.gagal_beruntun}x probe gagal (${url}).`,
+    );
+  }
   process.exit(0);
 }
 
 const release = hasil.releases.find((r) => r.id === aktif.release_id) ?? null;
 if (!release) {
   catat({ sehat, aksi: "tidak_bisa_rollback", alasan: "release deployment aktif tidak ditemukan" });
+  kabar(`[Autore] ${APP} production down (${url}) tapi rollback tidak bisa: release aktif tidak ditemukan.`);
   process.exit(1);
 }
 const target = pilihTargetRollback(hasil.deployments, produksi, release);
@@ -107,6 +133,9 @@ if (!target) {
     alasan: "tidak ada deployment sehat sebelumnya",
     release: release.id,
   });
+  kabar(
+    `[Autore] ${APP} production down (${url}) tapi rollback tidak bisa: tidak ada deployment sehat sebelumnya. Perlu tindakan manual.`,
+  );
   process.exit(1);
 }
 
@@ -122,9 +151,25 @@ const rencana = {
 
 if (MODE === "dry-run") {
   catat({ aksi: "akan_rollback", ...rencana });
+  kabar(
+    `[Autore] ${APP} production gagal ${putusan.status.gagal_beruntun}x berturut-turut (${url}). ` +
+      `Dry-run: rollback ${aktif.id} -> ${target.id} TIDAK dijalankan.`,
+  );
   process.exit(0);
 }
 
 const keluaran = await hatchRollback().rollback(release.id, "production", WATCHDOG);
 catat({ aksi: "rollback", ...rencana, hasil: keluaran });
+if (keluaran.ok) {
+  tulisStatus(berkas, { gagal_beruntun: 0 });
+  kabar(
+    `[Autore] ${APP} production di-rollback otomatis: ${aktif.id} -> ${target.id} ` +
+      `(${target.image_digest.slice(0, 19)}). Sebab: health check gagal ${putusan.status.gagal_beruntun}x.`,
+  );
+} else {
+  kabar(
+    `[Autore] ${APP} production GAGAL di-rollback otomatis: ${keluaran.error ?? "tanpa pesan"}. ` +
+      `Perlu tindakan manual. Url: ${url}`,
+  );
+}
 process.exit(keluaran.ok ? 0 : 1);

@@ -242,6 +242,10 @@ if [[ "${AUTORE_DEPLOY_MODE:-deploy}" == "rollback" ]]; then
   # (aplikasi satu port). Aplikasi multiport wajib mengirim DEPLOY_PORT.
   if [[ -z "${DEPLOY_PORT_DIISI}" ]]; then
     peta="$(docker inspect -f '{{range $p, $c := .NetworkSettings.Ports}}{{range $c}}{{.HostPort}} {{$p}}{{"\n"}}{{end}}{{end}}' "${ACTIVE_CONTAINER}" 2>/dev/null | head -n1 || true)"
+    # Container berhenti kehilangan NetworkSettings.Ports; HostConfig tetap ada.
+    if [[ -z "${peta}" ]]; then
+      peta="$(docker inspect -f '{{range $p, $c := .HostConfig.PortBindings}}{{range $c}}{{.HostPort}} {{$p}}{{"\n"}}{{end}}{{end}}' "${ACTIVE_CONTAINER}" 2>/dev/null | head -n1 || true)"
+    fi
     if [[ -n "${peta}" ]]; then
       DEPLOY_PORT="${peta%% *}"
       CONTAINER_PORT="${peta##* }"

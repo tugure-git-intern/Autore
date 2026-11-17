@@ -166,7 +166,11 @@ export function hatchRollback(deps: RollbackDeps = {}): RollbackHandler {
           };
         }
         const namaJob = job(app) || jobRollback(app);
-        const args = [
+        // Port host production ikut dikirim: watchdog bisa memicu rollback saat
+        // container aktif sudah hilang, dan saat itu port tak bisa disimpulkan
+        // lagi dari container. Staging belum punya entri port di lingkungan.json.
+        const deployPort = isProduction ? konfig(app).productionDeployPort : null;
+        const args: string[] = [
           "release",
           "trigger-rollback",
           "--job",
@@ -186,6 +190,7 @@ export function hatchRollback(deps: RollbackDeps = {}): RollbackHandler {
           "--actor",
           aktor.login,
         ];
+        if (deployPort !== null) args.push("--deploy-port", String(deployPort));
         const keluaran = await spawn(bin, args);
         if (keluaran.code !== 0) {
           return {

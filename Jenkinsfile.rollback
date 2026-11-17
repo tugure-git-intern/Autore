@@ -31,6 +31,7 @@ pipeline {
         string(name: 'ROLLBACK_DEPLOYMENT_ID', defaultValue: '', description: 'Deployment ID target rollback')
         string(name: 'ROLLBACK_RELEASE_ID', defaultValue: '', description: 'app:commit:build release yang di-rollback')
         string(name: 'ROLLBACK_ACTOR', defaultValue: '', description: 'Login pelaku rollback')
+        string(name: 'ROLLBACK_DEPLOY_PORT', defaultValue: '', description: 'Port host container rollback (wajib kalau container aktif sudah hilang)')
     }
 
     stages {
@@ -48,6 +49,10 @@ pipeline {
                     }
                     if (!params.ROLLBACK_DEPLOYMENT_ID?.trim()) {
                         error('ROLLBACK_DEPLOYMENT_ID wajib diisi')
+                    }
+                    def port = (params.ROLLBACK_DEPLOY_PORT ?: '').trim()
+                    if (port && (!(port ==~ /[1-9][0-9]{0,4}/) || (port as int) > 65535)) {
+                        error("ROLLBACK_DEPLOY_PORT bukan port valid: ${port}")
                     }
                     def bagian = (params.ROLLBACK_RELEASE_ID ?: '').tokenize(':')
                     if (bagian.size() != 3 || !(bagian[2] ==~ /\d+/)) {
@@ -73,6 +78,7 @@ pipeline {
                     "RB_DEPLOYMENT_ID=${params.ROLLBACK_DEPLOYMENT_ID}",
                     "RB_RELEASE_ID=${params.ROLLBACK_RELEASE_ID}",
                     "RB_ACTOR=${params.ROLLBACK_ACTOR}",
+                    "RB_DEPLOY_PORT=${params.ROLLBACK_DEPLOY_PORT}",
                 ]) {
                     sh '''#!/bin/sh
                     set -e
@@ -91,6 +97,11 @@ pipeline {
                     export CANDIDATE_CONTAINER_NAME="$ACTIVE_CONTAINER_NAME-candidate"
                     export DEPLOYMENT_ID="$RB_DEPLOYMENT_ID"
                     export RESULT_JSON="$WORKSPACE/.deploy-rollback-result.json"
+
+                    # Container aktif sudah hilang: port tidak bisa disimpulkan lagi.
+                    if [ -n "$RB_DEPLOY_PORT" ]; then
+                      export DEPLOY_PORT="$RB_DEPLOY_PORT"
+                    fi
 
                     image_ref="$AUTORE_REGISTRY/$RB_APP@$RB_DIGEST"
                     set +e

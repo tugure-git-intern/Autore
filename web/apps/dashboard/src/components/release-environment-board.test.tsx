@@ -200,8 +200,31 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     expect(screen.getByRole("button", { name: "Setujui" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Setujui" })).toHaveClass("bg-green-600");
+    expect(screen.getByRole("button", { name: "Setujui" })).toHaveClass(
+      "bg-[#496cc3]",
+      "dark:bg-[#839cff]",
+    );
     expect(screen.getByRole("button", { name: "Tolak" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Tolak" })).toHaveClass(
+      "border-[#496cc3]/50",
+      "dark:border-[#839cff]/50",
+    );
+  });
+
+  it("menutup form penolakan lewat tombol Batal", () => {
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments}
+        deployments={deployments}
+        role="qa"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tolak" }));
+    expect(screen.getByLabelText("Alasan penolakan (wajib)")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    expect(screen.queryByLabelText("Alasan penolakan (wajib)")).toBeNull();
   });
 
   it("tidak menawarkan approval untuk release yang sudah lewat gerbang", () => {
@@ -230,7 +253,10 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toHaveClass("bg-blue-600");
+    expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toHaveClass(
+      "bg-[#496cc3]",
+      "dark:bg-[#839cff]",
+    );
     expect(screen.queryByRole("button", { name: "Rollback Production" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
   });

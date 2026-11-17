@@ -19,7 +19,7 @@ interface ActionButtonProps {
   /** Aplikasi yang jadi sasaran aksi. Deploy & scan sama-sama butuh ini: server
    *  tidak punya target cadangan, dan aksi tanpa id dijawab 400. */
   app: string;
-  variant?: "green" | "secondary";
+  variant?: "primary" | "secondary";
   confirm?: ActionConfirmation;
   onDone?: () => void;
 }
@@ -103,7 +103,7 @@ export function ActionButton({
           <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => setOpen(false)}>Batal</Button>
             <Button
-              variant="green"
+              variant="primary"
               onClick={() => {
                 setOpen(false);
                 void dispatch();

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Role, StatusRelease } from "@autore/contracts";
 import { roleAtLeast } from "@autore/contracts";
+import { Check, RotateCcw, Rocket, Send, X } from "lucide-react";
 import { Button } from "./ui/button";
 
 type Aksi = "approve" | "reject" | "promote" | "rollback";
@@ -73,30 +74,35 @@ export function ReleaseKeputusan({
     <div className="space-y-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         {bolehSetujui ? (
-          <Button variant="green" disabled={kirim} onClick={() => void jalankan("approve", {})}>
+          <Button variant="primary" disabled={kirim} onClick={() => void jalankan("approve", {})}>
+            <Check size={16} aria-hidden="true" />
             Setujui
           </Button>
         ) : null}
         {bolehTolak ? (
           <Button
-            variant="danger"
+            variant="secondary"
             disabled={kirim}
+            aria-expanded={tanyaAlasan}
             onClick={() => setTanyaAlasan((lama) => !lama)}
           >
+            <X size={16} aria-hidden="true" />
             Tolak
           </Button>
         ) : null}
         {bolehPromosi ? (
           <Button variant="primary" disabled={kirim} onClick={() => void jalankan("promote", {})}>
+            <Rocket size={16} aria-hidden="true" />
             Promosikan ke Production
           </Button>
         ) : null}
         {bolehRollback ? (
           <Button
-            variant="ghost"
+            variant="secondary"
             disabled={kirim}
             onClick={() => void jalankan("rollback", { environment: "production" })}
           >
+            <RotateCcw size={16} aria-hidden="true" />
             Rollback Production
           </Button>
         ) : null}
@@ -113,13 +119,20 @@ export function ReleaseKeputusan({
             rows={2}
             className="w-full rounded-md border border-gray-200 bg-white p-2 text-sm dark:border-[#50638b] dark:bg-[#353b43] dark:text-white"
           />
-          <Button
-            variant="ghost"
-            disabled={kirim || alasan.trim() === ""}
-            onClick={() => void jalankan("reject", { alasan })}
-          >
-            Kirim penolakan
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" disabled={kirim} onClick={() => setTanyaAlasan(false)}>
+              <X size={16} aria-hidden="true" />
+              Batal
+            </Button>
+            <Button
+              variant="primary"
+              disabled={kirim || alasan.trim() === ""}
+              onClick={() => void jalankan("reject", { alasan })}
+            >
+              <Send size={16} aria-hidden="true" />
+              Kirim penolakan
+            </Button>
+          </div>
         </div>
       ) : null}
       {pesan ? (

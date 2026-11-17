@@ -343,6 +343,16 @@ describe("rollback sengaja (mode rollback skrip emitor)", () => {
     expect(hasil.releases.find((r) => r.id.endsWith(":2"))?.status).toBe("rolled_back");
   });
 
+  it("event tanpa health_url tidak dikarang port 8154/8153", () => {
+    const hasil = fold([
+      ...sukses(1, DIGEST_1, "dep-stg-1"),
+    ]);
+
+    const deployment = hasil.deployments.find((d) => d.id === "dep-stg-1");
+    expect(deployment?.health_check_url).toBe("");
+    expect(deployment?.status).toBe("sehat");
+  });
+
   it("event deploy yang diabaikan tidak mendaftarkan deployment", () => {
     const hasil = fold([
       ...sukses(1, DIGEST_1, "dep-stg-1"),

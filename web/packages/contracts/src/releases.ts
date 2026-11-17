@@ -269,7 +269,7 @@ export function isDeployment(value: unknown): value is Deployment {
     isNonEmpty(value.environment_id) &&
     /^sha256:[0-9a-f]{64}$/.test(String(value.image_digest)) &&
     ["antri", "berjalan", "sehat", "gagal"].includes(String(value.status)) &&
-    isNonEmpty(value.health_check_url) && isNonEmpty(value.mulai_pada) &&
+    typeof value.health_check_url === "string" && isNonEmpty(value.mulai_pada) &&
     isNullableString(value.selesai_pada) && isNullableString(value.error);
 }
 

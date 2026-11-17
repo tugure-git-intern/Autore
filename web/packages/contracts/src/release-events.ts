@@ -350,7 +350,9 @@ export function foldReleaseEvents(
         environment_id: envTarget.id,
         image_digest: event.digest!,
         status: sehat ? "sehat" : "gagal",
-        health_check_url: event.health_url || (isProduction ? "http://127.0.0.1:8154/health" : "http://127.0.0.1:8153/health"),
+        // Event tanpa health_url: kosongkan, jangan menebak port 8154/8153 yang
+        // hanya benar untuk satu mesin. URL asli selalu ikut dari deploy script.
+        health_check_url: event.health_url || "",
         mulai_pada: event.ts,
         selesai_pada: event.ts,
         error: sehat ? null : (event.error || event.outcome || "deploy gagal"),

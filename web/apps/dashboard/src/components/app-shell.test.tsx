@@ -235,7 +235,7 @@ describe("AppShell — kerangka mobile", () => {
     const isi = screen.getByRole("main").firstElementChild as HTMLElement;
     expect(isi.className).toContain("pb-24");
     expect(isi.className).toContain("sm:pt-4");
-    expect(isi.className).toContain("lg:pt-0");
+    expect(isi.className).toContain("lg:pt-6");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 

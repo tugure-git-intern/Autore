@@ -103,7 +103,7 @@ describe("topbar route context", () => {
     // sudut melengkung di keempat sisi, dan renggang 12px dari kanan & bawah.
     expect(main.className).toContain("lg:ml-[274px]");
     expect(main.className).toContain("lg:mr-3");
-    expect(main.className).toContain("lg:mt-3");
+    expect(main.className).toContain("lg:mt-2");
     expect(main.className).toContain("lg:mb-3");
     expect(main.className).toContain("lg:w-auto");
     expect(main.className).toContain("lg:rounded-2xl");

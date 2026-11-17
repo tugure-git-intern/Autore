@@ -30,7 +30,7 @@ export function PageTabHeader({
       className={
         polos
           ? className
-          : `rounded-t-xl sm:rounded-t-2xl bg-white p-4 sm:px-6 sm:py-4 dark:bg-[var(--bg-canvas)] ${className}`
+          : `rounded-t-xl sm:rounded-t-2xl bg-white px-4 pb-4 pt-2 sm:px-6 dark:bg-[var(--bg-canvas)] ${className}`
       }
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -84,7 +84,7 @@ describe("RecentRuns", () => {
   it("empty state saat tidak ada run", () => {
     render(<RecentRuns runs={[]} />);
 
-    expect(screen.getByText("Belum ada run")).toBeInTheDocument();
+    expect(screen.getByText("Belum ada build")).toBeInTheDocument();
     expect(screen.queryAllByTestId("recent-run-row")).toHaveLength(0);
   });
 });

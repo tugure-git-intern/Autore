@@ -30,14 +30,14 @@ export function RecentRuns({ runs, stale = false }: { runs: readonly RunRecord[]
 
   return (
     <ChartCard
-      title="Recent Runs"
+      title="Riwayat Build"
       subtitle="Lima build terakhir dari Jenkins"
       action={
         stale ? <span className="text-xs text-amber-600">data terakhir</span> : undefined
       }
     >
       {baris.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-white">Belum ada run</p>
+        <p className="text-sm text-gray-500 dark:text-white">Belum ada build</p>
       ) : (
         <div className="-mx-5 -mb-5 overflow-x-auto">
           <table className="w-full text-left text-sm">

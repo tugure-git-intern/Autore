@@ -43,7 +43,7 @@ describe("ActivePipelines", () => {
   it("menampilkan judul dan hitungan dalam bahasa Indonesia", () => {
     gambar([pipeline(), antre()]);
 
-    expect(screen.getByRole("heading", { name: "Active Pipelines" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Pipeline Aktif" })).toBeInTheDocument();
     expect(screen.getByText("2 berjalan atau menunggu")).toBeInTheDocument();
   });
 
@@ -205,7 +205,7 @@ describe("ActivePipelines", () => {
 
     // Deskripsi
     const deskripsi = screen.getByText(
-      "Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya akan muncul di sini secara real-time.",
+      "Tidak ada pipeline yang sedang berjalan atau menunggu. Saat pipeline dimulai, statusnya akan muncul di sini secara langsung.",
     );
     expect(deskripsi).toBeInTheDocument();
     expect(deskripsi.className).toContain("text-sm");

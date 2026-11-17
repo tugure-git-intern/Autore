@@ -99,12 +99,14 @@ export function DashboardOverview() {
           value={<AnimatedNumber value={data.stats.total_apps} />}
           icon={Boxes}
           tone="blue"
+          hint="Aplikasi di registri"
         />
         <StatCard
           label="Container Berjalan"
           value={<AnimatedNumber value={data.stats.running_containers} />}
           icon={Container}
           tone="green"
+          hint="Container aktif"
         />
         <StatCard
           label="Lead Time"
@@ -118,6 +120,7 @@ export function DashboardOverview() {
           value={pipelineLabels[data.latest_pipeline.status] ?? pipelineLabels.unknown}
           icon={Workflow}
           tone="amber"
+          hint="Build terakhir"
         />
         <RepositoryHealthCard health={data.repository_health} />
       </section>
@@ -190,8 +193,8 @@ export function DashboardOverview() {
 function LoadingSkeleton() {
   return (
     <section aria-label="Memuat status" aria-busy="true">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((key) => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((key) => (
           <Skeleton key={key} className="h-28" />
         ))}
       </div>

@@ -22,7 +22,7 @@ export function StatCard({ label, value, icon: Icon, tone = "blue", hint }: Stat
   return (
     <section className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-5 dark:border-[#50638b] dark:bg-[#353b43]">
       {/* Tile rides the label row; the value keeps one fixed place below it. */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex min-h-10 items-start gap-2.5">
         <span
           aria-hidden="true"
           className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tones[tone]}`}

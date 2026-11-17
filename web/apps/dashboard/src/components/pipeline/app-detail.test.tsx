@@ -129,7 +129,7 @@ test("riwayat build hanya memuat aplikasi terpilih, dengan link Jenkins per buil
 test("mengabsen jujur saat aplikasi belum pernah dibangun", () => {
   gambar();
 
-  expect(screen.getByText("Belum ada run untuk aplikasi ini")).toBeVisible();
+  expect(screen.getByText("Belum ada build untuk aplikasi ini")).toBeVisible();
   expect(screen.queryByRole("link", { name: /Jenkins/ })).toBeNull();
 });
 

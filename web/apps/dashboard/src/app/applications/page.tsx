@@ -44,10 +44,10 @@ function findings(status: AppStatus, securityIssues: number): string {
 function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void; sentuh?: boolean }) {
   const kelasTautan = sentuh
     ? "inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline dark:text-blue-300"
-    : "text-blue-600 hover:underline dark:text-blue-300";
+    : "whitespace-nowrap text-blue-600 hover:underline dark:text-blue-300";
 
   return (
-    <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex items-center gap-3"}>
+    <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex flex-wrap items-center gap-x-3 gap-y-1"}>
       <Link href={`/pipeline?app=${encodeURIComponent(app)}`} className={kelasTautan}>
         Detail
       </Link>

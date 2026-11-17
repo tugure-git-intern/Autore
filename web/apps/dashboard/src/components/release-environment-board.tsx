@@ -33,7 +33,7 @@ const LABEL_RELEASE: Record<StatusRelease, string> = {
   digantikan: "Digantikan",
   gagal: "Gagal",
   ditolak: "Ditolak",
-  rolled_back: "Rolled Back",
+  rolled_back: "Dikembalikan",
 };
 
 const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
@@ -76,7 +76,7 @@ export function ReleaseEnvironmentBoard({
   return (
     <section aria-label={`Environment ${appName}`} className="space-y-4">
       <header>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Staging</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">Environment</p>
         <h2 className="text-lg font-semibold">{appName}</h2>
       </header>
       {inkonsisten.length > 0 ? (

@@ -42,3 +42,5 @@ dist/
 
 # Isolated local worktrees
 .worktrees/
+
+web/dashboard-run.log

@@ -99,15 +99,15 @@ afterEach(() => {
 });
 
 describe("OverviewAnalytics", () => {
-  it("menaruh section Active Pipelines di atas grafik Tren 7 Hari", async () => {
+  it("menaruh section Pipeline Aktif di atas grafik Tren 7 Hari", async () => {
     stub(async () => response({ data: runs(8), stale: false }));
 
     renderAnalytics();
 
     const judul = (await screen.findAllByRole("heading")).map((h) => h.textContent);
-    expect(judul).toContain("Active Pipelines");
+    expect(judul).toContain("Pipeline Aktif");
     expect(judul).toContain("Tren 7 Hari");
-    expect(judul.indexOf("Active Pipelines")).toBeLessThan(judul.indexOf("Tren 7 Hari"));
+    expect(judul.indexOf("Pipeline Aktif")).toBeLessThan(judul.indexOf("Tren 7 Hari"));
   });
 
   it("menampilkan kartu pipeline walau /api/runs gagal", async () => {
@@ -121,7 +121,7 @@ describe("OverviewAnalytics", () => {
     expect(screen.getByText("1 berjalan atau menunggu")).toBeInTheDocument();
   });
 
-  it("Sync menukar isi Recent Runs ke payload baru, tanpa reload", async () => {
+  it("Sync menukar isi Riwayat Build ke payload baru, tanpa reload", async () => {
     let tarikan = 0;
     stub(async () => {
       tarikan += 1;

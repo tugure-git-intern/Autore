@@ -6,6 +6,8 @@ export interface PageTabHeaderProps {
   icon?: ComponentType<{ className?: string }>;
   action?: ReactNode;
   className?: string;
+  /** Tanpa latar putih dan padding: untuk halaman yang isinya langsung kartu di kanvas. */
+  polos?: boolean;
 }
 
 /**
@@ -20,11 +22,16 @@ export function PageTabHeader({
   icon: Icon,
   action,
   className = "",
+  polos = false,
 }: PageTabHeaderProps) {
   return (
     <div
       data-testid="page-tab-header"
-      className={`rounded-t-xl sm:rounded-t-2xl bg-white p-5 sm:p-6 dark:bg-[var(--bg-canvas)] ${className}`}
+      className={
+        polos
+          ? className
+          : `rounded-t-xl sm:rounded-t-2xl bg-white p-5 sm:p-6 dark:bg-[var(--bg-canvas)] ${className}`
+      }
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

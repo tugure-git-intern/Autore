@@ -1,7 +1,9 @@
 "use client";
 
+import { LayoutDashboard } from "lucide-react";
 import { useCurrentUser } from "@/components/app-shell";
 import { DashboardOverview } from "@/components/dashboard-overview";
+import { PageTabHeader } from "@/components/ui/page-tab-header";
 
 // Deploy sengaja tidak ada di sini: tanpa aplikasi terpilih, deploy cuma menebak
 // target. Jalankan Ulang di /pipeline (atau detail aplikasi) yang punya konteks.
@@ -10,23 +12,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center gap-4 sm:mb-8 sm:gap-5">
-        <h1 className="text-xl font-semibold tracking-tight text-ink dark:text-white">Dashboard</h1>
-        {login ? (
-          <>
-            <span
-              data-testid="header-separator"
-              aria-hidden="true"
-              className="hidden text-gray-300 dark:text-[#50638b] sm:inline"
-            >
-              |
-            </span>
-            <p className="text-sm text-gray-500 dark:text-white sm:text-base">
-              Selamat datang, {login}.
-            </p>
-          </>
-        ) : null}
-      </div>
+      <PageTabHeader
+        polos
+        className="mb-6 sm:mb-8"
+        title="Dashboard"
+        description={login ? `Selamat datang, ${login}.` : undefined}
+        icon={LayoutDashboard}
+      />
       <DashboardOverview />
     </div>
   );

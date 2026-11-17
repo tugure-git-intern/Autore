@@ -123,7 +123,7 @@ test("Overview menampilkan tren, distribusi, dan recent runs", async () => {
 
   expect(await screen.findByText("Tren 7 Hari")).toBeInTheDocument();
   expect(screen.getByText("Distribusi")).toBeInTheDocument();
-  expect(screen.getByText("Recent Runs")).toBeInTheDocument();
+  expect(screen.getByText("Riwayat Build")).toBeInTheDocument();
   expect(await screen.findByText("tes-web #9")).toBeInTheDocument();
 });
 
@@ -139,7 +139,7 @@ test("Overview tetap tampil saat /api/runs gagal", async () => {
   );
 
   expect(await screen.findByText("Belum ada build dalam 7 hari terakhir")).toBeInTheDocument();
-  expect(screen.getByText("Belum ada run")).toBeInTheDocument();
+  expect(screen.getByText("Belum ada build")).toBeInTheDocument();
   expect(screen.getByText("Aplikasi")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
 });
@@ -156,7 +156,7 @@ test("menandai data terakhir saat /api/runs menjawab stale", async () => {
   expect(await screen.findByText("data terakhir")).toBeInTheDocument();
 });
 
-test("Overview menampilkan section Active Pipelines beserta hitungannya", async () => {
+test("Overview menampilkan section Pipeline Aktif beserta hitungannya", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -194,7 +194,7 @@ test("Overview menampilkan section Active Pipelines beserta hitungannya", async 
     </StatusProvider>,
   );
 
-  expect(await screen.findByRole("heading", { name: "Active Pipelines" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Pipeline Aktif" })).toBeInTheDocument();
   // `findByText`, bukan `getByText`: judul section tampil sebelum /api/active
   // selesai, jadi assertion sinkron di sini balapan dengan respons fetch.
   expect(await screen.findByText("1 berjalan atau menunggu")).toBeInTheDocument();
@@ -300,7 +300,7 @@ test("Overview tidak mengarang sapaan saat tidak ada user (halaman auth)", async
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
 });
 
-test("header meletakkan judul dan sapaan sejajar secara horizontal dengan pemisah dan jarak proporsional", async () => {
+test("header dashboard memakai PageTabHeader: judul dan sapaan dalam satu kepala halaman", async () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
 
   render(
@@ -309,17 +309,9 @@ test("header meletakkan judul dan sapaan sejajar secara horizontal dengan pemisa
     </AppShell>,
   );
 
-  const heading = screen.getByRole("heading", { name: "Dashboard" });
-  const container = heading.parentElement;
-  expect(container?.className).toContain("flex");
-  expect(container?.className).toContain("items-center");
-  expect(container?.className).toMatch(/gap-(4|5)/);
-  expect(container?.className).toMatch(/mb-(6|8)/);
-
-  const separator = screen.getByTestId("header-separator");
-  expect(separator).toBeInTheDocument();
-  expect(separator.className).toContain("text-gray-300");
-
-  const greeting = screen.getByText("Selamat datang, MAliffadlan.");
-  expect(greeting.className).toContain("text-gray-500");
+  const header = screen.getByTestId("page-tab-header");
+  expect(header.className).toMatch(/mb-(6|8)/);
+  expect(within(header).getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+  expect(within(header).getByText("Selamat datang, MAliffadlan.")).toBeInTheDocument();
+  expect(screen.queryByTestId("header-separator")).toBeNull();
 });

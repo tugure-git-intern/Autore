@@ -32,9 +32,9 @@ const RERUN_CONFIRM = {
 
 function Fakta({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]">
+    <div className="min-w-0 rounded-md border border-gray-200 bg-white p-3 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]">
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <div className="mt-1 text-sm text-ink">{children}</div>
+      <div className="mt-1 break-words text-sm text-ink">{children}</div>
     </div>
   );
 }
@@ -150,7 +150,7 @@ export function AppDetail({
         <h2 className="text-sm font-semibold text-ink">Riwayat Build</h2>
         <p className="mt-1 text-xs text-muted">Lima build terakhir aplikasi ini dari Jenkins.</p>
         {riwayat.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">Belum ada run untuk aplikasi ini</p>
+          <p className="mt-3 text-sm text-muted">Belum ada build untuk aplikasi ini</p>
         ) : (
           <ul aria-label="Riwayat build aplikasi ini" className="mt-3 divide-y divide-gray-100 dark:divide-[var(--color-line)]">
             {riwayat.map((run) => (

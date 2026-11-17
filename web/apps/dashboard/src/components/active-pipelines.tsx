@@ -28,7 +28,7 @@ export function ActivePipelines({
 
   return (
     <ChartCard
-      title="Active Pipelines"
+      title="Pipeline Aktif"
       action={
         <div className="flex items-center gap-2 text-xs">
           <span
@@ -52,8 +52,8 @@ export function ActivePipelines({
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Semua Pipeline Selesai</h3>
           <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-white">
-            Tidak ada pipeline yang sedang berjalan atau menunggu. Saat workflow dimulai, statusnya
-            akan muncul di sini secara real-time.
+            Tidak ada pipeline yang sedang berjalan atau menunggu. Saat pipeline dimulai, statusnya
+            akan muncul di sini secara langsung.
           </p>
         </div>
       ) : (

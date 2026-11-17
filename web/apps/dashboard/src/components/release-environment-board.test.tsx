@@ -126,7 +126,32 @@ describe("ReleaseEnvironmentBoard", () => {
     const staging = screen.getByTestId("environment-staging");
     expect(within(staging).getByText("Sehat")).toBeVisible();
     expect(screen.getByText("Menunggu Persetujuan")).toBeVisible();
-    expect(screen.getByText(digest)).toBeVisible();
+    expect(screen.getByTestId("release-digest")).toHaveTextContent(`sha256:${"a".repeat(12)}...`);
+    expect(screen.getByTestId("release-digest")).toHaveAttribute("title", digest);
+  });
+
+  it("membatasi daftar ke tiga rilis terbaru dan melipat sisanya", () => {
+    const banyak = Array.from({ length: 5 }, (_, i) => ({
+      ...releases[0]!,
+      id: `rel-${i + 1}`,
+      commit_subject: `subjek ${i + 1}`,
+    }));
+    render(
+      <ReleaseEnvironmentBoard
+        releases={banyak}
+        environments={environments}
+        deployments={deployments}
+      />,
+    );
+
+    const terlihat = screen.getByLabelText("Release terbaru");
+    expect(within(terlihat).getAllByRole("listitem")).toHaveLength(3);
+    const lipat = screen.getByLabelText("Release sebelumnya").closest("details")!;
+    expect(within(lipat).getAllByRole("listitem")).toHaveLength(2);
+    expect(lipat).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByText("Lihat semua 5 rilis"));
+    expect(lipat).toHaveAttribute("open");
   });
 
   it("menandai deployment dengan digest berbeda tanpa melempar", () => {
@@ -175,6 +200,7 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     expect(screen.getByRole("button", { name: "Setujui" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Setujui" })).toHaveClass("bg-green-600");
     expect(screen.getByRole("button", { name: "Tolak" })).toBeVisible();
   });
 
@@ -204,6 +230,7 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Promosikan ke Production" })).toHaveClass("bg-blue-600");
     expect(screen.queryByRole("button", { name: "Rollback Production" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Setujui" })).toBeNull();
   });
@@ -307,7 +334,11 @@ describe("ReleaseEnvironmentBoard", () => {
     );
 
     // Kartu rilis dirender di luar kartu environment, jadi kueri tanpa pembatas.
-    expect(screen.getByTestId("release-digantikan")).toHaveTextContent("Digantikan build 37");
+    const digantikan = screen.getByTestId("release-digantikan");
+    expect(digantikan).toHaveTextContent("Digantikan build 37");
+    const kartuLama = digantikan.closest("article")!;
+    expect(within(kartuLama).queryByTestId("release-tindakan")).toBeNull();
+    expect(within(kartuLama).queryByTestId("release-umur")).toBeNull();
     expect(screen.queryAllByRole("button", { name: "Setujui" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Tolak" })).toHaveLength(2);
   });

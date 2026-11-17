@@ -10,6 +10,8 @@ import { ReleaseKeputusan } from "./release-keputusan";
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "./ui/badge";
 
+const MAKS_TERLIHAT = 3;
+
 function BoardCard({ testId, children }: { testId?: string; children: ReactNode }) {
   return (
     <div
@@ -40,6 +42,11 @@ const LABEL_RELEASE: Record<StatusRelease, string> = {
 function tautanCommit(repoUrl: string | null, sha: string): string | null {
   if (!repoUrl) return null;
   return `${repoUrl.trim().replace(/\.git$/, "").replace(/\/$/, "")}/commit/${sha}`;
+}
+
+/** Nama build pendek dari id release (`tes-testing:sha:73` -> `73`). */
+function nomorBuild(id: string): string {
+  return id.slice(id.lastIndexOf(":") + 1);
 }
 
 /**
@@ -81,6 +88,184 @@ const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
   rolled_back: "gray",
 };
 
+const FORMAT_WAKTU = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Jakarta",
+});
+
+function waktuBuild(iso: string): string {
+  const waktu = Date.parse(iso);
+  return Number.isNaN(waktu) ? "—" : FORMAT_WAKTU.format(waktu).replace(",", "");
+}
+
+function ringkasDigest(digest: string | null): string {
+  if (!digest) return "—";
+  const [algo, nilai] = digest.split(":", 2);
+  return `${algo}:${(nilai ?? "").slice(0, 12)}...`;
+}
+
+function DaftarRelease({
+  items,
+  label,
+  role,
+}: {
+  items: { release: Release; pengganti: string | null }[];
+  label: string;
+  role: Role | null;
+}) {
+  return (
+    <ol
+      aria-label={label}
+      className="mt-3 divide-y divide-gray-200 dark:divide-[var(--color-line)]"
+    >
+      {items.map(({ release, pengganti }) => (
+        <li key={release.id} className="py-4 first:pt-0 last:pb-0">
+          <ReleaseRow release={release} pengganti={pengganti} role={role} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ReleaseRow({
+  release,
+  pengganti,
+  role,
+}: {
+  release: Release;
+  pengganti: string | null;
+  role: Role | null;
+}) {
+  const commitUrl = tautanCommit(release.repo_url, release.commit_sha);
+  const tindakan = TINDAKAN[release.status];
+  const umur = release.status === "menunggu_persetujuan"
+    ? umurPersetujuan(release.menunggu_sejak)
+    : null;
+  // Rilis pengganti tidak bisa disetujui, dan umur antreannya sudah tidak relevan.
+  const tampilkanTindakan = !(pengganti && release.status === "menunggu_persetujuan");
+  const tampilkanUmur = tampilkanTindakan && umur !== null;
+
+  return (
+    <article className="min-w-0 space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {commitUrl ? (
+            <a
+              href={commitUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-sm font-semibold hover:underline hover:underline-offset-2"
+              data-testid="release-commit-link"
+            >
+              {release.commit_sha.slice(0, 7)}
+            </a>
+          ) : (
+            <span className="font-mono text-sm font-semibold">{release.commit_sha.slice(0, 7)}</span>
+          )}
+          <span
+            data-testid="release-build"
+            className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-muted dark:bg-[var(--bg-sidebar)]"
+          >
+            #{nomorBuild(release.id)}
+          </span>
+          {release.branch ? (
+            <span data-testid="release-branch" className="font-mono text-xs text-muted">
+              {release.branch}
+            </span>
+          ) : null}
+        </div>
+        <Badge tone={TONE_RELEASE[release.status]} className="shrink-0">
+          {LABEL_RELEASE[release.status]}
+        </Badge>
+      </div>
+
+      <p
+        data-testid="release-subjek"
+        className="truncate text-sm font-medium leading-snug"
+        title={release.commit_subject ?? undefined}
+      >
+        {release.commit_subject ?? (
+          <span className="font-normal italic text-muted">Tanpa pesan commit</span>
+        )}
+      </p>
+
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
+        <span>
+          Dibuat oleh <span data-testid="release-dibuat-oleh">{release.dibuat_oleh}</span>
+        </span>
+        <span aria-hidden="true">·</span>
+        {release.approved_by ? (
+          <span>
+            disetujui <span data-testid="release-approved-by">{release.approved_by}</span>
+          </span>
+        ) : (
+          <span data-testid="release-approved-by">belum disetujui</span>
+        )}
+        <span aria-hidden="true">·</span>
+        <time data-testid="release-waktu" dateTime={release.dibuat_pada}>
+          {waktuBuild(release.dibuat_pada)}
+        </time>
+        {pengganti ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span data-testid="release-digantikan">Digantikan build {nomorBuild(pengganti)}</span>
+          </>
+        ) : null}
+        {tampilkanTindakan && (tindakan || tampilkanUmur) ? (
+          <>
+            {tindakan ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span
+                  data-testid="release-tindakan"
+                  className="font-medium text-amber-700 dark:text-amber-300"
+                >
+                  {tindakan}
+                </span>
+              </>
+            ) : null}
+            {tampilkanUmur ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span data-testid="release-umur" className="text-amber-700 dark:text-amber-300">
+                  menunggu {umur}
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </p>
+
+      {/* Digest penuh tetap ada di tooltip; baris tidak lagi memenuhi lebar kartu. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+          <span>image</span>
+          <code
+            data-testid="release-digest"
+            title={release.image_digest ?? undefined}
+            aria-label={release.image_digest ?? "digest belum tersedia"}
+            className="min-w-0 truncate font-mono"
+          >
+            {ringkasDigest(release.image_digest)}
+          </code>
+        </p>
+
+        <div className="empty:hidden shrink-0">
+          <ReleaseKeputusan
+            releaseId={release.id}
+            role={role}
+            status={release.status}
+            digantikan={pengganti !== null}
+          />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 /** Mockup Fase 1: data diberikan pemanggil, belum membaca API atau men-deploy. */
 export function ReleaseEnvironmentBoard({
   releases,
@@ -102,6 +287,13 @@ export function ReleaseEnvironmentBoard({
     const release = releases.find((item) => item.id === deployment.release_id);
     return !release || release.image_digest !== deployment.image_digest;
   });
+
+  const baris = releases.map((release) => ({
+    release,
+    pengganti: digantikanDiStaging(release.id, environments, deployments),
+  }));
+  const terlihat = baris.slice(0, MAKS_TERLIHAT);
+  const sisa = baris.slice(MAKS_TERLIHAT);
 
   return (
     <section aria-label={`Environment ${appName}`} className="space-y-4">
@@ -144,86 +336,15 @@ export function ReleaseEnvironmentBoard({
       </div>
       <BoardCard>
         <h3 className="font-medium">Release Terbaru</h3>
-        {releases.map((release) => {
-          // Rilis yang pointer staging-nya sudah pindah: badged, tombolnya dimatikan.
-          const pengganti = digantikanDiStaging(release.id, environments, deployments);
-          const commitUrl = tautanCommit(release.repo_url, release.commit_sha);
-          const tindakan = TINDAKAN[release.status];
-          const umur = release.status === "menunggu_persetujuan"
-            ? umurPersetujuan(release.menunggu_sejak)
-            : null;
-          return (
-          <div key={release.id} className="mt-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {commitUrl ? (
-                <a
-                  href={commitUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-sm underline underline-offset-2"
-                  data-testid="release-commit-link"
-                >
-                  {release.commit_sha.slice(0, 7)}
-                </a>
-              ) : (
-                <span className="font-mono text-sm">{release.commit_sha.slice(0, 7)}</span>
-              )}
-              {release.branch ? (
-                <span data-testid="release-branch" className="font-mono text-xs text-muted">
-                  {release.branch}
-                </span>
-              ) : null}
-              <Badge tone={TONE_RELEASE[release.status]}>{LABEL_RELEASE[release.status]}</Badge>
-              {pengganti ? (
-                <Badge tone="gray">
-                  <span data-testid="release-digantikan">
-                    Digantikan build {pengganti.slice(pengganti.lastIndexOf(":") + 1)}
-                  </span>
-                </Badge>
-              ) : null}
-            </div>
-            {release.commit_subject ? (
-              <p data-testid="release-subjek" className="text-sm">
-                {release.commit_subject}
-              </p>
-            ) : null}
-            {tindakan || umur ? (
-              <p className="flex flex-wrap items-center gap-2 text-xs">
-                {tindakan ? (
-                  <span data-testid="release-tindakan" className="font-medium text-amber-700 dark:text-amber-300">
-                    {tindakan}
-                  </span>
-                ) : null}
-                {umur ? (
-                  <span data-testid="release-umur" className="text-muted">
-                    menunggu {umur}
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-            {/* Jejak audit terlihat orang: pembuat commit dan approver terakhir. */}
-            <p className="text-xs text-muted">
-              Dibuat oleh <span data-testid="release-dibuat-oleh">{release.dibuat_oleh}</span>
-              {" - "}
-              {release.approved_by ? (
-                <>
-                  disetujui <span data-testid="release-approved-by">{release.approved_by}</span>
-                </>
-              ) : (
-                <span data-testid="release-approved-by">belum disetujui</span>
-              )}
-            </p>
-            <code className="block break-all text-xs text-muted">{release.image_digest}</code>
-            {/* Komponen sendiri yang memutuskan aksi mana yang boleh tampil. */}
-            <ReleaseKeputusan
-              releaseId={release.id}
-              role={role}
-              status={release.status}
-              digantikan={pengganti !== null}
-            />
-          </div>
-          );
-        })}
+        <DaftarRelease items={terlihat} label="Release terbaru" role={role} />
+        {sisa.length > 0 ? (
+          <details className="border-t border-gray-200 pt-3 dark:border-[var(--color-line)]">
+            <summary className="cursor-pointer select-none text-xs font-medium text-muted hover:text-ink">
+              Lihat semua {releases.length} rilis
+            </summary>
+            <DaftarRelease items={sisa} label="Release sebelumnya" role={role} />
+          </details>
+        ) : null}
       </BoardCard>
     </section>
   );

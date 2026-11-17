@@ -70,20 +70,24 @@ export function ReleaseKeputusan({
   if (!bolehSetujui && !bolehTolak && !bolehPromosi && !bolehRollback) return null;
 
   return (
-    <div className="mt-2 space-y-2">
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         {bolehSetujui ? (
-          <Button disabled={kirim} onClick={() => void jalankan("approve", {})}>
+          <Button variant="green" disabled={kirim} onClick={() => void jalankan("approve", {})}>
             Setujui
           </Button>
         ) : null}
         {bolehTolak ? (
-          <Button variant="ghost" disabled={kirim} onClick={() => setTanyaAlasan((lama) => !lama)}>
+          <Button
+            variant="danger"
+            disabled={kirim}
+            onClick={() => setTanyaAlasan((lama) => !lama)}
+          >
             Tolak
           </Button>
         ) : null}
         {bolehPromosi ? (
-          <Button disabled={kirim} onClick={() => void jalankan("promote", {})}>
+          <Button variant="primary" disabled={kirim} onClick={() => void jalankan("promote", {})}>
             Promosikan ke Production
           </Button>
         ) : null}

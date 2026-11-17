@@ -1,0 +1,21 @@
+[Unit]
+Description=Autore production watchdog untuk %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tugure
+Group=tugure
+WorkingDirectory=/home/tugure/Autore/web
+EnvironmentFile=/etc/autore/watchdog.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=AUTORE_WATCHDOG_APP=%i
+Environment=AUTORE_WATCHDOG_AMBANG=3
+Environment=AUTORE_WATCHDOG_MODE=on
+# Override per aplikasi (mis. MODE=dry-run untuk app yang belum siap live).
+EnvironmentFile=-/etc/autore/watchdog-%i.env
+ExecStart=/home/tugure/Autore/web/node_modules/.bin/tsx apps/api/scripts/watchdog.ts
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Jalankan watchdog production %i tiap menit
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=autore-watchdog@%i.service
+
+[Install]
+WantedBy=timers.target

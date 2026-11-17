@@ -17,6 +17,9 @@ const payload = {
         alasan: null,
         dibuat_oleh: "operator",
         dibuat_pada: "2026-11-13T04:00:00Z",
+        commit_subject: null,
+        branch: null,
+        repo_url: null,
       },
     ],
     deployments: [

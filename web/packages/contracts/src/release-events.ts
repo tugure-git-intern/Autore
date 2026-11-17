@@ -25,6 +25,10 @@ export type ReleaseEvent = {
   request_id: string;
   commit: string;
   build_number: number;
+  /** Direkam pipeline saat build, bukan diambil dari API GitHub saat render. */
+  commit_subject?: string;
+  branch?: string;
+  repo_url?: string;
   actor?: string;
   digest?: string;
   image_ref?: string;
@@ -79,13 +83,18 @@ export function isReleaseEvent(value: unknown): value is ReleaseEvent {
     value,
     ["id", "ts", "kind", "app", "environment", "request_id", "commit", "build_number"],
     ["actor", "digest", "image_ref", "deployment_id", "outcome", "active_before",
-      "active_after", "health", "health_url", "error"],
+      "active_after", "health", "health_url", "error",
+      "commit_subject", "branch", "repo_url"],
   )) {
     return false;
   }
   if (!nonEmpty(value.id) || !nonEmpty(value.ts) || !nonEmpty(value.app) ||
     (value.environment !== "staging" && value.environment !== "production") || !nonEmpty(value.request_id) ||
     !SHA.test(String(value.commit)) || !Number.isInteger(value.build_number)) return false;
+  // Metadata commit opsional (event lama tidak punya); kalau ada harus teks berisi.
+  for (const key of ["commit_subject", "branch", "repo_url"] as const) {
+    if (value[key] !== undefined && !nonEmpty(value[key])) return false;
+  }
   if (!["requested", "build_started", "digest_verified", "deploy_result", "build_failed",
     "approved", "rejected"].includes(String(value.kind))) {
     return false;
@@ -147,6 +156,9 @@ function releaseAwal(event: ReleaseEvent): Release {
     alasan: null,
     dibuat_oleh: event.actor?.trim() || "pipeline",
     dibuat_pada: event.ts,
+    commit_subject: event.commit_subject ?? null,
+    branch: event.branch ?? null,
+    repo_url: event.repo_url ?? null,
   };
 }
 
@@ -247,6 +259,14 @@ export function foldReleaseEvents(
     }
     const key = releaseId(event);
     let release = releases.get(key) ?? releaseAwal(event);
+    // Metadata commit bisa datang di event mana pun (build_failed, deploy_result,
+    // atau requested); nilai pertama yang tidak null yang menang.
+    release = {
+      ...release,
+      commit_subject: release.commit_subject ?? event.commit_subject ?? null,
+      branch: release.branch ?? event.branch ?? null,
+      repo_url: release.repo_url ?? event.repo_url ?? null,
+    };
     const staging = environments.get(`${event.app}:staging`)!;
 
     if (event.kind === "requested") {

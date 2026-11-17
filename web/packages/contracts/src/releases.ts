@@ -33,6 +33,10 @@ export type Release = {
   alasan: string | null;
   dibuat_oleh: string;
   dibuat_pada: string;
+  /** Metadata commit dari pipeline; null untuk event lama yang belum merekamnya. */
+  commit_subject: string | null;
+  branch: string | null;
+  repo_url: string | null;
 };
 
 export type Environment = {
@@ -234,13 +238,16 @@ export function isRelease(value: unknown): value is Release {
   if (!hasKeys(value, [
     "id", "application_id", "commit_sha", "image_digest", "status",
     "approved_by", "alasan", "dibuat_oleh", "dibuat_pada",
+    "commit_subject", "branch", "repo_url",
   ])) return false;
   if (!isNonEmpty(value.id) || !isNonEmpty(value.application_id) ||
     !/^[0-9a-f]{40}$/.test(String(value.commit_sha)) ||
     (value.image_digest !== null && !/^sha256:[0-9a-f]{64}$/.test(String(value.image_digest))) ||
     !STATUS_RELEASE.includes(value.status as StatusRelease) ||
     !isNullableString(value.approved_by) || !isNullableString(value.alasan) ||
-    !isNonEmpty(value.dibuat_oleh) || !isNonEmpty(value.dibuat_pada)) return false;
+    !isNonEmpty(value.dibuat_oleh) || !isNonEmpty(value.dibuat_pada) ||
+    !isNullableString(value.commit_subject) || !isNullableString(value.branch) ||
+    !isNullableString(value.repo_url)) return false;
   if (value.status === "draft" || value.status === "build_berjalan") return true;
   if (value.image_digest === null) return false;
   if (value.status === "ditolak") return isNonEmpty(value.alasan);

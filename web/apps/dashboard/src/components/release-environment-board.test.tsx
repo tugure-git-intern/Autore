@@ -42,6 +42,9 @@ const releases: Release[] = [
     alasan: null,
     dibuat_oleh: "developer",
     dibuat_pada: "2026-11-12T06:00:00.000Z",
+    commit_subject: null,
+    branch: null,
+    repo_url: null,
   },
 ];
 

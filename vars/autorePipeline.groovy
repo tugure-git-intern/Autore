@@ -281,6 +281,9 @@ def call(Map config = [:]) {
                             --environment "${AUTORE_RELEASE_ENV}" \
                             --build "${BUILD_NUMBER}" \
                             --commit "${FULL_GIT_COMMIT}" \
+                            --commit-subject "${AUDIT_MESSAGE}" \
+                            --branch "${GIT_BRANCH}" \
+                            --repo-url "${GIT_URL}" \
                             --request-id "build-${BUILD_NUMBER}" >/dev/null
                         fi
                         exit "${deploy_code}"
@@ -314,7 +317,7 @@ def call(Map config = [:]) {
                                       logs: ["[done] build #${BUILD_NUMBER} ${currentBuild.currentResult}".toString()])
                         if (releaseEnvironment) {
                             def releaseKode = sh(
-                                script: "AUTORE_WORKSPACE=${q(workspace)} ${autoreBin} release record --event build_failed --app ${q(appName)} --environment ${q(releaseEnvironment)} --build ${BUILD_NUMBER} --commit ${q(env.FULL_GIT_COMMIT ?: '')} --error ${q(env.FAILED_STAGE ?: 'pipeline gagal')}",
+                                script: "AUTORE_WORKSPACE=${q(workspace)} ${autoreBin} release record --event build_failed --app ${q(appName)} --environment ${q(releaseEnvironment)} --build ${BUILD_NUMBER} --commit ${q(env.FULL_GIT_COMMIT ?: '')} --commit-subject ${q(env.AUDIT_MESSAGE ?: '')} --branch ${q(env.GIT_BRANCH ?: '')} --repo-url ${q(env.GIT_URL ?: '')} --error ${q(env.FAILED_STAGE ?: 'pipeline gagal')}",
                                 returnStatus: true
                             )
                             if (releaseKode != 0) {

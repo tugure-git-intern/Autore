@@ -26,6 +26,17 @@ pub struct Event {
     pub request_id: String,
     pub commit: String,
     pub build_number: u64,
+    /// Subjek commit (`git log -1 --pretty=%s`) direkam saat build, bukan
+    /// ditanyakan ulang ke GitHub: dashboard dan audit trail tetap terbaca
+    /// walau GitHub tidak bisa dihubungi.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit_subject: Option<String>,
+    /// Branch asal build, sudah dinormalkan (tanpa `refs/heads/` atau `origin/`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// URL repo asal; dipakai dashboard menyusun tautan commit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -181,6 +192,40 @@ pub struct RecordArgs {
     /// Pelaku atas nama dashboard; dipakai event rollback
     #[arg(long)]
     actor: Option<String>,
+    /// Subjek commit dari pipeline (`git log -1 --pretty=%s`)
+    #[arg(long)]
+    commit_subject: Option<String>,
+    /// Branch asal build; `refs/heads/` dan `origin/` dibuang saat disimpan
+    #[arg(long)]
+    branch: Option<String>,
+    /// URL repo asal, untuk tautan commit di dashboard
+    #[arg(long)]
+    repo_url: Option<String>,
+}
+
+/// Teks opsional dari pipeline: spasi saja dianggap tidak ada supaya event lama
+/// dan event baru punya bentuk yang sama (field hilang, bukan string kosong).
+fn teks_pipeline(nilai: Option<&String>) -> Option<String> {
+    let teks = nilai?.trim();
+    if teks.is_empty() {
+        return None;
+    }
+    Some(teks.chars().take(300).collect())
+}
+
+/// Jenkins memberi `GIT_BRANCH` sebagai `origin/main` atau `refs/heads/main`;
+/// yang disimpan cukup nama branch-nya.
+fn rapikan_branch(nilai: Option<&String>) -> Option<String> {
+    let teks = nilai?.trim();
+    let teks = teks
+        .strip_prefix("refs/heads/")
+        .or_else(|| teks.strip_prefix("origin/"))
+        .unwrap_or(teks);
+    if teks.is_empty() {
+        None
+    } else {
+        Some(teks.to_string())
+    }
 }
 
 pub fn run(action: ReleaseAction) -> i32 {
@@ -350,8 +395,17 @@ fn record(args: RecordArgs) -> Result<Event, String> {
 /// Inti `record`, tapi arah workspace eksplisit supaya tes tidak menulis ke
 /// ledger nyata `~/autore-workspace/release-state.json`.
 fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
+    let commit_subject = teks_pipeline(args.commit_subject.as_ref());
+    let branch = rapikan_branch(args.branch.as_ref());
+    let repo_url = teks_pipeline(args.repo_url.as_ref());
     let event = if let Some(ref path) = args.from_deploy_result {
-        from_result(path, &args)?
+        from_result(
+            path,
+            &args,
+            commit_subject,
+            branch,
+            repo_url,
+        )?
     } else if args.event.as_deref() == Some("build_failed") {
         Event {
             id: args
@@ -365,6 +419,9 @@ fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
             request_id: args.request_id,
             commit: args.commit,
             build_number: args.build,
+            commit_subject,
+            branch,
+            repo_url,
             actor: args.actor.clone(),
             digest: None,
             image_ref: None,
@@ -383,7 +440,13 @@ fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
     Ok(event)
 }
 
-fn from_result(path: &Path, args: &RecordArgs) -> Result<Event, String> {
+fn from_result(
+    path: &Path,
+    args: &RecordArgs,
+    commit_subject: Option<String>,
+    branch: Option<String>,
+    repo_url: Option<String>,
+) -> Result<Event, String> {
     let raw =
         fs::read_to_string(path).map_err(|e| format!("gagal baca {}: {e}", path.display()))?;
     let value: Value = serde_json::from_str(&raw).map_err(|e| format!("result bukan JSON: {e}"))?;
@@ -414,6 +477,9 @@ fn from_result(path: &Path, args: &RecordArgs) -> Result<Event, String> {
         request_id: args.request_id.clone(),
         commit: args.commit.clone(),
         build_number: args.build,
+        commit_subject,
+        branch,
+        repo_url,
         actor: args.actor.clone(),
         digest: Some(digest.into()),
         image_ref: value
@@ -553,6 +619,9 @@ mod tests {
             request_id: "req".into(),
             commit: "a".repeat(40),
             build_number: 1,
+            commit_subject: None,
+            branch: None,
+            repo_url: None,
             actor: Some("operator".into()),
             digest: None,
             image_ref: None,
@@ -698,6 +767,9 @@ mod tests {
             error: None,
             id: Some("tes-testing-7-rollback-1".into()),
             actor: Some("budi".into()),
+            commit_subject: None,
+            branch: None,
+            repo_url: None,
         };
 
         let tmp_ws = TempDir::new().unwrap();
@@ -716,6 +788,74 @@ mod tests {
             event.ts
         );
         assert!(event.ts.ends_with('Z'), "ts={}", event.ts);
+    }
+
+    #[test]
+    fn record_menyimpan_metadata_commit_dan_branch() {
+        let tmp = TempDir::new().unwrap();
+        let hasil = tmp.path().join("result.json");
+        fs::write(
+            &hasil,
+            serde_json::json!({
+                "requested_digest": "sha256:".to_string() + &"a".repeat(64),
+                "outcome": "success",
+                "deployment_id": "dep-1",
+                "health": "ok",
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let args = RecordArgs {
+            from_deploy_result: Some(hasil),
+            event: None,
+            app: "tes-testing".into(),
+            environment: "staging".into(),
+            build: 9,
+            commit: "a".repeat(40),
+            request_id: "build-9".into(),
+            error: None,
+            id: None,
+            actor: None,
+            commit_subject: Some("  perbaiki login  ".into()),
+            branch: Some("origin/main".into()),
+            repo_url: Some("https://github.com/tugure-git-intern/tes-testing".into()),
+        };
+
+        let tmp_ws = TempDir::new().unwrap();
+        let event = record_at(tmp_ws.path(), args).unwrap();
+        assert_eq!(event.commit_subject.as_deref(), Some("perbaiki login"));
+        assert_eq!(event.branch.as_deref(), Some("main"));
+        assert_eq!(
+            event.repo_url.as_deref(),
+            Some("https://github.com/tugure-git-intern/tes-testing")
+        );
+    }
+
+    #[test]
+    fn build_failed_membawa_metadata_commit_dan_menolak_teks_kosong() {
+        let tmp = TempDir::new().unwrap();
+        let args = RecordArgs {
+            from_deploy_result: None,
+            event: Some("build_failed".into()),
+            app: "tes-testing".into(),
+            environment: "staging".into(),
+            build: 10,
+            commit: "b".repeat(40),
+            request_id: "build-10".into(),
+            error: Some("4. Clippy".into()),
+            id: None,
+            actor: None,
+            commit_subject: Some("   ".into()),
+            branch: Some("refs/heads/main".into()),
+            repo_url: Some("".into()),
+        };
+
+        let event = record_at(tmp.path(), args).unwrap();
+        // Spasi/kosong berarti "tidak diketahui", bukan string kosong di ledger.
+        assert_eq!(event.commit_subject, None);
+        assert_eq!(event.branch.as_deref(), Some("main"));
+        assert_eq!(event.repo_url, None);
+        assert_eq!(event.kind, "build_failed");
     }
 
     #[test]

@@ -134,6 +134,31 @@ describe("fold event release", () => {
       "invalid release event",
     );
   });
+
+  it("metadata commit opsional: teks kosong ditolak, teks berisi diterima", () => {
+    expect(isReleaseEvent(event({ commit_subject: "perbaiki login" }))).toBe(true);
+    expect(isReleaseEvent(event({ branch: "main" }))).toBe(true);
+    expect(isReleaseEvent(event({ repo_url: "https://github.com/a/b" }))).toBe(true);
+    expect(isReleaseEvent(event({ commit_subject: "   " }))).toBe(false);
+    expect(isReleaseEvent(event({ branch: "" }))).toBe(false);
+  });
+
+  it("metadata commit terlipat ke release, event lama tetap null", () => {
+    const tanpaMetadata = fold([event()]).releases[0]!;
+    expect(tanpaMetadata.commit_subject).toBeNull();
+    expect(tanpaMetadata.branch).toBeNull();
+    expect(tanpaMetadata.repo_url).toBeNull();
+
+    const berMetadata = sukses(1, DIGEST_1, "dep-1").map((item) =>
+      item.kind === "digest_verified"
+        ? { ...item, commit_subject: "perbaiki login", branch: "main", repo_url: "https://github.com/a/b" }
+        : item
+    );
+    const release = fold(berMetadata).releases[0]!;
+    expect(release.commit_subject).toBe("perbaiki login");
+    expect(release.branch).toBe("main");
+    expect(release.repo_url).toBe("https://github.com/a/b");
+  });
 });
 
 

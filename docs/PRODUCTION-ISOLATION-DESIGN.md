@@ -56,6 +56,14 @@ flowchart LR
 
 Agar repositori aplikasi tidak dapat memodifikasi atau melewati `Security Gate`, definisi pipeline dipindahkan dari repositori aplikasi ke **Jenkins Global Trusted Shared Library** yang dikelola khusus oleh tim Infrastruktur/SecOps.
 
+> **Mitigasi jalur production (terpasang):** stage `Deploy Production (Optional)` dihapus
+> dari `vars/autorePipeline.groovy`, dan library menolak
+> `releaseEnvironment: 'production'`. Build dari repo aplikasi karena itu tidak punya
+> jalur ke production sama sekali; promosi hanya lewat `Jenkinsfile.promote` (repo
+> Autore, dipicu API setelah release berstatus `disetujui`). Sisa risiko C-2 =
+> eksekusi perintah arbitrer di runner sandbox; remediasi penuhnya tetap langkah 1–3
+> di bawah.
+
 ```mermaid
 flowchart TD
     ADMIN_REPO["Repo Infra (Read-Only bagi Dev):<br/>autore-jenkins-library.git"] -->|"Global Trusted Library"| CTRL["Jenkins Controller"]

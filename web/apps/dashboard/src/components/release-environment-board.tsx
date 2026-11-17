@@ -36,6 +36,36 @@ const LABEL_RELEASE: Record<StatusRelease, string> = {
   rolled_back: "Dikembalikan",
 };
 
+/** Tautan commit hanya jika pipeline merekam URL repo; event lama tidak punya. */
+function tautanCommit(repoUrl: string | null, sha: string): string | null {
+  if (!repoUrl) return null;
+  return `${repoUrl.trim().replace(/\.git$/, "").replace(/\/$/, "")}/commit/${sha}`;
+}
+
+/**
+ * Umur antrean approval dalam bahasa manusia. Dihitung dari waktu event staging
+ * sehat, bukan waktu render, supaya angkanya sama di semua penonton.
+ */
+export function umurPersetujuan(sejak: string | null, sekarang = Date.now()): string | null {
+  if (!sejak) return null;
+  const mulai = Date.parse(sejak);
+  if (Number.isNaN(mulai)) return null;
+  const menit = Math.floor((sekarang - mulai) / 60_000);
+  if (menit < 1) return "baru saja";
+  if (menit < 60) return `${menit} menit`;
+  const jam = Math.floor(menit / 60);
+  if (jam < 24) return `${jam} jam`;
+  return `${Math.floor(jam / 24)} hari`;
+}
+
+/** Siapa yang perlu bergerak pada status ini; status tenang tidak diberi label. */
+const TINDAKAN: Partial<Record<StatusRelease, string>> = {
+  menunggu_persetujuan: "Perlu QA/Admin menyetujui",
+  gagal: "Perlu developer memperbaiki build",
+  ditolak: "Perlu developer revisi lalu build ulang",
+  rolled_back: "Perlu developer memeriksa penyebab rollback",
+};
+
 const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
   draft: "gray",
   build_berjalan: "blue",
@@ -117,10 +147,32 @@ export function ReleaseEnvironmentBoard({
         {releases.map((release) => {
           // Rilis yang pointer staging-nya sudah pindah: badged, tombolnya dimatikan.
           const pengganti = digantikanDiStaging(release.id, environments, deployments);
+          const commitUrl = tautanCommit(release.repo_url, release.commit_sha);
+          const tindakan = TINDAKAN[release.status];
+          const umur = release.status === "menunggu_persetujuan"
+            ? umurPersetujuan(release.menunggu_sejak)
+            : null;
           return (
           <div key={release.id} className="mt-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm">{release.commit_sha.slice(0, 7)}</span>
+              {commitUrl ? (
+                <a
+                  href={commitUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-sm underline underline-offset-2"
+                  data-testid="release-commit-link"
+                >
+                  {release.commit_sha.slice(0, 7)}
+                </a>
+              ) : (
+                <span className="font-mono text-sm">{release.commit_sha.slice(0, 7)}</span>
+              )}
+              {release.branch ? (
+                <span data-testid="release-branch" className="font-mono text-xs text-muted">
+                  {release.branch}
+                </span>
+              ) : null}
               <Badge tone={TONE_RELEASE[release.status]}>{LABEL_RELEASE[release.status]}</Badge>
               {pengganti ? (
                 <Badge tone="gray">
@@ -130,6 +182,25 @@ export function ReleaseEnvironmentBoard({
                 </Badge>
               ) : null}
             </div>
+            {release.commit_subject ? (
+              <p data-testid="release-subjek" className="text-sm">
+                {release.commit_subject}
+              </p>
+            ) : null}
+            {tindakan || umur ? (
+              <p className="flex flex-wrap items-center gap-2 text-xs">
+                {tindakan ? (
+                  <span data-testid="release-tindakan" className="font-medium text-amber-700 dark:text-amber-300">
+                    {tindakan}
+                  </span>
+                ) : null}
+                {umur ? (
+                  <span data-testid="release-umur" className="text-muted">
+                    menunggu {umur}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
             {/* Jejak audit terlihat orang: pembuat commit dan approver terakhir. */}
             <p className="text-xs text-muted">
               Dibuat oleh <span data-testid="release-dibuat-oleh">{release.dibuat_oleh}</span>

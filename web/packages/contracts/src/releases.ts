@@ -37,6 +37,8 @@ export type Release = {
   commit_subject: string | null;
   branch: string | null;
   repo_url: string | null;
+  /** Saat release mulai menunggu persetujuan (event staging sehat). */
+  menunggu_sejak: string | null;
 };
 
 export type Environment = {
@@ -90,10 +92,12 @@ export type AksiRelease =
   | "rollback_production_dari_aktif";
 
 export type KonteksTransisi = {
-  actor?: string;
-  alasan?: string;
   deployment?: Deployment;
   environment?: Environment;
+  actor?: string;
+  alasan?: string;
+  /** Waktu event pemicu; dipakai mencatat umur antrean persetujuan. */
+  waktu?: string;
 };
 
 const TUJUAN: Record<AksiRelease, { dari: StatusRelease; ke: StatusRelease }> = {
@@ -166,6 +170,7 @@ export function transisiRelease(
     status: aturan.ke,
     approved_by: aksi === "approve" ? konteks.actor!.trim() : release.approved_by,
     alasan: aksi === "reject" ? konteks.alasan!.trim() : release.alasan,
+    menunggu_sejak: aksi === "staging_sehat" ? (konteks.waktu ?? release.menunggu_sejak) : release.menunggu_sejak,
   };
 }
 
@@ -238,7 +243,7 @@ export function isRelease(value: unknown): value is Release {
   if (!hasKeys(value, [
     "id", "application_id", "commit_sha", "image_digest", "status",
     "approved_by", "alasan", "dibuat_oleh", "dibuat_pada",
-    "commit_subject", "branch", "repo_url",
+    "commit_subject", "branch", "repo_url", "menunggu_sejak",
   ])) return false;
   if (!isNonEmpty(value.id) || !isNonEmpty(value.application_id) ||
     !/^[0-9a-f]{40}$/.test(String(value.commit_sha)) ||
@@ -247,7 +252,7 @@ export function isRelease(value: unknown): value is Release {
     !isNullableString(value.approved_by) || !isNullableString(value.alasan) ||
     !isNonEmpty(value.dibuat_oleh) || !isNonEmpty(value.dibuat_pada) ||
     !isNullableString(value.commit_subject) || !isNullableString(value.branch) ||
-    !isNullableString(value.repo_url)) return false;
+    !isNullableString(value.repo_url) || !isNullableString(value.menunggu_sejak)) return false;
   if (value.status === "draft" || value.status === "build_berjalan") return true;
   if (value.image_digest === null) return false;
   if (value.status === "ditolak") return isNonEmpty(value.alasan);

@@ -37,6 +37,7 @@ export function release(status: Release["status"] = "staging_berjalan"): Release
     commit_subject: null,
     branch: null,
     repo_url: null,
+    menunggu_sejak: null,
   };
 }
 

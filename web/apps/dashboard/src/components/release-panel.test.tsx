@@ -20,6 +20,7 @@ const payload = {
         commit_subject: null,
         branch: null,
         repo_url: null,
+        menunggu_sejak: null,
       },
     ],
     deployments: [

@@ -159,6 +159,7 @@ function releaseAwal(event: ReleaseEvent): Release {
     commit_subject: event.commit_subject ?? null,
     branch: event.branch ?? null,
     repo_url: event.repo_url ?? null,
+    menunggu_sejak: null,
   };
 }
 
@@ -396,7 +397,7 @@ export function foldReleaseEvents(
               }
             }
           } else {
-            release = transisiRelease(release, "staging_sehat", { deployment, environment: staging });
+            release = transisiRelease(release, "staging_sehat", { deployment, environment: staging, waktu: event.ts });
           }
           environments.set(envTarget.id, { ...envTarget, active_deployment_id: deployment.id });
         }

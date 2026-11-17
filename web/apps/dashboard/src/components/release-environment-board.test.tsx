@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Deployment, Environment, Release } from "@autore/contracts";
-import { ReleaseEnvironmentBoard } from "./release-environment-board";
+import { ReleaseEnvironmentBoard, umurPersetujuan } from "./release-environment-board";
 
 const fetchMock = vi.fn();
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   fetchMock.mockReset();
 });
@@ -45,6 +46,7 @@ const releases: Release[] = [
     commit_subject: null,
     branch: null,
     repo_url: null,
+    menunggu_sejak: null,
   },
 ];
 
@@ -69,6 +71,44 @@ describe("ReleaseEnvironmentBoard", () => {
     const board = screen.getByRole("region", { name: "Environment Portal Klaim" });
     expect(within(board).getByRole("heading", { name: "Staging" })).toBeVisible();
     expect(within(board).getByRole("heading", { name: "Production" })).toBeVisible();
+  });
+
+  it("menampilkan konteks koordinasi: subjek, branch, tautan commit, dan umur antrean", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-17T07:00:00Z"));
+    const denganKonteks: Release[] = [{
+      ...releases[0]!,
+      commit_subject: "perbaiki login pelanggan",
+      branch: "main",
+      repo_url: "https://github.com/tugure-git-intern/tes-testing.git",
+      menunggu_sejak: "2026-11-17T04:00:00Z",
+    }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={denganKonteks}
+        environments={environments}
+        deployments={deployments}
+      />,
+    );
+
+    expect(screen.getByTestId("release-subjek")).toHaveTextContent("perbaiki login pelanggan");
+    expect(screen.getByTestId("release-branch")).toHaveTextContent("main");
+    expect(screen.getByTestId("release-commit-link")).toHaveAttribute(
+      "href",
+      "https://github.com/tugure-git-intern/tes-testing/commit/0123456789abcdef0123456789abcdef01234567",
+    );
+    expect(screen.getByTestId("release-tindakan")).toHaveTextContent("Perlu QA/Admin menyetujui");
+    expect(screen.getByTestId("release-umur")).toHaveTextContent("menunggu 3 jam");
+    vi.useRealTimers();
+  });
+
+  it("umurPersetujuan membulatkan menit, jam, dan hari", () => {
+    const awal = "2026-11-17T04:00:00Z";
+    const jam = Date.parse(awal) + 3 * 60 * 60 * 1000;
+    expect(umurPersetujuan(awal, jam)).toBe("3 jam");
+    expect(umurPersetujuan(awal, Date.parse(awal) + 90_000)).toBe("1 menit");
+    expect(umurPersetujuan(awal, Date.parse(awal) + 2 * 24 * 60 * 60 * 1000)).toBe("2 hari");
+    expect(umurPersetujuan(null)).toBeNull();
   });
 
   it("menampilkan production belum dikonfigurasi, bukan online", () => {

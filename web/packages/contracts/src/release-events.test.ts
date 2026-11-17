@@ -148,6 +148,7 @@ describe("fold event release", () => {
     expect(tanpaMetadata.commit_subject).toBeNull();
     expect(tanpaMetadata.branch).toBeNull();
     expect(tanpaMetadata.repo_url).toBeNull();
+    expect(tanpaMetadata.menunggu_sejak).toBeNull();
 
     const berMetadata = sukses(1, DIGEST_1, "dep-1").map((item) =>
       item.kind === "digest_verified"
@@ -158,6 +159,8 @@ describe("fold event release", () => {
     expect(release.commit_subject).toBe("perbaiki login");
     expect(release.branch).toBe("main");
     expect(release.repo_url).toBe("https://github.com/a/b");
+    // Umur antrean approval dihitung dari event staging sehat, bukan waktu render.
+    expect(release.menunggu_sejak).toBe("2026-11-13T04:00:00Z");
   });
 });
 

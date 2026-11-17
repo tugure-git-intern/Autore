@@ -1,3 +1,4 @@
+// Pemicu: poll SCM H/5 menit; commit ke main otomatis membangun ulang.
 // Jalur CI->staging untuk autore-dummy: build, push registry, deploy staging
 // by digest di :8190, lalu catat event rilis supaya kandidat promosi muncul
 // sendiri di dashboard. Promote/rollback tetap di job terpisah

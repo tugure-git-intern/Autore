@@ -241,7 +241,7 @@ function Shell({ children, user }: { children: ReactNode; user: SessionUser }) {
             Semua jarak kiri ber-prefix lg:, jadi di mobile (sidebar overlay lewat bar
             bawah) kartu tetap menempel tepi. */}
         <main
-          className={`w-full flex-1 bg-white transition-[margin] duration-300 ease-in-out motion-reduce:transition-none dark:bg-[#353b43] dark:text-white lg:mt-2 lg:mb-3 lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200 dark:lg:border-[#50638b] ${
+          className={`w-full flex-1 bg-white transition-[margin] duration-300 ease-in-out motion-reduce:transition-none dark:bg-[#353b43] dark:text-white lg:mt-1 lg:mb-3 lg:mr-3 lg:w-auto lg:overflow-y-auto lg:rounded-2xl lg:border-y lg:border-r lg:border-gray-200 dark:lg:border-[#50638b] ${
             sidebarTerbuka ? "lg:ml-[274px]" : "lg:ml-3"
           }`}
         >

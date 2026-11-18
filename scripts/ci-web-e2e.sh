@@ -30,10 +30,19 @@ if ! compgen -G "${BROWSERS}/chromium-*/chrome-linux*/chrome" >/dev/null; then
 fi
 
 # Salinan repo harus identik dengan skrip yang benar-benar dijalankan. Tanpa ini
-# perubahan di repo bisa tidak pernah dipakai pipeline (atau sebaliknya).
+# perubahan di repo bisa tidak pernah dipakai pipeline (atau sebaliknya). Repo
+# Autore wajib menyertakan salinan; repo web lain tidak punya suite ini.
 SALINAN="${WORKSPACE}/scripts/ci-web-e2e.sh"
-if [[ -f "${SALINAN}" ]] && ! cmp -s "${SALINAN}" "${BASH_SOURCE[0]}"; then
-  gagal "gate terpasang ${BASH_SOURCE[0]} berbeda dari ${SALINAN} di repo. Pasang ulang: sudo install -m 0755 \"${SALINAN}\" /usr/local/lib/autore-ci/ci-web-e2e.sh"
+if grep -Fq '"@autore/dashboard"' "${DASHBOARD_DIR}/package.json"; then
+  [[ -f "${SALINAN}" ]] || gagal "repo Autore wajib menyertakan ${SALINAN} supaya gate bisa dibandingkan dengan yang terpasang."
+  beda=1
+elif [[ -f "${SALINAN}" ]]; then
+  beda=1
+else
+  beda=0
+fi
+if [[ "${beda}" -eq 1 ]] && ! cmp -s "${SALINAN}" "${BASH_SOURCE[0]}"; then
+  gagal "gate terpasang ${BASH_SOURCE[0]} berbeda dari ${SALINAN} (isi commit repo). Sinkronkan lewat commit yang sudah di-review; admin yang memasang, bukan checkout."
 fi
 
 # Lock direktori tepercaya agar semua workspace di runner berbagi lock yang

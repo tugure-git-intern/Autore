@@ -20,10 +20,12 @@ ada() { grep -Fqx -- "$2" "$1"; }
 buat_workspace() {
   local ws="$1"
   mkdir -p "${ws}/web/apps/dashboard" "${ws}/web/node_modules/.bin" \
-    "${ws}/browsers/chromium-9999/chrome-linux64"
+    "${ws}/scripts" "${ws}/browsers/chromium-9999/chrome-linux64"
   printf '{"name":"@autore/web","private":true}\n' > "${ws}/web/package.json"
   printf '{"name":"@autore/dashboard","scripts":{"test:e2e":"playwright test"}}\n' \
     > "${ws}/web/apps/dashboard/package.json"
+  # Repo Autore asli menyertakan gate; penjaga drift menuntut salinan identik.
+  cp "${TARGET}" "${ws}/scripts/ci-web-e2e.sh"
   printf '#!/bin/sh\nexit 0\n' > "${ws}/browsers/chromium-9999/chrome-linux64/chrome"
   chmod 0755 "${ws}/browsers/chromium-9999/chrome-linux64/chrome"
   cp "${TMP}/stub-playwright" "${ws}/web/node_modules/.bin/playwright"
@@ -329,7 +331,6 @@ fi
 # 9. Salinan repo berbeda dari gate terpasang: tolak sebelum Playwright.
 ws="${TMP}/ws-drift"
 buat_workspace "${ws}"
-mkdir -p "${ws}/scripts"
 printf '#!/usr/bin/env bash\nexit 0\n' > "${ws}/scripts/ci-web-e2e.sh"
 rc=0
 jalankan "${ws}" 0 "${TMP}/out-drift" "" "${TMP}/pw-drift" || rc=$?
@@ -339,31 +340,53 @@ else
   fail "drift gate tidak ditolak dengan pesan yang benar (exit ${rc})"
   cat "${TMP}/out-drift" >&2
 fi
+# Pesan tidak boleh menyuruh root memasang berkas dari checkout yang belum direview.
+if grep -Fq 'sudo install' "${TMP}/out-drift"; then
+  fail "pesan drift menyuruh memasang berkas repo sebagai root"
+else
+  ok "pesan drift tidak menyuruh memasang berkas repo sebagai root"
+fi
 
-# 9b. Salinan identik: gate lanjut normal.
+# 9b. Salinan identik: gate lanjut normal dan Playwright benar-benar dipanggil.
 ws="${TMP}/ws-salinan-sama"
 buat_workspace "${ws}"
-mkdir -p "${ws}/scripts"
-cp "${TARGET}" "${ws}/scripts/ci-web-e2e.sh"
 rc=0
 jalankan "${ws}" 0 "${TMP}/out-salinan-sama" "" "${TMP}/pw-salinan-sama" || rc=$?
-if [[ "${rc}" -eq 0 ]]; then
+if [[ "${rc}" -eq 0 && -s "${TMP}/pw-salinan-sama.log" ]]; then
   ok "salinan repo identik dilanjutkan"
 else
-  fail "salinan identik malah ditolak (exit ${rc})"
+  fail "salinan identik ditolak atau Playwright tidak dipanggil (exit ${rc})"
   cat "${TMP}/out-salinan-sama" >&2
 fi
 
-# 9c. Repo tanpa scripts/ci-web-e2e.sh (repo non-Autore): tetap jalan.
+# 9c. Repo web non-Autore (dashboard lain) tanpa salinan gate: tetap jalan.
 ws="${TMP}/ws-tanpa-salinan"
 buat_workspace "${ws}"
+printf '{"name":"@lain/dashboard","scripts":{"test:e2e":"playwright test"}}\n' \
+  > "${ws}/web/apps/dashboard/package.json"
+rm -f "${ws}/scripts/ci-web-e2e.sh"
 rc=0
 jalankan "${ws}" 0 "${TMP}/out-tanpa-salinan" "" "${TMP}/pw-tanpa-salinan" || rc=$?
-if [[ "${rc}" -eq 0 ]]; then
-  ok "repo tanpa salinan gate dilanjutkan"
+if [[ "${rc}" -eq 0 && -s "${TMP}/pw-tanpa-salinan.log" ]]; then
+  ok "repo non-Autore tanpa salinan gate dilanjutkan"
 else
-  fail "repo tanpa salinan gate ditolak (exit ${rc})"
+  fail "repo non-Autore tanpa salinan gate ditolak atau tidak jalan (exit ${rc})"
   cat "${TMP}/out-tanpa-salinan" >&2
+fi
+
+# 9d. Repo Autore (dashboard @autore/dashboard) tanpa salinan gate: tolak.
+#     Tanpa berkas pembanding, drift tidak bisa dideteksi — jangan gagal terbuka.
+ws="${TMP}/ws-autore-tanpa-salinan"
+buat_workspace "${ws}"
+rm -f "${ws}/scripts/ci-web-e2e.sh"
+rc=0
+jalankan "${ws}" 0 "${TMP}/out-autore-tanpa-salinan" "" "${TMP}/pw-autore-tanpa-salinan" || rc=$?
+if [[ "${rc}" -eq 1 ]] && grep -Fq 'wajib menyertakan' "${TMP}/out-autore-tanpa-salinan" \
+   && [[ ! -s "${TMP}/pw-autore-tanpa-salinan.log" ]]; then
+  ok "repo Autore tanpa salinan gate ditolak"
+else
+  fail "repo Autore tanpa salinan gate tidak ditolak (exit ${rc})"
+  cat "${TMP}/out-autore-tanpa-salinan" >&2
 fi
 
 if [[ "${GAGAL}" -ne 0 ]]; then

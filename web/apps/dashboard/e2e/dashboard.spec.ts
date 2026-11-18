@@ -196,7 +196,7 @@ test.describe("section Active Pipelines", () => {
   test("berada di atas grafik Tren 7 Hari", async ({ page }) => {
     await page.goto("/");
 
-    const judul = page.getByRole("heading", { name: "Active Pipelines" });
+    const judul = page.getByRole("heading", { name: "Pipeline Aktif" });
     await expect(judul).toBeVisible();
 
     const kotakJudul = (await judul.boundingBox())!;
@@ -359,9 +359,9 @@ test.describe("section Active Pipelines", () => {
 
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Active Pipelines" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pipeline Aktif" })).toBeVisible();
     await expect(page.getByText("0 berjalan atau menunggu")).toBeVisible();
-    await expect(page.getByText("Semua pipeline selesai")).toBeVisible();
+    await expect(page.getByText("Semua Pipeline Selesai")).toBeVisible();
     await expect(page.getByTestId("pipeline-card")).toHaveCount(0);
   });
 });

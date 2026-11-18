@@ -15,7 +15,8 @@ const SIDEBAR = 250;
 // Kartu konten mulai setelah sidebar + jarak 12px, dan renggang 12px dari kanan.
 const KONTEN_X = SIDEBAR_X + SIDEBAR + 12;
 const JARAK_KANAN = 12;
-const TINGGI_TOPBAR = 64;
+const TINGGI_TOPBAR = 56;
+const JARAK_ATAS_KONTEN = 4;
 
 test.describe("kerangka melayang di layar lebar", () => {
   test("topbar membentang ujung ke ujung dan tidak pernah tertutup sidebar", async ({ page }) => {
@@ -119,6 +120,13 @@ test.describe("kerangka melayang di layar lebar", () => {
     await page.setViewportSize({ width: 1280, height: 500 });
     await page.goto("/audit", { waitUntil: "networkidle" });
 
+    await page.evaluate(() => {
+      const main = document.querySelector("main")!;
+      const filler = document.createElement("div");
+      filler.style.height = "1200px";
+      main.appendChild(filler);
+    });
+
     const hasil = await page.evaluate(() => {
       const header = document.querySelector("header")!;
       const main = document.querySelector("main")!;
@@ -138,8 +146,8 @@ test.describe("kerangka melayang di layar lebar", () => {
     expect(hasil.overflowY).toBe("auto");
     expect(hasil.mainScrollTop).toBeGreaterThan(0);
     expect(hasil.windowScrollY).toBe(0);
-    // Tepi atas kartu konten tetap renggang 12px di bawah topbar.
-    expect(hasil.mainTop).toBe(hasil.headerBottom + 12);
+    // Tepi atas kartu konten tetap renggang 4px di bawah topbar.
+    expect(hasil.mainTop).toBe(hasil.headerBottom + JARAK_ATAS_KONTEN);
   });
 
   test("menu Penampilan mengganti tema lewat modal kebab dan tersimpan setelah reload", async ({

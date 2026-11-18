@@ -47,7 +47,11 @@ const webServer: PlaywrightTestConfig["webServer"] = HIDUP
           PORT: String(PORT_API),
           AUTORE_BIN: STUB,
           AUTORE_WORKSPACE: TMP,
+          AUTORE_ENVIRONMENTS: path.join(FIXTURE, "environments.json"),
           AUTORE_AUDIT_LOG: path.join(TMP, "audit.log"),
+          // Suite penuh mengirim lebih dari 10 request terautentikasi per menit;
+          // batas produksi 10 tetap default di API.
+          AUTORE_RATE_LIMIT: "1000",
         },
       },
       {

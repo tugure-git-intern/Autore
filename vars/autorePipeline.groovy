@@ -84,14 +84,14 @@ def call(Map config = [:]) {
                     // Artefak stage 5 bukan kode proyek: gitleaks terbukti menandai berkas
                     // manifes .next sebagai secret (7 temuan), dan vendor 705 MB tidak perlu
                     // ditelusuri. Checkout bersih memang tidak punya berkas ini.
-                    sh 'rm -rf web/node_modules web/apps/*/node_modules web/apps/*/tsconfig.tsbuildinfo web/apps/dashboard/.next web/test-results web/.env'
+                    sh 'rm -rf web/node_modules web/apps/*/node_modules web/apps/*/tsconfig.tsbuildinfo web/apps/dashboard/.next web/apps/dashboard/.next-e2e web/apps/dashboard/test-results web/apps/dashboard/playwright-report web/test-results web/.env'
                     script {
                         // Script gate HANYA dari direktori yang dipasang admin (runner/setup-agent.sh).
                         // Repo yang dipindai tidak boleh menyediakan kode yang menentukan lulus/gagal.
                         def trusted = '/usr/local/lib/autore-ci'
                         def needed = ['ci-sonarqube-gate.sh', 'build-musl-release.sh',
                                       'ci-nexus-publish.sh', 'ci-deploy-by-digest.sh', 'notify-telegram.sh',
-                                      'ci-web-tests.sh']
+                                      'ci-web-tests.sh', 'ci-web-e2e.sh']
                         def missing = needed.findAll { name ->
                             sh(script: "test -x '${trusted}/${name}' && echo yes || echo no", returnStdout: true).trim() != 'yes'
                         }
@@ -175,6 +175,21 @@ def call(Map config = [:]) {
                             sh '/usr/local/lib/autore-ci/ci-web-tests.sh'
                         } else {
                             echo "Dilewati: web/package.json tidak ada — project non-web, gerbang vitest/tsc/build tidak berlaku."
+                        }
+                    }
+                }
+            }
+
+            stage('5.5 E2E Regression Gate (Playwright)') {
+                steps {
+                    script {
+                        // Suite E2E hanya dimiliki dashboard Autore. Repo web lain
+                        // (tanpa web/apps/dashboard) dilewati, bukan digagalkan.
+                        if (fileExists('web/apps/dashboard/package.json')) {
+                            env.FAILED_STAGE = '5.5 E2E Regression Gate (Playwright)'
+                            sh '/usr/local/lib/autore-ci/ci-web-e2e.sh'
+                        } else {
+                            echo "Dilewati: web/apps/dashboard/package.json tidak ada — suite E2E hanya untuk dashboard Autore."
                         }
                     }
                 }

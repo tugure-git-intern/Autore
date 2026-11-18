@@ -4,6 +4,20 @@ Dokumen ini mendefinisikan batas risiko sementara untuk lingkungan **Sandbox VPS
 
 ---
 
+## Current State (Single VPS)
+
+Status saat ini: **satu VPS** menjalankan seluruh peran — Jenkins controller + agent, registry, Nexus, dashboard/API, serta container aplikasi staging dan production. Ini adalah batas lingkungan yang disengaja untuk fase sandbox, bukan arsitektur produksi final.
+
+- **Staging dan production belum terisolasi host.** Keduanya berjalan di Docker daemon yang sama. `environments.json` membedakan keduanya lewat label target (`vps-staging` untuk staging, `127.0.0.1:<port>` untuk production), tetapi label itu tidak memberi batas CPU, memori, jaringan, atau filesystem. Gangguan atau compromise pada staging dapat memengaruhi production.
+- **Entry environment dibuat eksplisit.** `autore env init --all` menambahkan pasangan staging + production untuk setiap app di `registry.tsv`; entri yang sudah ada tidak ditimpa. Port staging dan production dialokasikan berpasangan di rentang `8300–8399`, sehingga target production konsisten walau masih menunjuk loopback VPS yang sama.
+- **Akses operator belum lewat domain/TLS publik.** Jenkins controller diikat ke `127.0.0.1:8080` dan diakses lewat SSH port-forward. Penyediaan domain, sertifikat TLS, dan termination di depan endpoint publik berada di luar kendali tim aplikasi (tanggung jawab tim infra).
+- **Belum ada HA/DR.** Satu VPS berarti satu titik kegagalan untuk controller, registry, dan beban aplikasi. Backup/restore dan replikasi lintas host belum menjadi bagian dari fase ini.
+- **Gate E2E berjalan hermetik.** Stage `5.5 E2E Regression Gate (Playwright)` memakai server uji di `127.0.0.1:9198/9199` dan tidak menembak dashboard production `9120/9121`.
+
+**Roadmap isolasi:** pemisahan host builder/deploy, runner ephemeral/rootless, dan shared library yang dikontrol admin dijelaskan di Bagian 2 dan Bagian 3. Semua itu **belum diterapkan** pada single VPS ini dan tidak boleh diasumsikan sudah ada saat membaca status di atas. Isolasi production, hardening C-1/C-2, TLS/domain, serta HA/DR adalah pekerjaan lanjutan di luar fase single-VPS.
+
+---
+
 ## 1. Status Risiko Sementara Khusus Sandbox (Wajib Dipatuhi)
 
 Konfigurasi di direktori `runner/` dan `sandbox/` saat ini dirancang **khusus untuk pembuktian konsep (PoC) di VM Sandbox terisolasi** dan memiliki dua risiko arsitektural yang diterima sementara dengan batasan ketat:

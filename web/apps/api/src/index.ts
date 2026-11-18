@@ -20,6 +20,12 @@ import {
 } from "./release-rollback";
 import { hatchPromote, type PromoteHandler } from "./release-promote";
 
+/** Batas rate limit default 10/menit; test hermetik boleh menaikkannya lewat env. */
+const BATAS_RATE = (() => {
+  const nilai = Number.parseInt(process.env.AUTORE_RATE_LIMIT ?? "", 10);
+  return Number.isInteger(nilai) && nilai > 0 ? nilai : 10;
+})();
+
 export type RunsLoader = () => Promise<{ data: RunsPayload; stale: boolean }>;
 export type ActiveLoader = () => Promise<{ data: ActivePayload; stale: boolean }>;
 export type SbomLoader = (app: string) => Promise<SbomResult>;
@@ -149,7 +155,7 @@ export function createApp(
   clock: () => number = () => Date.now(),
   audit: AuditLoader = (max = 100) => bacaAudit(max),
   releases: ReleaseLoader = (app) => loadReleases(app),
-  rateLimiter: MiddlewareHandler = rateLimit({ limit: 10, windowMs: 60_000, now: clock }),
+  rateLimiter: MiddlewareHandler = rateLimit({ limit: BATAS_RATE, windowMs: 60_000, now: clock }),
   approvals: ApprovalHandler = hatchApprovals(),
   rollback: RollbackHandler = hatchRollback(),
   promote: PromoteHandler = hatchPromote(),

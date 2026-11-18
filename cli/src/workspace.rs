@@ -164,7 +164,7 @@ fn pesan_port_bentrok(workspace: &Path, nama: &str, port: u16, sebab: &str) -> S
 }
 
 /// Semua baris `registry.tsv` utuh (nama, port app, port deploy) untuk ditulis ulang.
-fn entri_registry(workspace: &Path) -> Vec<(String, u16, u16)> {
+pub(crate) fn entri_registry(workspace: &Path) -> Vec<(String, u16, u16)> {
     const APP_PORT: u16 = 8000;
     let mut out = Vec::new();
     let Ok(isi) = std::fs::read_to_string(workspace.join("registry.tsv")) else {
@@ -188,7 +188,7 @@ fn entri_registry(workspace: &Path) -> Vec<(String, u16, u16)> {
     out
 }
 
-fn port_bebas(port: u16) -> bool {
+pub(crate) fn port_bebas(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 

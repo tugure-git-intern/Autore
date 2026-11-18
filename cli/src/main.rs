@@ -6,6 +6,7 @@ mod github;
 mod hooks;
 mod jenkins;
 mod launcher;
+mod lingkungan;
 mod pipeline_record;
 mod progress;
 mod release;
@@ -836,6 +837,12 @@ enum Commands {
         json: bool,
     },
 
+    /// Siapkan environments.json (staging + production) untuk semua app di registry.tsv
+    Env {
+        #[command(subcommand)]
+        action: lingkungan::EnvAction,
+    },
+
     /// Catat kemajuan pipeline ke simpanan status (dipakai pipeline Jenkins)
     Pipeline {
         #[command(subcommand)]
@@ -1548,6 +1555,7 @@ fn execute_command(
 
         Commands::Active { json } => active::jalankan(json),
         Commands::Sbom { app, json } => sbom::jalankan(&app, json),
+        Commands::Env { action } => lingkungan::jalankan(action),
 
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.

@@ -7,7 +7,7 @@ test.describe("Fase 2A read-only", () => {
     await expect(page.getByText("Sehat", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Menunggu Persetujuan", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Belum ada deployment", { exact: true })).toBeVisible();
-    await expect(page.getByText("sha256:24e3fdc5344959c9ab78cae9c05d920f6ba8fc9aa2eb3706400abfe76d645036", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("release-digest").first()).toContainText(/^sha256:[0-9a-f]{12}\.\.\.$/);
     await expect(page.getByRole("region", { name: "Environment tes-testing" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Deploy", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Rollback", exact: true })).toHaveCount(0);

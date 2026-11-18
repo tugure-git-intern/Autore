@@ -83,6 +83,12 @@ NODE_VERSION="${NODE_VERSION:-22.23.4}"
 NODE_PREFIX="/usr/local/lib/node22"
 NODE_LINK_DIR="/usr/local/bin"
 
+# --- Playwright Chromium -----------------------------------------------------
+# Dipasang sekali di runner, bukan tiap build. Versi mengikuti override
+# @playwright/test di web/package.json; naikkan keduanya bersamaan.
+PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION:-1.65.0}"
+PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/autore/ms-playwright}"
+
 node_major() { "$1" -v 2>/dev/null | sed 's/^v//' | cut -d. -f1; }
 
 install_node() {
@@ -117,6 +123,30 @@ install_node() {
 }
 
 install_node
+
+install_playwright() {
+  local marker="${PLAYWRIGHT_BROWSERS_PATH}/.autore-playwright-${PLAYWRIGHT_VERSION}"
+  if [[ -f "${marker}" ]] && compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux*/chrome" >/dev/null; then
+    log "Playwright Chromium ${PLAYWRIGHT_VERSION} sudah terpasang — skipping"
+    return
+  fi
+
+  log "Installing Playwright Chromium ${PLAYWRIGHT_VERSION} into ${PLAYWRIGHT_BROWSERS_PATH}"
+  install -d -o root -g "${AGENT_USER}" -m 0755 "${PLAYWRIGHT_BROWSERS_PATH}"
+  # npx memasang paket Playwright sementara; --with-deps menyiapkan pustaka
+  # sistem yang dibutuhkan Chromium headless.
+  if ! PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" \
+      "${NODE_LINK_DIR}/npx" --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium; then
+    die "Playwright Chromium gagal dipasang — cek jaringan/apt runner."
+  fi
+  chown -R root:"${AGENT_USER}" "${PLAYWRIGHT_BROWSERS_PATH}"
+  chmod -R g+rX "${PLAYWRIGHT_BROWSERS_PATH}"
+  touch "${marker}"
+  chown root:"${AGENT_USER}" "${marker}"
+  chmod 0644 "${marker}"
+}
+
+install_playwright
 
 log "Preparing agent work directory ${AGENT_WORKDIR}"
 install -d -o "${AGENT_USER}" -g "${AGENT_USER}" -m 0750 "${AGENT_WORKDIR}"

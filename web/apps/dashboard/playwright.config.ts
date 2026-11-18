@@ -69,7 +69,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   timeout: 30_000,
-  reporter: [["list"]],
+  reporter: [["list"], ["html", { open: "never" }]],
   // Sesi palsu yang sah: cookie `authjs.session-token` asli (encode() Auth.js)
   // untuk 127.0.0.1 dan 100.80.3.14. Tanpa ini dashboard hanya menampilkan
   // /login, karena satu-satunya cara masuk adalah OAuth GitHub.
@@ -79,6 +79,8 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL,
     viewport: { width: 1280, height: 720 },
     storageState: path.join(AKAR, "e2e", ".auth", "state.json"),
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     // Host workaround, harmless on a normal box:
     //  - the bundled headless-shell binary crashes on this kernel, so force the
     //    full chromium build (`npx playwright install chromium` ships both);

@@ -133,7 +133,7 @@ test.describe("Audit Log — garis timeline", () => {
 
   test("Full Action Matrix E2E: Scan tes-web, Deploy tes-java, Quick-Start audit-test-app -> tercatat di audit.log dan tampil dengan ikon yang tepat di /audit", async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(120_000);
     const auditLogPath = AUDIT_LOG;
     const bacaAuditTerakhir = async () => {
@@ -224,13 +224,13 @@ test.describe("Audit Log — garis timeline", () => {
       localStorage.setItem("autore-theme", "dark");
     });
     await page.waitForTimeout(200);
-    await page.screenshot({ path: "/tmp/audit-action-matrix-dark.png", fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("audit-action-matrix-dark.png"), fullPage: true });
 
     await page.evaluate(() => {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("autore-theme", "light");
     });
     await page.waitForTimeout(200);
-    await page.screenshot({ path: "/tmp/audit-action-matrix-light.png", fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("audit-action-matrix-light.png"), fullPage: true });
   });
 });

@@ -72,6 +72,11 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
   # "never executed ... os error 2".
   # Lock pada direktori (bukan berkas) supaya induk cache boleh read-only.
   RUST_LOCK_DIR="${RUST_CACHE_DIR%/}.lock"
+  # Sisa versi lama: lock berbentuk berkas. Ganti dengan direktori; build lama
+  # yang masih memegang fd-nya tetap terlindungi sampai build itu selesai.
+  if [[ -e "${RUST_LOCK_DIR}" && ! -d "${RUST_LOCK_DIR}" ]]; then
+    rm -f "${RUST_LOCK_DIR}"
+  fi
   mkdir -p "${RUST_LOCK_DIR}" || {
     echo "ERROR: tidak bisa menyiapkan lock cache Rust ${RUST_LOCK_DIR}" >&2
     exit 1

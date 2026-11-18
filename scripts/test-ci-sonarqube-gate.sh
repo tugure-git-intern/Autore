@@ -158,10 +158,24 @@ case4() {
   grep -q 'mulai rust' "${URUTAN_LOG}" && not_ok "tahap Rust tidak dijalankan tanpa lock" || ok "tahap Rust tidak dijalankan tanpa lock"
 }
 
+# Kasus 5: sisa lock berbentuk berkas dari versi lama -> dimigrasi, bukan gagal.
+case5() {
+  local a="${TMP}/ws-a" rc=0
+  buat_repo_rust "${a}"
+  : > "${URUTAN_LOG}"
+  export RUST_CACHE_DIR="${TMP}/cache"
+  rm -rf "${TMP}/cache.lock"
+  : > "${TMP}/cache.lock"
+  WORKSPACE="${a}" bash "${TARGET}" > "${TMP}/migrate.log" 2>&1 || rc=$?
+  [[ ${rc} -eq 0 ]] && ok "lock berkas lama dimigrasi ke direktori" || not_ok "lock berkas lama dimigrasi ke direktori (exit ${rc})"
+  [[ -d "${TMP}/cache.lock" ]] && ok "lock kini direktori" || not_ok "lock kini direktori"
+}
+
 case1
 case2
 case3
 case4
+case5
 
 if (( FAIL > 0 )); then
   echo "GAGAL: ${FAIL} kasus gugur, ${PASS} lulus"

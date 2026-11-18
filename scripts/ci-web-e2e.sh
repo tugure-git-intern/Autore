@@ -29,6 +29,13 @@ if ! compgen -G "${BROWSERS}/chromium-*/chrome-linux*/chrome" >/dev/null; then
   gagal "Chromium Playwright tidak ada di ${BROWSERS}. Jalankan runner/setup-agent.sh di runner, atau set PLAYWRIGHT_BROWSERS_PATH ke cache browser yang sudah terpasang."
 fi
 
+# Salinan repo harus identik dengan skrip yang benar-benar dijalankan. Tanpa ini
+# perubahan di repo bisa tidak pernah dipakai pipeline (atau sebaliknya).
+SALINAN="${WORKSPACE}/scripts/ci-web-e2e.sh"
+if [[ -f "${SALINAN}" ]] && ! cmp -s "${SALINAN}" "${BASH_SOURCE[0]}"; then
+  gagal "gate terpasang ${BASH_SOURCE[0]} berbeda dari ${SALINAN} di repo. Pasang ulang: sudo install -m 0755 \"${SALINAN}\" /usr/local/lib/autore-ci/ci-web-e2e.sh"
+fi
+
 # Lock direktori tepercaya agar semua workspace di runner berbagi lock yang
 # sama, termasuk setelah skrip diganti. Tidak perlu izin tulis di runner.
 LOCK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || gagal "Tidak bisa menentukan direktori lock E2E."

@@ -326,6 +326,46 @@ else
   fail "tidak bisa membatalkan gate A"
 fi
 
+# 9. Salinan repo berbeda dari gate terpasang: tolak sebelum Playwright.
+ws="${TMP}/ws-drift"
+buat_workspace "${ws}"
+mkdir -p "${ws}/scripts"
+printf '#!/usr/bin/env bash\nexit 0\n' > "${ws}/scripts/ci-web-e2e.sh"
+rc=0
+jalankan "${ws}" 0 "${TMP}/out-drift" "" "${TMP}/pw-drift" || rc=$?
+if [[ "${rc}" -eq 1 ]] && grep -Fq 'berbeda dari' "${TMP}/out-drift" && [[ ! -s "${TMP}/pw-drift.log" ]]; then
+  ok "gate terpasang berbeda dari salinan repo ditolak"
+else
+  fail "drift gate tidak ditolak dengan pesan yang benar (exit ${rc})"
+  cat "${TMP}/out-drift" >&2
+fi
+
+# 9b. Salinan identik: gate lanjut normal.
+ws="${TMP}/ws-salinan-sama"
+buat_workspace "${ws}"
+mkdir -p "${ws}/scripts"
+cp "${TARGET}" "${ws}/scripts/ci-web-e2e.sh"
+rc=0
+jalankan "${ws}" 0 "${TMP}/out-salinan-sama" "" "${TMP}/pw-salinan-sama" || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
+  ok "salinan repo identik dilanjutkan"
+else
+  fail "salinan identik malah ditolak (exit ${rc})"
+  cat "${TMP}/out-salinan-sama" >&2
+fi
+
+# 9c. Repo tanpa scripts/ci-web-e2e.sh (repo non-Autore): tetap jalan.
+ws="${TMP}/ws-tanpa-salinan"
+buat_workspace "${ws}"
+rc=0
+jalankan "${ws}" 0 "${TMP}/out-tanpa-salinan" "" "${TMP}/pw-tanpa-salinan" || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
+  ok "repo tanpa salinan gate dilanjutkan"
+else
+  fail "repo tanpa salinan gate ditolak (exit ${rc})"
+  cat "${TMP}/out-tanpa-salinan" >&2
+fi
+
 if [[ "${GAGAL}" -ne 0 ]]; then
   printf '\nGAGAL: ada kasus kontrak yang tidak lulus.\n' >&2
   exit 1

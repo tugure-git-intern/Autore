@@ -187,7 +187,15 @@ def call(Map config = [:]) {
                         // (tanpa web/apps/dashboard) dilewati, bukan digagalkan.
                         if (fileExists('web/apps/dashboard/package.json')) {
                             env.FAILED_STAGE = '5.5 E2E Regression Gate (Playwright)'
-                            sh '/usr/local/lib/autore-ci/ci-web-e2e.sh'
+                            // Artefak Playwright (trace, screenshot, report) harus
+                            // terunggah walau stage gagal — di situlah bukti satu-
+                            // satunya saat E2E merah di CI.
+                            try {
+                                sh '/usr/local/lib/autore-ci/ci-web-e2e.sh'
+                            } finally {
+                                archiveArtifacts artifacts: 'web/apps/dashboard/test-results/**,web/apps/dashboard/playwright-report/**',
+                                                 allowEmptyArchive: true
+                            }
                         } else {
                             echo "Dilewati: web/apps/dashboard/package.json tidak ada — suite E2E hanya untuk dashboard Autore."
                         }

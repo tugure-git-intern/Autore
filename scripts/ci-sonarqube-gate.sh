@@ -66,6 +66,15 @@ rust_tool() {
 
 if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
   mkdir -p "${RUST_CACHE_DIR}"
+  # Dua job yang membangun repo yang sama berbagi cache ini. Tanpa lock, satu
+  # build menghapus binary tes yang sedang dijalankan build lain:
+  # "never executed ... os error 2".
+  exec 9>"${RUST_CACHE_DIR}.lock"
+  log "Menunggu lock cache Rust (maks. 900 detik)..."
+  flock -x -w 900 -E 75 9 || {
+    echo "ERROR: lock cache Rust ${RUST_CACHE_DIR} tidak didapat dalam 900 detik — build lain masih memakainya" >&2
+    exit 1
+  }
   rust_tool '
     set -euo pipefail
     rustup component add clippy llvm-tools-preview >/dev/null 2>&1 || true

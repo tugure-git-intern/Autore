@@ -13,6 +13,7 @@ SONAR_SCANNER_IMAGE="${SONAR_SCANNER_IMAGE:-sonarsource/sonar-scanner-cli:12.3.0
 RUST_IMAGE="${RUST_IMAGE:-clux/muslrust@sha256:15a72a4abf1c593b0bea63a4a8f20e95c1e5a0696d7051eca87b9b850b2d7e43}"
 RUST_CACHE_DIR="${RUST_CACHE_DIR:-${HOME}/.cache/autore/rust-ci}"
 CE_TASK_TIMEOUT="${CE_TASK_TIMEOUT:-300}"
+RUST_LOCK_WAIT=900
 CACERTS_MOUNT="${CACERTS_MOUNT:-}"
 
 log() { printf '\n==> [SonarQube Gate] %s\n' "$*"; }
@@ -69,12 +70,28 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
   # Dua job yang membangun repo yang sama berbagi cache ini. Tanpa lock, satu
   # build menghapus binary tes yang sedang dijalankan build lain:
   # "never executed ... os error 2".
-  exec 9>"${RUST_CACHE_DIR}.lock"
-  log "Menunggu lock cache Rust (maks. 900 detik)..."
-  flock -x -w 900 -E 75 9 || {
-    echo "ERROR: lock cache Rust ${RUST_CACHE_DIR} tidak didapat dalam 900 detik — build lain masih memakainya" >&2
+  # Lock pada direktori (bukan berkas) supaya induk cache boleh read-only.
+  RUST_LOCK_DIR="${RUST_CACHE_DIR%/}.lock"
+  mkdir -p "${RUST_LOCK_DIR}" || {
+    echo "ERROR: tidak bisa menyiapkan lock cache Rust ${RUST_LOCK_DIR}" >&2
     exit 1
   }
+  exec 9<"${RUST_LOCK_DIR}" || {
+    echo "ERROR: tidak bisa membuka lock cache Rust ${RUST_LOCK_DIR}" >&2
+    exit 1
+  }
+  if ! flock -x -n 9; then
+    log "Menunggu lock cache Rust (maks. ${RUST_LOCK_WAIT} detik)..."
+    flock -x -w "${RUST_LOCK_WAIT}" -E 75 9 || {
+      rc=$?
+      if [[ ${rc} -eq 75 ]]; then
+        echo "ERROR: lock cache Rust ${RUST_LOCK_DIR} tidak didapat dalam ${RUST_LOCK_WAIT} detik — build lain masih memakainya" >&2
+        exit 75
+      fi
+      echo "ERROR: flock gagal pada ${RUST_LOCK_DIR} (exit ${rc})" >&2
+      exit 1
+    }
+  fi
   rust_tool '
     set -euo pipefail
     rustup component add clippy llvm-tools-preview >/dev/null 2>&1 || true
@@ -105,6 +122,9 @@ if [[ -f "${WORKSPACE}/cli/Cargo.toml" ]]; then
   sed -i "s|^SF:/work/|SF:|; s|^SF:${WORKSPACE}/|SF:|" "${LCOV_FILE}"
   log "Contoh path lcov: $(grep -m1 '^SF:' "${LCOV_FILE}")"
   log "Clippy report & lcov siap (clippy: $(wc -c < "${CLIPPY_REPORT}") byte, lcov: $(grep -c '^SF:' "${LCOV_FILE}") file)."
+  # Lepas lock sebelum scanner/CE/quality gate: tahap 3-5 tidak memakai cache
+  # Rust, jadi build lain boleh langsung masuk alih-alih menunggu gate penuh.
+  exec 9>&-
 else
   echo "ERROR: ${WORKSPACE}/cli/Cargo.toml tidak ada — gerbang Rust tidak bisa dijalankan (dilarang lolos dengan laporan dummy)." >&2
   exit 1

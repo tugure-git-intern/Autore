@@ -585,3 +585,94 @@ describe("audit aksi (jejak siapa yang menekan tombol)", () => {
     expect(audit).not.toHaveBeenCalled();
   });
 });
+
+describe("connect", () => {
+  const SESI = { login: "MAliffadlan", nama: "Alif Fadlan", email: "alif@example.com" };
+  const INPUT = {
+    repo: "https://github.com/tugure-reasuransi/autore-demo",
+    nama: "coba-connect",
+    branch: "main",
+  } as const;
+
+  it("menjalankan argv connect dengan lock, cwd workspace, dan penanda tahap aktif", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    const out = await actions.connect(INPUT);
+
+    expect(out).toMatchObject({ ok: true, status: 200, action: "connect", target: "coba-connect" });
+    const [file, args, opts] = spawn.mock.calls[0] as [
+      string,
+      string[],
+      { shell: boolean; cwd: string; env: NodeJS.ProcessEnv; timeout: number },
+    ];
+    expect(file).toBe(process.env.AUTORE_BIN || "autore");
+    expect(args).toEqual([
+      "connect",
+      "--path",
+      dir,
+      "--repo",
+      INPUT.repo,
+      "--app-name",
+      "coba-connect",
+      "--branch",
+      "main",
+    ]);
+    expect(opts.shell).toBe(false);
+    expect(opts.cwd).toBe(dir);
+    expect(opts.env.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(opts.env.AUTORE_PROGRESS).toBe("json");
+    expect(opts.timeout).toBe(180_000);
+  });
+
+  it("mengembalikan URL repo yang dibaca dari keluaran CLI", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({ stdout: "  • Repo GitHub    tugure-reasuransi/autore-demo (tersambung)\n" }),
+      ),
+    });
+
+    expect(await actions.connect(INPUT)).toMatchObject({
+      repo: "https://github.com/tugure-reasuransi/autore-demo",
+    });
+  });
+
+  it("menolak folder aplikasi yang sudah ada tanpa menjalankan apa pun", async () => {
+    const dir = await workspace(["coba-connect"]);
+    const { actions, spawn } = make(dir);
+
+    expect(await actions.connect(INPUT)).toMatchObject({ ok: false, status: 409 });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("deploy dan connect tidak boleh jalan bersamaan untuk aplikasi mana pun", async () => {
+    const dir = await workspace(["tes-web"]);
+    let lepas: ((hasil: SpawnResult) => void) | undefined;
+    const spawn = vi.fn(() => new Promise<SpawnResult>((resolve) => { lepas = resolve; }));
+    const { actions } = make(dir, { spawn });
+
+    const berjalan = actions.connect(INPUT);
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
+
+    expect(await actions.run("deploy", "tes-web")).toMatchObject({ ok: false, status: 409 });
+    expect(await actions.connect({ ...INPUT, nama: "lain-lagi" })).toMatchObject({
+      ok: false,
+      status: 409,
+    });
+    lepas?.(result());
+    await berjalan;
+  });
+
+  it("mencatat jejak audit walau CLI keluar gagal", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir, {
+      spawn: vi.fn(async () => result({ exitCode: 1, stderr: "ERROR: gagal push" })),
+    });
+
+    expect(await actions.connect(INPUT, SESI)).toMatchObject({ ok: false, status: 422 });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "connect", target: "coba-connect", exit: 1 }),
+    );
+  });
+});

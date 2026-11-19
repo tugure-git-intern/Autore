@@ -8,6 +8,7 @@ import { roleAtLeast, roleFor, type ActivePayload, type RunsPayload, type SbomRe
 import { getRuns } from "./runs";
 import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
+import { bacaBodyConnect, type HasilBacaConnect } from "./connect";
 import { hatchSbom } from "./sbom";
 import { bacaAllowlist, requireSession, type AuthApi, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
@@ -77,17 +78,20 @@ async function readAppBody(
   return { ok: true, app: app.trim() };
 }
 
-const MAX_QUICK_START_BODY = 4 * 1024;
+const MAX_BODY_AKSI = 4 * 1024;
 
 /**
- * Body quick-start wajib `{"nama":"...","stack":"python|nodejs|java|go","kode":"contoh|kosong"}`.
- * Ukurannya dibatasi dua kali (content-length lalu panjang teks) supaya body raksasa
- * tidak pernah sampai ke validator, apalagi ke spawn.
+ * Ukuran body dibatasi dua kali (content-length lalu panjang teks) supaya body
+ * raksasa tidak pernah sampai ke validator, apalagi ke spawn. Dipakai quick-start
+ * dan connect — keduanya berujung pada proses yang menulis ke GitHub.
  */
-async function readQuickStartBody(request: Request): Promise<HasilBaca> {
+async function bacaJsonTerbatas(
+  request: Request,
+  pesanBentuk: string,
+): Promise<{ ok: true; parsed: unknown } | { ok: false; error: string }> {
   const panjang = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(panjang) && panjang > MAX_QUICK_START_BODY) {
-    return { ok: false, error: `body terlalu besar (maks ${MAX_QUICK_START_BODY} byte)` };
+  if (Number.isFinite(panjang) && panjang > MAX_BODY_AKSI) {
+    return { ok: false, error: `body terlalu besar (maks ${MAX_BODY_AKSI} byte)` };
   }
 
   let teks: string;
@@ -96,17 +100,33 @@ async function readQuickStartBody(request: Request): Promise<HasilBaca> {
   } catch {
     return { ok: false, error: "body tidak bisa dibaca" };
   }
-  if (teks.length > MAX_QUICK_START_BODY) {
-    return { ok: false, error: `body terlalu besar (maks ${MAX_QUICK_START_BODY} byte)` };
+  if (teks.length > MAX_BODY_AKSI) {
+    return { ok: false, error: `body terlalu besar (maks ${MAX_BODY_AKSI} byte)` };
   }
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(teks);
+    return { ok: true, parsed: JSON.parse(teks) };
   } catch {
-    return { ok: false, error: 'body harus JSON {"nama":"...","stack":"python|nodejs|java|go"}' };
+    return { ok: false, error: pesanBentuk };
   }
-  return bacaBodyQuickStart(parsed);
+}
+
+/** Body quick-start wajib `{"nama":"...","stack":"python|nodejs|java|go","kode":"contoh|kosong"}`. */
+async function readQuickStartBody(request: Request): Promise<HasilBaca> {
+  const body = await bacaJsonTerbatas(
+    request,
+    'body harus JSON {"nama":"...","stack":"python|nodejs|java|go"}',
+  );
+  return body.ok ? bacaBodyQuickStart(body.parsed) : body;
+}
+
+/** Body connect wajib `{"repo":"https://github.com/<owner>/<nama>"}`; nama/stack/branch opsional. */
+async function readConnectBody(request: Request): Promise<HasilBacaConnect> {
+  const body = await bacaJsonTerbatas(
+    request,
+    'body harus JSON {"repo":"https://github.com/<owner>/<nama>"}',
+  );
+  return body.ok ? bacaBodyConnect(body.parsed) : body;
 }
 
 /** Body reject wajib `{"alasan":"..."}`: satu kunci, string tidak kosong. */
@@ -313,6 +333,15 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     return reply(c, await actions.quickStart(body.nilai, c.get("sesi")));
+  });
+
+  // Repo dev yang sudah ada: clone + pipeline + push + job Jenkins. Perlindungan
+  // sama dengan quick-start (sesi dev, rate limit, whitelist, lock per aplikasi).
+  app.post("/api/actions/connect", async (c) => {
+    const body = await readConnectBody(c.req.raw);
+    c.header("Cache-Control", "no-store");
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    return reply(c, await actions.connect(body.nilai, c.get("sesi")));
   });
 
   return app;

@@ -6,6 +6,7 @@ import { bacaRegistry, catatAplikasi } from "./registry";
 import { aksiBerjalan, ambilKunci, pemegangKunci } from "./kunci";
 import { promisify } from "node:util";
 import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
+import { argvConnect, type ConnectInput } from "./connect";
 import type { Identitas } from "./session";
 import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
 
@@ -21,7 +22,7 @@ export type SpawnOptions = {
 /** Menyelesaikan hasil untuk exit code apa pun; melempar dengan `code` "ETIMEDOUT"/"ENOENT" saat gagal jalan. */
 export type SpawnAction = (file: string, args: string[], options: SpawnOptions) => Promise<SpawnResult>;
 
-export type ActionKind = "deploy" | "scan" | "quick-start";
+export type ActionKind = "deploy" | "scan" | "quick-start" | "connect";
 
 export type ActionResult =
   | {
@@ -29,7 +30,7 @@ export type ActionResult =
       status: 200;
       action: ActionKind;
       target: string;
-      /** Hanya quick-start: URL repo GitHub yang dibaca dari keluaran CLI. */
+      /** Hanya quick-start/connect: URL repo GitHub yang dibaca dari keluaran CLI. */
       repo?: string;
       output: string;
     }
@@ -39,7 +40,12 @@ export type ActionResult =
 const APP_ID = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_OUTPUT = 4_000;
 const MAX_BUFFER = 1024 * 1024;
-const TIMEOUT: Record<ActionKind, number> = { deploy: 180_000, scan: 60_000, "quick-start": 180_000 };
+const TIMEOUT: Record<ActionKind, number> = {
+  deploy: 180_000,
+  scan: 60_000,
+  "quick-start": 180_000,
+  connect: 180_000,
+};
 
 /**
  * Cangkang tipis di atas `execFile`: satu tempat yang tahu cara menerjemahkan
@@ -208,8 +214,8 @@ export function hatchActions(deps: {
     // quick-start menyentuh registry dan Jenkins, bukan cuma satu folder: aturan
     // lama (aksi lain menunggu selama quick-start jalan) dipertahankan.
     const globalsedang = aksiBerjalan();
-    if (globalsedang === "quick-start") {
-      return failed(409, "aksi quick-start masih berjalan, tunggu sampai selesai");
+    if (globalsedang === "quick-start" || globalsedang === "connect") {
+      return failed(409, `aksi ${globalsedang} masih berjalan, tunggu sampai selesai`);
     }
     const sedang = pemegangKunci(id);
     if (sedang) {
@@ -271,7 +277,12 @@ export function hatchActions(deps: {
    *
    * `author` = identitas dari sesi dashboard; jadi author commit di repo (audit trail).
    */
-  async function quickStart(input: QuickStartInput, author?: Identitas): Promise<ActionResult> {
+  async function buatBaru(
+    kind: "quick-start" | "connect",
+    nama: string,
+    args: string[],
+    author?: Identitas,
+  ): Promise<ActionResult> {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
     }
@@ -280,13 +291,13 @@ export function hatchActions(deps: {
       return failed(409, `aksi ${berjalan} masih berjalan, tunggu sampai selesai`);
     }
 
-    const dir = join(workspace, input.nama);
+    const dir = join(workspace, nama);
     if (dirname(resolve(dir)) !== resolve(workspace)) {
-      return failed(400, `nama aplikasi keluar dari workspace: ${input.nama}`);
+      return failed(400, `nama aplikasi keluar dari workspace: ${nama}`);
     }
     try {
       if ((await stat(dir)).isDirectory()) {
-        return failed(409, `folder aplikasi "${input.nama}" sudah ada di workspace`);
+        return failed(409, `folder aplikasi "${nama}" sudah ada di workspace`);
       }
     } catch {
       // Belum ada: itu keadaan yang diinginkan.
@@ -294,19 +305,19 @@ export function hatchActions(deps: {
 
     // Kunci per aplikasi (K2): aplikasi lama atau sedang deploy juga ikut menahan
     // nama ini. Spawn yang benar-benar jalan sudah ditolak `aksiBerjalan` di atas.
-    const lepas = ambilKunci(input.nama, "quick-start");
+    const lepas = ambilKunci(nama, kind);
     if (!lepas) {
       return failed(
         409,
-        `aksi ${pemegangKunci(input.nama) ?? "quick-start"} masih berjalan, tunggu sampai selesai`,
+        `aksi ${pemegangKunci(nama) ?? kind} masih berjalan, tunggu sampai selesai`,
       );
     }
     try {
       let res: SpawnResult;
       try {
-        res = await deps.spawn(bin, argvQuickStart(workspace, input, author), {
+        res = await deps.spawn(bin, args, {
           shell: false,
-          timeout: TIMEOUT["quick-start"],
+          timeout: TIMEOUT[kind],
           cwd: workspace,
           env: {
             ...process.env,
@@ -320,14 +331,14 @@ export function hatchActions(deps: {
         if (code === "ETIMEDOUT") {
           return failed(
             504,
-            `quick-start melewati batas waktu ${TIMEOUT["quick-start"] / 1000} detik. ` +
+            `${kind} melewati batas waktu ${TIMEOUT[kind] / 1000} detik. ` +
               "Prosesnya mungkin masih jalan di Jenkins - periksa daftar pipeline sebelum mengulang.",
           );
         }
         return failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);
       }
 
-      const catatan = await catatKeRegistry(workspace, dir, input.nama);
+      const catatan = await catatKeRegistry(workspace, dir, nama);
       resetStatusCache();
       const output = capped(
         [res.stdout.trim(), res.stderr.trim(), catatan].filter(Boolean).join("\n"),
@@ -335,24 +346,33 @@ export function hatchActions(deps: {
       await audit({
         login: author?.login ?? "",
         email: author?.email ?? "",
-        action: "quick-start",
-        target: input.nama,
+        action: kind,
+        target: nama,
         exit: res.exitCode,
       });
       return res.exitCode === 0
         ? {
             ok: true,
             status: 200,
-            action: "quick-start",
-            target: input.nama,
+            action: kind,
+            target: nama,
             repo: repoDariOutput(output),
             output,
           }
-        : failed(422, `quick-start keluar dengan kode ${res.exitCode}`, output);
+        : failed(422, `${kind} keluar dengan kode ${res.exitCode}`, output);
     } finally {
       lepas();
     }
   }
 
-  return { run, quickStart };
+  async function quickStart(input: QuickStartInput, author?: Identitas): Promise<ActionResult> {
+    return buatBaru("quick-start", input.nama, argvQuickStart(workspace, input, author), author);
+  }
+
+  /** Repo dev yang sudah ada: clone → pipeline bila belum ada → push → daftar Jenkins. */
+  async function connect(input: ConnectInput, author?: Identitas): Promise<ActionResult> {
+    return buatBaru("connect", input.nama, argvConnect(workspace, input, author), author);
+  }
+
+  return { run, quickStart, connect };
 }

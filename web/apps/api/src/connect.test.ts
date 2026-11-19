@@ -67,6 +67,7 @@ describe("argvConnect", () => {
     expect(baca.ok).toBe(true);
     if (!baca.ok) return;
     const args = argvConnect("/home/tugure/autore-workspace", baca.nilai, {
+      login: "budi",
       nama: "Budi",
       email: "budi@example.com",
     });

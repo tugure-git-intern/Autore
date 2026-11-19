@@ -619,6 +619,65 @@ describe("POST /api/actions/quick-start", () => {
   });
 });
 
+describe("POST /api/actions/connect", () => {
+  const BODY = { repo: "https://github.com/tugure-reasuransi/autore-demo" };
+
+  it("menolak tanpa sesi meski body-nya sah", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const res = await app.request("http://localhost/api/actions/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(BODY),
+    });
+
+    expect(res.status).toBe(401);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("meneruskan permintaan sah ke CLI dan mengembalikan URL repo", async () => {
+    const spawn = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "  • Repo GitHub    tugure-reasuransi/autore-demo (tersambung)\n",
+      stderr: "",
+    }));
+    const app = await testApp(spawn);
+
+    const res = await post(app, "/api/actions/connect", BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      action: "connect",
+      target: "autore-demo",
+      repo: "https://github.com/tugure-reasuransi/autore-demo",
+    });
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]];
+    expect(args.slice(0, 2)).toEqual(["connect", "--path"]);
+    expect(args).toEqual(expect.arrayContaining(["--branch", "main", "--author-name", "alif"]));
+  });
+
+  it("menolak repo di luar github.com dengan 400 tanpa menjalankan proses", async () => {
+    const spawn = vi.fn(async () => ok());
+    const app = await testApp(spawn);
+
+    const res = await post(app, "/api/actions/connect", { repo: "https://evil.com/a/b" });
+
+    expect(res.status).toBe(400);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("menolak kunci body asing dengan 400", async () => {
+    const app = await testApp();
+    const res = await post(app, "/api/actions/connect", { ...BODY, path: "/etc" });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("repo, nama, stack, branch");
+  });
+});
+
 describe("GET /api/audit/log", () => {
   it("mengembalikan riwayat jejak audit dalam format JSON dan total", async () => {
     const { createApp } = await freshApp();
@@ -630,6 +689,7 @@ describe("GET /api/audit/log", () => {
       {
         run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
         quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
+        connect: async () => ({ ok: true, status: 200, action: "connect", target: "tes-web", output: "" }),
       },
       async () => ({ data: RUNS, stale: false }),
       { secret: TEST_SECRET, allowed: ["alif"] },
@@ -655,6 +715,7 @@ describe("GET /api/audit/log", () => {
       {
         run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
         quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
+        connect: async () => ({ ok: true, status: 200, action: "connect", target: "tes-web", output: "" }),
       },
       async () => ({ data: RUNS, stale: false }),
       { secret: TEST_SECRET, allowed: ["alif"] },

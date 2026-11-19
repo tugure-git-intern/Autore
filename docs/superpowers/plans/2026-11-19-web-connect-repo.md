@@ -10,6 +10,17 @@
 
 **Spec:** tidak ada dokumen spec terpisah; kebutuhan berasal dari permintaan user: "dev mau manual tapi tidak mau lewat terminal, cukup klik di web". Keputusan desain ada di plan ini.
 
+## Status
+
+- **Task 1 + 2: SELESAI** (commit `50673a2`, laptop `~/Autore`). 5 tes baru lulus, 321 tes unit lulus, `clippy -D warnings` bersih. Uji nyata: clone + generate + push ke `tugure-reasuransi/autore-demo` sukses (commit `45dbace`); tahap Jenkins berhenti karena laptop tidak punya `jenkins.conf` (Jenkins ada di VPS).
+- **Task 3–7: belum dikerjakan.**
+- Penyimpangan dari rencana awal, sudah diterapkan di kode:
+  - Task 1 dan 2 digabung jadi satu commit: `clippy -D warnings` menolak fungsi yang belum dipakai, jadi commit Task 1 sendirian akan merah.
+  - `git_push_branch` tidak ditambahkan ke `main.rs`; fungsi `push_branch` ada di `connect.rs` (`git push -q origin HEAD:<branch>`).
+  - `jenkins::ensure_git_committed_and_remote` **tidak** dipakai: fungsi itu menjalankan `git branch -M main` dan akan mengganti nama branch repo dev. Sebagai gantinya `commit_scaffold` di `connect.rs` (add + commit, branch dibiarkan apa adanya).
+  - `ensure_jenkins_config` di `main.rs` diubah jadi `pub(crate)` supaya bisa dipanggil dari `connect.rs`.
+- Catatan lapangan: `workspace::catat_port` memperingatkan bila folder workspace belum ada (di laptop `~/autore-workspace` belum ada). Di VPS folder itu ada. Bukan penghalang, tapi pesan warning itu sebaiknya tidak muncul di dialog dashboard.
+
 ## Global Constraints
 
 - Argv selalu array, `shell: false`; teks dari browser tidak pernah masuk argv selain nilai yang sudah lolos regex/whitelist di server.
@@ -32,7 +43,7 @@
 
 ---
 
-### Task 1: Modul `connect.rs` — parse URL repo + deteksi stack
+### Task 1: Modul `connect.rs` — parse URL repo + deteksi stack (SELESAI)
 
 **Files:**
 - Create: `cli/src/connect.rs`
@@ -113,7 +124,7 @@ git commit -m "feat(cli): parse URL repo GitHub + deteksi stack untuk alur conne
 
 ---
 
-### Task 2: Subcommand `autore connect`
+### Task 2: Subcommand `autore connect` (SELESAI)
 
 **Files:**
 - Modify: `cli/src/main.rs` (enum `Commands` dekat `QuickStart` ~757; cabang dispatch dekat `Commands::QuickStart` ~1606)
@@ -160,8 +171,8 @@ Expected: FAIL — belum ada `ConnectOpts`/`nama_aplikasi_connect`.
 5. `deteksi_stack(&target_dir)`; `--stack` menang; kalau dua-duanya kosong → `TechStack::Python`.
 6. `app_port` default `stack.default_port()`; `deploy_port` lewat `workspace::pilih_port`.
 7. Kalau `has_existing_pipeline_files(&target_dir)` → cetak "Dockerfile/Jenkinsfile milik repo dipakai apa adanya" dan **jangan** generate. Kalau tidak → `generate_project_files_with(&cfg, &target_dir, false)`.
-8. `ensure_git_committed_and_remote(&target_dir, &format!("{}.git", rr.url), author.as_ref())`.
-9. `git_push_branch(&target_dir, &opts.branch)`; gagal → keluar 1 **sebelum** `catat_port`.
+8. `commit_scaffold(&target_dir, author.as_ref())` — add + commit saja; branch repo tidak di-rename.
+9. `push_branch(&target_dir, &opts.branch)`; gagal → keluar 1 **sebelum** `catat_port`.
 10. `workspace::catat_port(...)`; `ensure_jenkins_config(&conf_path, interactive, false)` (sama seperti `quick-start`) → gagal konfigurasi = keluar 1.
 11. `jenkins::register_and_trigger_jenkins(&jk_cfg, &nama, &format!("{}.git", rr.url), &opts.branch)`.
 12. Panggil `progress::tahap(...)` pada tiap tahap (`klon`, `kerangka`, `kirim`, `jenkins`) — dashboard membaca progres dari itu saat `AUTORE_PROGRESS=json`.

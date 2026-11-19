@@ -176,6 +176,7 @@ start_container() {
   docker run -d --name "${name}" \
     --restart unless-stopped \
     --label "autore.deployment_id=${label}" \
+    -e "APP_VERSION=${label}" \
     -p "127.0.0.1:${port}:${CONTAINER_PORT}" \
     "${image}"
 }

@@ -1,8 +1,10 @@
 import json
+import os
 import threading
 import unittest
 import urllib.error
 import urllib.request
+from unittest import mock
 
 from app import make_server
 
@@ -33,6 +35,12 @@ class AppTest(unittest.TestCase):
         status, body = self.get("/")
         self.assertEqual(status, 200)
         self.assertEqual(body, "Hello from Autore sandbox")
+
+    def test_root_menyertakan_app_version(self):
+        with mock.patch.dict(os.environ, {"APP_VERSION": "autore-dummy-production-36"}):
+            status, body = self.get("/")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, "Hello from Autore sandbox (autore-dummy-production-36)")
 
     def test_unknown_path_returns_404(self):
         with self.assertRaises(urllib.error.HTTPError) as ctx:

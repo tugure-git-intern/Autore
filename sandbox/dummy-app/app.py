@@ -1,9 +1,17 @@
 """Minimal HTTP app used to exercise the Autore sandbox pipeline."""
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 GREETING = "Hello from Autore sandbox"
+
+
+def sapaan() -> str:
+    """GREETING plus APP_VERSION, supaya staging vs production bisa dibedakan
+    saat demo promote/rollback tanpa membuka docker inspect."""
+    versi = os.environ.get("APP_VERSION", "").strip()
+    return f"{GREETING} ({versi})" if versi else GREETING
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -11,7 +19,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._send(200, "application/json", json.dumps({"status": "ok"}))
         elif self.path == "/":
-            self._send(200, "text/plain; charset=utf-8", GREETING)
+            self._send(200, "text/plain; charset=utf-8", sapaan())
         else:
             self._send(404, "text/plain; charset=utf-8", "Not Found")
 

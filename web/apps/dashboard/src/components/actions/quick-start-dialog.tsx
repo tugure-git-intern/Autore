@@ -158,7 +158,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                   </p>
                 ) : null}
                 <p className="mt-1 text-xs text-muted">
-                  Kosong = repo dibuat di akun GitHub pemilik token.
+                  Kosong = org bawaan server. Tanpa org bawaan, repo dibuat di akun pemilik token.
                 </p>
               </div>
 
@@ -199,7 +199,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                 </div>
                 <div className="flex gap-2">
                   <dt className="w-28 text-muted">Organisasi</dt>
-                  <dd className="font-mono text-ink">{orgBersih || "akun pemilik token"}</dd>
+                  <dd className="font-mono text-ink">{orgBersih || "org bawaan server"}</dd>
                 </div>
                 <div className="flex gap-2">
                   <dt className="w-28 text-muted">Isi kode</dt>

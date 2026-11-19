@@ -60,7 +60,7 @@ async function workspace(apps: string[]) {
 
 function make(
   dir: string,
-  options: { spawn?: SpawnAction; listed?: string[]; audit?: PencatatAudit } = {},
+  options: { spawn?: SpawnAction; listed?: string[]; audit?: PencatatAudit; orgBawaan?: string } = {},
 ) {
   const spawn = options.spawn ?? vi.fn(async () => result());
   const audit = options.audit ?? vi.fn();
@@ -69,6 +69,7 @@ function make(
     run: async () => statusJson(options.listed ?? ["tes-web", "ui-demo"]),
     spawn,
     audit,
+    orgBawaan: options.orgBawaan,
   });
   return {
     actions,
@@ -367,6 +368,35 @@ describe("quick-start", () => {
     expect(opts.env.GIT_TERMINAL_PROMPT).toBe("0");
     expect(opts.env.AUTORE_PROGRESS).toBe("json");
     expect(opts.timeout).toBe(180_000);
+  });
+
+  it("org kosong memakai org bawaan unit, bukan akun pemilik token", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir, { orgBawaan: "tugure-reasuransi" });
+
+    await actions.quickStart(INPUT);
+
+    expect(spawn.mock.calls[0][1]).toEqual(expect.arrayContaining(["--org", "tugure-reasuransi"]));
+  });
+
+  it("org yang diisi pemanggil mengalahkan org bawaan", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir, { orgBawaan: "tugure-reasuransi" });
+
+    await actions.quickStart({ ...INPUT, org: "org-lain" });
+
+    const args = spawn.mock.calls[0][1] as string[];
+    expect(args).toEqual(expect.arrayContaining(["--org", "org-lain"]));
+    expect(args).not.toContain("tugure-reasuransi");
+  });
+
+  it("tanpa org bawaan dan tanpa org pemanggil, flag --org tidak dikirim", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir, { orgBawaan: "  " });
+
+    await actions.quickStart(INPUT);
+
+    expect(spawn.mock.calls[0][1]).not.toContain("--org");
   });
 
   it("mengembalikan URL repo yang dibaca dari keluaran CLI", async () => {

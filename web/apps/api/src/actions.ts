@@ -141,8 +141,11 @@ export function hatchActions(deps: {
   bin?: string;
   /** Jejak aksi; default menulis JSONL ke `~/.local/state/autore/audit.log`. */
   audit?: PencatatAudit;
+  /** Org tujuan repo baru; default dari `AUTORE_DEFAULT_ORG`. */
+  orgBawaan?: string;
 }) {
   const bin = deps.bin || process.env.AUTORE_BIN || "autore";
+  const orgBawaan = (deps.orgBawaan ?? process.env.AUTORE_DEFAULT_ORG ?? "").trim();
   const workspace = deps.workspace.trim();
   const audit = deps.audit ?? catatAudit;
   // Kunci tulis tinggal di kunci.ts supaya deploy, scan, quick-start, dan approval
@@ -366,7 +369,10 @@ export function hatchActions(deps: {
   }
 
   async function quickStart(input: QuickStartInput, author?: Identitas): Promise<ActionResult> {
-    return buatBaru("quick-start", input.nama, argvQuickStart(workspace, input, author), author);
+    // Org kosong berarti org bawaan unit, bukan akun pemilik token. Connect tidak
+    // ikut: repo itu sudah ada di GitHub, jadi pemiliknya tidak ditentukan di sini.
+    const nilai = orgBawaan && !input.org ? { ...input, org: orgBawaan } : input;
+    return buatBaru("quick-start", nilai.nama, argvQuickStart(workspace, nilai, author), author);
   }
 
   /** Repo dev yang sudah ada: clone → pipeline bila belum ada → push → daftar Jenkins. */

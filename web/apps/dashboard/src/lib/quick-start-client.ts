@@ -28,7 +28,7 @@ export interface PermintaanQuickStart {
   nama: string;
   stack: Stack;
   kode: Kode;
-  /** Organisasi GitHub; kosong = repo lahir di akun pemilik token. */
+  /** Organisasi GitHub; kosong = org bawaan API (`AUTORE_DEFAULT_ORG`), atau akun pemilik token. */
   org?: string;
 }
 

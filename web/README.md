@@ -159,6 +159,7 @@ Konfigurasi unit API — bukan body request:
 | --- | --- | --- | --- |
 | `AUTORE_WORKSPACE` | ya | akar direktori aplikasi | semua aksi 503 |
 | `AUTORE_BIN` | tidak | path binary `autore` | pakai `autore` dari `PATH` |
+| `AUTORE_DEFAULT_ORG` | tidak | org tujuan repo baru dari quick-start | repo dibuat di akun pemilik token |
 
 Balasan: `200` sukses · `400` body/id tidak sah · `404` id tidak terdaftar atau
 direktori hilang · `409` aksi lain masih berjalan (satu lock global) · `422` CLI

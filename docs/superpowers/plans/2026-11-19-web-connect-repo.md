@@ -376,7 +376,7 @@ Run: `cd cli && cargo test && cargo clippy --all-targets -- -D warnings`
 Run: `cd web && npm test && npx tsc --noEmit && npx eslint .`
 Expected: PASS.
 
-- [ ] **Step 5: Verifikasi manual**
+- [x] **Step 5: Verifikasi manual**
 
 Run: `autore quick-start --app-name uji-org --stack python --org tugure-reasuransi --deploy-port 8175`
 Expected: repo `tugure-reasuransi/uji-org` dibuat (bukan di akun pribadi), build jalan. Kalau token bukan anggota org atau kurang scope, error menyebut izin org — bukan pesan umum.

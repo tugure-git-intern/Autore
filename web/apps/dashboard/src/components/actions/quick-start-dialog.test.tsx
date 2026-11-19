@@ -139,7 +139,7 @@ test("sukses menutup dialog, memanggil onSelesai, dan menampilkan toast sukses",
 
   await waitFor(() => expect(onSelesai).toHaveBeenCalledTimes(1));
   expect(await screen.findByTestId("toast")).toHaveTextContent("coba-web");
-  expect(document.querySelector("dialog")).not.toHaveAttribute("open");
+  await waitFor(() => expect(document.querySelector("dialog")).not.toHaveAttribute("open"));
   expect(goToLogin).not.toHaveBeenCalled();
 });
 

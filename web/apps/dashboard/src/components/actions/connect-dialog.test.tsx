@@ -121,7 +121,7 @@ test("sukses mengirim repo/nama/branch ke API lalu menutup dialog dan memuat ula
     nama: "autore-demo",
     branch: "master",
   });
-  expect(document.querySelector("dialog")).not.toHaveAttribute("open");
+  await waitFor(() => expect(document.querySelector("dialog")).not.toHaveAttribute("open"));
 });
 
 test("penolakan server ditampilkan apa adanya dan dialog tetap terbuka", async () => {

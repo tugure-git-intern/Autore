@@ -1,5 +1,6 @@
 mod active;
 mod admin;
+mod connect;
 mod doctor;
 mod external;
 mod github;
@@ -576,7 +577,7 @@ fn git_push_main(dir: &std::path::Path) -> bool {
 }
 
 /// Konfigurasi Jenkins: pakai yang tersimpan, atau tanya sekali di sesi interaktif.
-fn ensure_jenkins_config(
+pub(crate) fn ensure_jenkins_config(
     conf_path: &std::path::Path,
     interactive: bool,
     reconfigure: bool,
@@ -785,6 +786,46 @@ enum Commands {
         author_name: Option<String>,
 
         /// Email identitas commit dari sesi dashboard (pasangan `--author-name`)
+        #[arg(long)]
+        author_email: Option<String>,
+    },
+
+    /// Sambungkan repo GitHub yang sudah ada: clone, tambah pipeline bila belum ada, push, daftar Jenkins
+    #[command(visible_alias = "sambung")]
+    Connect {
+        /// URL repo, mis. https://github.com/tugure-reasuransi/autore-demo
+        #[arg(long)]
+        repo: String,
+
+        /// Direktori induk tempat repo di-clone
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+
+        /// Nama aplikasi (default: nama repo)
+        #[arg(long)]
+        app_name: Option<String>,
+
+        /// Tech stack: python, nodejs, java, go (default: ditebak dari isi repo)
+        #[arg(long)]
+        stack: Option<String>,
+
+        /// Port internal aplikasi di dalam container
+        #[arg(long)]
+        app_port: Option<u16>,
+
+        /// Port host untuk deployment (default: port bebas pertama)
+        #[arg(long)]
+        deploy_port: Option<u16>,
+
+        /// Branch yang dipakai pipeline
+        #[arg(long, default_value = "main")]
+        branch: String,
+
+        /// Identitas commit dari sesi dashboard (audit trail)
+        #[arg(long)]
+        author_name: Option<String>,
+
+        /// Email identitas commit dari sesi dashboard
         #[arg(long)]
         author_email: Option<String>,
     },
@@ -1896,6 +1937,38 @@ fn execute_command(
                     1
                 }
             }
+        }
+
+        Commands::Connect {
+            repo,
+            path,
+            app_name,
+            stack,
+            app_port,
+            deploy_port,
+            branch,
+            author_name,
+            author_email,
+        } => {
+            let base_dir = if path == std::path::Path::new(".") {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            } else {
+                path
+            };
+            connect::jalankan(
+                &connect::ConnectOpts {
+                    repo,
+                    path: base_dir,
+                    app_name,
+                    stack,
+                    app_port,
+                    deploy_port,
+                    branch,
+                    author_name,
+                    author_email,
+                },
+                interactive,
+            )
         }
 
         Commands::DeleteProject => {

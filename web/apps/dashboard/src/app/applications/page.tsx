@@ -9,6 +9,7 @@ import { dash } from "@/lib/format";
 import { filterApps, type StatusFilter } from "@/lib/filter-apps";
 import { useStatus } from "@/components/app-shell";
 import { ActionButton } from "@/components/actions/action-button";
+import { ConnectDialog } from "@/components/actions/connect-dialog";
 import { QuickStartDialog } from "@/components/actions/quick-start-dialog";
 import { ApplicationsFilter } from "@/components/applications-filter";
 import { formatBuild } from "@/components/dashboard-overview";
@@ -101,7 +102,12 @@ export default function ApplicationsPage() {
           title="Daftar Aplikasi"
           description={`${applications.length} aplikasi terdaftar dalam pipeline DevSecOps.`}
           icon={Layers}
-          action={<QuickStartDialog onSelesai={reload} />}
+          action={
+            <span className="flex flex-wrap items-start justify-end gap-2">
+              <ConnectDialog onSelesai={reload} />
+              <QuickStartDialog onSelesai={reload} />
+            </span>
+          }
         />
 
         <div className="rounded-b-xl sm:rounded-b-2xl bg-white p-5 sm:p-6 pt-4 space-y-4 dark:bg-[var(--bg-canvas)]">

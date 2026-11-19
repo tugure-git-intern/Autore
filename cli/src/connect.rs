@@ -288,7 +288,7 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
                 nama
             );
             println!("  • Folder project : {}", target.display());
-            println!("  • Repo GitHub    : {}/{}", rr.owner, rr.name);
+            println!("  • Repo GitHub    {}/{} (tersambung)", rr.owner, rr.name);
             println!("  • Job Jenkins    : {job_url}");
             println!("  • Port deploy    : {}", cfg.deploy_port);
             progress::tahap(

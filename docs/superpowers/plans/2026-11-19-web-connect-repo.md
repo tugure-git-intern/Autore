@@ -265,21 +265,21 @@ git commit -m "feat(api): validasi + argv untuk aksi connect"
 - Consumes: `bacaBodyConnect`, `argvConnect` (Task 3); `spawnAutore`, `capped`, `failed`, `catatKeRegistry`, `ambilKunci`, `pemegangKunci`, `aksiBerjalan`, `repoDariOutput`.
 - Produces: `ActionKind` memuat `"connect"`; `Actions` memuat `connect(input: ConnectInput, author?: Identitas): Promise<ActionResult>`.
 
-- [ ] **Step 1: Tulis tes yang gagal** — di `actions.test.ts`: spawn dipanggil dengan argv hasil `argvConnect`, `GIT_TERMINAL_PROMPT: "0"`, `AUTORE_PROGRESS: "json"`, timeout 180 000; exit ≠ 0 → `422`; lock aplikasi lain → `409`; `audit` mencatat `action: "connect"`. Di `index.test.ts`: `POST /api/actions/connect` body salah → `400`, body sah → `200 { ok: true, action: "connect", repo }`.
+- [x] **Step 1: Tulis tes yang gagal** — di `actions.test.ts`: spawn dipanggil dengan argv hasil `argvConnect`, `GIT_TERMINAL_PROMPT: "0"`, `AUTORE_PROGRESS: "json"`, timeout 180 000; exit ≠ 0 → `422`; lock aplikasi lain → `409`; `audit` mencatat `action: "connect"`. Di `index.test.ts`: `POST /api/actions/connect` body salah → `400`, body sah → `200 { ok: true, action: "connect", repo }`.
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts apps/api/src/index.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 3: Implementasi** — salin bentuk `quickStart`: cek `workspace`, cek `aksiBerjalan()`, cek folder `workspace/<nama>` belum ada (`409`), `ambilKunci(nama, "connect")`, spawn, `catatKeRegistry`, `resetStatusCache`, `audit({ action: "connect" })`, sukses → `{ ok: true, status: 200, action: "connect", target: nama, repo: repoDariOutput(output), output }`. Route di `index.ts` mengikuti handler quick-start (sesi diteruskan, `Cache-Control: no-store`).
+- [x] **Step 3: Implementasi** — salin bentuk `quickStart`: cek `workspace`, cek `aksiBerjalan()`, cek folder `workspace/<nama>` belum ada (`409`), `ambilKunci(nama, "connect")`, spawn, `catatKeRegistry`, `resetStatusCache`, `audit({ action: "connect" })`, sukses → `{ ok: true, status: 200, action: "connect", target: nama, repo: repoDariOutput(output), output }`. Route di `index.ts` mengikuti handler quick-start (sesi diteruskan, `Cache-Control: no-store`).
 
-- [ ] **Step 4: Jalankan tes**
+- [x] **Step 4: Jalankan tes**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts apps/api/src/index.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts web/apps/api/src/index.ts web/apps/api/src/index.test.ts
@@ -298,21 +298,21 @@ git commit -m "feat(api): aksi connect + route /api/actions/connect"
 **Interfaces:**
 - Produces: `runConnect(input: { repo: string; nama: string; stack: Stack }): Promise<{ ok: boolean; message: string; repo?: string }>`; komponen `<ConnectDialog onDone={() => void} />`.
 
-- [ ] **Step 1: Tulis tes yang gagal** — client mengirim `POST /api/actions/connect` dengan body `{repo,nama,stack}` dan meneruskan pesan error server; dialog: tombol "Sambungkan Repo" membuka form 3 kolom, kolom kosong menonaktifkan submit, konfirmasi kedua wajib (`Sambungkan sekarang`) sebelum memanggil `runConnect`.
+- [x] **Step 1: Tulis tes yang gagal** — client mengirim `POST /api/actions/connect` dengan body `{repo,nama,stack}` dan meneruskan pesan error server; dialog: tombol "Sambungkan Repo" membuka form 3 kolom, kolom kosong menonaktifkan submit, konfirmasi kedua wajib (`Sambungkan sekarang`) sebelum memanggil `runConnect`.
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/dashboard/src/lib/connect-client.test.ts apps/dashboard/src/components/actions/connect-dialog.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implementasi** — `connect-client.ts` meniru `quick-start-client.ts` (satu `fetch`, tanpa `shell`), `connect-dialog.tsx` meniru `quick-start-dialog.tsx` (field: URL repo placeholder `https://github.com/<owner>/<repo>`, nama aplikasi, pilihan stack; pesan konfirmasi menyebut bahwa repo akan di-clone, ditambah `Dockerfile`/`Jenkinsfile` bila belum ada, lalu di-push). Tempatkan tombol **Sambungkan Repo** tepat di samping tombol Quick Start di `applications/page.tsx`.
+- [x] **Step 3: Implementasi** — `connect-client.ts` meniru `quick-start-client.ts` (satu `fetch`, tanpa `shell`), `connect-dialog.tsx` meniru `quick-start-dialog.tsx` (field: URL repo placeholder `https://github.com/<owner>/<repo>`, nama aplikasi, pilihan stack; pesan konfirmasi menyebut bahwa repo akan di-clone, ditambah `Dockerfile`/`Jenkinsfile` bila belum ada, lalu di-push). Tempatkan tombol **Sambungkan Repo** tepat di samping tombol Quick Start di `applications/page.tsx`.
 
-- [ ] **Step 4: Jalankan tes**
+- [x] **Step 4: Jalankan tes**
 
 Run: `cd web && npx vitest run apps/dashboard/src/lib/connect-client.test.ts apps/dashboard/src/components/actions/connect-dialog.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/connect-client.ts web/apps/dashboard/src/lib/connect-client.test.ts web/apps/dashboard/src/components/actions/connect-dialog.tsx web/apps/dashboard/src/components/actions/connect-dialog.test.tsx web/apps/dashboard/src/app/applications/page.tsx
@@ -327,16 +327,16 @@ git commit -m "feat(dashboard): dialog Sambungkan Repo di halaman Applications"
 - Modify: `README.md` (tabel `CLI Reference`, sisi `autore deploy`)
 - Modify: `web/README.md` (bagian aksi dashboard)
 
-- [ ] **Step 1: Tambah baris dokumentasi** — README: `| \`autore connect\` | Men-clone repo GitHub yang sudah ada, menambahkan \`Dockerfile\`/\`Jenkinsfile\` bila belum ada, commit+push, lalu mendaftarkan job Jenkins (\`--repo\`, \`--branch\`, \`--stack\`). | Manual onboarding |`. `web/README.md`: satu paragraf bahwa dashboard punya dua jalur onboarding — Quick Start (buat repo baru) dan Sambungkan Repo (repo yang sudah ada).
+- [x] **Step 1: Tambah baris dokumentasi** — README: `| \`autore connect\` | Men-clone repo GitHub yang sudah ada, menambahkan \`Dockerfile\`/\`Jenkinsfile\` bila belum ada, commit+push, lalu mendaftarkan job Jenkins (\`--repo\`, \`--branch\`, \`--stack\`). | Manual onboarding |`. `web/README.md`: satu paragraf bahwa dashboard punya dua jalur onboarding — Quick Start (buat repo baru) dan Sambungkan Repo (repo yang sudah ada).
 
-- [ ] **Step 2: Regresi penuh**
+- [x] **Step 2: Regresi penuh**
 
 Run: `cd cli && cargo test && cargo clippy --all-targets -- -D warnings`
 Expected: PASS tanpa warning.
 Run: `cd web && npm test && npx tsc --noEmit && npx eslint .`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md web/README.md

@@ -28,7 +28,8 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process;
 use templates::{
-    generate_project_files_with, validate_app_name, validate_deploy_port, InitConfig, TechStack,
+    generate_project_files_with, validate_app_name, validate_deploy_port, validate_org_name,
+    InitConfig, TechStack,
 };
 
 #[derive(Parser)]
@@ -440,6 +441,7 @@ fn commands_for(index: usize) -> Commands {
             app_port: None,
             deploy_port: None,
             kode: "kosong".to_string(),
+            org: None,
             author_name: None,
             author_email: None,
         },
@@ -779,6 +781,10 @@ enum Commands {
         /// Port host untuk deployment (default: port bebas pertama mulai 8081)
         #[arg(long)]
         deploy_port: Option<u16>,
+
+        /// Organisasi GitHub tempat repo dibuat (default: akun pemilik token)
+        #[arg(long)]
+        org: Option<String>,
 
         /// Identitas commit dari sesi dashboard: nama GitHub yang menekan tombol
         /// (audit trail). Tanpa ini dipakai identitas bot `Autore CLI`.
@@ -1651,6 +1657,7 @@ fn execute_command(
             app_port,
             deploy_port,
             kode,
+            org,
             author_name,
             author_email,
         } => {
@@ -1679,6 +1686,12 @@ fn execute_command(
             if let Err(e) = validate_app_name(&resolved_name) {
                 eprintln!("{} {}", "ERROR:".red().bold(), e);
                 return 1;
+            }
+            if let Some(ref o) = org {
+                if let Err(e) = validate_org_name(o.trim()) {
+                    eprintln!("{} {}", "ERROR:".red().bold(), e);
+                    return 1;
+                }
             }
 
             let resolved_stack = match stack {
@@ -1860,7 +1873,12 @@ fn execute_command(
                     return 1;
                 }
             };
-            let (full_name, created) = match github::ensure_repo(&token, &owner, &cfg.app_name) {
+            let (full_name, created) = match github::ensure_repo(
+                &token,
+                &owner,
+                &cfg.app_name,
+                org.as_deref().map(str::trim),
+            ) {
                 Ok(v) => v,
                 Err(e) => {
                     eprintln!("{} {e}", "ERROR:".red().bold());
@@ -2303,6 +2321,7 @@ mod tests {
             app_port: None,
             deploy_port: None,
             kode: "kosong".to_string(),
+            org: None,
             author_name: None,
             author_email: None,
         };

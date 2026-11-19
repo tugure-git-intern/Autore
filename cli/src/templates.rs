@@ -246,6 +246,23 @@ pub fn validate_deploy_port(port: u16) -> Result<(), String> {
     Ok(())
 }
 
+/// Nama organisasi GitHub: lebih longgar dari nama aplikasi (boleh huruf besar
+/// dan titik), tetap satu elemen argv yang aman.
+pub fn validate_org_name(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.len() > 39 {
+        return Err("Nama organisasi wajib 1-39 karakter".into());
+    }
+    let mut chars = name.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphanumeric() {
+        return Err("Nama organisasi harus diawali huruf atau angka".into());
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Nama organisasi hanya boleh berisi huruf, angka, '-', '_', atau '.'".into());
+    }
+    Ok(())
+}
+
 pub fn validate_app_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.len() > 63 {
         return Err(
@@ -574,6 +591,25 @@ mod tests {
         for good in ["my-tugure-app", "service_1", "autore-dummy"] {
             assert!(validate_app_name(good).is_ok(), "{good:?} rejected");
         }
+    }
+
+    #[test]
+    fn org_name_boleh_huruf_besar_tapi_tetap_satu_elemen_argv() {
+        for good in ["tugure-reasuransi", "Tugure.Dev", "org_1"] {
+            assert!(validate_org_name(good).is_ok(), "{good:?} ditolak");
+        }
+        for bad in [
+            "",
+            "-leading",
+            "ada spasi",
+            "a/b",
+            "../escape",
+            "--force",
+            "a'b",
+        ] {
+            assert!(validate_org_name(bad).is_err(), "{bad:?} diterima");
+        }
+        assert!(validate_org_name(&"a".repeat(40)).is_err());
     }
 
     #[test]

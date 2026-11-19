@@ -174,8 +174,13 @@ type KirimHttp<'a> = &'a dyn Fn(&str, &str, &str, Option<&str>) -> Result<(u16, 
 /// Pastikan repo `owner/name` ada di GitHub. `true` = baru dibuat.
 /// Jalur `ensure_repo` dengan lapisan HTTP disuntik, supaya tes bisa membuktikan
 /// permintaan apa saja yang benar-benar dikirim tanpa menyentuh jaringan.
-pub fn ensure_repo(token: &str, owner: &str, name: &str) -> Result<(String, bool), String> {
-    ensure_repo_dengan(&curl_api, token, owner, name)
+pub fn ensure_repo(
+    token: &str,
+    owner: &str,
+    name: &str,
+    org: Option<&str>,
+) -> Result<(String, bool), String> {
+    ensure_repo_dengan(&curl_api, token, owner, name, org)
 }
 
 fn ensure_repo_dengan(
@@ -183,8 +188,12 @@ fn ensure_repo_dengan(
     token: &str,
     owner: &str,
     name: &str,
+    org: Option<&str>,
 ) -> Result<(String, bool), String> {
-    let full = format!("{owner}/{name}");
+    // Repo organisasi lahir di `/orgs/{org}/repos`; `owner` (akun pemilik token)
+    // hanya dipakai bila tidak ada org, supaya `full` selalu pemilik sebenarnya.
+    let pemilik = org.unwrap_or(owner);
+    let full = format!("{pemilik}/{name}");
 
     // Cek keberadaan dulu: repo yang sudah ada tidak boleh di-POST ulang. POST
     // berulang ke `/user/repos` kena secondary rate limit GitHub untuk "content
@@ -201,7 +210,11 @@ fn ensure_repo_dengan(
     let payload = format!(
         "{{\"name\":\"{name}\",\"private\":false,\"description\":\"Dibuat otomatis oleh Autore CLI\"}}"
     );
-    let (code, body) = kirim(token, "POST", "/user/repos", Some(&payload))?;
+    let endpoint = match org {
+        Some(o) => format!("/orgs/{o}/repos"),
+        None => "/user/repos".to_string(),
+    };
+    let (code, body) = kirim(token, "POST", &endpoint, Some(&payload))?;
     match code {
         201 => Ok((full, true)),
         422 => Ok((full, false)),
@@ -282,7 +295,7 @@ mod tests {
         );
 
         let (full, baru) =
-            ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "audit-test-app")
+            ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "audit-test-app", None)
                 .expect("repo yang sudah ada harus lolos");
 
         assert_eq!(full, "tugure-git-intern/audit-test-app");
@@ -311,8 +324,9 @@ mod tests {
             ],
         );
 
-        let (full, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
-            .expect("repo baru harus dibuat");
+        let (full, baru) =
+            ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru", None)
+                .expect("repo baru harus dibuat");
 
         assert_eq!(full, "tugure-git-intern/app-baru");
         assert!(baru, "201 berarti repo memang baru");
@@ -341,7 +355,7 @@ mod tests {
             ],
         );
 
-        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-lama")
+        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-lama", None)
             .expect("422 = repo sudah ada, bukan kegagalan");
 
         assert!(!baru);
@@ -361,7 +375,7 @@ mod tests {
             ],
         );
 
-        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+        let (_, baru) = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru", None)
             .expect("cek yang tidak bisa dibaca tidak boleh memblokir pembuatan");
 
         assert!(baru);
@@ -382,7 +396,7 @@ mod tests {
             ],
         );
 
-        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru", None)
             .expect_err("403 harus jadi error");
 
         assert!(
@@ -409,7 +423,7 @@ mod tests {
             ],
         );
 
-        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru")
+        let err = ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru", None)
             .expect_err("403 harus jadi error");
 
         assert!(
@@ -426,5 +440,65 @@ mod tests {
             Some("tugure-git-intern")
         );
         assert_eq!(extract_json_string(body, "full_name"), None);
+    }
+
+    #[test]
+    fn org_membuat_repo_di_endpoint_org_dan_full_name_memakai_org() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (201, r#"{"full_name":"tugure-reasuransi/uji-org"}"#),
+            ],
+        );
+
+        let (full, baru) = ensure_repo_dengan(
+            &kirim,
+            "token",
+            "tugure-git-intern",
+            "uji-org",
+            Some("tugure-reasuransi"),
+        )
+        .expect("org harus bisa membuat repo");
+
+        assert_eq!(full, "tugure-reasuransi/uji-org");
+        assert!(baru);
+        assert_eq!(
+            *catatan.borrow(),
+            vec![
+                (
+                    "GET".to_string(),
+                    "/repos/tugure-reasuransi/uji-org".to_string()
+                ),
+                (
+                    "POST".to_string(),
+                    "/orgs/tugure-reasuransi/repos".to_string()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn tanpa_org_tetap_memakai_user_repos_dan_owner_token() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Not Found"}"#),
+                (201, r#"{"full_name":"tugure-git-intern/app-baru"}"#),
+            ],
+        );
+
+        let (full, baru) =
+            ensure_repo_dengan(&kirim, "token", "tugure-git-intern", "app-baru", None)
+                .expect("tanpa org tetap jalan");
+
+        assert_eq!(full, "tugure-git-intern/app-baru");
+        assert!(baru);
+        assert_eq!(
+            catatan.borrow()[1],
+            ("POST".to_string(), "/user/repos".to_string())
+        );
     }
 }

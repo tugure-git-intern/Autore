@@ -93,167 +93,171 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
         aria-labelledby={judulId}
         className="m-auto w-[min(30rem,92vw)] rounded-lg border border-gray-200 bg-white p-5 text-left shadow-lg backdrop:bg-black/40 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] backdrop:dark:bg-black/60"
       >
-        <h2 id={judulId} className="text-base font-semibold text-ink">
-          {langkah === 1 ? "Buat Aplikasi Baru" : "Konfirmasi pembuatan aplikasi"}
-        </h2>
+        {terbuka ? (
+          <>
+          <h2 id={judulId} className="text-base font-semibold text-ink">
+            {langkah === 1 ? "Buat Aplikasi Baru" : "Konfirmasi pembuatan aplikasi"}
+          </h2>
 
-        {langkah === 1 ? (
-          <div className="mt-4 space-y-4">
-            <div>
-              <label htmlFor="qs-nama" className="text-sm font-medium text-ink">
-                Nama Aplikasi
+          {langkah === 1 ? (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="qs-nama" className="text-sm font-medium text-ink">
+                  Nama Aplikasi
+                </label>
+                <input
+                  id="qs-nama"
+                  value={nama}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => setNama(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
+                />
+                {namaBersih !== "" && !namaSah(namaBersih) ? (
+                  <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
+                    Nama aplikasi tidak sah. Pakai huruf kecil/angka di awal, boleh `-` dan `_`
+                    (contoh: coba-web).
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <label htmlFor="qs-stack" className="text-sm font-medium text-ink">
+                  Bahasa
+                </label>
+                <select
+                  id="qs-stack"
+                  value={stack}
+                  onChange={(e) => setStack(e.target.value as Stack)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
+                >
+                  {STACK.map((pilihan) => (
+                    <option key={pilihan} value={pilihan}>
+                      {LABEL_STACK[pilihan]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="qs-org" className="text-sm font-medium text-ink">
+                  Organisasi (opsional)
+                </label>
+                <input
+                  id="qs-org"
+                  value={org}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="tugure-reasuransi"
+                  onChange={(e) => setOrg(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
+                />
+                {orgBersih !== "" && !orgSah(orgBersih) ? (
+                  <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
+                    Nama organisasi tidak sah. Pakai huruf/angka di awal, boleh `.`, `-`, `_`.
+                  </p>
+                ) : null}
+                <p className="mt-1 text-xs text-muted">
+                  Kosong = repo dibuat di akun GitHub pemilik token.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={kode === "contoh"}
+                  onChange={(e) => setKode(e.target.checked ? "contoh" : "kosong")}
+                />
+                Isi kode contoh (tanpa centang: repo kosong)
               </label>
-              <input
-                id="qs-nama"
-                value={nama}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setNama(e.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
-              />
-              {namaBersih !== "" && !namaSah(namaBersih) ? (
-                <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                  Nama aplikasi tidak sah. Pakai huruf kecil/angka di awal, boleh `-` dan `_`
-                  (contoh: coba-web).
+
+              <div className="flex justify-end gap-2">
+                <Button onClick={tutup}>Batal</Button>
+                <Button
+                  variant="primary"
+                  disabled={!namaSah(namaBersih) || (orgBersih !== "" && !orgSah(orgBersih))}
+                  onClick={() => setLangkah(2)}
+                >
+                  Lanjut
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300">
+                Aplikasi ini akan membuat repository PUBLIK di GitHub.
+              </p>
+
+              <dl className="space-y-1 text-sm">
+                <div className="flex gap-2">
+                  <dt className="w-28 text-muted">Nama</dt>
+                  <dd className="font-mono text-ink">{namaBersih}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 text-muted">Bahasa</dt>
+                  <dd className="text-ink">{LABEL_STACK[stack]}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 text-muted">Organisasi</dt>
+                  <dd className="font-mono text-ink">{orgBersih || "akun pemilik token"}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 text-muted">Isi kode</dt>
+                  <dd className="text-ink">{kode === "contoh" ? "Kode contoh" : "Repo kosong"}</dd>
+                </div>
+              </dl>
+
+              <p className="text-sm text-muted">
+                Langkah ini tidak bisa dibatalkan: repo GitHub, push kode, job Jenkins, dan build
+                pertama dijalankan sekaligus.
+              </p>
+
+              <div>
+                <label htmlFor="qs-konfirmasi" className="text-sm font-medium text-ink">
+                  Ketik nama aplikasi untuk konfirmasi
+                </label>
+                <input
+                  id="qs-konfirmasi"
+                  value={konfirmasi}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={namaBersih}
+                  onChange={(e) => setKonfirmasi(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
+                />
+              </div>
+
+              {pending ? (
+                <p role="status" className="flex items-center gap-2 text-sm text-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Sedang membuat repo di GitHub dan mendaftarkan ke Jenkins… (maks 180 detik)
                 </p>
               ) : null}
-            </div>
 
-            <div>
-              <label htmlFor="qs-stack" className="text-sm font-medium text-ink">
-                Bahasa
-              </label>
-              <select
-                id="qs-stack"
-                value={stack}
-                onChange={(e) => setStack(e.target.value as Stack)}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
-              >
-                {STACK.map((pilihan) => (
-                  <option key={pilihan} value={pilihan}>
-                    {LABEL_STACK[pilihan]}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="qs-org" className="text-sm font-medium text-ink">
-                Organisasi (opsional)
-              </label>
-              <input
-                id="qs-org"
-                value={org}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="tugure-reasuransi"
-                onChange={(e) => setOrg(e.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
-              />
-              {orgBersih !== "" && !orgSah(orgBersih) ? (
-                <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                  Nama organisasi tidak sah. Pakai huruf/angka di awal, boleh `.`, `-`, `_`.
-                </p>
-              ) : null}
-              <p className="mt-1 text-xs text-muted">
-                Kosong = repo dibuat di akun GitHub pemilik token.
-              </p>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={kode === "contoh"}
-                onChange={(e) => setKode(e.target.checked ? "contoh" : "kosong")}
-              />
-              Isi kode contoh (tanpa centang: repo kosong)
-            </label>
-
-            <div className="flex justify-end gap-2">
-              <Button onClick={tutup}>Batal</Button>
-              <Button
-                variant="primary"
-                disabled={!namaSah(namaBersih) || (orgBersih !== "" && !orgSah(orgBersih))}
-                onClick={() => setLangkah(2)}
-              >
-                Lanjut
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300">
-              Aplikasi ini akan membuat repository PUBLIK di GitHub.
-            </p>
-
-            <dl className="space-y-1 text-sm">
-              <div className="flex gap-2">
-                <dt className="w-28 text-muted">Nama</dt>
-                <dd className="font-mono text-ink">{namaBersih}</dd>
+              <div className="flex justify-end gap-2">
+                <Button disabled={pending} onClick={() => setLangkah(1)}>
+                  Kembali
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!cocok || pending}
+                  aria-busy={pending}
+                  onClick={() => void kirim()}
+                >
+                  {pending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Membuat…
+                    </>
+                  ) : (
+                    "Buat Aplikasi"
+                  )}
+                </Button>
               </div>
-              <div className="flex gap-2">
-                <dt className="w-28 text-muted">Bahasa</dt>
-                <dd className="text-ink">{LABEL_STACK[stack]}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="w-28 text-muted">Organisasi</dt>
-                <dd className="font-mono text-ink">{orgBersih || "akun pemilik token"}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="w-28 text-muted">Isi kode</dt>
-                <dd className="text-ink">{kode === "contoh" ? "Kode contoh" : "Repo kosong"}</dd>
-              </div>
-            </dl>
-
-            <p className="text-sm text-muted">
-              Langkah ini tidak bisa dibatalkan: repo GitHub, push kode, job Jenkins, dan build
-              pertama dijalankan sekaligus.
-            </p>
-
-            <div>
-              <label htmlFor="qs-konfirmasi" className="text-sm font-medium text-ink">
-                Ketik nama aplikasi untuk konfirmasi
-              </label>
-              <input
-                id="qs-konfirmasi"
-                value={konfirmasi}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={namaBersih}
-                onChange={(e) => setKonfirmasi(e.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
-              />
             </div>
-
-            {pending ? (
-              <p role="status" className="flex items-center gap-2 text-sm text-muted">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Sedang membuat repo di GitHub dan mendaftarkan ke Jenkins… (maks 180 detik)
-              </p>
-            ) : null}
-
-            <div className="flex justify-end gap-2">
-              <Button disabled={pending} onClick={() => setLangkah(1)}>
-                Kembali
-              </Button>
-              <Button
-                variant="primary"
-                disabled={!cocok || pending}
-                aria-busy={pending}
-                onClick={() => void kirim()}
-              >
-                {pending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    Membuat…
-                  </>
-                ) : (
-                  "Buat Aplikasi"
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
+          </>
+        ) : null}
       </dialog>
     </span>
   );

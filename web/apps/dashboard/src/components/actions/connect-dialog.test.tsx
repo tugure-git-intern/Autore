@@ -10,6 +10,7 @@ vi.mock("@/lib/actions-client", async (importOriginal) => {
 
 import { goToLogin } from "@/lib/actions-client";
 import { ConnectDialog } from "./connect-dialog";
+import { QuickStartDialog } from "./quick-start-dialog";
 
 type Reply = { ok?: boolean; status?: number; body?: unknown };
 
@@ -154,4 +155,25 @@ test("sesi berakhir dialihkan ke halaman login", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Sambungkan Sekarang" }));
 
   await waitFor(() => expect(goToLogin).toHaveBeenCalledWith("/login"));
+});
+
+// Dua dialog hidup berdampingan di /applications. Isi dialog tertutup tidak boleh
+// ikut ke pohon aksesibilitas: label kembar membuat locator `getByLabel("Nama Aplikasi")`
+// ambigu (Playwright strict mode) dan pembaca layar menyebut field yang tidak terlihat.
+test("dialog tertutup tidak menyumbang label saat dua dialog dipasang bersamaan", () => {
+  mockFetch(() => ({}));
+  render(
+    <>
+      <ConnectDialog />
+      <QuickStartDialog />
+    </>,
+  );
+  expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(0);
+
+  fireEvent.click(screen.getByRole("button", { name: /Buat Aplikasi Baru/ }));
+  expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+  fireEvent.click(screen.getByRole("button", { name: /Sambungkan Repo/ }));
+  expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(1);
 });

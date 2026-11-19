@@ -123,9 +123,22 @@ Dashboard tidak lagi read-only. Dua tombol memanggil dua endpoint:
 | --- | --- | --- | --- |
 | Jalankan Ulang | `/pipeline?app=<id>` | `POST /api/actions/deploy` | `autore deploy --path <workspace>/<id dari body>` |
 | Scan Keamanan | `/applications` (tiap baris) | `POST /api/actions/scan` | `autore scan --no-docker --path <workspace>/<id dari body>` |
+| Sambungkan Repo | `/applications` (header) | `POST /api/actions/connect` | `autore connect --repo <url> --app-name <nama> --branch <branch> --path <workspace>` |
 
 Tidak ada tombol deploy di header `/`: tanpa aplikasi terpilih, deploy cuma
 menebak target, jadi aksinya hanya ada di tempat yang punya konteks aplikasi.
+
+Onboarding punya dua jalur di header `/applications`: **Buat Aplikasi Baru**
+(`POST /api/actions/quick-start`) membuat repo GitHub baru dari templat, dan
+**Sambungkan Repo** (`POST /api/actions/connect`) memakai repo yang sudah ada —
+clone, tambah `Dockerfile`/`Jenkinsfile` bila belum ada, commit+push, lalu daftar
+Jenkins. Body connect: `{repo, nama, stack?, branch?}`; `repo` wajib
+`https://github.com/<owner>/<nama>` tanpa token/SSH, `nama` memakai pola id
+aplikasi, `stack` salah satu python/nodejs/java/go (bila kosong CLI menebak dari
+isi repo), dan `branch` bawaan `main` (huruf/angka/`.`/`_`/`/`/`-`, maks 100,
+tanpa `..` dan tanpa awalan `-`). Keduanya lewat modal konfirmasi ketik ulang
+nama, karena keduanya menulis ke GitHub. Timeout connect 180 s (clone+push+build
+trigger).
 
 Deploy bukan sekadar "build": CLI menjalankan `git add`/`git commit` di
 direktori aplikasi, push ke remote, lalu memicu build Jenkins. Karena itu tombol

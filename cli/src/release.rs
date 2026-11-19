@@ -399,13 +399,7 @@ fn record_at(dir: &Path, args: RecordArgs) -> Result<Event, String> {
     let branch = rapikan_branch(args.branch.as_ref());
     let repo_url = teks_pipeline(args.repo_url.as_ref());
     let event = if let Some(ref path) = args.from_deploy_result {
-        from_result(
-            path,
-            &args,
-            commit_subject,
-            branch,
-            repo_url,
-        )?
+        from_result(path, &args, commit_subject, branch, repo_url)?
     } else if args.event.as_deref() == Some("build_failed") {
         Event {
             id: args

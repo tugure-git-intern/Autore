@@ -174,6 +174,9 @@ test("dialog tertutup tidak menyumbang label saat dua dialog dipasang bersamaan"
   expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(1);
 
   fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+  // Judul tetap terpasang saat tertutup: aria-labelledby butuh teksnya, kalau tidak
+  // dialog kehilangan nama aksesibelnya dan locator `getByLabel("Buat Aplikasi Baru")` mati.
+  expect(screen.getByLabelText("Buat Aplikasi Baru")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Sambungkan Repo/ }));
   expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(1);
 });

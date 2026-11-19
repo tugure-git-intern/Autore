@@ -97,12 +97,12 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
         aria-labelledby={judulId}
         className="m-auto w-[min(30rem,92vw)] rounded-lg border border-gray-200 bg-white p-5 text-left shadow-lg backdrop:bg-black/40 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] backdrop:dark:bg-black/60"
       >
+        <h2 id={judulId} className="text-base font-semibold text-ink">
+          {langkah === 1 ? "Sambungkan Repo yang Sudah Ada" : "Konfirmasi penyambungan repo"}
+        </h2>
+
         {terbuka ? (
           <>
-          <h2 id={judulId} className="text-base font-semibold text-ink">
-            {langkah === 1 ? "Sambungkan Repo yang Sudah Ada" : "Konfirmasi penyambungan repo"}
-          </h2>
-
           {langkah === 1 ? (
             <div className="mt-4 space-y-4">
               <div>

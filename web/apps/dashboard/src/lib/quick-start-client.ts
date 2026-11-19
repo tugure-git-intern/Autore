@@ -17,10 +17,19 @@ export function namaSah(nama: string): boolean {
   return NAMA_APP.test(nama.trim());
 }
 
+/** Cermin `validate_org_name` CLI: boleh huruf besar dan titik, maks 39 karakter. */
+export const NAMA_ORG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,38}$/;
+
+export function orgSah(org: string): boolean {
+  return NAMA_ORG.test(org.trim());
+}
+
 export interface PermintaanQuickStart {
   nama: string;
   stack: Stack;
   kode: Kode;
+  /** Organisasi GitHub; kosong = repo lahir di akun pemilik token. */
+  org?: string;
 }
 
 export interface HasilQuickStart {
@@ -34,13 +43,19 @@ export interface HasilQuickStart {
 
 export async function runQuickStart(permintaan: PermintaanQuickStart): Promise<HasilQuickStart> {
   const nama = permintaan.nama.trim();
+  const org = permintaan.org?.trim() ?? "";
 
   let response: Response;
   try {
     response = await fetch("/api/actions/quick-start", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ nama, stack: permintaan.stack, kode: permintaan.kode }),
+      body: JSON.stringify({
+        nama,
+        stack: permintaan.stack,
+        kode: permintaan.kode,
+        ...(org ? { org } : {}),
+      }),
     });
   } catch {
     return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };

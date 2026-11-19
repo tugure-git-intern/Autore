@@ -20,14 +20,17 @@ export type Stack = (typeof STACK_SAH)[number];
 export const KODE_SAH = ["contoh", "kosong"] as const;
 export type Kode = (typeof KODE_SAH)[number];
 
-export type QuickStartInput = { nama: string; stack: Stack; kode: Kode };
+export type QuickStartInput = { nama: string; stack: Stack; kode: Kode; org?: string };
+
+/** Cermin `validate_org_name` CLI: boleh huruf besar dan titik, tetap satu elemen argv. */
+const NAMA_ORG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,38}$/;
 
 export type HasilBaca =
   | { ok: true; nilai: QuickStartInput }
   | { ok: false; error: string };
 
 /** Nama field yang boleh ada di body: sisanya ditolak, bukan diabaikan diam-diam. */
-const KUNCI_BODY = new Set(["nama", "stack", "kode"]);
+const KUNCI_BODY = new Set(["nama", "stack", "kode", "org"]);
 
 function isStack(nilai: unknown): nilai is Stack {
   return typeof nilai === "string" && (STACK_SAH as readonly string[]).includes(nilai);
@@ -50,7 +53,7 @@ export function bacaBodyQuickStart(body: unknown): HasilBaca {
   const record = body as Record<string, unknown>;
   for (const kunci of Object.keys(record)) {
     if (!KUNCI_BODY.has(kunci)) {
-      return { ok: false, error: `body hanya boleh memuat kunci nama, stack, kode (ada "${kunci}")` };
+      return { ok: false, error: `body hanya boleh memuat kunci nama, stack, kode, org (ada "${kunci}")` };
     }
   }
 
@@ -82,7 +85,21 @@ export function bacaBodyQuickStart(body: unknown): HasilBaca {
     };
   }
 
-  return { ok: true, nilai: { nama, stack: record.stack, kode: kodeMentah } };
+  let org: string | undefined;
+  if (record.org !== undefined) {
+    if (typeof record.org !== "string") return { ok: false, error: "org harus berupa string" };
+    const bersih = record.org.trim();
+    if (!NAMA_ORG.test(bersih)) {
+      return {
+        ok: false,
+        error:
+          "org tidak sah: 1-39 karakter, huruf/angka di awal, sisanya huruf, angka, '.', '-' atau '_'",
+      };
+    }
+    org = bersih;
+  }
+
+  return { ok: true, nilai: { nama, stack: record.stack, kode: kodeMentah, ...(org ? { org } : {}) } };
 }
 
 /** Argv tetap: `--path` selalu workspace dari unit, bukan dari pemanggil. */
@@ -101,6 +118,8 @@ export function argvQuickStart(workspace: string, nilai: QuickStartInput, author
   // Identitas author hanya datang dari sesi (lihat `identitasDariToken`), tidak
   // pernah dari body. Tanpa sesi, CLI memakai identitas bot bawaannya.
   if (author) args.push("--author-name", author.nama, "--author-email", author.email);
+  // Org hanya dikirim kalau diisi: tanpa flag, CLI membuat repo di akun pemilik token.
+  if (nilai.org) args.push("--org", nilai.org);
   return args;
 }
 

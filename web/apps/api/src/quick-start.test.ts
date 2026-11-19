@@ -144,3 +144,36 @@ describe("repoDariOutput", () => {
     expect(repoDariOutput("  ERROR: Token GitHub ditolak (HTTP 401).")).toBe("");
   });
 });
+
+describe("org opsional", () => {
+  it("menerima org dan mengirimnya sebagai --org", () => {
+    const hasil = bacaBodyQuickStart({
+      nama: "uji-org",
+      stack: "python",
+      org: "  tugure-reasuransi  ",
+    });
+    expect(hasil.ok).toBe(true);
+    if (!hasil.ok) return;
+    expect(hasil.nilai.org).toBe("tugure-reasuransi");
+    const args = argvQuickStart("/srv/apps", hasil.nilai);
+    expect(args.slice(-2)).toEqual(["--org", "tugure-reasuransi"]);
+  });
+
+  it("tanpa org tidak ada flag --org sama sekali", () => {
+    const hasil = bacaBodyQuickStart({ nama: "uji-org", stack: "python" });
+    expect(hasil.ok).toBe(true);
+    if (!hasil.ok) return;
+    expect(argvQuickStart("/srv/apps", hasil.nilai)).not.toContain("--org");
+  });
+
+  it("menolak org yang bukan satu elemen argv aman", () => {
+    for (const org of ["nama buruk!", "--force", "a/b", "../escape", ""]) {
+      const hasil = bacaBodyQuickStart({ nama: "uji-org", stack: "python", org });
+      expect(hasil.ok).toBe(false);
+    }
+  });
+
+  it("org bukan string ditolak, bukan diabaikan", () => {
+    expect(bacaBodyQuickStart({ nama: "uji-org", stack: "python", org: 7 }).ok).toBe(false);
+  });
+});

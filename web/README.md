@@ -129,7 +129,9 @@ Tidak ada tombol deploy di header `/`: tanpa aplikasi terpilih, deploy cuma
 menebak target, jadi aksinya hanya ada di tempat yang punya konteks aplikasi.
 
 Onboarding punya dua jalur di header `/applications`: **Buat Aplikasi Baru**
-(`POST /api/actions/quick-start`) membuat repo GitHub baru dari templat, dan
+(`POST /api/actions/quick-start`, body `{nama, stack, kode?, org?}`) membuat repo
+GitHub baru dari templat — `org` opsional membuat repo di organisasi GitHub,
+kosong berarti akun pemilik token — dan
 **Sambungkan Repo** (`POST /api/actions/connect`) memakai repo yang sudah ada —
 clone, tambah `Dockerfile`/`Jenkinsfile` bila belum ada, commit+push, lalu daftar
 Jenkins. Body connect: `{repo, nama, stack?, branch?}`; `repo` wajib

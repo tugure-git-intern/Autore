@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { STACK, namaSah, runQuickStart } from "./quick-start-client";
+import { STACK, namaSah, orgSah, runQuickStart } from "./quick-start-client";
 
 type Reply = { ok?: boolean; status?: number; body?: unknown };
 
@@ -103,4 +103,23 @@ test("namaSah mencerminkan validate_app_name CLI", () => {
 
 test("pilihan bahasa hanya empat stack yang dikenal CLI", () => {
   expect(STACK).toEqual(["python", "nodejs", "java", "go"]);
+});
+
+test("org dikirim hanya kalau diisi", async () => {
+  const fetchMock = mockFetch(() => ({ body: { ok: true } }));
+  await runQuickStart({ nama: "uji-org", stack: "python", kode: "contoh", org: "  tugure-reasuransi " });
+  const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  expect(JSON.parse(String(init.body)).org).toBe("tugure-reasuransi");
+
+  await runQuickStart({ nama: "uji-org", stack: "python", kode: "contoh", org: "   " });
+  const [, init2] = fetchMock.mock.calls[1] as [string, RequestInit];
+  expect(JSON.parse(String(init2.body))).not.toHaveProperty("org");
+});
+
+test("orgSah mengikuti pola organisasi GitHub", () => {
+  expect(orgSah("tugure-reasuransi")).toBe(true);
+  expect(orgSah("Tugure.Dev")).toBe(true);
+  for (const bad of ["", "--force", "a/b", "ada spasi", "../escape"]) {
+    expect(orgSah(bad)).toBe(false);
+  }
 });

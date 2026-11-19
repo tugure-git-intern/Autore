@@ -3,7 +3,7 @@
 import { Loader2, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { goToLogin } from "@/lib/actions-client";
-import { STACK, namaSah, runQuickStart, type Kode, type Stack } from "@/lib/quick-start-client";
+import { STACK, namaSah, orgSah, runQuickStart, type Kode, type Stack } from "@/lib/quick-start-client";
 import { Toast, type JenisToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 
@@ -27,12 +27,14 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
   const [nama, setNama] = useState("");
   const [stack, setStack] = useState<Stack>("nodejs");
   const [kode, setKode] = useState<Kode>("contoh");
+  const [org, setOrg] = useState("");
   const [langkah, setLangkah] = useState<1 | 2>(1);
   const [konfirmasi, setKonfirmasi] = useState("");
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<{ jenis: JenisToast; pesan: string } | null>(null);
 
   const namaBersih = nama.trim();
+  const orgBersih = org.trim();
   const cocok = konfirmasi.trim() === namaBersih && namaBersih !== "";
 
   // showModal memberi jebakan fokus + Escape; jsdom belum punya, jadi atribut
@@ -59,7 +61,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
   async function kirim() {
     setPending(true);
     setToast(null);
-    const hasil = await runQuickStart({ nama: namaBersih, stack, kode });
+    const hasil = await runQuickStart({ nama: namaBersih, stack, kode, org: orgBersih });
     setPending(false);
     setToast({ jenis: hasil.ok ? "sukses" : "gagal", pesan: hasil.message });
 
@@ -70,6 +72,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
     if (hasil.ok) {
       tutup();
       setNama("");
+      setOrg("");
       onSelesai?.();
     }
   }
@@ -134,6 +137,29 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
               </select>
             </div>
 
+            <div>
+              <label htmlFor="qs-org" className="text-sm font-medium text-ink">
+                Organisasi (opsional)
+              </label>
+              <input
+                id="qs-org"
+                value={org}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="tugure-reasuransi"
+                onChange={(e) => setOrg(e.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
+              />
+              {orgBersih !== "" && !orgSah(orgBersih) ? (
+                <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
+                  Nama organisasi tidak sah. Pakai huruf/angka di awal, boleh `.`, `-`, `_`.
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-muted">
+                Kosong = repo dibuat di akun GitHub pemilik token.
+              </p>
+            </div>
+
             <label className="flex items-center gap-2 text-sm text-ink">
               <input
                 type="checkbox"
@@ -145,7 +171,11 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
 
             <div className="flex justify-end gap-2">
               <Button onClick={tutup}>Batal</Button>
-              <Button variant="primary" disabled={!namaSah(namaBersih)} onClick={() => setLangkah(2)}>
+              <Button
+                variant="primary"
+                disabled={!namaSah(namaBersih) || (orgBersih !== "" && !orgSah(orgBersih))}
+                onClick={() => setLangkah(2)}
+              >
                 Lanjut
               </Button>
             </div>
@@ -164,6 +194,10 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
               <div className="flex gap-2">
                 <dt className="w-28 text-muted">Bahasa</dt>
                 <dd className="text-ink">{LABEL_STACK[stack]}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-28 text-muted">Organisasi</dt>
+                <dd className="font-mono text-ink">{orgBersih || "akun pemilik token"}</dd>
               </div>
               <div className="flex gap-2">
                 <dt className="w-28 text-muted">Isi kode</dt>

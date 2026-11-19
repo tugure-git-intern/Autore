@@ -212,3 +212,42 @@ test("tidak ada kelas animasi gradien di markup (aturan tampilan Autore)", () =>
 test("runQuickStart asli dipakai komponen", () => {
   expect(typeof runQuickStartAsli).toBe("function");
 });
+
+test("kolom organisasi opsional: kosong lolos, salah pola menahan Lanjut", () => {
+  mockFetch(() => ({}));
+  render(<QuickStartDialog />);
+  fireEvent.click(screen.getByRole("button", { name: /Buat Aplikasi Baru/ }));
+  fireEvent.change(screen.getByLabelText("Nama Aplikasi"), { target: { value: "uji-org" } });
+
+  const lanjut = screen.getByRole("button", { name: "Lanjut" });
+  expect(lanjut).toBeEnabled();
+
+  const org = screen.getByLabelText("Organisasi (opsional)");
+  fireEvent.change(org, { target: { value: "nama buruk!" } });
+  expect(lanjut).toBeDisabled();
+
+  fireEvent.change(org, { target: { value: "tugure-reasuransi" } });
+  expect(lanjut).toBeEnabled();
+});
+
+test("org ikut terkirim saat membuat aplikasi", async () => {
+  const fetchMock = mockFetch(() => ({ body: { ok: true } }));
+  render(<QuickStartDialog />);
+  fireEvent.click(screen.getByRole("button", { name: /Buat Aplikasi Baru/ }));
+  fireEvent.change(screen.getByLabelText("Nama Aplikasi"), { target: { value: "uji-org" } });
+  fireEvent.change(screen.getByLabelText("Organisasi (opsional)"), {
+    target: { value: "tugure-reasuransi" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Lanjut" }));
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "uji-org" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Buat Aplikasi" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  expect(JSON.parse(String(init.body))).toMatchObject({
+    nama: "uji-org",
+    org: "tugure-reasuransi",
+  });
+});

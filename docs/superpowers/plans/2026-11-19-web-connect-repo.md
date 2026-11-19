@@ -360,17 +360,17 @@ Konteks: org `tugure-reasuransi` sudah dibuat. `github::ensure_repo` saat ini se
 - Produces: `pub fn ensure_repo(token: &str, owner: &str, name: &str, org: Option<&str>) -> Result<(String, bool), String>` — endpoint `POST /orgs/{org}/repos` bila `org` ada, selain itu `POST /user/repos`; `full` tetap `format!("{owner}/{name}")` dengan `owner` = `org` bila ada.
 - Produces: flag `autore quick-start --org <nama>`; body API menerima kunci opsional `org`; argv menambah `--org <nama>` hanya bila diisi.
 
-- [ ] **Step 1: Tulis tes yang gagal** — di `github.rs`: dengan lapisan HTTP suntikan, `ensure_repo_dengan(..., Some("tugure-reasuransi"))` pada repo yang belum ada harus mengirim `POST /orgs/tugure-reasuransi/repos` dan mengembalikan `("tugure-reasuransi/app", true)`; dengan `None` tetap `POST /user/repos`. Di `quick-start.test.ts`: body `{nama,stack,org:"tugure-reasuransi"}` lolos dan `argvQuickStart` memuat `"--org","tugure-reasuransi"`; `org:"nama buruk!"` ditolak.
+- [x] **Step 1: Tulis tes yang gagal** — di `github.rs`: dengan lapisan HTTP suntikan, `ensure_repo_dengan(..., Some("tugure-reasuransi"))` pada repo yang belum ada harus mengirim `POST /orgs/tugure-reasuransi/repos` dan mengembalikan `("tugure-reasuransi/app", true)`; dengan `None` tetap `POST /user/repos`. Di `quick-start.test.ts`: body `{nama,stack,org:"tugure-reasuransi"}` lolos dan `argvQuickStart` memuat `"--org","tugure-reasuransi"`; `org:"nama buruk!"` ditolak.
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd cli && cargo test ensure_repo`
 Run: `cd web && npx vitest run apps/api/src/quick-start.test.ts`
 Expected: FAIL — parameter `org` dan kunci body belum ada.
 
-- [ ] **Step 3: Implementasi** — tambah parameter `org: Option<&str>` pada kedua fungsi, perbarui pemanggil di `main.rs` dan tes lama; pilih endpoint dengan `match org`. Nama org divalidasi pola yang sama dengan owner (`^[A-Za-z0-9._-]+$`). `KUNCI_BODY` API tambah `"org"` (opsional), `argvQuickStart` menambah `--org` hanya bila ada. Dialog dashboard: satu kolom opsional **Organisasi** dengan placeholder `tugure-reasuransi`.
+- [x] **Step 3: Implementasi** — tambah parameter `org: Option<&str>` pada kedua fungsi, perbarui pemanggil di `main.rs` dan tes lama; pilih endpoint dengan `match org`. Nama org divalidasi pola yang sama dengan owner (`^[A-Za-z0-9._-]+$`). `KUNCI_BODY` API tambah `"org"` (opsional), `argvQuickStart` menambah `--org` hanya bila ada. Dialog dashboard: satu kolom opsional **Organisasi** dengan placeholder `tugure-reasuransi`.
 
-- [ ] **Step 4: Jalankan tes**
+- [x] **Step 4: Jalankan tes**
 
 Run: `cd cli && cargo test && cargo clippy --all-targets -- -D warnings`
 Run: `cd web && npm test && npx tsc --noEmit && npx eslint .`

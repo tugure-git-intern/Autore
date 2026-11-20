@@ -117,41 +117,49 @@ export function ActionButton({
           onClose={() => setOpen(false)}
           className="m-auto rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]"
         >
-          <h2 id={titleId} className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
-            {confirm.title}
-          </h2>
-          {confirm.warning ? (
-            <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-300">{confirm.warning}</p>
+          {/* Isi dialog hanya saat terbuka: <dialog> tertutup memuat 14 input
+              ber-aria-label mirip di halaman tabel, dan itu membuat locator
+              `getByLabel` spek lama (mis. "Nama Aplikasi", "Batal") ambigu
+              sekaligus mengotori pohon aksesibilitas. */}
+          {open ? (
+            <>
+              <h2 id={titleId} className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
+                {confirm.title}
+              </h2>
+              {confirm.warning ? (
+                <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-300">{confirm.warning}</p>
+              ) : null}
+              {confirm.requireTypedName !== undefined ? (
+                <div className="mt-3">
+                  <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
+                    Ketik nama aplikasi untuk konfirmasi
+                  </label>
+                  <input
+                    id={inputId}
+                    value={typed}
+                    onChange={(event) => setTyped(event.target.value)}
+                    // autoComplete off: nama app bukan data yang mau diisi browser.
+                    autoComplete="off"
+                    aria-label="Ketik nama aplikasi untuk konfirmasi"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)]"
+                  />
+                </div>
+              ) : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <Button onClick={() => setOpen(false)}>Batal</Button>
+                <Button
+                  variant="primary"
+                  disabled={!namaCocok}
+                  onClick={() => {
+                    setOpen(false);
+                    void dispatch();
+                  }}
+                >
+                  {confirm.confirmLabel}
+                </Button>
+              </div>
+            </>
           ) : null}
-          {confirm.requireTypedName !== undefined ? (
-            <div className="mt-3">
-              <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
-                Ketik nama aplikasi untuk konfirmasi
-              </label>
-              <input
-                id={inputId}
-                value={typed}
-                onChange={(event) => setTyped(event.target.value)}
-                // autoComplete off: nama app bukan data yang mau diisi browser.
-                autoComplete="off"
-                aria-label="Ketik nama aplikasi untuk konfirmasi"
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)]"
-              />
-            </div>
-          ) : null}
-          <div className="mt-4 flex justify-end gap-2">
-            <Button onClick={() => setOpen(false)}>Batal</Button>
-            <Button
-              variant="primary"
-              disabled={!namaCocok}
-              onClick={() => {
-                setOpen(false);
-                void dispatch();
-              }}
-            >
-              {confirm.confirmLabel}
-            </Button>
-          </div>
         </dialog>
       ) : null}
     </span>

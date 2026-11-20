@@ -52,8 +52,11 @@ function renderTanpaKerangka(ui: ReactNode) {
 
 test("menampilkan modal dulu dan tidak memanggil API saat dibatalkan", async () => {
   const fetchMock = mockFetch(() => ({}));
-  render(<ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" confirm={DEPLOY_CONFIRM} />);
-  const dialog = () => screen.getByText("Yakin mau deploy?").closest("dialog") as HTMLDialogElement;
+  const { container } = render(
+    <ActionButton label="Deploy Sekarang" action="deploy" app="tes-web" confirm={DEPLOY_CONFIRM} />,
+  );
+  // Judul hanya ada saat terbuka, jadi dialog dicari dari kerangka, bukan teksnya.
+  const dialog = () => container.querySelector("dialog") as HTMLDialogElement;
 
   // Modal terpasang tapi belum terbuka: klik pertama hanya membuka konfirmasi.
   expect(dialog()).not.toHaveAttribute("open");
@@ -68,6 +71,34 @@ test("menampilkan modal dulu dan tidak memanggil API saat dibatalkan", async () 
 
   await waitFor(() => expect(dialog()).not.toHaveAttribute("open"));
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("dialog tertutup tidak menyumbang input atau tombol ke pohon halaman", () => {
+  // Regresi nyata: `<dialog>` selalu terpasang di tiap baris tabel. Kalau isinya
+  // dirender walau tertutup, `getByLabel("Nama Aplikasi")` di spek lama jadi
+  // ambigu (14 elemen) dan pohon aksesibilitas penuh kontrol tak terlihat.
+  const { container } = render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{
+        title: "Hapus aplikasi ini dari server?",
+        confirmLabel: "Hapus permanen",
+        requireTypedName: "app-a",
+      }}
+    />,
+  );
+  const dialog = container.querySelector("dialog") as HTMLDialogElement;
+
+  expect(dialog.textContent).toBe("");
+  expect(screen.queryByLabelText("Ketik nama aplikasi untuk konfirmasi")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Batal" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+
+  expect(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Batal" })).toBeInTheDocument();
 });
 
 test("memanggil endpoint aksi setelah dikonfirmasi", async () => {

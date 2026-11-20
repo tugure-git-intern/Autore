@@ -139,6 +139,29 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
     }
 }
 
+/// Buang baris `nama` dari `registry.tsv`. `true` bila ada baris yang dibuang;
+/// berkas ditulis ulang hanya kalau berubah, dengan format baris yang sama
+/// seperti `catat_port`.
+// Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
+#[allow(dead_code)]
+pub(crate) fn hapus_port(workspace: &Path, nama: &str) -> bool {
+    let semua = entri_registry(workspace);
+    let sisa: Vec<&(String, u16, u16)> = semua.iter().filter(|(n, _, _)| n != nama).collect();
+    if sisa.len() == semua.len() {
+        return false;
+    }
+    let isi: String = sisa
+        .iter()
+        .map(|(n, a, d)| format!("{n}\t{a}\t{d}\n"))
+        .collect();
+    let reg = workspace.join("registry.tsv");
+    if let Err(e) = std::fs::write(&reg, isi) {
+        eprintln!("WARNING: gagal menulis {}: {e}", reg.display());
+        return false;
+    }
+    true
+}
+
 /// Tes yang mengubah `AUTORE_WORKSPACE` wajib berurutan: env proses dibagi semua
 /// thread tes, dan saling hapus membuat registry tertulis ke folder lain.
 #[cfg(test)]
@@ -420,5 +443,31 @@ mod tests {
     #[test]
     fn port_bebas_memeriksa_port() {
         let _ = port_bebas(1024);
+    }
+
+    #[test]
+    fn hapus_port_membuang_satu_baris_dan_menyisakan_lain() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("registry.tsv"),
+            "a\t8000\t8083\nb\t8000\t8093\n",
+        )
+        .unwrap();
+        assert!(hapus_port(tmp.path(), "a"));
+        assert_eq!(entri_registry(tmp.path()).len(), 1);
+        assert_eq!(entri_registry(tmp.path())[0].0, "b");
+    }
+
+    #[test]
+    fn hapus_port_nama_tidak_ada_tidak_menulis_ulang() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let reg = tmp.path().join("registry.tsv");
+        std::fs::write(&reg, "a\t8000\t8083\n").unwrap();
+        let sebelum = std::fs::metadata(&reg).unwrap().modified().unwrap();
+        assert!(!hapus_port(tmp.path(), "tidak-ada"));
+        assert_eq!(
+            std::fs::metadata(&reg).unwrap().modified().unwrap(),
+            sebelum
+        );
     }
 }

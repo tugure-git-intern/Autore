@@ -90,6 +90,21 @@ where
     Ok(laporan)
 }
 
+/// Buang kunci `nama` dari `environments.json`. `Ok(false)` bila berkas tidak
+/// ada atau kunci tidak ada (berkas tidak disentuh); `Err` hanya bila berkas
+/// ada tapi rusak atau tidak bisa ditulis. Penulisan atomik lewat `tulis_env`.
+// Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
+#[allow(dead_code)]
+pub(crate) fn hapus_app(workspace: &Path, nama: &str) -> Result<bool, String> {
+    let path = workspace.join("environments.json");
+    let mut doc = baca_env(&path)?;
+    if doc.remove(nama).is_none() {
+        return Ok(false);
+    }
+    tulis_env(&path, &doc)?;
+    Ok(true)
+}
+
 fn baca_env(path: &Path) -> Result<Map<String, Value>, String> {
     match fs::read_to_string(path) {
         Ok(isi) => {
@@ -335,5 +350,50 @@ mod tests {
         let hasil = init_semua(tmp.path());
         assert!(hasil.is_err());
         assert!(!tmp.path().join("environments.json").exists());
+    }
+
+    #[test]
+    fn hapus_app_membuang_kunci_app_itu_saja() {
+        let tmp = TempDir::new().unwrap();
+        let lama = json!({
+            "app-a": {
+                "staging": {"target": "vps-staging", "deploy_port": 8300},
+                "production": {"target": "127.0.0.1:8301", "deploy_port": 8301, "container_port": 8000}
+            },
+            "app-b": {
+                "staging": {"target": "vps-staging", "deploy_port": 8302},
+                "production": {"target": "127.0.0.1:8303", "deploy_port": 8303, "container_port": 8000}
+            }
+        });
+        fs::write(
+            tmp.path().join("environments.json"),
+            serde_json::to_string_pretty(&lama).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(hapus_app(tmp.path(), "app-a"), Ok(true));
+        let doc = baca_json(tmp.path());
+        assert!(doc.get("app-a").is_none(), "kunci app-a harus hilang");
+        assert_eq!(doc["app-b"], lama["app-b"], "kunci lain harus utuh");
+    }
+
+    #[test]
+    fn hapus_app_tanpa_berkas_mengembalikan_false() {
+        let tmp = TempDir::new().unwrap();
+        assert_eq!(hapus_app(tmp.path(), "app-a"), Ok(false));
+        assert!(!tmp.path().join("environments.json").exists());
+    }
+
+    #[test]
+    fn hapus_app_berkas_rusak_mengembalikan_err() {
+        let tmp = TempDir::new().unwrap();
+        let asli = "{ ini bukan json";
+        fs::write(tmp.path().join("environments.json"), asli).unwrap();
+        assert!(hapus_app(tmp.path(), "app-a").is_err());
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("environments.json")).unwrap(),
+            asli,
+            "berkas rusak tidak boleh ditimpa"
+        );
     }
 }

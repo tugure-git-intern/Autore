@@ -255,6 +255,9 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
     } else {
         println!("  {} File pipeline dibuat", "2/4".green().bold());
     }
+    // Peringatan dini lewat jalur yang sama dengan quick-start: repo tanpa kode
+    // aplikasi atau tanpa endpoint /health akan gagal di tahap deploy nanti.
+    crate::peringatkan_folder_kosong(&target);
     progress::tahap("kerangka", "selesai", "Pipeline siap.");
 
     let git_url = format!("{}.git", rr.url);

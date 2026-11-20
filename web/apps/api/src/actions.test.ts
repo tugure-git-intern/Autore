@@ -614,6 +614,26 @@ describe("audit aksi (jejak siapa yang menekan tombol)", () => {
     expect(out).toMatchObject({ status: 404 });
     expect(audit).not.toHaveBeenCalled();
   });
+
+  it("mencatat audit walau spawn gagal dijalankan — percobaan pun harus ada jejaknya", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir, {
+      spawn: vi.fn(async () => {
+        throw Object.assign(new Error("spawn autore ENOENT"), { code: "ENOENT" });
+      }),
+    });
+
+    const out = await actions.run("deploy", "tes-web", SESI);
+
+    expect(out).toMatchObject({ ok: false, status: 503 });
+    expect(audit).toHaveBeenCalledWith({
+      login: "MAliffadlan",
+      email: "alif@example.com",
+      action: "deploy",
+      target: "tes-web",
+      exit: -1,
+    });
+  });
 });
 
 describe("connect", () => {
@@ -840,5 +860,25 @@ describe("remove", () => {
       status: 404,
     });
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("tetap mencatat audit walau CLI kehabisan waktu sebelum sempat berjalan", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir, {
+      spawn: vi.fn(async () => {
+        throw Object.assign(new Error("killed"), { code: "ETIMEDOUT" });
+      }),
+    });
+
+    const out = await actions.remove("tes-web", "tes-web", SESI);
+
+    expect(out).toMatchObject({ ok: false, status: 504 });
+    expect(audit).toHaveBeenCalledWith({
+      login: "MAliffadlan",
+      email: "alif@example.com",
+      action: "remove",
+      target: "tes-web",
+      exit: -1,
+    });
   });
 });

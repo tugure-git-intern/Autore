@@ -270,6 +270,15 @@ export function hatchActions(deps: {
         });
       } catch (error) {
         const code = (error as { code?: unknown }).code;
+        // `exit: -1` = tidak pernah ada exit code dari CLI. Jejak tetap dicatat:
+        // percobaan yang gagal jalan justru yang paling perlu ditelusuri.
+        await audit({
+          login: author?.login ?? "",
+          email: author?.email ?? "",
+          action: kind,
+          target: id,
+          exit: -1,
+        });
         return code === "ETIMEDOUT"
           ? failed(504, `aksi ${kind} melewati batas waktu ${TIMEOUT[kind] / 1000} detik`)
           : failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);
@@ -460,6 +469,15 @@ export function hatchActions(deps: {
         });
       } catch (error) {
         const code = (error as { code?: unknown }).code;
+        // Hapus itu permanen: walau CLI tidak sempat jalan, jejak "siapa menekan
+        // tombol" harus ada (`exit: -1` = tidak pernah ada exit code dari CLI).
+        await audit({
+          login: author?.login ?? "",
+          email: author?.email ?? "",
+          action: "remove",
+          target: id,
+          exit: -1,
+        });
         return code === "ETIMEDOUT"
           ? failed(504, `aksi remove melewati batas waktu ${TIMEOUT.remove / 1000} detik`)
           : failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);

@@ -55,7 +55,7 @@
   - `pub(crate) fn hapus_port(workspace: &Path, nama: &str) -> bool` — true bila ada baris yang dibuang; berkas ditulis ulang hanya kalau berubah.
   - `pub(crate) fn hapus_app(workspace: &Path, nama: &str) -> Result<bool, String>` — `Ok(false)` bila `environments.json` tidak ada atau kunci tidak ada; `Err` hanya bila berkas ada tapi rusak/tidak bisa ditulis.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```rust
 #[test]
@@ -80,21 +80,21 @@ fn hapus_port_nama_tidak_ada_tidak_menulis_ulang() {
 
 Tambah juga di `lingkungan.rs`: `hapus_app_membuang_kunci_app_itu_saja` (dua kunci, satu dibuang, kunci lain utuh) dan `hapus_app_tanpa_berkas_mengembalikan_false` (folder kosong → `Ok(false)`).
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd cli && cargo test --bin autore hapus_port`
 Expected: FAIL, `cannot find function hapus_port`.
 
-- [ ] **Step 3: Implement kedua fungsi**
+- [x] **Step 3: Implement kedua fungsi**
 
 Tulis ulang berkas dengan baris/kunci yang tersisa, mengikuti cara tulis yang sudah dipakai `catat_port` dan `init_semua_dengan` (tulis ke berkas sementara lalu rename untuk `environments.json`). Jangan mengubah format baris yang tersisa.
 
-- [ ] **Step 4: Jalankan tes, pastikan lulus**
+- [x] **Step 4: Jalankan tes, pastikan lulus**
 
 Run: `cd cli && cargo test --bin autore hapus_`
 Expected: PASS, empat tes baru hijau.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/workspace.rs cli/src/lingkungan.rs

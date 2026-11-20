@@ -178,6 +178,13 @@ git commit -m "feat(cli): hapus job Jenkins dan container per app"
   - `pub(crate) fn jalankan_dengan(nama: &str, konfirmasi: &str, workspace: &Path, cfg: Option<&JenkinsConfig>) -> (i32, Vec<HasilLangkah>)` — orkestrasi dengan workspace dan konfigurasi Jenkins disuntik supaya bisa diuji tanpa jaringan.
   - `pub(crate) fn jalankan(nama: &str, konfirmasi: &str) -> i32` — cangkang tipis: baca `workspace::workspace_dir()` dan `jenkins::load_config_from(&jenkins::default_config_path())`, panggil `jalankan_dengan`, cetak ringkasan.
 
+Perbaikan wajib setelah review Task 3 (putusan bos alif + controller):
+- Bila langkah `backup` GAGAL, langkah `registry`, `environments`, dan `folder` TIDAK dijalankan; masing-masing dicatat GAGAL dengan pesan menyebut "dilewati: backup gagal". `container` dan `job` tetap dijalankan; exit 1. Alasan: tanpa salinan, data user hilang permanen. Tes: buat backup gagal dan tegaskan registry/environments/folder masih utuh.
+- Keanggotaan `terdaftar` dibaca dari kolom pertama mentah `registry.tsv` (split '\t', trim), bukan dari `entri_registry`, supaya app berbaris legacy dua kolom tetap bisa dihapus. `entri_registry` tidak diubah. Tes: app legacy dua kolom terhapus dan barisnya hilang.
+- Langkah `container`: container yang memang tidak ada = BERHASIL. Tambah helper `workspace::container_ada(nama) -> bool` (`docker container inspect <nama>`, guard `nama_sah`, keluaran tertangkap) dan panggil sebelum `hapus_container`; Docker tidak terpasang/berhenti tetap GAGAL. Signature `hapus_container` tetap. Tes dengan stub docker untuk kedua kasus.
+- Nama berkas backup memakai epoch-nanos atau menolak menimpa `.bak` yang sudah ada, supaya dua penghapusan dalam detik yang tidak menimpa salinan pra-mutasi.
+- Varian clap cukup `HapusApp { nama, #[arg(long)] konfirmasi }`; clap sudah menurunkan `hapus-app`, jadi `visible_alias` yang sama tidak perlu.
+
 - [ ] **Step 1: Tulis tes gagal**
 
 ```rust

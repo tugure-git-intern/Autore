@@ -407,3 +407,9 @@ Lalu `git format-patch`, `scp`, `git am` di VPS, `git push origin main`, dan tun
 ## Catatan Eksekusi
 
 (Diisi saat eksekusi: nomor build Jenkins, sha256 biner, keluaran bukti lima tempat, penyimpangan dari plan.)
+
+---
+
+## Batas yang diketahui
+
+- App berbaris registry legacy bisa dihapus lewat CLI (`autore hapus-app`) dan API (`POST /api/actions/remove`), tetapi tidak muncul di daftar dashboard: sumber daftarnya `autore status` melewati baris legacy itu, jadi tombol Hapus belum menawarkannya. Menampilkannya menuntut `entri_registry` (CLI Rust) melonggarkan baris legacy — perubahan perilaku fitur lain, di luar cakupan perbaikan bug hapus ini.

@@ -198,10 +198,12 @@ export function createApp(
   // ini hanya listen di 127.0.0.1. Semua aksi (deploy, scan, quick-start) minimum
   // role `dev`; approve/reject punya gerbang sendiri di bawah.
   app.use("/api/actions/*", requireSession(auth, "dev"));
-  app.use("/api/actions/*", rateLimiter);
   // Hapus app permanen mematikan job + container + folder: gerbang admin di sini,
   // sesudah gerbang `dev` supaya sesi berperan rendah tetap ditolak 403 (bukan 401).
+  // Gerbang paling ketat didahulukan atas rate limiter: penolakan izin tidak boleh
+  // memakan kuota, kalau tidak sesi berperan rendah malah dapat 429 bukan 403.
   app.use("/api/actions/remove", requireSession(auth, "admin"));
+  app.use("/api/actions/*", rateLimiter);
 
   // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
   app.get("/api/runs", async (c) => {

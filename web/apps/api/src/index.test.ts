@@ -922,4 +922,19 @@ describe("POST /api/actions/remove", () => {
     expect(res.status).toBe(400);
     expect(spawn).not.toHaveBeenCalled();
   });
+
+  it("dev yang menembak remove tidak membakar kuota rate limiter", async () => {
+    const { app, spawn } = await appRemove("dev");
+
+    // Gerbang admin harus lebih dulu dari rate limiter: sesi berperan rendah
+    // ditolak 403, bukan 429, walau menembak melebihi kuota limiter.
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await post(app, "/api/actions/remove", { app: "tes-web", konfirmasi: "tes-web" });
+      statuses.push(res.status);
+    }
+
+    expect(statuses.every((s) => s === 403)).toBe(true);
+    expect(spawn).not.toHaveBeenCalled();
+  });
 });

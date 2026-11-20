@@ -4,6 +4,7 @@ mod connect;
 mod doctor;
 mod external;
 mod github;
+mod hapus;
 mod hooks;
 mod jenkins;
 mod launcher;
@@ -906,6 +907,16 @@ enum Commands {
         /// Email identitas commit dari sesi dashboard
         #[arg(long)]
         author_email: Option<String>,
+    },
+
+    /// Hapus app di server: container, job Jenkins, registry, environments, folder
+    HapusApp {
+        /// Nama app yang terdaftar di registry.tsv
+        nama: String,
+
+        /// Wajib sama persis dengan nama app (konfirmasi ketik-nama)
+        #[arg(long)]
+        konfirmasi: String,
     },
 
     /// Hapus folder project Autore secara interaktif
@@ -2061,6 +2072,8 @@ fn execute_command(
             )
         }
 
+        Commands::HapusApp { nama, konfirmasi } => hapus::jalankan(&nama, &konfirmasi),
+
         Commands::DeleteProject => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let candidates = discover_deletable_projects(&cwd);
@@ -2175,6 +2188,23 @@ mod tests {
             }
             _ => panic!("perintah yang diparse bukan Deploy"),
         }
+    }
+
+    /// RED: dashboard memanggil `autore hapus-app <nama> --konfirmasi <nama>`;
+    /// clap menurunkan nama perintah dari varian, tanpa alias tambahan.
+    #[test]
+    fn hapus_app_diparse_dari_argv() {
+        use clap::Parser;
+        let cli =
+            Cli::try_parse_from(["autore", "hapus-app", "app-a", "--konfirmasi", "app-a"]).unwrap();
+        match cli.command {
+            Some(Commands::HapusApp { nama, konfirmasi }) => {
+                assert_eq!(nama, "app-a");
+                assert_eq!(konfirmasi, "app-a");
+            }
+            _ => panic!("perintah yang diparse bukan HapusApp"),
+        }
+        assert!(Cli::try_parse_from(["autore", "hapus-app", "app-a"]).is_err());
     }
 
     #[test]

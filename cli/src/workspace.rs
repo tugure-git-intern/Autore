@@ -53,7 +53,6 @@ pub(crate) fn container_jalan() -> Option<Vec<String>> {
 
 /// Hapus container app (`docker rm -f`, argumen array — bukan shell). Nama tidak
 /// sah ditolak sebelum docker dipanggil. `false` = gagal atau nama tidak sah.
-#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
 pub(crate) fn hapus_container(nama: &str) -> bool {
     if !crate::connect::nama_sah(nama) {
         return false;
@@ -160,7 +159,6 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
 /// `entri_registry` sebelum mengklaim sukses. Berkas ditulis ulang hanya
 /// kalau ada baris yang dibuang.
 // Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
-#[allow(dead_code)]
 pub(crate) fn hapus_port(workspace: &Path, nama: &str) -> bool {
     let reg = workspace.join("registry.tsv");
     let isi = match std::fs::read_to_string(&reg) {

@@ -93,8 +93,6 @@ where
 /// Buang kunci `nama` dari `environments.json`. `Ok(false)` bila berkas tidak
 /// ada atau kunci tidak ada (berkas tidak disentuh); `Err` hanya bila berkas
 /// ada tapi rusak atau tidak bisa ditulis. Penulisan atomik lewat `tulis_env`.
-// Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
-#[allow(dead_code)]
 pub(crate) fn hapus_app(workspace: &Path, nama: &str) -> Result<bool, String> {
     let path = workspace.join("environments.json");
     let mut doc = baca_env(&path)?;

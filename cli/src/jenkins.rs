@@ -867,7 +867,6 @@ fn daftarkan_job(
 
 /// Terjemahkan kode HTTP `doDelete`: 200/302 terhapus, 404 job memang tidak ada
 /// (bukan kegagalan), 401/403 kredensial salah, selain itu gagal dengan kodenya.
-#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
 pub fn kode_hapus_job(code: u16) -> Result<bool, String> {
     match code {
         200 | 302 => Ok(true),
@@ -881,7 +880,6 @@ pub fn kode_hapus_job(code: u16) -> Result<bool, String> {
 
 /// Hapus job Jenkins lewat `POST doDelete`. Crumb opsional (CSRF bisa dimatikan);
 /// kredensial lewat stdin curl, tidak pernah di argv.
-#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
 pub fn hapus_job(cfg: &JenkinsConfig, job_name: &str) -> Result<bool, String> {
     // Nama masuk URL ber-kredensial: `../`, `?`, `#` bisa membelokkan sasaran POST.
     if !crate::connect::nama_sah(job_name) {

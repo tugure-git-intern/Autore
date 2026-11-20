@@ -902,4 +902,39 @@ describe("remove", () => {
 
     expect(await actions.remove("busuk", "busuk")).toMatchObject({ ok: true, status: 200 });
   });
+
+  it("menjawab 503 bila registry dan autore status dua-duanya tidak bisa diperiksa", async () => {
+    const dir = await workspace([]);
+    const spawn = vi.fn(async () => result());
+    const actions = hatchActions({
+      workspace: dir,
+      run: async () => {
+        throw new Error("autore tidak bisa dipanggil");
+      },
+      spawn,
+    });
+
+    await expect(actions.remove("app-a", "app-a")).resolves.toMatchObject({ ok: false, status: 503 });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("menjawab 503 bila registry tidak terbaca walau status berhasil", async () => {
+    const dir = await workspace([]);
+    // Direktori bernama registry.tsv: readFile melempar EISDIR, bukan ENOENT —
+    // berkas yang gagal dibaca tidak boleh dianggap "tidak ada app".
+    await mkdir(join(dir, "registry.tsv"));
+    const { actions, spawn } = make(dir);
+
+    await expect(actions.remove("hantu", "hantu")).resolves.toMatchObject({ ok: false, status: 503 });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("tetap 404 bila registry terbaca dan app memang tidak ada di keduanya", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "app-a\t8000\t8093\n");
+    const { actions, spawn } = make(dir);
+
+    await expect(actions.remove("hantu", "hantu")).resolves.toMatchObject({ ok: false, status: 404 });
+    expect(spawn).not.toHaveBeenCalled();
+  });
 });

@@ -218,16 +218,29 @@ export function hatchActions(deps: {
    * muncul di `autore status`. Folder TIDAK diperiksa: app yatim (folder sudah
    * hilang) justru yang paling perlu dibersihkan, sedangkan `resolveTarget` akan
    * menolaknya.
+   *
+   * "tidak-ada" hanya disimpulkan bila KEDUA sumber terbaca. Registry gagal dibaca
+   * atau status gagal = kita tidak tahu; menjawab 404 di keadaan itu menyuruh user
+   * percaya app-nya sudah hilang padahal mungkin masih ada.
    */
-  async function appTerdaftar(id: string): Promise<boolean> {
-    const isiRegistry = await readFile(join(workspace, "registry.tsv"), "utf8").catch(() => "");
-    if (namaDiRegistry(isiRegistry).includes(id)) return true;
+  type KeberadaanApp = "ada" | "tidak-ada" | "tidak-bisa-dipastikan";
+
+  async function keberadaanApp(id: string): Promise<KeberadaanApp> {
+    let namaRegistry: string[] = [];
+    let registryTerbaca = true;
     try {
-      const status = await loadDashboardStatus(deps.run);
-      return status.data.applications.some((app) => app.id === id);
-    } catch {
-      return false;
+      namaRegistry = namaDiRegistry(await readFile(join(workspace, "registry.tsv"), "utf8"));
+    } catch (error) {
+      // ENOENT = workspace belum pernah menulis registry, jadi "terbaca kosong".
+      registryTerbaca = (error as { code?: unknown }).code === "ENOENT";
     }
+    if (namaRegistry.includes(id)) return "ada";
+
+    const namaStatus = await loadDashboardStatus(deps.run)
+      .then((status) => status.data.applications.map((app) => app.id))
+      .catch(() => null);
+    if (namaStatus?.includes(id)) return "ada";
+    return registryTerbaca && namaStatus ? "tidak-ada" : "tidak-bisa-dipastikan";
   }
 
   async function run(
@@ -465,7 +478,14 @@ export function hatchActions(deps: {
       return failed(409, `aksi ${pemegangKunci(id) ?? "remove"} masih berjalan, tunggu sampai selesai`);
     }
     try {
-      if (!(await appTerdaftar(id))) {
+      const ada = await keberadaanApp(id);
+      if (ada === "tidak-bisa-dipastikan") {
+        return failed(
+          503,
+          `tidak bisa memastikan keberadaan aplikasi "${id}": registry atau autore status gagal dibaca`,
+        );
+      }
+      if (ada === "tidak-ada") {
         return failed(404, `aplikasi "${id}" tidak terdaftar`);
       }
       // Lapis path: gabungan tetap satu tingkat di bawah workspace (menahan "..").

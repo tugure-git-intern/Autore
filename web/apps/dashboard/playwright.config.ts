@@ -27,12 +27,21 @@ if (!HIDUP) {
 }
 process.env.AUTORE_E2E_AUTH_DIR ??= path.join(AKAR, "e2e", ".auth");
 
-// Satu rahasia untuk server dan global-setup. `web/.env` tetap menang bila ada;
-// nilai cadangan ini yang membuat suite jalan di mesin bersih tanpa .env.
-process.env.AUTH_SECRET ??= "e2e-hermetik-secret-tetap";
-process.env.NEXTAUTH_SECRET ??= process.env.AUTH_SECRET;
-// Allowlist fail-closed: login yang di-mint global-setup wajib ada di sini.
-process.env.AUTORE_ALLOWED_USERS ??= "maliffadlan:dev,tugure-git-intern:admin";
+// Rahasia hermetik hanya untuk mode hermetik. Di mode LIVE server sudah memakai
+// rahasia dari `web/.env`; menimpanya membuat cookie suite ditandatangani dengan
+// kunci lain, dan dashboard menyajikan /login alih-alih halaman yang diuji.
+if (HIDUP) {
+  if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) {
+    throw new Error(
+      "Mode E2E_LIVE butuh rahasia server: jalankan `npm run test:e2e:live` dari web/ agar .env termuat.",
+    );
+  }
+} else {
+  process.env.AUTH_SECRET ??= "e2e-hermetik-secret-tetap";
+  process.env.NEXTAUTH_SECRET ??= process.env.AUTH_SECRET;
+  // Allowlist fail-closed: login yang di-mint global-setup wajib ada di sini.
+  process.env.AUTORE_ALLOWED_USERS ??= "maliffadlan:dev,tugure-git-intern:admin";
+}
 
 const webServer: PlaywrightTestConfig["webServer"] = HIDUP
   ? undefined

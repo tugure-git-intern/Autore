@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, beforeEach, expect, it, vi } from "vitest";
 import {
   hatchActions,
   spawnAutore,
@@ -10,6 +10,11 @@ import {
   type SpawnResult,
 } from "./actions";
 import type { PencatatAudit } from "./audit";
+import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
+
+// Cache status (`lastGood`) adalah state modul: tanpa reset, tes yang urutannya
+// berbeda mewarisi daftar lama dan lulus/gagal tergantung urutan (`--sequence.shuffle`).
+beforeEach(() => resetStatusCache());
 
 /** Status minimal yang lolos validator fail-closed di status.ts. */
 function statusJson(apps: string[]): string {
@@ -60,13 +65,19 @@ async function workspace(apps: string[]) {
 
 function make(
   dir: string,
-  options: { spawn?: SpawnAction; listed?: string[]; audit?: PencatatAudit; orgBawaan?: string } = {},
+  options: {
+    spawn?: SpawnAction;
+    listed?: string[];
+    audit?: PencatatAudit;
+    orgBawaan?: string;
+    run?: RunAutore;
+  } = {},
 ) {
   const spawn = options.spawn ?? vi.fn(async () => result());
   const audit = options.audit ?? vi.fn();
   const actions = hatchActions({
     workspace: dir,
-    run: async () => statusJson(options.listed ?? ["tes-web", "ui-demo"]),
+    run: options.run ?? (async () => statusJson(options.listed ?? ["tes-web", "ui-demo"])),
     spawn,
     audit,
     orgBawaan: options.orgBawaan,
@@ -158,18 +169,22 @@ describe("hatchActions", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("menolak jenis aksi di luar deploy/scan tanpa menjalankan apa pun", async () => {
-    const dir = await workspace(["tes-web"]);
-    const { actions, spawn } = make(dir);
+  it.each(["remove", "toString", "constructor", "__proto__", "hasOwnProperty"])(
+    "menolak jenis aksi %j tanpa menjalankan apa pun",
+    async (kind) => {
+      const dir = await workspace(["tes-web"]);
+      const { actions, spawn } = make(dir);
 
-    // Panggilan runtime di luar tipe: dulu jenis apa pun selain deploy diam-diam jadi scan.
-    const paksa = actions.run as unknown as (kind: string, id: string) => Promise<ActionResult>;
-    const out = await paksa("remove", "tes-web");
+      // Panggilan runtime di luar tipe: dulu jenis apa pun selain deploy diam-diam jadi
+      // scan, sedangkan nama dari rantai prototipe ("toString") lolos sebagai fungsi.
+      const paksa = actions.run as unknown as (kind: string, id: string) => Promise<ActionResult>;
+      const out = await paksa(kind, "tes-web");
 
-    expect(out).toMatchObject({ ok: false, status: 400 });
-    expect(out.ok === false ? out.error : "").toContain("remove");
-    expect(spawn).not.toHaveBeenCalled();
-  });
+      expect(out).toMatchObject({ ok: false, status: 400 });
+      expect(out.ok === false ? out.error : "").toContain(kind);
+      expect(spawn).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["../../etc", "tes-web/../../etc", "a b", "tes-web;rm -rf /", "", "a".repeat(65)])(
     "menolak id berbahaya %j dengan 400",
@@ -949,5 +964,62 @@ describe("remove", () => {
 
     await expect(actions.remove("hantu", "hantu")).resolves.toMatchObject({ ok: false, status: 404 });
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("menjawab 503 walau cache status sudah dipanaskan, bukan 404 dari daftar basi", async () => {
+    const dir = await workspace([]);
+    // Panaskan cache lewat runner lain (seperti rute /api/status memakai runner produksi):
+    // jalur hapus memakai runner-nya sendiri, jadi panggilan itu gagal dan hanya `lastGood`
+    // yang tersisa. Daftar lama tidak boleh dipakai memutuskan app tidak ada.
+    await loadDashboardStatus(async () => statusJson(["app-lama"]));
+    const { actions, spawn } = make(dir, {
+      run: async () => {
+        throw new Error("autore status gagal");
+      },
+    });
+
+    await expect(actions.remove("app-baru", "app-baru")).resolves.toMatchObject({
+      ok: false,
+      status: 503,
+    });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("tidak meneruskan hapus ke CLI hanya karena app ada di daftar basi", async () => {
+    const dir = await workspace([]);
+    await loadDashboardStatus(async () => statusJson(["app-lama"]));
+    const { actions, spawn } = make(dir, {
+      run: async () => {
+        throw new Error("autore status gagal");
+      },
+    });
+
+    await expect(actions.remove("app-lama", "app-lama")).resolves.toMatchObject({
+      ok: false,
+      status: 503,
+    });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("app di registry mentah tetap boleh dihapus walau status basi", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "legacy\t8000\n");
+    await loadDashboardStatus(async () => statusJson(["app-lama"]));
+    const { actions } = make(dir, {
+      listed: [],
+      run: async () => {
+        throw new Error("autore status gagal");
+      },
+    });
+
+    expect(await actions.remove("legacy", "legacy")).toMatchObject({ ok: true, status: 200 });
+  });
+
+  it("menghapus app yang barisnya berakhiran CRLF, baris kosong diabaikan", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "app-a\t8000\t8093\r\nlegacy\t8000\r\n\r\n");
+    const { actions } = make(dir, { listed: [] });
+
+    expect(await actions.remove("legacy", "legacy")).toMatchObject({ ok: true, status: 200 });
   });
 });

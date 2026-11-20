@@ -250,9 +250,11 @@ export function hatchActions(deps: {
     }
     if (namaRegistry.includes(id)) return "ada";
 
-    const namaStatus = await loadDashboardStatus(deps.run)
-      .then((status) => status.data.applications.map((app) => app.id))
-      .catch(() => null);
+    const st = await loadDashboardStatus(deps.run).catch(() => null);
+    // Data basi = `autore status` sedang gagal: `lastGood` masih memegang daftar lama,
+    // dan untuk aksi permanen daftar itu tidak boleh memutuskan "tidak ada" (atau
+    // meneruskan hapus ke CLI) — sama seperti `resolveTarget`, hanya basi = tidak tahu.
+    const namaStatus = st && !st.stale ? st.data.applications.map((app) => app.id) : null;
     if (namaStatus?.includes(id)) return "ada";
     return registryTerbaca && namaStatus ? "tidak-ada" : "tidak-bisa-dipastikan";
   }
@@ -268,10 +270,12 @@ export function hatchActions(deps: {
 
     // Tipe sempit tidak menahan teks asing saat runtime (rute bisa mengirim apa
     // saja): jenis di luar tabel ditolak sebelum kunci diambil atau CLI dijalankan.
-    const rakitan = (ARGV_JALANKAN as Record<string, PerakitArgv>)[kind];
-    if (!rakitan) {
+    // `Object.hasOwn`, bukan indeks langsung: "toString"/"__proto__" ada di rantai
+    // prototipe dan lolos sebagai "fungsi" (atau meledak saat dipanggil).
+    if (!Object.hasOwn(ARGV_JALANKAN, kind)) {
       return failed(400, `jenis aksi "${kind}" tidak dikenal`);
     }
+    const rakitan = ARGV_JALANKAN[kind];
 
     // Target selalu dari permintaan: tidak ada aplikasi yang ditentukan server, karena
     // tombol di dashboard selalu menunjuk aplikasi yang sedang dibuka.

@@ -123,6 +123,13 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
     let reg = workspace.join("registry.tsv");
     if let Err(e) = std::fs::write(&reg, isi) {
         eprintln!("WARNING: gagal menulis {}: {e}", reg.display());
+        return;
+    }
+    // Aplikasi baru langsung punya pasangan staging + production. Tanpa ini
+    // hanya `autore env init --all` manual yang mengisinya, sehingga app hasil
+    // connect/init tidak bisa di-promote. Idempoten: entri lama dipertahankan.
+    if let Err(e) = crate::lingkungan::init_semua(workspace) {
+        eprintln!("WARNING: environments.json belum terisi: {e}");
     }
 }
 
@@ -291,6 +298,25 @@ mod tests {
         assert_eq!(daftar[0].nama, "satu");
         assert_eq!(daftar[0].deploy_port, 8023);
         assert_eq!(daftar[1].nama, "dua");
+    }
+
+    #[test]
+    fn catat_port_sekaligus_menyiapkan_staging_dan_production() {
+        let tmp = TempDir::new().unwrap();
+        catat_port(tmp.path(), "baru", 8000, 8090);
+        let isi = std::fs::read_to_string(tmp.path().join("environments.json")).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&isi).unwrap();
+        let staging = doc["baru"]["staging"]["deploy_port"].as_u64().unwrap();
+        let production = doc["baru"]["production"]["deploy_port"].as_u64().unwrap();
+        assert_ne!(staging, production);
+        assert_eq!(doc["baru"]["production"]["container_port"], 8000);
+
+        // Entri yang sudah ada tidak boleh digeser saat app lain menyusul.
+        catat_port(tmp.path(), "susulan", 3000, 8091);
+        let isi2 = std::fs::read_to_string(tmp.path().join("environments.json")).unwrap();
+        let doc2: serde_json::Value = serde_json::from_str(&isi2).unwrap();
+        assert_eq!(doc2["baru"], doc["baru"]);
+        assert!(doc2["susulan"]["staging"]["deploy_port"].is_number());
     }
 
     #[test]

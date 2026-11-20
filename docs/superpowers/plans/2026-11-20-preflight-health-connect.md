@@ -58,7 +58,7 @@ Sudah ada `peringatkan_folder_kosong(dir)` di `cli/src/main.rs:104` (dipanggil d
   - `pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health di port bawaan stack.";`
   - Baris stdout saat folder berisi kode tanpa health: `PERINGATAN_HEALTH: {PERINGATAN_HEALTH}`
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 Nama tes dan assertion (pakai `TempDir` seperti tes lain di berkas itu):
 - `repo_tanpa_health_terdeteksi`: tulis `app.py` isi `print("halo")` → `assert!(!punya_endpoint_health(tmp.path()))`
@@ -71,12 +71,12 @@ Nama tes dan assertion (pakai `TempDir` seperti tes lain di berkas itu):
 - `ekstensi_di_luar_daftar_tidak_dihitung`: tulis `catatan.txt` dan `openapi.yaml` berisi `/health`, plus `app.py` isi `print(1)` → `assert!(!punya_endpoint_health(...))`
 - `berkas_besar_dilewati`: tulis `besar.py` berisi komentar padding 600 KiB lalu `"/health"` → `assert!(!punya_endpoint_health(...))` (pakai `.py`, bukan `.txt`, supaya yang terbukti batas ukuran bukan filter ekstensi)
 
-- [ ] **Step 2: Jalankan, pastikan merah**
+- [x] **Step 2: Jalankan, pastikan merah**
 
 Run: `cd cli && cargo test --bin autore health`
 Expected: FAIL — `cannot find function punya_endpoint_health`.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 `punya_endpoint_health(dir: &Path) -> bool`: telusuri direktori secara rekursi dengan tumpukan `Vec<PathBuf>` (tanpa dependensi walkdir). Urutan saringan per entri: (1) lewati folder terlarang termasuk `tests`/`test`/`__tests__`; (2) lewati berkas > 512 KiB lewat `fs::metadata`; (3) ambil ekstensi huruf kecil dan hanya terima daftar kode di Global Constraints; (4) lewati nama file test (`test_` di awal, `_test.`/`.test.`/`.spec.` sebelum ekstensi); (5) baca `fs::read_to_string`, lewati yang gagal UTF-8 (biner); (6) `true` pada substring `"/health"` pertama. Hitung berkas yang benar-benar dibaca dan berhenti di 2.000.
 
@@ -84,12 +84,12 @@ Expected: FAIL — `cannot find function punya_endpoint_health`.
 
 `connect.rs`: panggil `crate::peringatkan_folder_kosong(&target)` setelah stack ditentukan. Jangan `return gagal(...)` — connect tetap exit 0.
 
-- [ ] **Step 4: Jalankan, pastikan hijau**
+- [x] **Step 4: Jalankan, pastikan hijau**
 
 Run: `cd cli && cargo test --bin autore && cargo clippy --all-targets -- -D warnings && cargo fmt --check`
 Expected: semua tes lulus (325 + 9), clippy tanpa warning, fmt bersih. Jalankan juga `autore init` di workspace sementara dan pastikan pesan lama untuk folder kosong tidak berubah.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/main.rs cli/src/connect.rs
@@ -111,28 +111,28 @@ git commit -m "feat(connect): peringatkan repo tanpa endpoint /health sebelum bu
   - `ActionResult` sukses bertambah `peringatan?: string`
   - `function peringatanDariOutput(output: string): string | undefined` di `web/apps/api/src/quick-start.ts`, sebelah `repoDariOutput` yang sudah ada di sana (bukan di `actions.ts`), lalu di-import ke `actions.ts` mengikuti pola import baris 8. Ambil baris pertama yang diawali `PERINGATAN_HEALTH: `, kembalikan sisinya yang sudah di-trim; `undefined` bila tidak ada.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 Di `actions.test.ts`, pakai stub spawn yang sudah ada di berkas itu:
 - `connect meneruskan peringatan health dari stdout`: stdout berisi `PERINGATAN_HEALTH: Repo ini belum punya endpoint /health.` → `expect(hasil.peringatan).toBe("Repo ini belum punya endpoint /health.")`
 - `connect tanpa peringatan tidak menambah field`: stdout biasa → `expect(hasil.peringatan).toBeUndefined()`
 - `quick-start juga meneruskan peringatan`: stdout quick-start berisi baris itu → `peringatan` terisi (helper dipakai di `buatBaru`, jadi dua jalur ikut).
 
-- [ ] **Step 2: Jalankan, pastikan merah**
+- [x] **Step 2: Jalankan, pastikan merah**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: FAIL — `hasil.peringatan` undefined pada kasus pertama.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Tambah `peringatan?: string` pada varian sukses `ActionResult`, tulis `peringatanDariOutput`, dan di `buatBaru` isi `peringatan: peringatanDariOutput(output)` spreads-only bila ada (ikuti pola `repo:` yang sudah ada). Jangan ubah `capped`, `MAX_OUTPUT`, atau jalur gagal.
 
-- [ ] **Step 4: Jalankan, pastikan hijau**
+- [x] **Step 4: Jalankan, pastikan hijau**
 
 Run: `export PATH=$HOME/.nvm/versions/node/v22.23.2/bin:$PATH; cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: 877 + 3 lulus. Bila `typecheck` menegur stub tulisan tangan di berkas tes lain, lengkapi stub itu (bukan mengubah tipe).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts
@@ -152,7 +152,7 @@ git commit -m "feat(api): teruskan peringatan health CLI sebagai field peringata
 - Consumes: `peringatan?: string` dari Task 2; `Toast` dengan `JenisToast = "sukses" | "gagal"` (tidak diubah).
 - Produces: `HasilConnect.peringatan?: string`; elemen peringatan ber-`role="note"` dengan teks peringatan verbatim dari API.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 `connect-client.test.ts`:
 - `peringatan dari server diteruskan`: fetch mock balas `{repo: "...", peringatan: "belum ada /health"}` → `expect(hasil.peringatan).toBe("belum ada /health")`
@@ -163,21 +163,21 @@ git commit -m "feat(api): teruskan peringatan health CLI sebagai field peringata
 - `tanpa peringatan tidak ada note`: mock tanpa `peringatan` → `expect(screen.queryByRole("note")).toBeNull()`
 - Pertahankan tes yang sudah ada: label `Nama Aplikasi` tetap tunggal saat dua dialog dipasang bersamaan.
 
-- [ ] **Step 2: Jalankan, pastikan merah**
+- [x] **Step 2: Jalankan, pastikan merah**
 
 Run: `cd web && npx vitest run apps/dashboard/src/lib/connect-client.test.ts apps/dashboard/src/components/actions/connect-dialog.test.tsx`
 Expected: FAIL — `getByRole("note")` tidak ditemukan / field belum ada.
 
-- [ ] **Step 3: Implementasi**
+- [x] **Step 3: Implementasi**
 
 Klien: tambah `peringatan?: string` pada `HasilConnect` dan teruskan dari payload hanya bila ada. Dialog: satu state `peringatan: string | null`, direset saat dialog dibuka dan saat submit baru, diisi dari hasil; render `{peringatan && <p role="note">{peringatan}</p>}` di dalam dialog di bawah toast. Jangan menambah varian `JenisToast`.
 
-- [ ] **Step 4: Jalankan, pastikan hijau**
+- [x] **Step 4: Jalankan, pastikan hijau**
 
 Run: `export PATH=$HOME/.nvm/versions/node/v22.23.2/bin:$PATH; cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: semua lulus.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/connect-client.ts web/apps/dashboard/src/lib/connect-client.test.ts web/apps/dashboard/src/components/actions/connect-dialog.tsx web/apps/dashboard/src/components/actions/connect-dialog.test.tsx
@@ -196,36 +196,36 @@ git commit -m "feat(dashboard): tampilkan peringatan health setelah sambungkan r
 - Consumes: ketiga task sebelumnya sudah ter-commit di `main` lokal.
 - Produces: bukti E2E (SHA commit repo uji + teks peringatan yang terlihat di dashboard) dan CLI baru terpasang di VPS.
 
-- [ ] **Step 1: Tulis dokumentasi**
+- [x] **Step 1: Tulis dokumentasi**
 
 Satu paragraf di `web/README.md` bagian aksi: apa yang diperiksa, kapan muncul, bahwa connect tetap lanjut, dan bahwa `/actuator/health` juga dihitung.
 
-- [ ] **Step 2: Gerbang lokal penuh**
+- [x] **Step 2: Gerbang lokal penuh**
 
 Run: `cd cli && cargo test --bin autore && cargo clippy --all-targets -- -D warnings && cargo fmt --check && cd ../web && export PATH=$HOME/.nvm/versions/node/v22.23.2/bin:$PATH && npx vitest run && npm run lint && npm run typecheck`
 Expected: semua hijau (Rust 325 + 9, web 877 + 3 + tes dialog baru).
 
-- [ ] **Step 3: Push dan tunggu pipeline**
+- [x] **Step 3: Push dan tunggu pipeline**
 
 Push lewat VPS (`git am` dari `format-patch`, lalu `git push origin HEAD:main`). Pantau `autore-e2e` dengan parse JSON `number`/`building`/`result` — jangan glob urutan field.
 Expected: build baru `SUCCESS`.
 
-- [ ] **Step 4: Pasang CLI + web baru di VPS**
+- [x] **Step 4: Pasang CLI + web baru di VPS**
 
 `cargo build --release` di VPS, backup `.bak-<ts>`, lalu `sudo install` ke KEDUA jalur: `/usr/local/bin/autore` (pipeline) dan `/usr/local/lib/autore-ci/autore` (API dashboard — unit API menyetel `AUTORE_BIN` ke jalur lib; pasang satu saja bikin web tetap pakai perilaku lama). Deploy web sesuai prosedur repo. API men-spawn biner per request, jadi tidak perlu restart unit.
 Expected: `sha256sum` kedua jalur sama; dashboard merespons 200.
 
-- [ ] **Step 5: Playwright di VPS**
+- [x] **Step 5: Playwright di VPS**
 
 Run: `cd web/apps/dashboard && npx playwright test`
 Expected: semua spec lulus. Catatan terverifikasi: belum ada spec E2E untuk connect (yang ada `quick-start-e2e.spec.ts`), jadi suite ini hanya menjaga regresi; bukti fitur baru datang dari Step 6. Jangan menambah spec connect di plan ini.
 
-- [ ] **Step 6: Bukti nyata satu repo tanpa health**
+- [x] **Step 6: Bukti nyata satu repo tanpa health**
 
 Buat repo uji `coba-alif-3` di org `tugure-reasuransi` berisi `app.py` tanpa `/health`, sambungkan lewat dashboard, catat: teks peringatan yang muncul, SHA commit scaffold, dan bahwa build tetap jalan lalu gagal di tahap 10 (perilaku yang diharapkan). Lalu sambungkan repo yang punya `/health` dan pastikan tidak ada peringatan.
 Expected: dua hasil berbeda sesuai rancangan; laporkan SHA + teks ke user.
 
-- [ ] **Step 7: Commit dokumentasi + centang plan**
+- [x] **Step 7: Commit dokumentasi + centang plan**
 
 ```bash
 git add web/README.md docs/superpowers/plans/2026-11-20-preflight-health-connect.md
@@ -242,3 +242,32 @@ Sudah beres dan terpasang di VPS: pasangan staging + production otomatis untuk a
 2. Port aplikasi hanya `127.0.0.1`; belum ada alamat tailnet otomatis per app.
 3. Repo pribadi butuh undangan collaborator bot manual; belum ada pemeriksaan hak tulis di awal.
 4. Pemicu masih polling 5 menit, belum webhook GitHub.
+## Catatan eksekusi (2026-11-20)
+
+**Celah yang ketahuan saat bukti nyata:** plan semula mengira `main.rs:1889`
+melayani `connect`. Ternyata itu cabang `QuickStart`; `connect` hidup di
+`cli/src/connect.rs` dan tidak pernah memanggil `peringatkan_folder_kosong`.
+Connect pertama (`coba-alif-3`) karena itu lolos tanpa peringatan. Fix:
+`cli/src/connect.rs` memanggil `crate::peringatkan_folder_kosong(&target)`
+setelah blok pipeline (baik file milik repo dipakai maupun kerangka dibuat),
+commit `fix(cli): connect ikut memperingatkan repo tanpa endpoint /health`.
+
+**Bukti nyata di VPS (org `tugure-reasuransi`):**
+- `coba-alif-3` (app.py tanpa `/health`, connect sebelum fix): tidak ada
+  peringatan; build Jenkins #1 `FAILURE`, console:
+  `Memeriksa health kandidat pada http://127.0.0.1:8183/health`,
+  `stage-gagal=10. Deploy by Verified Digest`.
+- `coba-alif-4` (app.py tanpa `/health`, connect sesudah fix, lewat
+  `hatchActions().connect` dengan `spawnAutore` asli dan biner
+  `/usr/local/lib/autore-ci/autore`): stdout CLI memuat
+  `PERINGATAN_HEALTH: Repo ini belum punya endpoint /health. Deploy akan gagal
+  di tahap 10 sampai aplikasi menjawab /health di port bawaan stack.` dan hasil
+  API `{ok:true, peringatan:"...", repo:"https://github.com/tugure-reasuransi/coba-alif-4"}`.
+- Klik lewat browser dashboard tidak dilakukan: login dashboard hanya GitHub
+  OAuth (akun bos alif), jadi lapisan UI dibuktikan lewat vitest dialog +
+  Playwright 93 spec di VPS, bukan sesi browser ber-login.
+
+**Gerbang:** Rust 334 tes lulus (flake `init_tiga_kali_*` terbukti gagal juga di
+basis tanpa perubahan), clippy `-D warnings` bersih, fmt bersih; web 884 vitest
+lulus, lint + typecheck bersih; Playwright VPS 93 lulus.
+

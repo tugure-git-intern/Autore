@@ -180,3 +180,28 @@ test("dialog tertutup tidak menyumbang label saat dua dialog dipasang bersamaan"
   fireEvent.click(screen.getByRole("button", { name: /Sambungkan Repo/ }));
   expect(screen.queryAllByLabelText("Nama Aplikasi")).toHaveLength(1);
 });
+
+async function sambung(body: unknown) {
+  mockFetch(() => ({ body }));
+  render(<ConnectDialog />);
+  buka();
+  sampaiKonfirmasi();
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "autore-demo" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Sambungkan Sekarang" }));
+  await waitFor(() => expect(document.querySelector("dialog")).not.toHaveAttribute("open"));
+}
+
+test("peringatan health tetap terlihat setelah dialog tertutup", async () => {
+  await sambung({ ok: true, repo: REPO, peringatan: "Repo ini belum punya endpoint /health." });
+
+  expect(screen.getByRole("note")).toHaveTextContent("Repo ini belum punya endpoint /health.");
+  expect(screen.getByRole("status")).toHaveTextContent("tersambung");
+});
+
+test("tanpa peringatan tidak ada note", async () => {
+  await sambung({ ok: true, repo: REPO });
+
+  expect(screen.queryByRole("note")).toBeNull();
+});

@@ -31,6 +31,8 @@ export interface HasilConnect {
   message: string;
   /** URL repo GitHub yang dibaca CLI dari keluarannya. */
   repo?: string;
+  /** Peringatan CLI (mis. repo belum punya endpoint /health); connect tetap sukses. */
+  peringatan?: string;
   /** Diisi kalau server menolak karena sesi; pemanggil yang memindahkan halaman. */
   redirectTo?: string;
 }
@@ -52,11 +54,14 @@ export async function runConnect(permintaan: PermintaanConnect): Promise<HasilCo
   }
 
   if (response.ok) {
-    const payload = (await response.json().catch(() => null)) as { repo?: string } | null;
+    const payload = (await response.json().catch(() => null)) as
+      | { repo?: string; peringatan?: string }
+      | null;
     return {
       ok: true,
       message: `Repo "${nama}" tersambung. Build pertama sedang berjalan di Jenkins.`,
       ...(payload?.repo ? { repo: payload.repo } : {}),
+      ...(payload?.peringatan ? { peringatan: payload.peringatan } : {}),
     };
   }
 

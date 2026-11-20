@@ -25,6 +25,8 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
   const [konfirmasi, setKonfirmasi] = useState("");
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<{ jenis: JenisToast; pesan: string } | null>(null);
+  /** Peringatan tetap tayang setelah dialog tertutup: toast hilang dalam 4 detik. */
+  const [peringatan, setPeringatan] = useState<string | null>(null);
   /** Nama aplikasi mengikuti URL repo sampai dev mengubahnya sendiri. */
   const [namaDiubah, setNamaDiubah] = useState(false);
 
@@ -63,9 +65,11 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
   async function kirim() {
     setPending(true);
     setToast(null);
+    setPeringatan(null);
     const hasil = await runConnect({ repo: repoBersih, nama: namaBersih, branch: branchBersih });
     setPending(false);
     setToast({ jenis: hasil.ok ? "sukses" : "gagal", pesan: hasil.message });
+    if (hasil.peringatan) setPeringatan(hasil.peringatan);
 
     if (hasil.redirectTo) {
       goToLogin(hasil.redirectTo);
@@ -83,13 +87,25 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
 
   return (
     <span className="inline-flex flex-col items-end gap-2">
-      <Button onClick={() => setTerbuka(true)} disabled={pending}>
+      <Button
+        onClick={() => {
+          setPeringatan(null);
+          setTerbuka(true);
+        }}
+        disabled={pending}
+      >
         <Link2 className="h-4 w-4" aria-hidden="true" />
         Sambungkan Repo
       </Button>
 
       {toast ? (
         <Toast jenis={toast.jenis} pesan={toast.pesan} onTutup={() => setToast(null)} />
+      ) : null}
+
+      {peringatan ? (
+        <p role="note" className="max-w-[30rem] text-sm text-amber-700 dark:text-amber-300">
+          {peringatan}
+        </p>
       ) : null}
 
       <dialog

@@ -64,6 +64,25 @@ test("mengirim repo, nama, dan branch yang sudah dirapikan ke endpoint connect",
   expect(hasil.repo).toBe("https://github.com/tugure-reasuransi/autore-demo");
 });
 
+test("peringatan health dari server diteruskan ke pemanggil", async () => {
+  mockFetch(() => ({
+    body: { ok: true, repo: "https://github.com/tugure-reasuransi/autore-demo", peringatan: "Repo ini belum punya endpoint /health." },
+  }));
+
+  const hasil = await runConnect({ repo: "https://github.com/tugure-reasuransi/autore-demo", nama: "autore-demo", branch: "main" });
+
+  expect(hasil.ok).toBe(true);
+  expect(hasil.peringatan).toBe("Repo ini belum punya endpoint /health.");
+});
+
+test("tanpa peringatan dari server, field peringatan tidak ada", async () => {
+  mockFetch(() => ({ body: { ok: true, repo: "https://github.com/tugure-reasuransi/autore-demo" } }));
+
+  const hasil = await runConnect({ repo: "https://github.com/tugure-reasuransi/autore-demo", nama: "autore-demo", branch: "main" });
+
+  expect(hasil.peringatan).toBeUndefined();
+});
+
 test("penolakan server memakai pesan error dan baris pertama keluaran CLI", async () => {
   mockFetch(() => ({
     ok: false,

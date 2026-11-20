@@ -60,8 +60,8 @@ pub(crate) fn hapus_container(nama: &str) -> bool {
     }
     Command::new("docker")
         .args(["rm", "-f", nama])
-        .status()
-        .map(|s| s.success())
+        .output()
+        .map(|o| o.status.success())
         .unwrap_or(false)
 }
 
@@ -513,5 +513,7 @@ mod tests {
         assert!(!hapus_container("../lain"));
         assert!(!hapus_container("a b"));
         assert!(!hapus_container(""));
+        assert!(!hapus_container("."));
+        assert!(!hapus_container(".."));
     }
 }

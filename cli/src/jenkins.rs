@@ -883,6 +883,10 @@ pub fn kode_hapus_job(code: u16) -> Result<bool, String> {
 /// kredensial lewat stdin curl, tidak pernah di argv.
 #[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
 pub fn hapus_job(cfg: &JenkinsConfig, job_name: &str) -> Result<bool, String> {
+    // Nama masuk URL ber-kredensial: `../`, `?`, `#` bisa membelokkan sasaran POST.
+    if !crate::connect::nama_sah(job_name) {
+        return Err("Nama job tidak sah".to_string());
+    }
     let base = normalize_jenkins_url(&cfg.url)?;
     let tmp_dir = std::env::temp_dir().join(format!("autore-jk-hapus-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)
@@ -1229,6 +1233,21 @@ mod tests {
         assert_eq!(kode_hapus_job(200), Ok(true));
         assert_eq!(kode_hapus_job(404), Ok(false));
         assert!(kode_hapus_job(401).is_err());
+        assert!(kode_hapus_job(403).is_err());
+        assert!(kode_hapus_job(401).unwrap_err().contains("Autentikasi"));
         assert!(kode_hapus_job(500).unwrap_err().contains("500"));
+    }
+
+    #[test]
+    fn hapus_job_menolak_nama_tidak_sah_tanpa_jaringan() {
+        // Guard nama harus berjalan sebelum curl apa pun: URL valid tetapi tidak
+        // ada server di 127.0.0.1:1 — bila guard bocor, tes gagal lewat pesan curl.
+        let cfg = JenkinsConfig {
+            url: "http://127.0.0.1:1".to_string(),
+            user: "admin".to_string(),
+            token: "tok".to_string(),
+        };
+        let err = hapus_job(&cfg, "../lain").unwrap_err();
+        assert!(err.contains("tidak sah"), "pesan: {err}");
     }
 }

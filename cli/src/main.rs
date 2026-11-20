@@ -107,7 +107,79 @@ pub fn peringatkan_folder_kosong(dir: &std::path::Path) {
             "  {} Folder ini belum berisi kode aplikasi. Pipeline tetap jalan sampai image dibuat, tapi tahap deploy akan ditolak sampai ada aplikasi yang bisa dijalankan.",
             "i".yellow().bold()
         );
+    } else if !punya_endpoint_health(dir) {
+        println!("PERINGATAN_HEALTH: {PERINGATAN_HEALTH}");
     }
+}
+
+pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health di port bawaan stack.";
+
+const EKSTENSI_KODE: [&str; 9] = ["py", "js", "jsx", "ts", "tsx", "mjs", "cjs", "java", "go"];
+const FOLDER_DILEWATI: [&str; 9] = [
+    ".git",
+    "node_modules",
+    "target",
+    "vendor",
+    "dist",
+    "build",
+    "tests",
+    "test",
+    "__tests__",
+];
+
+/// Nama file test: menembak `/health` bukan bukti aplikasinya menyediakan endpoint itu.
+fn nama_file_test(nama: &str) -> bool {
+    nama.starts_with("test_")
+        || nama.contains("_test.")
+        || nama.contains(".test.")
+        || nama.contains(".spec.")
+}
+
+/// Cari `/health` di berkas kode repo. Statis: tidak menjalankan kode, tidak jaringan.
+/// Dokumentasi, file test, folder dependensi, dan berkas > 512 KiB tidak dihitung;
+/// berhenti setelah 2.000 berkas dibaca supaya repo besar tidak menahan connect.
+pub fn punya_endpoint_health(dir: &std::path::Path) -> bool {
+    let mut tumpukan = vec![dir.to_path_buf()];
+    let mut dibaca = 0usize;
+    while let Some(kini) = tumpukan.pop() {
+        let Ok(entries) = std::fs::read_dir(&kini) else {
+            continue;
+        };
+        for entri in entries.filter_map(Result::ok) {
+            let path = entri.path();
+            let nama = entri.file_name().to_string_lossy().to_lowercase();
+            let Ok(meta) = std::fs::metadata(&path) else {
+                continue;
+            };
+            if meta.is_dir() {
+                if !FOLDER_DILEWATI.contains(&nama.as_str()) {
+                    tumpukan.push(path);
+                }
+                continue;
+            }
+            let ekstensi = path
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            if !EKSTENSI_KODE.contains(&ekstensi.as_str())
+                || nama_file_test(&nama)
+                || meta.len() > 512 * 1024
+            {
+                continue;
+            }
+            if dibaca >= 2_000 {
+                return false;
+            }
+            let Ok(isi) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            dibaca += 1;
+            if isi.contains("/health") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Tentukan folder target untuk `Buat Project Baru` dari menu interaktif:
@@ -2596,5 +2668,92 @@ mod tests {
         let bantuan = logs.render_long_help().to_string();
         assert!(bantuan.contains("--no-follow"), "{bantuan}");
         assert!(bantuan.contains("--lines"), "{bantuan}");
+    }
+
+    fn tulis(dir: &std::path::Path, nama: &str, isi: &str) {
+        let p = dir.join(nama);
+        if let Some(induk) = p.parent() {
+            std::fs::create_dir_all(induk).unwrap();
+        }
+        std::fs::write(p, isi).unwrap();
+    }
+
+    #[test]
+    fn repo_tanpa_health_terdeteksi() {
+        let tmp = TempDir::new().unwrap();
+        tulis(tmp.path(), "app.py", "print(\"halo\")\n");
+        assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn repo_dengan_health_terdeteksi() {
+        let tmp = TempDir::new().unwrap();
+        tulis(
+            tmp.path(),
+            "app.py",
+            "if self.path == \"/health\":\n    pass\n",
+        );
+        assert!(punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn health_milik_framework_tetap_terdeteksi() {
+        let tmp = TempDir::new().unwrap();
+        tulis(
+            tmp.path(),
+            "Main.java",
+            "@GetMapping(\"/actuator/health\")\n",
+        );
+        assert!(punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn health_di_folder_abaikan_tidak_dihitung() {
+        let tmp = TempDir::new().unwrap();
+        tulis(tmp.path(), "node_modules/lib/x.js", "\"/health\"\n");
+        tulis(tmp.path(), "app.py", "print(1)\n");
+        assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn folder_kosong_tidak_memicu_pesan_health() {
+        let tmp = TempDir::new().unwrap();
+        assert!(tanpa_kode_aplikasi(tmp.path()));
+        assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn readme_yang_menyebut_health_tidak_dihitung() {
+        let tmp = TempDir::new().unwrap();
+        tulis(tmp.path(), "README.md", "GET /health\n");
+        tulis(tmp.path(), "app.py", "print(1)\n");
+        assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn file_test_yang_menembak_health_tidak_dihitung() {
+        for nama in ["test_app.py", "app.test.js", "tests/api.py"] {
+            let tmp = TempDir::new().unwrap();
+            tulis(tmp.path(), nama, "client.get(\"/health\")\n");
+            tulis(tmp.path(), "app.py", "print(1)\n");
+            assert!(!punya_endpoint_health(tmp.path()), "{nama} ikut dihitung");
+        }
+    }
+
+    #[test]
+    fn ekstensi_di_luar_daftar_tidak_dihitung() {
+        let tmp = TempDir::new().unwrap();
+        tulis(tmp.path(), "catatan.txt", "/health\n");
+        tulis(tmp.path(), "openapi.yaml", "/health:\n");
+        tulis(tmp.path(), "app.py", "print(1)\n");
+        assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    #[test]
+    fn berkas_besar_dilewati() {
+        let tmp = TempDir::new().unwrap();
+        let isi = format!("# {}\n\"/health\"\n", "x".repeat(600 * 1024));
+        tulis(tmp.path(), "besar.py", &isi);
+        assert!(!punya_endpoint_health(tmp.path()));
     }
 }

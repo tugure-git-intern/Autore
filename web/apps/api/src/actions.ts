@@ -5,7 +5,7 @@ import { catatAudit, type PencatatAudit } from "./audit";
 import { bacaRegistry, catatAplikasi } from "./registry";
 import { aksiBerjalan, ambilKunci, pemegangKunci } from "./kunci";
 import { promisify } from "node:util";
-import { argvQuickStart, repoDariOutput, type QuickStartInput } from "./quick-start";
+import { argvQuickStart, peringatanDariOutput, repoDariOutput, type QuickStartInput } from "./quick-start";
 import { argvConnect, type ConnectInput } from "./connect";
 import type { Identitas } from "./session";
 import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
@@ -32,6 +32,8 @@ export type ActionResult =
       target: string;
       /** Hanya quick-start/connect: URL repo GitHub yang dibaca dari keluaran CLI. */
       repo?: string;
+      /** Hanya quick-start/connect: peringatan CLI (mis. repo belum punya /health), bila ada. */
+      peringatan?: string;
       output: string;
     }
   | { ok: false; status: 400 | 404 | 409 | 422 | 503 | 504; error: string; output?: string };
@@ -342,6 +344,7 @@ export function hatchActions(deps: {
       }
 
       const catatan = await catatKeRegistry(workspace, dir, nama);
+      const peringatan = peringatanDariOutput(res.stdout);
       resetStatusCache();
       const output = capped(
         [res.stdout.trim(), res.stderr.trim(), catatan].filter(Boolean).join("\n"),
@@ -360,6 +363,7 @@ export function hatchActions(deps: {
             action: kind,
             target: nama,
             repo: repoDariOutput(output),
+            ...(peringatan ? { peringatan } : {}),
             output,
           }
         : failed(422, `${kind} keluar dengan kode ${res.exitCode}`, output);

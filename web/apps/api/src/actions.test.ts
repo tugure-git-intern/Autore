@@ -668,6 +668,47 @@ describe("connect", () => {
     });
   });
 
+  it("meneruskan peringatan health dari stdout CLI", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({
+          stdout:
+            "  1/4 File pipeline dibuat:\nPERINGATAN_HEALTH: Repo ini belum punya endpoint /health.\n  • Repo GitHub    tugure-reasuransi/autore-demo (tersambung)\n",
+        }),
+      ),
+    });
+
+    const out = await actions.connect(INPUT);
+
+    expect(out.ok).toBe(true);
+    expect(out.ok && out.peringatan).toBe("Repo ini belum punya endpoint /health.");
+  });
+
+  it("tanpa baris peringatan, field peringatan tidak ada", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => result({ stdout: "  • Repo GitHub    tugure-reasuransi/autore-demo\n" })),
+    });
+
+    const out = await actions.connect(INPUT);
+
+    expect(out.ok && out.peringatan).toBeUndefined();
+  });
+
+  it("quick-start ikut meneruskan peringatan health", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({ stdout: "PERINGATAN_HEALTH: Repo ini belum punya endpoint /health.\n" }),
+      ),
+    });
+
+    const out = await actions.quickStart({ nama: "coba-web", stack: "nodejs", kode: "contoh" });
+
+    expect(out.ok && out.peringatan).toBe("Repo ini belum punya endpoint /health.");
+  });
+
   it("menolak folder aplikasi yang sudah ada tanpa menjalankan apa pun", async () => {
     const dir = await workspace(["coba-connect"]);
     const { actions, spawn } = make(dir);

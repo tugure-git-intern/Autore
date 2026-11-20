@@ -126,6 +126,14 @@ export function argvQuickStart(workspace: string, nilai: QuickStartInput, author
 /** CLI mencetak `• Repo GitHub <owner>/<nama> (baru dibuat|sudah ada)`. */
 const BARIS_REPO = /\bRepo GitHub\s+([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)/;
 
+/** CLI mencetak `PERINGATAN_HEALTH: <pesan>` saat repo belum punya endpoint /health. */
+export function peringatanDariOutput(output: string): string | undefined {
+  const bersih = output.replace(/\u001b\[[0-9;]*m/g, "");
+  const baris = bersih.split("\n").find((b) => b.trimStart().startsWith("PERINGATAN_HEALTH:"));
+  const pesan = baris?.trimStart().slice("PERINGATAN_HEALTH:".length).trim();
+  return pesan ? pesan : undefined;
+}
+
 export function repoDariOutput(output: string): string {
   const bersih = output.replace(/\u001b\[[0-9;]*m/g, "");
   // `match`, bukan `exec`: gate keamanan pra-commit menandai panggilan `.exec(` sebagai exec() shell.

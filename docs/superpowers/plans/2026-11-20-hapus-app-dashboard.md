@@ -240,7 +240,7 @@ Expected: FAIL, modul belum ada.
 
 - [ ] **Step 3: Implement `cli/src/hapus.rs` dan sambungkan ke clap**
 
-Urutan `jalankan`: `periksa` → backup `registry.tsv` + `environments.json` ke `.bak-<epoch-detik>` → `hapus_container(nama)` → `hapus_job` untuk `<nama>`, `<nama>-rollback`, `<nama>-promote` (404 dianggap berhasil, job memang tidak ada) → `hapus_port` → `lingkungan::hapus_app` → hapus folder bila ada dan bukan repo sumber. Setiap langkah menghasilkan `HasilLangkah`; kegagalan satu langkah tidak menghentikan langkah lain, tetapi `ringkasan` menentukan exit code. Cetak satu baris per langkah dengan prefix yang sama seperti gaya `connect.rs`, lalu ringkasan.
+Urutan `jalankan`: `periksa` → backup `registry.tsv` + `environments.json` ke `.bak-<epoch-detik>` → `hapus_container(nama)` → `hapus_job` untuk `<nama>`, `<nama>-rollback`, `<nama>-promote` (404 dianggap berhasil, job memang tidak ada) → `hapus_port` (bila mengembalikan `false`, baca ulang `entri_registry`: baris masih ada berarti langkah registry GAGAL, bukan "tidak ada baris" — `false` juga berarti gagal tulis) → `lingkungan::hapus_app` → hapus folder bila ada dan bukan repo sumber. Lepas kedua `#[allow(dead_code)]` dari Task 1 di sini. Setiap langkah menghasilkan `HasilLangkah`; kegagalan satu langkah tidak menghentikan langkah lain, tetapi `ringkasan` menentukan exit code. Cetak satu baris per langkah dengan prefix yang sama seperti gaya `connect.rs`, lalu ringkasan.
 
 Bila konfigurasi Jenkins tidak ada, langkah job dicatat gagal dengan pesan yang menyebut `jenkins.conf` — registry dan folder tetap dibersihkan, dan exit code 1 memberi tahu user bahwa job mungkin masih ada.
 

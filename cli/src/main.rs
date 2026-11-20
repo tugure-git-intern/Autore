@@ -112,7 +112,7 @@ pub fn peringatkan_folder_kosong(dir: &std::path::Path) {
     }
 }
 
-pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health di port bawaan stack.";
+pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health dengan JSON {\"status\":\"ok\"} di port bawaan stack.";
 
 const EKSTENSI_KODE: [&str; 9] = ["py", "js", "jsx", "ts", "tsx", "mjs", "cjs", "java", "go"];
 const FOLDER_DILEWATI: [&str; 9] = [

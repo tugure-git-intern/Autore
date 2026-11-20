@@ -153,7 +153,7 @@ CLI mencetak `PERINGATAN_HEALTH: <pesan>`, API meneruskannya sebagai field
 sebagai `role="note"` yang tetap terbaca setelah dialog tertutup (toast sukses
 hilang dalam 4 detik). Connect tetap lanjut: ini peringatan dini, bukan gerbang —
 pipeline tetap penentu, dan deploy akan gagal di tahap health check bila aplikasi
-tidak menjawab `/health` di port bawaan stack.
+tidak menjawab `/health` di port bawaan stack. Kontrak health deploy: body `/health` wajib JSON `{"status":"ok"}`; 200 dengan body lain tetap ditolak.
 
 Deploy bukan sekadar "build": CLI menjalankan `git add`/`git commit` di
 direktori aplikasi, push ke remote, lalu memicu build Jenkins. Karena itu tombol

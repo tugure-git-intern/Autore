@@ -185,7 +185,7 @@ Perbaikan wajib setelah review Task 3 (putusan bos alif + controller):
 - Nama berkas backup memakai epoch-nanos atau menolak menimpa `.bak` yang sudah ada, supaya dua penghapusan dalam detik yang tidak menimpa salinan pra-mutasi.
 - Varian clap cukup `HapusApp { nama, #[arg(long)] konfirmasi }`; clap sudah menurunkan `hapus-app`, jadi `visible_alias` yang sama tidak perlu.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```rust
 #[test]
@@ -240,23 +240,23 @@ fn jenkins_tidak_terkonfigurasi_tetap_membersihkan_registry_dan_folder() {
 }
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd cli && cargo test --bin autore periksa_`
 Expected: FAIL, modul belum ada.
 
-- [ ] **Step 3: Implement `cli/src/hapus.rs` dan sambungkan ke clap**
+- [x] **Step 3: Implement `cli/src/hapus.rs` dan sambungkan ke clap**
 
 Urutan `jalankan`: `periksa` → backup `registry.tsv` + `environments.json` ke `.bak-<epoch-detik>` → `hapus_container(nama)` → `hapus_job` untuk `<nama>`, `<nama>-rollback`, `<nama>-promote` (404 dianggap berhasil, job memang tidak ada) → `hapus_port` (bila mengembalikan `false`, baca ulang `entri_registry`: baris masih ada berarti langkah registry GAGAL, bukan "tidak ada baris" — `false` juga berarti gagal tulis) → `lingkungan::hapus_app` → hapus folder bila ada dan bukan repo sumber. Lepas kedua `#[allow(dead_code)]` dari Task 1 di sini. Setiap langkah menghasilkan `HasilLangkah`; kegagalan satu langkah tidak menghentikan langkah lain, tetapi `ringkasan` menentukan exit code. Cetak satu baris per langkah dengan prefix yang sama seperti gaya `connect.rs`, lalu ringkasan.
 
 Bila konfigurasi Jenkins tidak ada, langkah job dicatat gagal dengan pesan yang menyebut `jenkins.conf` — registry dan folder tetap dibersihkan, dan exit code 1 memberi tahu user bahwa job mungkin masih ada.
 
-- [ ] **Step 4: Jalankan tes dan gerbang penuh**
+- [x] **Step 4: Jalankan tes dan gerbang penuh**
 
 Run: `cd cli && cargo test --bin autore && cargo clippy --all-targets -- -D warnings && cargo fmt --check`
 Expected: PASS, clippy bersih, fmt bersih.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/hapus.rs cli/src/main.rs

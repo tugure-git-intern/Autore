@@ -105,6 +105,12 @@ The authoritative CI/CD pipeline definition is maintained in the administrative 
 | 9 | **Push to Nexus Registry** | Uploads image to private Nexus repository under `ALLOW_ONCE` immutability policy (disallows tag overwriting). |
 | 10 | **Deploy by Verified Digest** | Deploys containers strictly referencing `@sha256:<digest>` verified in Stage 9, preventing image spoofing. |
 
+### The `/health` requirement (Stage 10)
+
+Stage 10 starts the new container and probes `http://127.0.0.1:<port>/health` before switching traffic to it. The endpoint must answer HTTP 200 with the JSON body `{"status":"ok"}`; a 200 with any other body is rejected, and there is no fallback to `/`. The port is the stack default (Python 8000, Node.js 3000, Java 8080, Go 8080).
+
+`init`, `quick-start`, and `connect` print a warning up front when the repository has no `/health` endpoint, so the failure is known before the build runs. For a working reference, generate the sample app (`--kode contoh`) — it already answers `/health` on the stack default port. To check an app manually: `curl -i http://127.0.0.1:<port>/health`.
+
 ---
 
 ## Tech Stack

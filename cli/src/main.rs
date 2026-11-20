@@ -112,7 +112,7 @@ pub fn peringatkan_folder_kosong(dir: &std::path::Path) {
     }
 }
 
-pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health dengan JSON {\"status\":\"ok\"} di port bawaan stack.";
+pub const PERINGATAN_HEALTH: &str = "Repo ini belum punya endpoint /health. Deploy akan gagal di tahap 10 sampai aplikasi menjawab /health dengan JSON {\"status\":\"ok\"} di port bawaan stack. Health check dipakai pipeline untuk memastikan aplikasi benar-benar hidup sebelum trafik dialihkan. Contoh siap jalan: jalankan init dengan --kode contoh. Uji manual: curl -i http://127.0.0.1:<port>/health.";
 
 const EKSTENSI_KODE: [&str; 9] = ["py", "js", "jsx", "ts", "tsx", "mjs", "cjs", "java", "go"];
 const FOLDER_DILEWATI: [&str; 9] = [

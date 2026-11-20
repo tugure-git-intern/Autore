@@ -1,8 +1,10 @@
 //! Orkestrasi `autore hapus-app`: satu aksi membersihkan app di server.
 //!
 //! Urutan efek samping: backup -> container -> job Jenkins -> registry ->
-//! environments -> folder. Satu langkah gagal tidak menghentikan langkah lain;
-//! exit code datang dari `ringkasan`.
+//! environments -> folder. Satu langkah gagal tidak menghentikan langkah lain,
+//! KECUALI backup: tanpa salinan pra-mutasi, registry/environments/folder
+//! dilewati supaya data user tidak hilang tanpa bisa dipulihkan. Exit code
+//! datang dari `ringkasan`.
 
 use crate::{connect, jenkins, lingkungan, workspace};
 use colored::Colorize;
@@ -85,12 +87,13 @@ pub(crate) fn ringkasan(langkah: &[HasilLangkah]) -> (i32, String) {
     (1, format!("Langkah gagal -> {}", gagal.join("; ")))
 }
 
-/// Salin registry.tsv + environments.json ke `.bak-<epoch-detik>` sebelum ada
-/// yang dibuang. Berkas yang tidak ada dilewati.
+/// Salin registry.tsv + environments.json ke `.bak-<epoch-nanos>` sebelum ada
+/// yang dibuang. Nanos dipakai supaya dua penghapusan dalam detik yang sama
+/// tidak saling menimpa salinan pra-mutasi. Berkas yang tidak ada dilewati.
 fn langkah_backup(workspace: &Path) -> HasilLangkah {
     let epoch = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
+        .map(|d| d.as_nanos())
         .unwrap_or(0);
     let mut disalin = Vec::new();
     let mut rusak = Vec::new();
@@ -116,20 +119,60 @@ fn langkah_backup(workspace: &Path) -> HasilLangkah {
     hasil("backup", true, pesan)
 }
 
+/// Container yang memang tidak ada = berhasil (app yatim tetap boleh
+/// dibersihkan). Docker yang tidak bisa ditanya tetap GAGAL: itu bukan bukti
+/// apa-apa tentang container.
 fn langkah_container(nama: &str) -> HasilLangkah {
+    if !workspace::container_ada(nama) {
+        if workspace::container_jalan().is_none() {
+            return hasil(
+                "container",
+                false,
+                "Docker tidak bisa ditanya (tidak terpasang atau daemon berhenti)".to_string(),
+            );
+        }
+        return hasil(
+            "container",
+            true,
+            format!("container '{nama}' memang tidak ada"),
+        );
+    }
     if workspace::hapus_container(nama) {
         hasil("container", true, format!("docker rm -f {nama}"))
     } else {
-        hasil(
-            "container",
-            false,
-            format!("docker rm -f {nama} gagal (container tidak ada atau Docker tidak berjalan)"),
-        )
+        hasil("container", false, format!("docker rm -f {nama} gagal"))
     }
 }
 
-/// Tiga job per app. 404 = job memang tidak ada, tetap berhasil. Tanpa
-/// jenkins.conf langkah ini GAGAL supaya user tahu job mungkin masih hidup.
+/// Tiga job per app (nama, -rollback, -promote). 404 = job memang tidak ada,
+/// tetap berhasil; Err diagregasi jadi GAGAL. Penghapus disuntik supaya tes
+/// tidak butuh jaringan.
+fn langkah_job_dengan<F>(nama: &str, hapus: F) -> HasilLangkah
+where
+    F: Fn(&str) -> Result<bool, String>,
+{
+    let mut catatan = Vec::new();
+    let mut rusak = Vec::new();
+    for job in [
+        nama.to_string(),
+        format!("{nama}-rollback"),
+        format!("{nama}-promote"),
+    ] {
+        match hapus(&job) {
+            Ok(true) => catatan.push(format!("{job} terhapus")),
+            Ok(false) => catatan.push(format!("{job} tidak ada")),
+            Err(e) => rusak.push(format!("{job}: {e}")),
+        }
+    }
+    if rusak.is_empty() {
+        hasil("job Jenkins", true, catatan.join(", "))
+    } else {
+        hasil("job Jenkins", false, rusak.join("; "))
+    }
+}
+
+/// Tanpa jenkins.conf langkah ini GAGAL supaya user tahu job mungkin masih
+/// hidup; registry/env/folder tetap dibersihkan.
 fn langkah_job(cfg: Option<&jenkins::JenkinsConfig>, nama: &str) -> HasilLangkah {
     let Some(cfg) = cfg else {
         return hasil(
@@ -141,24 +184,7 @@ fn langkah_job(cfg: Option<&jenkins::JenkinsConfig>, nama: &str) -> HasilLangkah
             ),
         );
     };
-    let mut catatan = Vec::new();
-    let mut rusak = Vec::new();
-    for job in [
-        nama.to_string(),
-        format!("{nama}-rollback"),
-        format!("{nama}-promote"),
-    ] {
-        match jenkins::hapus_job(cfg, &job) {
-            Ok(true) => catatan.push(format!("{job} terhapus")),
-            Ok(false) => catatan.push(format!("{job} tidak ada")),
-            Err(e) => rusak.push(format!("{job}: {e}")),
-        }
-    }
-    if rusak.is_empty() {
-        hasil("job Jenkins", true, catatan.join(", "))
-    } else {
-        hasil("job Jenkins", false, rusak.join("; "))
-    }
+    langkah_job_dengan(nama, |job| jenkins::hapus_job(cfg, job))
 }
 
 /// `hapus_port` false berarti "tidak ada baris ATAU gagal tulis". Baca ulang
@@ -232,6 +258,22 @@ fn langkah_folder(folder: &Path) -> HasilLangkah {
     }
 }
 
+/// Keanggotaan dibaca dari kolom pertama mentah registry.tsv, bukan
+/// `entri_registry`: ia melewati baris legacy dua kolom, padahal app lama tetap
+/// harus bisa dihapus. Registry yang tak terbaca = daftar kosong, jadi `periksa`
+/// menolak dan tidak ada yang disentuh.
+fn terdaftar_di_registry(workspace: &Path) -> Vec<String> {
+    let Ok(isi) = std::fs::read_to_string(workspace.join("registry.tsv")) else {
+        return Vec::new();
+    };
+    isi.lines()
+        .filter_map(|b| b.split('\t').next())
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// Orkestrasi dengan workspace dan konfigurasi Jenkins disuntik supaya bisa
 /// diuji tanpa jaringan.
 pub(crate) fn jalankan_dengan(
@@ -241,22 +283,26 @@ pub(crate) fn jalankan_dengan(
     cfg: Option<&jenkins::JenkinsConfig>,
 ) -> (i32, Vec<HasilLangkah>) {
     let folder = workspace.join(nama);
-    let terdaftar: Vec<String> = workspace::entri_registry(workspace)
-        .into_iter()
-        .map(|(n, _, _)| n)
-        .collect();
+    let terdaftar = terdaftar_di_registry(workspace);
     if let Err(e) = periksa(nama, konfirmasi, &terdaftar, &folder) {
         return (1, vec![hasil("periksa", false, e)]);
     }
     // vec! mengevaluasi kiri-ke-kanan: urutan efek samping terjamin.
-    let langkah = vec![
+    let mut langkah = vec![
         langkah_backup(workspace),
         langkah_container(nama),
         langkah_job(cfg, nama),
-        langkah_registry(workspace, nama),
-        langkah_env(workspace, nama),
-        langkah_folder(&folder),
     ];
+    if langkah[0].berhasil {
+        langkah.push(langkah_registry(workspace, nama));
+        langkah.push(langkah_env(workspace, nama));
+        langkah.push(langkah_folder(&folder));
+    } else {
+        // Tanpa salinan pra-mutasi, buang data user = tidak bisa dipulihkan.
+        for nama in ["registry", "environments", "folder"] {
+            langkah.push(hasil(nama, false, "dilewati: backup gagal".to_string()));
+        }
+    }
     (ringkasan(&langkah).0, langkah)
 }
 
@@ -428,6 +474,177 @@ mod tests {
             .contains(".bak-")));
     }
 
+    // --- Perbaikan review Task 3 ---
+
+    /// Important 1: tanpa salinan pra-mutasi, registry/env/folder tidak disentuh.
+    #[cfg(unix)]
+    #[test]
+    fn backup_gagal_menahan_registry_environments_dan_folder() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        // Folder docker palsu di TempDir lain: ws jadi read-only, sampai log
+        // stub pun tidak bisa ditulis di sana.
+        let tmp_docker = TempDir::new().unwrap();
+        let _docker = DockerPalsu::pasang(tmp_docker.path());
+        std::fs::write(ws.join("registry.tsv"), "app-a\t8000\t8083\n").unwrap();
+        std::fs::write(
+            ws.join("environments.json"),
+            r#"{"app-a":{"staging":{"deploy_port":8300}}}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(ws.join("app-a")).unwrap();
+        std::fs::write(ws.join("app-a/Dockerfile"), "FROM scratch").unwrap();
+        // Workspace read-only -> fs::copy ke .bak gagal -> langkah backup GAGAL.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(ws, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let (kode, langkah) = jalankan_dengan("app-a", "app-a", ws, None);
+        std::fs::set_permissions(ws, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(kode, 1);
+        let backup = langkah
+            .iter()
+            .find(|l| l.nama == "backup")
+            .expect("langkah backup harus ada");
+        assert!(!backup.berhasil, "backup harus GAGAL: {}", backup.pesan);
+        for nama in ["registry", "environments", "folder"] {
+            let l = langkah
+                .iter()
+                .find(|l| l.nama == nama)
+                .unwrap_or_else(|| panic!("langkah {nama} harus ada"));
+            assert!(!l.berhasil, "langkah {nama} harus GAGAL saat backup gagal");
+            assert!(
+                l.pesan.contains("dilewati: backup gagal"),
+                "pesan {nama} harus menyebut dilewati: {}",
+                l.pesan
+            );
+        }
+        // Container dan job tetap jalan.
+        assert!(langkah.iter().any(|l| l.nama == "container" && l.berhasil));
+        assert!(langkah.iter().any(|l| l.nama == "job Jenkins"));
+        // Data user utuh.
+        assert_eq!(
+            std::fs::read_to_string(ws.join("registry.tsv")).unwrap(),
+            "app-a\t8000\t8083\n"
+        );
+        assert!(std::fs::read_to_string(ws.join("environments.json"))
+            .unwrap()
+            .contains("app-a"));
+        assert!(ws.join("app-a/Dockerfile").exists());
+    }
+
+    /// Important 2 (a): container memang tidak ada = pembersihan BERHASIL.
+    #[cfg(unix)]
+    #[test]
+    fn container_tidak_ada_dianggap_berhasil() {
+        let tmp = TempDir::new().unwrap();
+        let _docker = DockerPalsu::container_hilang(tmp.path());
+        let l = langkah_container("app-a");
+        assert!(l.berhasil, "app yatim tidak boleh exit 1: {}", l.pesan);
+    }
+
+    /// Important 2 (b): Docker tidak terpasang/berhenti = GAGAL.
+    #[cfg(unix)]
+    #[test]
+    fn container_docker_tidak_bisa_dijalankan_dilaporkan_gagal() {
+        let tmp = TempDir::new().unwrap();
+        let _docker = DockerPalsu::tanpa_docker(tmp.path());
+        let l = langkah_container("app-a");
+        assert!(!l.berhasil, "Docker mati tidak boleh dianggap bersih");
+    }
+
+    /// Minor 1: trio nama job dipanggil; 404 dianggap berhasil.
+    #[test]
+    fn langkah_job_memanggil_trio_nama_dan_404_berhasil() {
+        let dipanggil = std::cell::RefCell::new(Vec::new());
+        let l = langkah_job_dengan("app-a", |job| {
+            dipanggil.borrow_mut().push(job.to_string());
+            Ok(false) // 404: job memang tidak ada
+        });
+        assert_eq!(
+            dipanggil.into_inner(),
+            vec!["app-a", "app-a-rollback", "app-a-promote"]
+        );
+        assert!(l.berhasil);
+        assert!(l.pesan.contains("tidak ada"), "pesan: {}", l.pesan);
+    }
+
+    /// Minor 1: Err diagregasi jadi GAGAL, job lain tetap dicoba.
+    #[test]
+    fn langkah_job_mengagregasi_error_dan_tetap_mencoba_sisanya() {
+        let dipanggil = std::cell::RefCell::new(Vec::new());
+        let l = langkah_job_dengan("app-a", |job| {
+            dipanggil.borrow_mut().push(job.to_string());
+            if job.ends_with("-rollback") {
+                Err("HTTP 500".to_string())
+            } else {
+                Ok(true)
+            }
+        });
+        assert_eq!(dipanggil.into_inner().len(), 3, "job lain tetap dicoba");
+        assert!(!l.berhasil);
+        assert!(l.pesan.contains("HTTP 500"), "pesan: {}", l.pesan);
+        assert!(l.pesan.contains("app-a-rollback"), "pesan: {}", l.pesan);
+    }
+
+    /// Important 3: baris legacy dua kolom tetap bisa dihapus.
+    #[cfg(unix)]
+    #[test]
+    fn app_berbaris_legacy_dua_kolom_bisa_dihapus() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let _docker = DockerPalsu::pasang(ws);
+        let reg = ws.join("registry.tsv");
+        std::fs::write(&reg, "legacy\t8000\napp-b\t8000\t8093\n").unwrap();
+        std::fs::create_dir_all(ws.join("legacy")).unwrap();
+        let (kode, langkah) = jalankan_dengan("legacy", "legacy", ws, None);
+        assert_eq!(kode, 1); // hanya job Jenkins (cfg None)
+        assert!(
+            !langkah.iter().any(|l| l.nama == "periksa"),
+            "app legacy tidak boleh ditolak periksa"
+        );
+        assert!(langkah
+            .iter()
+            .all(|l| l.berhasil || l.nama == "job Jenkins"));
+        assert_eq!(
+            std::fs::read_to_string(&reg).unwrap(),
+            "app-b\t8000\t8093\n"
+        );
+        assert!(!ws.join("legacy").exists());
+    }
+
+    /// Minor 3: dua penghapusan dalam detik yang sama tidak menimpa salinan.
+    #[cfg(unix)]
+    #[test]
+    fn dua_penghapusan_beruntun_tidak_menimpa_backup() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let _docker = DockerPalsu::pasang(ws);
+        std::fs::write(
+            ws.join("registry.tsv"),
+            "app-a\t8000\t8083\napp-b\t8000\t8093\n",
+        )
+        .unwrap();
+        jalankan_dengan("app-a", "app-a", ws, None);
+        jalankan_dengan("app-b", "app-b", ws, None);
+        let mut salinan: Vec<String> = std::fs::read_dir(ws)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with("registry.tsv.bak-"))
+            .collect();
+        salinan.sort();
+        assert_eq!(
+            salinan.len(),
+            2,
+            "dua penghapusan = dua salinan: {salinan:?}"
+        );
+        assert!(
+            std::fs::read_to_string(ws.join(&salinan[0]))
+                .unwrap()
+                .contains("app-a"),
+            "salinan pertama harus pra-mutasi"
+        );
+    }
+
+    // --- Helper stub docker (dipakai tes di atas) ---
     /// Docker palsu di PATH depan: tes orkestrasi tidak boleh menyentuh daemon
     /// Docker nyata. PATH lama dipulihkan saat guard jatuh (Drop).
     #[cfg(unix)]
@@ -439,10 +656,25 @@ mod tests {
 
     #[cfg(unix)]
     impl DockerPalsu {
+        /// Docker tersedia; semua perintah sukses (container ada).
         fn pasang(tmp: &Path) -> Self {
-            let kunci = workspace::KUNCI_ENV_WS
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            Self::dengan_skrip(tmp, "exit 0\n")
+        }
+
+        /// Docker tersedia tetapi container tidak ada: `ps` jalan, `inspect`
+        /// dan `rm` gagal — seperti daemon nyata untuk container asing.
+        fn container_hilang(tmp: &Path) -> Self {
+            Self::dengan_skrip(tmp, "case \"$1\" in ps) exit 0 ;; esac\nexit 1\n")
+        }
+
+        /// Docker tidak terpasang: PATH hanya berisi folder kosong.
+        fn tanpa_docker(tmp: &Path) -> Self {
+            let bin = tmp.join("bin-kosong");
+            std::fs::create_dir_all(&bin).unwrap();
+            Self::pasang_path(&bin, tmp.join("docker.log"), false)
+        }
+
+        fn dengan_skrip(tmp: &Path, akhir: &str) -> Self {
             let bin = tmp.join("bin-palsu");
             std::fs::create_dir_all(&bin).unwrap();
             let log = tmp.join("docker.log");
@@ -450,15 +682,28 @@ mod tests {
             std::fs::write(
                 &stub,
                 format!(
-                    "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nexit 0\n",
-                    log.display()
+                    "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n{}",
+                    log.display(),
+                    akhir
                 ),
             )
             .unwrap();
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+            Self::pasang_path(&bin, log, true)
+        }
+
+        /// `sisip=false` mengganti PATH seluruhnya (docker hilang), bukan menyisipkan.
+        fn pasang_path(bin: &Path, log: std::path::PathBuf, sisip: bool) -> Self {
+            let kunci = workspace::KUNCI_ENV_WS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let path_lama = std::env::var_os("PATH").unwrap_or_default();
-            let path_baru = format!("{}:{}", bin.display(), path_lama.to_string_lossy());
+            let path_baru = if sisip {
+                format!("{}:{}", bin.display(), path_lama.to_string_lossy())
+            } else {
+                bin.display().to_string()
+            };
             std::env::set_var("PATH", path_baru);
             Self {
                 _kunci: kunci,
@@ -502,9 +747,10 @@ mod tests {
             .file_name()
             .to_string_lossy()
             .starts_with("registry.tsv.bak-")));
-        // Container dipanggil lewat argv, bukan shell, dan namanya tepat.
+        // Container dipanggil lewat argv, bukan shell, dan namanya tepat:
+        // inspect dulu (memastikan ada), baru rm -f.
         let log = std::fs::read_to_string(&_docker.log).unwrap();
-        assert_eq!(log, "rm\n-f\napp-a\n");
+        assert_eq!(log, "container\ninspect\napp-a\nrm\n-f\napp-a\n");
         assert!(langkah.iter().any(|l| l.nama == "container" && l.berhasil));
     }
 

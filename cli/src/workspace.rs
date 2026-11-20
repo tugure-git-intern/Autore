@@ -64,6 +64,21 @@ pub(crate) fn hapus_container(nama: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Apakah container `nama` ada, termasuk yang berhenti? `docker container
+/// inspect` (argv, keluaran tertangkap); nama tidak sah ditolak tanpa memanggil
+/// docker. `false` juga berarti docker tidak bisa dijalankan — pemanggil
+/// membedakannya lewat `container_jalan()` supaya app yatim tidak dianggap gagal.
+pub(crate) fn container_ada(nama: &str) -> bool {
+    if !crate::connect::nama_sah(nama) {
+        return false;
+    }
+    Command::new("docker")
+        .args(["container", "inspect", nama])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 /// Rentang port deploy di host: kebiasaan lama kelipatan 10 dari 8003, lalu celah lain.
 const PORT_AWAL: u16 = 8003;
 const PORT_TENGAH: u16 = 8200;
@@ -158,7 +173,6 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
 /// gagal tulis (lihat WARNING stderr) — caller wajib verifikasi ulang lewat
 /// `entri_registry` sebelum mengklaim sukses. Berkas ditulis ulang hanya
 /// kalau ada baris yang dibuang.
-// Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
 pub(crate) fn hapus_port(workspace: &Path, nama: &str) -> bool {
     let reg = workspace.join("registry.tsv");
     let isi = match std::fs::read_to_string(&reg) {
@@ -504,6 +518,14 @@ mod tests {
             std::fs::metadata(&reg).unwrap().modified().unwrap(),
             sebelum
         );
+    }
+
+    #[test]
+    fn container_ada_menolak_nama_tidak_sah() {
+        assert!(!container_ada("../lain"));
+        assert!(!container_ada("a b"));
+        assert!(!container_ada(""));
+        assert!(!container_ada(".."));
     }
 
     #[test]

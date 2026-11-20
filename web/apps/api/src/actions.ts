@@ -25,6 +25,13 @@ export type SpawnAction = (file: string, args: string[], options: SpawnOptions) 
 
 export type ActionKind = "deploy" | "scan" | "quick-start" | "connect" | "remove";
 
+/**
+ * Jenis aksi yang dijalankan lewat `run` (tanpa lock khusus quick-start/connect).
+ * Tipe sempit + tabel dispatch: tanpa itu jenis asing (mis. "remove") lolos ke
+ * `else` dan diam-diam menjalankan scan.
+ */
+export type KindJalankan = "deploy" | "scan";
+
 export type ActionResult =
   | {
       ok: true;
@@ -153,6 +160,13 @@ export function argvDeploy(dir: string, author?: Identitas): string[] {
   return args;
 }
 
+type PerakitArgv = (dir: string, author?: Identitas) => string[];
+
+const ARGV_JALANKAN: Record<KindJalankan, PerakitArgv> = {
+  deploy: (dir, author) => argvDeploy(dir, author),
+  scan: (dir) => ["scan", "--no-docker", "--path", dir],
+};
+
 export function hatchActions(deps: {
   workspace: string;
   run: RunAutore;
@@ -244,12 +258,19 @@ export function hatchActions(deps: {
   }
 
   async function run(
-    kind: ActionKind,
+    kind: KindJalankan,
     appId?: string,
     author?: Identitas,
   ): Promise<ActionResult> {
     if (!workspace) {
       return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
+    }
+
+    // Tipe sempit tidak menahan teks asing saat runtime (rute bisa mengirim apa
+    // saja): jenis di luar tabel ditolak sebelum kunci diambil atau CLI dijalankan.
+    const rakitan = (ARGV_JALANKAN as Record<string, PerakitArgv>)[kind];
+    if (!rakitan) {
+      return failed(400, `jenis aksi "${kind}" tidak dikenal`);
     }
 
     // Target selalu dari permintaan: tidak ada aplikasi yang ditentukan server, karena
@@ -282,10 +303,7 @@ export function hatchActions(deps: {
       const target = await resolveTarget(id);
       if (!target.ok) return failed(target.status, target.error);
 
-      const args =
-        kind === "deploy"
-          ? argvDeploy(target.dir, author)
-          : ["scan", "--no-docker", "--path", target.dir];
+      const args = rakitan(target.dir, author);
 
       let res: SpawnResult;
       try {

@@ -158,6 +158,19 @@ describe("hatchActions", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  it("menolak jenis aksi di luar deploy/scan tanpa menjalankan apa pun", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    // Panggilan runtime di luar tipe: dulu jenis apa pun selain deploy diam-diam jadi scan.
+    const paksa = actions.run as unknown as (kind: string, id: string) => Promise<ActionResult>;
+    const out = await paksa("remove", "tes-web");
+
+    expect(out).toMatchObject({ ok: false, status: 400 });
+    expect(out.ok === false ? out.error : "").toContain("remove");
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
   it.each(["../../etc", "tes-web/../../etc", "a b", "tes-web;rm -rf /", "", "a".repeat(65)])(
     "menolak id berbahaya %j dengan 400",
     async (id) => {

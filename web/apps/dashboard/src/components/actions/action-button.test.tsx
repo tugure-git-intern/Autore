@@ -247,6 +247,98 @@ test("requireTypedName: menekan konfirmasi mengirim konfirmasi ke server", async
   expect(JSON.parse(String(init.body))).toEqual({ app: "app-a", konfirmasi: "app-a" });
 });
 
+test("requireTypedName: huruf besar berbeda tetap terkunci", () => {
+  mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{ title: "Hapus?", confirmLabel: "Hapus permanen", requireTypedName: "app-a" }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "APP-A" },
+  });
+
+  expect(screen.getByRole("button", { name: "Hapus permanen" })).toBeDisabled();
+});
+
+test("requireTypedName: Batal lalu buka lagi mengosongkan input & mengunci tombol", () => {
+  mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{ title: "Hapus?", confirmLabel: "Hapus permanen", requireTypedName: "app-a" }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "app-a" },
+  });
+  expect(screen.getByRole("button", { name: "Hapus permanen" })).toBeEnabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  expect(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Hapus permanen" })).toBeDisabled();
+});
+
+test("dialog ditutup lewat Escape menyinkronkan state dan bisa dibuka lagi", () => {
+  mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  const { container } = render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{ title: "Hapus?", confirmLabel: "Hapus permanen", requireTypedName: "app-a" }}
+    />,
+  );
+  const dialog = container.querySelector("dialog");
+  expect(dialog).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  expect(dialog).toHaveAttribute("open");
+
+  // Escape menutup dialog native -> event `close` -> state `open` ikut turun.
+  fireEvent(dialog as Element, new Event("close"));
+  expect(dialog).not.toHaveAttribute("open");
+
+  // Tanpa sinkronisasi, klik Hapus berikutnya tidak membuka apa pun.
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  expect(dialog).toHaveAttribute("open");
+});
+
+test("klik ganda tombol konfirmasi tidak mengirim aksi permanen dua kali", async () => {
+  const fetchMock = mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{ title: "Hapus?", confirmLabel: "Hapus permanen", requireTypedName: "app-a" }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "app-a" },
+  });
+  const konfirmasi = screen.getByRole("button", { name: "Hapus permanen" });
+  fireEvent.click(konfirmasi);
+  fireEvent.click(konfirmasi);
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test("kegagalan jaringan tetap dilaporkan, bukan diam", async () => {
   vi.stubGlobal(
     "fetch",

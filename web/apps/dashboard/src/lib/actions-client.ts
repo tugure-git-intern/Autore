@@ -23,6 +23,12 @@ export function firstLine(text: string): string {
   return text.split("\n").find((line) => line.trim())?.trim() ?? "";
 }
 
+/** Baris tidak-kosong terakhir: ringkasan langkah gagal CLI ada di paling akhir. */
+function lastLine(text: string): string {
+  const lines = text.split("\n").filter((line) => line.trim());
+  return lines[lines.length - 1]?.trim() ?? "";
+}
+
 /**
  * Memanggil endpoint aksi dan menerjemahkan jawabannya jadi satu pesan siap
  * tampil. Nama aksi dan id aplikasi tetap di sini — frontend tidak pernah
@@ -51,9 +57,11 @@ export async function runAction(
 
   if (response.ok) return { ok: true, message: SUCCESS[action] };
 
-  // 401/403 = identitas yang bermasalah, bukan aksi yang gagal: menampilkan
-  // pesan saja akan menyisakan UI yang terus gagal sampai halaman dimuat ulang.
-  if (response.status === 401 || response.status === 403) {
+  // 401 = sesi yang bermasalah, bukan aksi yang gagal: menampilkan pesan saja
+  // akan menyisakan UI yang terus gagal sampai halaman dimuat ulang. 403 beda:
+  // itu penolakan izin dengan pesan jelas dari server (mis. butuh role admin),
+  // jadi jatuh ke jalur payload di bawah supaya pesannya tampil tanpa redirect.
+  if (response.status === 401) {
     return {
       ok: false,
       message: "Sesi Anda sudah berakhir. Silakan login ulang.",
@@ -65,6 +73,13 @@ export async function runAction(
     | { error?: string; output?: string }
     | null;
   const error = payload?.error ?? `Server menolak aksi (HTTP ${response.status}).`;
-  const detail = payload?.output ? firstLine(payload.output) : "";
+  // Remove mencetak judul dulu lalu ringkasan langkah gagal di akhir: ambil
+  // baris terakhir supaya user tahu apa yang belum dibuang. Aksi lain (scan,
+  // deploy) tetap pakai baris pertama.
+  const detail = payload?.output
+    ? action === "remove"
+      ? lastLine(payload.output)
+      : firstLine(payload.output)
+    : "";
   return { ok: false, message: detail ? `${error} — ${detail}` : error };
 }

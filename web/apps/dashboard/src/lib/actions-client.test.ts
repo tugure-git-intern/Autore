@@ -54,10 +54,17 @@ describe("runAction", () => {
     expect(hasil.message).toMatch(/sesi .*berakhir|login ulang/i);
   });
 
-  it("memperlakukan 403 sama seperti 401: kembali ke login", async () => {
-    mockFetch(() => ({ status: 403, body: { ok: false, status: 403, error: "Tidak ada di whitelist." } }));
+  it("403 memakai pesan izin server, tanpa melempar ke login", async () => {
+    mockFetch(() => ({
+      status: 403,
+      body: { ok: false, status: 403, error: "Aksi ini butuh role admin; role Anda dev." },
+    }));
 
-    expect(await runAction("scan", "tes-web")).toMatchObject({ ok: false, redirectTo: "/login" });
+    const hasil = await runAction("remove", "app-a", "app-a");
+
+    expect(hasil.ok).toBe(false);
+    expect(hasil.redirectTo).toBeUndefined();
+    expect(hasil.message).toBe("Aksi ini butuh role admin; role Anda dev.");
   });
 
   it("membawa pesan server saat aksinya gagal tanpa menandai redirect", async () => {
@@ -118,21 +125,32 @@ describe("runAction", () => {
     });
   });
 
-  it("menampilkan output 422 apa adanya, tidak menimpanya dengan pesan generik", async () => {
+  it("remove: pakai ringkasan langkah gagal di baris TERAKHIR, bukan judul CLI", async () => {
     mockFetch(() => ({
       status: 422,
       body: {
         ok: false,
         status: 422,
         error: "aksi remove keluar dengan kode 1",
-        output: "dilewati: backup gagal\nlangkah lain",
+        // Bentuk realistis: judul dulu, daftar langkah, ringkasan ERROR paling akhir.
+        output: [
+          "● Hapus app app-a",
+          "✔ container dihentikan",
+          "✖ registry dilewati",
+          "ERROR: dilewati: backup gagal — registry, environments, folder belum dibuang",
+        ].join("\n"),
       },
     }));
 
     const hasil = await runAction("remove", "app-a", "app-a");
 
     expect(hasil.ok).toBe(false);
-    expect(hasil.message).toBe("aksi remove keluar dengan kode 1 — dilewati: backup gagal");
+    expect(hasil.message).toContain("dilewati: backup gagal");
+    // Bukan judul CLI di baris pertama.
+    expect(hasil.message).not.toContain("● Hapus app");
+    expect(hasil.message).toBe(
+      "aksi remove keluar dengan kode 1 — ERROR: dilewati: backup gagal — registry, environments, folder belum dibuang",
+    );
   });
 
   it("melaporkan kegagalan jaringan tanpa redirect", async () => {

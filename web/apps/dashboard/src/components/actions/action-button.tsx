@@ -38,13 +38,16 @@ export function ActionButton({
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  // Penjaga sinkron: state `pending` belum tentu sudah ter-commit saat Enter
+  // ditekan berulang, sedangkan ref langsung. Mencegah aksi permanen terkirim dua kali.
+  const mengirim = useRef(false);
   const titleId = useId();
   const inputId = useId();
   const kirimToast = useKirimToast();
 
   // Konfirmasi hanya aktif kalau nama diketik persis (tanpa trim): spasi di
   // ujung tetap dianggap belum cocok, sama seperti pengecekan server.
-  const namaCocok = !confirm?.requireTypedName || typed === confirm.requireTypedName;
+  const namaCocok = confirm?.requireTypedName === undefined || typed === confirm.requireTypedName;
 
   // showModal memberi jebakan fokus + Escape; jsdom belum punya, jadi atribut
   // `open` jadi jalur cadangannya (dan itu yang diuji).
@@ -66,9 +69,16 @@ export function ActionButton({
    * Kemajuan sudah diucapkan `aria-busy` + label tombol, jadi tidak perlu toast.
    */
   async function dispatch() {
+    if (mengirim.current) return;
+    mengirim.current = true;
     setPending(true);
-    const outcome = await runAction(action, app, confirm?.requireTypedName ? typed : undefined);
+    const outcome = await runAction(
+      action,
+      app,
+      confirm?.requireTypedName !== undefined ? typed : undefined,
+    );
     setPending(false);
+    mengirim.current = false;
     kirimToast(outcome.message, outcome.ok ? "sukses" : "gagal");
     onDone?.();
     // Pindah halaman setelah pesan terkirim: user sempat membaca alasannya.
@@ -102,6 +112,9 @@ export function ActionButton({
         <dialog
           ref={dialog}
           aria-labelledby={titleId}
+          // Escape menutup dialog native tanpa lewat React: sinkronkan state
+          // supaya klik Hapus berikutnya masih bisa membukanya.
+          onClose={() => setOpen(false)}
           className="m-auto rounded-lg border border-gray-200 bg-white p-4 text-left backdrop:bg-black/30 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]"
         >
           <h2 id={titleId} className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
@@ -110,7 +123,7 @@ export function ActionButton({
           {confirm.warning ? (
             <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-300">{confirm.warning}</p>
           ) : null}
-          {confirm.requireTypedName ? (
+          {confirm.requireTypedName !== undefined ? (
             <div className="mt-3">
               <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
                 Ketik nama aplikasi untuk konfirmasi

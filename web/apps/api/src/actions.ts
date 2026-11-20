@@ -41,6 +41,21 @@ export type ActionResult =
 
 /** Id aplikasi dari registry: cukup ketat untuk menolak "/", "..", spasi, dan NUL. */
 const APP_ID = /^[A-Za-z0-9._-]{1,64}$/;
+
+/**
+ * Nama app dari `registry.tsv` mentah: kolom pertama tiap baris, tanpa syarat
+ * kolom lain ada atau portnya angka. `bacaRegistry` membuang baris legacy dan
+ * baris ber-port rusak, sedangkan CLI `hapus-app` justru menghapus baris seperti
+ * itu — daftar ini yang dipakai gerbang hapus supaya API tidak lebih ketat
+ * daripada CLI, dan app paling perlu dibersihkan tidak malah ditolak.
+ */
+function namaDiRegistry(isi: string): string[] {
+  return isi
+    .split("\n")
+    .map((baris) => baris.split("\t")[0].trim())
+    .filter((nama) => nama !== "");
+}
+
 const MAX_OUTPUT = 4_000;
 const MAX_BUFFER = 1024 * 1024;
 const TIMEOUT: Record<ActionKind, number> = {
@@ -206,7 +221,7 @@ export function hatchActions(deps: {
    */
   async function appTerdaftar(id: string): Promise<boolean> {
     const isiRegistry = await readFile(join(workspace, "registry.tsv"), "utf8").catch(() => "");
-    if (bacaRegistry(isiRegistry).some((item) => item.nama === id)) return true;
+    if (namaDiRegistry(isiRegistry).includes(id)) return true;
     try {
       const status = await loadDashboardStatus(deps.run);
       return status.data.applications.some((app) => app.id === id);

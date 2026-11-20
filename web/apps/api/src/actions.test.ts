@@ -881,4 +881,25 @@ describe("remove", () => {
       exit: -1,
     });
   });
+
+  it("menghapus app berbaris registry legacy dua kolom", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "app-a\t8000\t8093\nlegacy\t8000\n");
+    const { actions, spawn } = make(dir, { listed: [] });
+
+    const out = await actions.remove("legacy", "legacy");
+
+    expect(out).toMatchObject({ ok: true, status: 200, action: "remove", target: "legacy" });
+    const [file, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(file).toBe(process.env.AUTORE_BIN || "autore");
+    expect(args).toEqual(["hapus-app", "legacy", "--konfirmasi", "legacy"]);
+  });
+
+  it("menghapus app yang portnya bukan angka", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "busuk\tbukan-angka\n");
+    const { actions } = make(dir, { listed: [] });
+
+    expect(await actions.remove("busuk", "busuk")).toMatchObject({ ok: true, status: 200 });
+  });
 });

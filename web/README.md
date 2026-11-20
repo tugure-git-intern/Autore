@@ -259,6 +259,11 @@ UI menampilkan "Sesi Anda sudah berakhir. Silakan login ulang." lalu berpindah k
 `/login` begitu API menjawab 401. Jawaban 403 (mis. aksi yang butuh role admin)
 tampil sebagai toast gagal berisi pesan server, tanpa redirect.
 
+Catatan: itu berlaku untuk jalur aksi umum (`actions-client.ts`: deploy, scan,
+remove). Jalur quick-start dan connect (`quick-start-client.ts`,
+`connect-client.ts`) masih memperlakukan 403 seperti 401 dan berpindah ke
+`/login`.
+
 ### Batas jujur
 
 - Kalau `AUTORE_ALLOWED_USERS` kosong, API hanya memverifikasi tanda tangan

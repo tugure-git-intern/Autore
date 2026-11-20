@@ -337,27 +337,27 @@ Tombol di `applications/page.tsx`: label `"Hapus"`, `action="remove"`, `confirm=
 
 Peran tidak dibaca di klien: tombol terlihat untuk semua, server menolak 403 dan pesan itu tampil lewat jalur toast yang sudah ada.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 `actions-client.test.ts`: `runAction("remove", "app-a", "app-a")` mengirim body `{ app: "app-a", konfirmasi: "app-a" }`; `runAction("scan", "app-a")` tetap mengirim `{ app: "app-a" }` saja.
 
 `action-button.test.tsx`: dengan `requireTypedName: "app-a"`, tombol konfirmasi disabled saat input kosong dan saat berisi `"app-b"`, aktif setelah `"app-a"`; menekan tombol itu memanggil `runAction` dengan konfirmasi `"app-a"`.
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/dashboard/src/lib/actions-client.test.ts apps/dashboard/src/components/actions/action-button.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement perubahan klien**
+- [x] **Step 3: Implement perubahan klien**
 
 Input memakai `useId` dan `aria-label` seperti input di `connect-dialog.tsx`; dialog tetap memakai `showModal` dengan jalur cadang atribut `open` yang sudah ada.
 
-- [ ] **Step 4: Jalankan gerbang web**
+- [x] **Step 4: Jalankan gerbang web**
 
 Run: `cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: semua lulus.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/dashboard/src/lib/actions-client.ts web/apps/dashboard/src/lib/actions-client.test.ts web/apps/dashboard/src/components/actions/action-button.tsx web/apps/dashboard/src/components/actions/action-button.test.tsx web/apps/dashboard/src/app/applications/page.tsx
@@ -376,11 +376,11 @@ git commit -m "feat(dashboard): tombol Hapus dengan konfirmasi ketik nama"
 **Interfaces:**
 - Consumes: semua task sebelumnya; biner terpasang di VPS; skrip `scripts/mint-session-cookie.mts` untuk sesi Playwright.
 
-- [ ] **Step 1: Tulis docs**
+- [x] **Step 1: Tulis docs**
 
 README: satu baris tabel untuk `autore hapus-app <nama> --konfirmasi <nama>` plus kalimat bahwa repo GitHub tidak disentuh dan riwayat build ikut hilang. `web/README.md`: satu paragraf bahwa aksi remove butuh peran admin dan konfirmasi nama.
 
-- [ ] **Step 2: Tulis e2e**
+- [x] **Step 2: Tulis e2e**
 
 `hapus-app.spec.ts`: buat app uji lewat CLI (`connect` pada repo uji tanpa `/health`), buka `/applications` dengan cookie sesi admin, klik Hapus, ketik nama, konfirmasi, harapkan toast sukses dan app hilang dari daftar. Sesi qa/dev diuji menolak: tombol tetap ada, jawaban 403, app masih ada.
 

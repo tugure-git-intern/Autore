@@ -39,7 +39,7 @@
 - Consumes: `audit` yang sudah ada — `audit({ login, email, action, target, exit })`, `exit: number`.
 - Produces: tidak ada tanda tangan baru. Baris audit memakai `exit: -1` untuk kegagalan spawn/timeout.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 Tambahkan di `actions.test.ts`, mengikuti pola tes `remove` yang ada (spawn disuntik, audit dipalsukan):
 
@@ -63,12 +63,12 @@ it("deploy mencatat audit walau spawn gagal dijalankan", async () => {
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: FAIL — `deps.audit` tidak terpanggil pada kedua kasus.
 
-- [ ] **Step 3: Implement audit sebelum `return` gagal**
+- [x] **Step 3: Implement audit sebelum `return` gagal**
 
 Di kedua blok `catch (error)`, hitung pesan seperti sekarang, catat audit dulu, baru kembalikan hasil — pola sama dengan audit 422 yang sudah ada:
 
@@ -86,12 +86,12 @@ Di kedua blok `catch (error)`, hitung pesan seperti sekarang, catat audit dulu, 
 }
 ```
 
-- [ ] **Step 4: Jalankan tes, pastikan lulus**
+- [x] **Step 4: Jalankan tes, pastikan lulus**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: PASS, tes 422 yang lama tetap lulus.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts
@@ -110,7 +110,7 @@ git commit -m "fix(api): catat audit walau spawn gagal atau kehabisan waktu"
 - Consumes: `workspace` (string), `loadDashboardStatus(deps.run)` yang sudah ada.
 - Produces: `appTerdaftar(id: string)` tidak lagi memakai `bacaRegistry`; keanggotaan registry dinilai dari `split("\t")[0].trim()` per baris.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```ts
 it("remove menerima app berbaris registry legacy dua kolom", async () => {
@@ -127,12 +127,12 @@ it("remove menerima app yang portnya bukan angka", async () => {
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: FAIL — 404 `tidak terdaftar` (baris legacy dibuang `bacaRegistry`).
 
-- [ ] **Step 3: Implement pembacaan kolom pertama**
+- [x] **Step 3: Implement pembacaan kolom pertama**
 
 ```ts
 const namaDiRegistry = (isi: string): string[] =>
@@ -147,12 +147,12 @@ async function appTerdaftar(id: string): Promise<boolean> {
 
 Komentar WHY: CLI menghapus baris legacy dan baris berport rusak, jadi API tidak boleh lebih ketat daripada CLI.
 
-- [ ] **Step 4: Jalankan tes, pastikan lulus**
+- [x] **Step 4: Jalankan tes, pastikan lulus**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts
@@ -170,7 +170,7 @@ git commit -m "fix(api): keanggotaan app dari kolom pertama registry mentah"
 **Interfaces:**
 - Produces: `type KeberadaanApp = "ada" | "tidak-ada" | "tidak-bisa-dipastikan"` dan `async function keberadaanApp(id: string): Promise<KeberadaanApp>`. Registry yang tidak bisa dibaca (`readFile` gagal selain ENOENT) → `"tidak-bisa-dipastikan"`; `loadDashboardStatus` melempar → `"tidak-bisa-dipastikan"`.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```ts
 it("remove menjawab 503 bila registry dan status tidak bisa diperiksa", async () => {
@@ -186,12 +186,12 @@ it("remove tetap 404 bila registry terbaca dan app memang tidak ada", async () =
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: FAIL — kasus pertama masih 404.
 
-- [ ] **Step 3: Implement tri-state dan pesannya**
+- [x] **Step 3: Implement tri-state dan pesannya**
 
 Kembalikan `"ada"` bila nama ada di registry mentah atau di `status.data.applications`; `"tidak-ada"` bila registry terbaca DAN status berhasil DAN nama tidak ada di keduanya; sisanya `"tidak-bisa-dipastikan"`. Di `remove`:
 
@@ -203,12 +203,12 @@ if (ada === "tidak-bisa-dipastikan") {
 if (ada === "tidak-ada") return failed(404, `aplikasi "${id}" tidak terdaftar`);
 ```
 
-- [ ] **Step 4: Jalankan tes, pastikan lulus**
+- [x] **Step 4: Jalankan tes, pastikan lulus**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: PASS (termasuk tes yatim dan tes 404 dari Task 4 fitur).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts
@@ -227,7 +227,7 @@ git commit -m "fix(api): pisahkan 503 tidak bisa dipastikan dari 404 tidak terda
 - Consumes: `normalizeLogin`, `parseRole` (sudah ada di berkas sama).
 - Produces: `parseAllowlist(raw: unknown): Map<string, Role>` menerima `Map<string, Role>` dan `Map<string, unknown>` (nilai lewat `parseRole` seperti cabang objek).
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```ts
 it("membaca peta role berbentuk Map", () => {
@@ -242,21 +242,21 @@ it("Map dengan role tidak sah dibuang, bukan diberi default", () => {
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run packages/contracts/src/roles.test.ts`
 Expected: FAIL — peta kosong (Map masuk cabang objek, `Object.entries` kosong).
 
-- [ ] **Step 3: Implement cabang Map**
+- [x] **Step 3: Implement cabang Map**
 
 Sebelum cabang objek, tambahkan `if (raw instanceof Map)` yang mengiterasi `raw.entries()` dengan aturan sama: login dinormalkan, role lewat `parseRole`, entri tidak sah dibuang, tetap fail closed.
 
-- [ ] **Step 4: Jalankan seluruh gerbang web**
+- [x] **Step 4: Jalankan seluruh gerbang web**
 
 Run: `cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: semua lulus kecuali `middleware.test.ts` pra-ada; typecheck bersih (tipe `ReadonlyMap` di `session.ts:123` kini benar-benar didukung).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/packages/contracts/src/roles.ts web/packages/contracts/src/roles.test.ts
@@ -274,7 +274,7 @@ git commit -m "fix(contracts): parseAllowlist mendukung peta role berbentuk Map"
 **Interfaces:**
 - Produces: `type KindJalankan = "deploy" | "scan"`; `run(kind: KindJalankan, appId?: string, author?: Identitas)`. Argumen perintah dari tabel: `{ deploy: (dir, author) => argvDeploy(dir, author), scan: (dir) => ["scan", "--no-docker", "--path", dir] }`.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```ts
 it("run menolak jenis aksi yang tidak dikenal tanpa spawn", async () => {
@@ -285,21 +285,21 @@ it("run menolak jenis aksi yang tidak dikenal tanpa spawn", async () => {
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/actions.test.ts`
 Expected: FAIL — sekarang "remove" menjalankan scan.
 
-- [ ] **Step 3: Implement tipe sempit + tabel dispatch**
+- [x] **Step 3: Implement tipe sempit + tabel dispatch**
 
 Persempit parameter ke `KindJalankan`, ambil argv dari tabel, dan tambahkan cabang `else return failed(400, \`jenis aksi "${kind}" tidak dikenal\`)` untuk panggilan runtime di luar tipe. Sesuaikan pemanggil di `index.ts` bila typecheck menuntut (keduanya memakai literal `deploy`/`scan`, jadi tidak seharusnya berubah).
 
-- [ ] **Step 4: Jalankan seluruh gerbang web**
+- [x] **Step 4: Jalankan seluruh gerbang web**
 
 Run: `cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: lulus, kecuali suite pra-ada.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts
@@ -318,7 +318,7 @@ git commit -m "fix(api): run() menolak jenis aksi di luar deploy dan scan"
 **Interfaces:**
 - Produces: urutan middleware `/api/actions/remove` = sesi `dev` → peran `admin` → rate limiter; sesi berperan rendah ditolak 403 tanpa membakar kuota rate limiter.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```ts
 it("dev yang menembak remove tidak membakar kuota rate limiter", async () => {
@@ -327,12 +327,12 @@ it("dev yang menembak remove tidak membakar kuota rate limiter", async () => {
 });
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/index.test.ts`
 Expected: FAIL bila kuota limiter per-login habis lebih dulu (429 muncul).
 
-- [ ] **Step 3: Pindahkan gerbang admin di atas rate limiter**
+- [x] **Step 3: Pindahkan gerbang admin di atas rate limiter**
 
 ```ts
 app.use("/api/actions/remove", requireSession(auth, "admin"));
@@ -341,11 +341,11 @@ app.use("/api/actions/*", rateLimiter);
 
 Tambahkan komentar WHY: gerbang paling ketat lebih dulu supaya penolakan izin tidak memakan kuota. Tes 403/200 lama harus tetap lulus.
 
-- [ ] **Step 4: Catat batas yang diketahui di plan fitur**
+- [x] **Step 4: Catat batas yang diketahui di plan fitur**
 
 Tambahkan di `docs/superpowers/plans/2026-11-20-hapus-app-dashboard.md` bagian "Batas yang diketahui": app berbaris registry legacy bisa dihapus lewat CLI dan API, tetapi tidak muncul di daftar dashboard (sumber daftar `autore status` melewati baris itu), sehingga tombol Hapus belum menawarkannya.
 
-- [ ] **Step 5: Jalankan seluruh gerbang web, lalu commit**
+- [x] **Step 5: Jalankan seluruh gerbang web, lalu commit**
 
 Run: `cd web && npx vitest run && npm run lint && npm run typecheck`
 

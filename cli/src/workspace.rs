@@ -121,6 +121,12 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
         .map(|(n, a, d)| format!("{n}\t{a}\t{d}\n"))
         .collect();
     let reg = workspace.join("registry.tsv");
+    // Folder workspace bisa belum ada (install baru, atau AUTORE_WORKSPACE menunjuk
+    // path baru). Tanpa ini registry hilang diam-diam dan port bentrok.
+    if let Err(e) = std::fs::create_dir_all(workspace) {
+        eprintln!("WARNING: gagal menyiapkan {}: {e}", workspace.display());
+        return;
+    }
     if let Err(e) = std::fs::write(&reg, isi) {
         eprintln!("WARNING: gagal menulis {}: {e}", reg.display());
         return;
@@ -132,6 +138,11 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
         eprintln!("WARNING: environments.json belum terisi: {e}");
     }
 }
+
+/// Tes yang mengubah `AUTORE_WORKSPACE` wajib berurutan: env proses dibagi semua
+/// thread tes, dan saling hapus membuat registry tertulis ke folder lain.
+#[cfg(test)]
+pub(crate) static KUNCI_ENV_WS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 fn alokasi_port(workspace: &Path, nama: &str, pilihan: Option<u16>) -> Result<(u16, u16), String> {
@@ -284,6 +295,18 @@ mod tests {
     }
 
     #[test]
+    fn catat_port_membuat_folder_workspace_yang_belum_ada() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ws = tmp.path().join("belum-ada");
+        catat_port(&ws, "app-baru", 8000, 8083);
+        assert!(
+            ws.join("registry.tsv").exists(),
+            "registry harus tetap tertulis"
+        );
+        assert_eq!(baca_registry(&ws).len(), 1);
+    }
+
+    #[test]
     fn catat_port_menambah_dan_menyegarkan_tanpa_menggusur_lain() {
         let tmp = TempDir::new().unwrap();
         catat_port(tmp.path(), "satu", 8000, 8003);
@@ -384,6 +407,7 @@ mod tests {
 
     #[test]
     fn workspace_dir_menghasilkan_path() {
+        let _kunci = KUNCI_ENV_WS.lock().unwrap_or_else(|e| e.into_inner());
         let w = workspace_dir();
         assert!(!w.as_os_str().is_empty());
 

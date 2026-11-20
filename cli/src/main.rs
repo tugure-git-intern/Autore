@@ -2258,11 +2258,14 @@ mod tests {
     }
 
     /// Workspace sementara untuk tes init: registry kosong/terisi + AUTORE_WORKSPACE.
-    fn ws_sementara(isi_registry: &str) -> TempDir {
+    fn ws_sementara(isi_registry: &str) -> (TempDir, std::sync::MutexGuard<'static, ()>) {
+        let kunci = workspace::KUNCI_ENV_WS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("registry.tsv"), isi_registry).unwrap();
         std::env::set_var("AUTORE_WORKSPACE", tmp.path());
-        tmp
+        (tmp, kunci)
     }
 
     fn init_ke(dir: &std::path::Path, nama: &str, deploy: Option<u16>) -> Commands {
@@ -2278,7 +2281,7 @@ mod tests {
 
     #[test]
     fn init_menulis_port_terpilih_ke_registry() {
-        let tmp = ws_sementara("");
+        let (tmp, _kunci) = ws_sementara("");
         let mut act = None;
         let dir = tmp.path().join("app-satu");
         assert_eq!(
@@ -2298,7 +2301,7 @@ mod tests {
 
     #[test]
     fn init_tiga_kali_dapat_tiga_port_berbeda() {
-        let tmp = ws_sementara("");
+        let (tmp, _kunci) = ws_sementara("");
         let mut act = None;
         for nama in ["port-test-1", "port-test-2", "port-test-3"] {
             let dir = tmp.path().join(nama);
@@ -2326,7 +2329,7 @@ mod tests {
 
     #[test]
     fn init_menolak_port_eksplisit_yang_sudah_dipakai() {
-        let tmp = ws_sementara("lain\t8000\t8088\n");
+        let (tmp, _kunci) = ws_sementara("lain\t8000\t8088\n");
         let mut act = None;
         let dir = tmp.path().join("app-baru");
         assert_eq!(

@@ -51,6 +51,20 @@ pub(crate) fn container_jalan() -> Option<Vec<String>> {
     )
 }
 
+/// Hapus container app (`docker rm -f`, argumen array — bukan shell). Nama tidak
+/// sah ditolak sebelum docker dipanggil. `false` = gagal atau nama tidak sah.
+#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
+pub(crate) fn hapus_container(nama: &str) -> bool {
+    if !crate::connect::nama_sah(nama) {
+        return false;
+    }
+    Command::new("docker")
+        .args(["rm", "-f", nama])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Rentang port deploy di host: kebiasaan lama kelipatan 10 dari 8003, lalu celah lain.
 const PORT_AWAL: u16 = 8003;
 const PORT_TENGAH: u16 = 8200;
@@ -492,5 +506,12 @@ mod tests {
             std::fs::metadata(&reg).unwrap().modified().unwrap(),
             sebelum
         );
+    }
+
+    #[test]
+    fn hapus_container_menolak_nama_tidak_sah() {
+        assert!(!hapus_container("../lain"));
+        assert!(!hapus_container("a b"));
+        assert!(!hapus_container(""));
     }
 }

@@ -46,7 +46,7 @@ pub fn parse_repo_url(input: &str) -> Result<RepoRef, String> {
     })
 }
 
-fn nama_sah(s: &str) -> bool {
+pub(crate) fn nama_sah(s: &str) -> bool {
     !s.is_empty()
         && s != "."
         && s != ".."

@@ -865,6 +865,83 @@ fn daftarkan_job(
     Ok(format!("{base}/job/{job_name}/"))
 }
 
+/// Terjemahkan kode HTTP `doDelete`: 200/302 terhapus, 404 job memang tidak ada
+/// (bukan kegagalan), 401/403 kredensial salah, selain itu gagal dengan kodenya.
+#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
+pub fn kode_hapus_job(code: u16) -> Result<bool, String> {
+    match code {
+        200 | 302 => Ok(true),
+        404 => Ok(false),
+        401 | 403 => Err(
+            "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password.".to_string(),
+        ),
+        lain => Err(format!("Gagal menghapus job Jenkins (HTTP {lain})")),
+    }
+}
+
+/// Hapus job Jenkins lewat `POST doDelete`. Crumb opsional (CSRF bisa dimatikan);
+/// kredensial lewat stdin curl, tidak pernah di argv.
+#[allow(dead_code)] // call site di Task 3 (aksi hapus dashboard)
+pub fn hapus_job(cfg: &JenkinsConfig, job_name: &str) -> Result<bool, String> {
+    let base = normalize_jenkins_url(&cfg.url)?;
+    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-hapus-{}", std::process::id()));
+    fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
+    let cookie_jar = tmp_dir.join("cookies.txt");
+
+    let result = (|| -> Result<bool, String> {
+        let user_cfg = format!("user = \"{}:{}\"\n", cfg.user, cfg.token);
+        let jar_str = cookie_jar.to_string_lossy().to_string();
+
+        let crumb_url = format!("{base}/crumbIssuer/api/json");
+        let (crumb_code, crumb_body) = curl_with_stdin_config(
+            &[
+                "-sS",
+                "--max-time",
+                "15",
+                "-c",
+                &jar_str,
+                "-w",
+                "\n__HTTP_CODE__:%{http_code}",
+                "--config",
+                "-",
+                &crumb_url,
+            ],
+            &user_cfg,
+        )?;
+        if crumb_code == 401 || crumb_code == 403 {
+            return Err(
+                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password."
+                    .to_string(),
+            );
+        }
+        let crumb_header = if crumb_code == 200 {
+            extract_crumb_pair(&crumb_body).map(|(k, v)| format!("{k}: {v}"))
+        } else {
+            None
+        };
+
+        let delete_url = format!("{base}/job/{job_name}/doDelete");
+        let mut args = vec!["-sS", "--max-time", "20", "-b", &jar_str, "-X", "POST"];
+        if let Some(ref h) = crumb_header {
+            args.push("-H");
+            args.push(h);
+        }
+        args.extend_from_slice(&[
+            "-w",
+            "\n__HTTP_CODE__:%{http_code}",
+            "--config",
+            "-",
+            &delete_url,
+        ]);
+        let (code, _) = curl_with_stdin_config(&args, &user_cfg)?;
+        kode_hapus_job(code)
+    })();
+
+    let _ = fs::remove_dir_all(&tmp_dir);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1144,5 +1221,14 @@ mod tests {
         .unwrap();
         assert_eq!(job_url, format!("http://{addr}/job/klaim-api/"));
         let _ = handle.join();
+    }
+
+    #[test]
+    fn kode_hapus_job_menerjemahkan_kode_http() {
+        assert_eq!(kode_hapus_job(302), Ok(true));
+        assert_eq!(kode_hapus_job(200), Ok(true));
+        assert_eq!(kode_hapus_job(404), Ok(false));
+        assert!(kode_hapus_job(401).is_err());
+        assert!(kode_hapus_job(500).unwrap_err().contains("500"));
     }
 }

@@ -285,7 +285,7 @@ git commit -m "feat(cli): autore hapus-app membersihkan container, job, registry
 
 Aturan rute: `app` wajib lolos `APP_ID`; `konfirmasi` wajib sama persis dengan `app` (kalau tidak 400); app wajib ada di `registry.tsv` **atau** daftar `autore status` (folder boleh sudah tidak ada); path tetap harus satu tingkat di bawah workspace; aksi ditolak 409 bila `aksiBerjalan()` bukan null atau `pemegangKunci(app)` ada — remove menyentuh registry dan Jenkins seperti quick-start.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 `hapus-app.test.ts`: `argvHapusApp("app-a", "app-a")` menghasilkan argv persis di atas.
 
@@ -298,21 +298,21 @@ Aturan rute: `app` wajib lolos `APP_ID`; `konfirmasi` wajib sama persis dengan `
 
 `index.test.ts` (pola `createApp` + `app.request` yang sudah ada di berkas itu): sesi ber-peran `dev` menembak `/api/actions/remove` → 403 dan `spawn` tidak terpanggil; sesi `admin` dengan konfirmasi cocok → 200.
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd web && npx vitest run apps/api/src/hapus-app.test.ts apps/api/src/actions.test.ts`
 Expected: FAIL, modul/aksi belum ada.
 
-- [ ] **Step 3: Implement modul, aksi, dan rute**
+- [x] **Step 3: Implement modul, aksi, dan rute**
 
 Rute memakai `requireSession(auth, "admin")` lalu `rateLimiter`, meniru susunan rute actions lain. Body: `{ app, konfirmasi }`. Jangan memakai `resolveTarget` (ia menuntut folder ada); tulis resolusi khusus remove sesuai aturan di atas.
 
-- [ ] **Step 4: Jalankan gerbang web**
+- [x] **Step 4: Jalankan gerbang web**
 
 Run: `cd web && npx vitest run && npm run lint && npm run typecheck`
 Expected: semua lulus, lint dan typecheck bersih.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/apps/api/src/hapus-app.ts web/apps/api/src/hapus-app.test.ts web/apps/api/src/actions.ts web/apps/api/src/actions.test.ts web/apps/api/src/index.ts web/apps/api/src/index.test.ts

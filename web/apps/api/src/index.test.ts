@@ -690,6 +690,7 @@ describe("GET /api/audit/log", () => {
         run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
         quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
         connect: async () => ({ ok: true, status: 200, action: "connect", target: "tes-web", output: "" }),
+        remove: async () => ({ ok: true, status: 200, action: "remove", target: "tes-web", output: "" }),
       },
       async () => ({ data: RUNS, stale: false }),
       { secret: TEST_SECRET, allowed: ["alif"] },
@@ -716,6 +717,7 @@ describe("GET /api/audit/log", () => {
         run: async () => ({ ok: true, status: 200, action: "deploy", target: "tes-web", output: "" }),
         quickStart: async () => ({ ok: true, status: 200, action: "quick-start", target: "tes-web", output: "" }),
         connect: async () => ({ ok: true, status: 200, action: "connect", target: "tes-web", output: "" }),
+        remove: async () => ({ ok: true, status: 200, action: "remove", target: "tes-web", output: "" }),
       },
       async () => ({ data: RUNS, stale: false }),
       { secret: TEST_SECRET, allowed: ["alif"] },
@@ -868,5 +870,56 @@ describe("Full Action Matrix Audit Log (quick-start, deploy, scan, jalankan-ulan
     expect(last.target).toBe("audit-test-app");
     expect(last.exit).toBe(0);
     expect(resRerun.status).toBe(200);
+  });
+});
+
+describe("POST /api/actions/remove", () => {
+  /** Aplikasi uji berperan tertentu supaya gerbang admin bisa diuji dari cookie asli. */
+  async function appRemove(peran: "admin" | "dev") {
+    const { createApp } = await freshApp();
+    const { hatchActions } = await import("./actions");
+    const dir = await workspace();
+    const spawn = vi.fn(async () => ok());
+    const audit = vi.fn();
+    const app = createApp(
+      async () => STATUS,
+      hatchActions({ workspace: dir, run: async () => STATUS, spawn, bin: "autore", audit }),
+      undefined,
+      { secret: TEST_SECRET, allowlist: () => new Map([["alif", peran]]) },
+    );
+    return { app, dir, spawn, audit };
+  }
+
+  it("menolak sesi berperan dev dengan 403 tanpa menjalankan CLI", async () => {
+    const { app, spawn } = await appRemove("dev");
+
+    const res = await post(app, "/api/actions/remove", { app: "tes-web", konfirmasi: "tes-web" });
+
+    expect(res.status).toBe(403);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("meneruskan permintaan admin dengan konfirmasi cocok ke CLI", async () => {
+    const { app, spawn, audit } = await appRemove("admin");
+
+    const res = await post(app, "/api/actions/remove", { app: "tes-web", konfirmasi: "tes-web" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toMatchObject({ ok: true, action: "remove", target: "tes-web" });
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]];
+    expect(args).toEqual(["hapus-app", "tes-web", "--konfirmasi", "tes-web"]);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ login: "alif", action: "remove", target: "tes-web", exit: 0 }),
+    );
+  });
+
+  it("menolak konfirmasi yang tidak sama dengan nama app dengan 400", async () => {
+    const { app, spawn } = await appRemove("admin");
+
+    const res = await post(app, "/api/actions/remove", { app: "tes-web", konfirmasi: "lain" });
+
+    expect(res.status).toBe(400);
+    expect(spawn).not.toHaveBeenCalled();
   });
 });

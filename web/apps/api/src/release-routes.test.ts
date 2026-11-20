@@ -86,7 +86,7 @@ const tanpaLimit = (async (_c: Context, next: () => Promise<void>) => {
 }) as unknown as MiddlewareHandler;
 
 function api(berkas: string, panggilanPromote: string[][] = []) {
-  const run = async (kind: "deploy" | "scan" | "quick-start" | "connect"): Promise<ActionResult> => ({
+  const run = async (kind: "deploy" | "scan" | "quick-start" | "connect" | "remove"): Promise<ActionResult> => ({
     ok: true,
     status: 200,
     action: kind,
@@ -108,6 +108,13 @@ function api(berkas: string, panggilanPromote: string[][] = []) {
         ok: true,
         status: 200,
         action: "connect",
+        target: APP,
+        output: "lulus",
+      }),
+      remove: async () => ({
+        ok: true,
+        status: 200,
+        action: "remove",
         target: APP,
         output: "lulus",
       }),
@@ -272,6 +279,13 @@ describe("gerbang role endpoint approval", () => {
           ok: true,
           status: 200,
           action: "connect",
+          target: APP,
+          output: "lulus",
+        }),
+        remove: async () => ({
+          ok: true,
+          status: 200,
+          action: "remove",
           target: APP,
           output: "lulus",
         }),

@@ -747,3 +747,98 @@ describe("connect", () => {
     );
   });
 });
+
+describe("remove", () => {
+  const SESI = { login: "MAliffadlan", nama: "Alif Fadlan", email: "alif@example.com" };
+
+  it("menolak konfirmasi yang berbeda tanpa menjalankan CLI", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    await expect(actions.remove("tes-web", "lain")).resolves.toMatchObject({
+      ok: false,
+      status: 400,
+    });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it.each(["../lain", "a/b", "", "a b", "a".repeat(65)])(
+    "menolak id yang menyerobot path %j dengan 400",
+    async (id) => {
+      const dir = await workspace(["tes-web"]);
+      const { actions, spawn } = make(dir, { listed: [id] });
+
+      await expect(actions.remove(id, id)).resolves.toMatchObject({ ok: false, status: 400 });
+      expect(spawn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("menghapus app yatim: folder sudah hilang tapi baris registry masih ada", async () => {
+    const dir = await workspace([]);
+    await writeFile(join(dir, "registry.tsv"), "app-a\t8000\t8003\n");
+    const { actions, spawn } = make(dir, { listed: [] });
+
+    const out = await actions.remove("app-a", "app-a");
+
+    expect(out).toMatchObject({ ok: true, status: 200, action: "remove", target: "app-a" });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const [file, args, opts] = spawn.mock.calls[0] as [
+      string,
+      string[],
+      { shell: boolean; timeout: number },
+    ];
+    expect(file).toBe(process.env.AUTORE_BIN || "autore");
+    expect(args).toEqual(["hapus-app", "app-a", "--konfirmasi", "app-a"]);
+    expect(opts.shell).toBe(false);
+    expect(opts.timeout).toBe(120_000);
+  });
+
+  it("mencatat audit walau CLI keluar 1, dan tidak meneruskan warna ANSI ke dashboard", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, audit } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({
+          exitCode: 1,
+          stdout:
+            "\u001b[32m\u001b[1m✔\u001b[0m registry.tsv dibersihkan\n\u001b[31m\u001b[1m✖\u001b[0m job Jenkins gagal",
+        }),
+      ),
+    });
+
+    const out = (await actions.remove("tes-web", "tes-web", SESI)) as ActionResult;
+
+    expect(out).toMatchObject({ ok: false, status: 422 });
+    const output = out.ok === false ? (out.output ?? "") : "";
+    expect(output).toContain("job Jenkins gagal");
+    expect(output).not.toMatch(/\u001b\[/);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "remove", target: "tes-web", exit: 1 }),
+    );
+  });
+
+  it("ditolak 409 selagi deploy masih berjalan", async () => {
+    const dir = await workspace(["tes-web"]);
+    let lepas: ((hasil: SpawnResult) => void) | undefined;
+    const spawn = vi.fn(() => new Promise<SpawnResult>((resolve) => { lepas = resolve; }));
+    const { actions } = make(dir, { spawn });
+
+    const berjalan = actions.run("deploy", "tes-web");
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
+
+    expect(await actions.remove("tes-web", "tes-web")).toMatchObject({ ok: false, status: 409 });
+
+    lepas?.(result());
+    expect(await berjalan).toMatchObject({ ok: true });
+  });
+
+  it("menolak 404 untuk app yang tidak ada di registry maupun status", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions, spawn } = make(dir);
+
+    await expect(actions.remove("bukan-app", "bukan-app")).resolves.toMatchObject({
+      ok: false,
+      status: 404,
+    });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+});

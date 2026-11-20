@@ -7,6 +7,7 @@ import { aksiBerjalan, ambilKunci, pemegangKunci } from "./kunci";
 import { promisify } from "node:util";
 import { argvQuickStart, peringatanDariOutput, repoDariOutput, type QuickStartInput } from "./quick-start";
 import { argvConnect, type ConnectInput } from "./connect";
+import { argvHapusApp, bersihkanAnsi } from "./hapus-app";
 import type { Identitas } from "./session";
 import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
 
@@ -22,7 +23,7 @@ export type SpawnOptions = {
 /** Menyelesaikan hasil untuk exit code apa pun; melempar dengan `code` "ETIMEDOUT"/"ENOENT" saat gagal jalan. */
 export type SpawnAction = (file: string, args: string[], options: SpawnOptions) => Promise<SpawnResult>;
 
-export type ActionKind = "deploy" | "scan" | "quick-start" | "connect";
+export type ActionKind = "deploy" | "scan" | "quick-start" | "connect" | "remove";
 
 export type ActionResult =
   | {
@@ -47,6 +48,7 @@ const TIMEOUT: Record<ActionKind, number> = {
   scan: 60_000,
   "quick-start": 180_000,
   connect: 180_000,
+  remove: 120_000,
 };
 
 /**
@@ -194,6 +196,23 @@ export function hatchActions(deps: {
       return { ok: false, status: 404, error: `direktori aplikasi "${id}" tidak ditemukan` };
     }
     return { ok: true, dir };
+  }
+
+  /**
+   * App dianggap ada untuk keperluan hapus kalau punya baris `registry.tsv` ATAU
+   * muncul di `autore status`. Folder TIDAK diperiksa: app yatim (folder sudah
+   * hilang) justru yang paling perlu dibersihkan, sedangkan `resolveTarget` akan
+   * menolaknya.
+   */
+  async function appTerdaftar(id: string): Promise<boolean> {
+    const isiRegistry = await readFile(join(workspace, "registry.tsv"), "utf8").catch(() => "");
+    if (bacaRegistry(isiRegistry).some((item) => item.nama === id)) return true;
+    try {
+      const status = await loadDashboardStatus(deps.run);
+      return status.data.applications.some((app) => app.id === id);
+    } catch {
+      return false;
+    }
   }
 
   async function run(
@@ -384,5 +403,88 @@ export function hatchActions(deps: {
     return buatBaru("connect", input.nama, argvConnect(workspace, input, author), author);
   }
 
-  return { run, quickStart, connect };
+  /**
+   * Hapus app permanen: job Jenkins + container + baris registry + folder.
+   *
+   * Beda dari deploy/scan, folder app boleh SUDAH hilang (app yatim) — jadi
+   * `resolveTarget` tidak dipakai, ia menuntut folder ada. Keberadaan app cukup
+   * dibuktikan lewat `appTerdaftar` (registry atau `autore status`).
+   *
+   * `konfirmasi` wajib sama persis dengan nama app: aksi permanen, salah ketik
+   * harus berhenti sebelum CLI dipanggil.
+   */
+  async function remove(app: string, konfirmasi: string, author?: Identitas): Promise<ActionResult> {
+    if (!workspace) {
+      return failed(503, "AUTORE_WORKSPACE belum diset di unit API");
+    }
+
+    const id = (app ?? "").trim();
+    if (!APP_ID.test(id)) {
+      return failed(400, `id aplikasi tidak sah: ${JSON.stringify(id)}`);
+    }
+    if (konfirmasi !== id) {
+      return failed(400, `konfirmasi tidak sama dengan nama aplikasi: ${JSON.stringify(konfirmasi)}`);
+    }
+    // remove menyentuh registry + Jenkins seperti quick-start, jadi aksi tulis
+    // mana pun yang sedang berjalan cukup alasan untuk menolak.
+    const berjalan = aksiBerjalan();
+    if (berjalan) {
+      return failed(409, `aksi ${berjalan} masih berjalan, tunggu sampai selesai`);
+    }
+    const sedang = pemegangKunci(id);
+    if (sedang) {
+      return failed(409, `aksi ${sedang} masih berjalan, tunggu sampai selesai`);
+    }
+
+    const lepas = ambilKunci(id, "remove");
+    if (!lepas) {
+      return failed(409, `aksi ${pemegangKunci(id) ?? "remove"} masih berjalan, tunggu sampai selesai`);
+    }
+    try {
+      if (!(await appTerdaftar(id))) {
+        return failed(404, `aplikasi "${id}" tidak terdaftar`);
+      }
+      // Lapis path: gabungan tetap satu tingkat di bawah workspace (menahan "..").
+      const dir = join(workspace, id);
+      if (dirname(resolve(dir)) !== resolve(workspace)) {
+        return failed(400, `path aplikasi keluar dari workspace: ${id}`);
+      }
+
+      let res: SpawnResult;
+      try {
+        res = await deps.spawn(bin, argvHapusApp(id, konfirmasi), {
+          shell: false,
+          timeout: TIMEOUT.remove,
+          cwd: workspace,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+      } catch (error) {
+        const code = (error as { code?: unknown }).code;
+        return code === "ETIMEDOUT"
+          ? failed(504, `aksi remove melewati batas waktu ${TIMEOUT.remove / 1000} detik`)
+          : failed(503, `gagal menjalankan perintah autore: ${String(code ?? error)}`);
+      }
+
+      // Keluaran hapus-app berwarna (escape ANSI + simbol ✔/✖): bersihkan dulu
+      // supaya dashboard tidak menerima kode escape mentah.
+      const output = capped(
+        bersihkanAnsi([res.stdout.trim(), res.stderr.trim()].filter(Boolean).join("\n")),
+      );
+      resetStatusCache();
+      await audit({
+        login: author?.login ?? "",
+        email: author?.email ?? "",
+        action: "remove",
+        target: id,
+        exit: res.exitCode,
+      });
+      return res.exitCode === 0
+        ? { ok: true, status: 200, action: "remove", target: id, output }
+        : failed(422, `aksi remove keluar dengan kode ${res.exitCode}`, output);
+    } finally {
+      lepas();
+    }
+  }
+
+  return { run, quickStart, connect, remove };
 }

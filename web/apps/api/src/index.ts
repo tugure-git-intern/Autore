@@ -9,6 +9,7 @@ import { getRuns } from "./runs";
 import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
 import { bacaBodyConnect, type HasilBacaConnect } from "./connect";
+import { bacaBodyHapusApp, type HasilBacaHapus } from "./hapus-app";
 import { hatchSbom } from "./sbom";
 import { bacaAllowlist, requireSession, type AuthApi, type Identitas } from "./session";
 import { bacaAudit, type BarisAuditLengkap } from "./audit";
@@ -129,6 +130,15 @@ async function readConnectBody(request: Request): Promise<HasilBacaConnect> {
   return body.ok ? bacaBodyConnect(body.parsed) : body;
 }
 
+/** Body hapus-app wajib `{"app":"<id aplikasi>","konfirmasi":"<nama aplikasi>"}`. */
+async function readRemoveBody(request: Request): Promise<HasilBacaHapus> {
+  const body = await bacaJsonTerbatas(
+    request,
+    'body harus JSON {"app":"<id aplikasi>","konfirmasi":"<nama aplikasi>"}',
+  );
+  return body.ok ? bacaBodyHapusApp(body.parsed) : body;
+}
+
 /** Body reject wajib `{"alasan":"..."}`: satu kunci, string tidak kosong. */
 async function readAlasanBody(
   request: Request,
@@ -189,6 +199,9 @@ export function createApp(
   // role `dev`; approve/reject punya gerbang sendiri di bawah.
   app.use("/api/actions/*", requireSession(auth, "dev"));
   app.use("/api/actions/*", rateLimiter);
+  // Hapus app permanen mematikan job + container + folder: gerbang admin di sini,
+  // sesudah gerbang `dev` supaya sesi berperan rendah tetap ditolak 403 (bukan 401).
+  app.use("/api/actions/remove", requireSession(auth, "admin"));
 
   // Riwayat build: cache 60 detik di dalam `getRuns`; Jenkins diam tetap 200 + stale.
   app.get("/api/runs", async (c) => {
@@ -342,6 +355,15 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
     return reply(c, await actions.connect(body.nilai, c.get("sesi")));
+  });
+
+  // Hapus app: aksi paling merusak. Role admin (gerbang di atas), rate limit, dan
+  // konfirmasi ketik-nama. Identitas dari sesi, bukan body (audit trail).
+  app.post("/api/actions/remove", async (c) => {
+    const body = await readRemoveBody(c.req.raw);
+    c.header("Cache-Control", "no-store");
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    return reply(c, await actions.remove(body.nilai.app, body.nilai.konfirmasi, c.get("sesi")));
   });
 
   return app;

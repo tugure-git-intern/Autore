@@ -57,6 +57,17 @@ describe("parseAllowlist", () => {
     expect(roleFor(users, "maliffadlan")).toBe("dev");
   });
 
+  it("membaca peta role berbentuk Map", () => {
+    const users = parseAllowlist(new Map<string, string>([["Alif", "admin"], ["Budi", "qa"]]));
+    expect(users.get("alif")).toBe("admin");
+    expect(users.get("budi")).toBe("qa");
+  });
+
+  it("Map dengan role tidak sah dibuang, bukan diberi default", () => {
+    const users = parseAllowlist(new Map<string, string>([["alif", "raja"]]));
+    expect(users.size).toBe(0);
+  });
+
   it("role tidak valid dibuang, bukan dijadikan admin", () => {
     const users = parseAllowlist({ maliffadlan: "dev", nakal: "owner", kosong: "" });
     expect(roleFor(users, "maliffadlan")).toBe("dev");

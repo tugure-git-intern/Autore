@@ -40,6 +40,17 @@ export function parseAllowlist(raw: unknown): Map<string, Role> {
     }
     return users;
   }
+  if (raw instanceof Map) {
+    // `Object.entries(Map)` selalu kosong, jadi cabang objek di bawah akan
+    // menolak SEMUA login tanpa pesan. Map diiterasi eksplisit, aturan sama.
+    for (const [key, value] of raw.entries()) {
+      const login = normalizeLogin(String(key));
+      const role = parseRole(value);
+      if (login === "" || role === null) continue;
+      users.set(login, role);
+    }
+    return users;
+  }
   if (raw !== null && typeof raw === "object") {
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const login = normalizeLogin(key);

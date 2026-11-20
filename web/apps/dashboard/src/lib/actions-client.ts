@@ -1,4 +1,4 @@
-export type ActionKind = "deploy" | "scan";
+export type ActionKind = "deploy" | "scan" | "remove";
 
 export interface ActionOutcome {
   ok: boolean;
@@ -15,6 +15,7 @@ export function goToLogin(redirectTo: string): void {
 const SUCCESS: Record<ActionKind, string> = {
   deploy: "Deploy terkirim, build Jenkins sedang berjalan.",
   scan: "Scan keamanan selesai tanpa temuan.",
+  remove: "Aplikasi dihapus dari server. Repo GitHub tidak disentuh.",
 };
 
 /** Dipakai juga oleh quick-start-client: satu cara membaca baris pesan CLI. */
@@ -26,8 +27,15 @@ export function firstLine(text: string): string {
  * Memanggil endpoint aksi dan menerjemahkan jawabannya jadi satu pesan siap
  * tampil. Nama aksi dan id aplikasi tetap di sini — frontend tidak pernah
  * mengirim perintah, hanya memilih salah satu aksi yang sudah dikenal.
+ *
+ * `konfirmasi` hanya ikut di body aksi yang meminta ketik-ulang nama (remove);
+ * aksi lain tetap kirim `{ app }` saja supaya kontraknya tak berubah.
  */
-export async function runAction(action: ActionKind, app: string): Promise<ActionOutcome> {
+export async function runAction(
+  action: ActionKind,
+  app: string,
+  konfirmasi?: string,
+): Promise<ActionOutcome> {
   let response: Response;
   try {
     response = await fetch(`/api/actions/${action}`, {
@@ -35,7 +43,7 @@ export async function runAction(action: ActionKind, app: string): Promise<Action
       headers: { "content-type": "application/json" },
       // Id aplikasi selalu ikut di body: server tidak punya target cadangan, jadi
       // aksi tanpa app akan dijawab 400, bukan menjalankan aplikasi lain.
-      body: JSON.stringify({ app }),
+      body: JSON.stringify(konfirmasi !== undefined ? { app, konfirmasi } : { app }),
     });
   } catch {
     return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };

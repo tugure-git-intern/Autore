@@ -183,6 +183,70 @@ test("memanggil onDone setelah aksi selesai supaya data di-refresh", async () =>
   await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
 });
 
+test("requireTypedName: konfirmasi terkunci sampai nama diketik persis", async () => {
+  mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{
+        title: "Hapus aplikasi ini dari server?",
+        warning: "Repo GitHub tidak disentuh.",
+        confirmLabel: "Hapus permanen",
+        requireTypedName: "app-a",
+      }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+
+  const tombol = screen.getByRole("button", { name: "Hapus permanen" });
+  const input = screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi");
+
+  // Kosong: terkunci.
+  expect(tombol).toBeDisabled();
+
+  // Salah (bukan nama persis): tetap terkunci.
+  fireEvent.change(input, { target: { value: "app-b" } });
+  expect(tombol).toBeDisabled();
+
+  // Ada spasi di ujung: konfirmasi harus sama persis, tanpa trim.
+  fireEvent.change(input, { target: { value: "app-a " } });
+  expect(tombol).toBeDisabled();
+
+  // Persis sama: baru aktif.
+  fireEvent.change(input, { target: { value: "app-a" } });
+  expect(tombol).toBeEnabled();
+});
+
+test("requireTypedName: menekan konfirmasi mengirim konfirmasi ke server", async () => {
+  const fetchMock = mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="app-a"
+      confirm={{
+        title: "Hapus aplikasi ini dari server?",
+        confirmLabel: "Hapus permanen",
+        requireTypedName: "app-a",
+      }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+  fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
+    target: { value: "app-a" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Hapus permanen" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe("/api/actions/remove");
+  expect(JSON.parse(String(init.body))).toEqual({ app: "app-a", konfirmasi: "app-a" });
+});
+
 test("kegagalan jaringan tetap dilaporkan, bukan diam", async () => {
   vi.stubGlobal(
     "fetch",

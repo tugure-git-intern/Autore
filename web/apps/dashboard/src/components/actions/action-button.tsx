@@ -11,6 +11,8 @@ export interface ActionConfirmation {
   /** Peringatan efek samping; ditampilkan merah karena bisa mengubah repo pengguna. */
   warning?: string;
   confirmLabel: string;
+  /** Bila diisi, user harus mengetik ulang nama ini persis sebelum konfirmasi aktif. */
+  requireTypedName?: string;
 }
 
 interface ActionButtonProps {
@@ -34,9 +36,15 @@ export function ActionButton({
 }: ActionButtonProps) {
   const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const inputId = useId();
   const kirimToast = useKirimToast();
+
+  // Konfirmasi hanya aktif kalau nama diketik persis (tanpa trim): spasi di
+  // ujung tetap dianggap belum cocok, sama seperti pengecekan server.
+  const namaCocok = !confirm?.requireTypedName || typed === confirm.requireTypedName;
 
   // showModal memberi jebakan fokus + Escape; jsdom belum punya, jadi atribut
   // `open` jadi jalur cadangannya (dan itu yang diuji).
@@ -59,7 +67,7 @@ export function ActionButton({
    */
   async function dispatch() {
     setPending(true);
-    const outcome = await runAction(action, app);
+    const outcome = await runAction(action, app, confirm?.requireTypedName ? typed : undefined);
     setPending(false);
     kirimToast(outcome.message, outcome.ok ? "sukses" : "gagal");
     onDone?.();
@@ -74,8 +82,10 @@ export function ActionButton({
         disabled={pending}
         aria-busy={pending}
         onClick={() => {
-          if (confirm) setOpen(true);
-          else void dispatch();
+          if (confirm) {
+            setTyped("");
+            setOpen(true);
+          } else void dispatch();
         }}
       >
         {pending ? (
@@ -100,10 +110,27 @@ export function ActionButton({
           {confirm.warning ? (
             <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-300">{confirm.warning}</p>
           ) : null}
+          {confirm.requireTypedName ? (
+            <div className="mt-3">
+              <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
+                Ketik nama aplikasi untuk konfirmasi
+              </label>
+              <input
+                id={inputId}
+                value={typed}
+                onChange={(event) => setTyped(event.target.value)}
+                // autoComplete off: nama app bukan data yang mau diisi browser.
+                autoComplete="off"
+                aria-label="Ketik nama aplikasi untuk konfirmasi"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)]"
+              />
+            </div>
+          ) : null}
           <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => setOpen(false)}>Batal</Button>
             <Button
               variant="primary"
+              disabled={!namaCocok}
               onClick={() => {
                 setOpen(false);
                 void dispatch();

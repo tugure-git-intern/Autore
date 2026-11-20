@@ -72,6 +72,69 @@ describe("runAction", () => {
     expect(hasil.message).toBe("aksi scan keluar dengan kode 1 — 2 temuan HIGH");
   });
 
+  it("mengirim konfirmasi di body remove, bukan hanya id aplikasi", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, action: "remove", target: "app-a" }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runAction("remove", "app-a", "app-a");
+
+    const [input, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(input)).toBe("/api/actions/remove");
+    expect(JSON.parse(String(init.body))).toEqual({ app: "app-a", konfirmasi: "app-a" });
+  });
+
+  it("tidak menambahkan konfirmasi pada aksi yang tidak membutuhkannya", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, action: "scan", target: "app-a" }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runAction("scan", "app-a");
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ app: "app-a" });
+  });
+
+  it("memakai pesan sukses yang menjanjikan repo tidak disentuh", async () => {
+    mockFetch(() => ({ status: 200, body: { ok: true, action: "remove", target: "app-a" } }));
+
+    const hasil = await runAction("remove", "app-a", "app-a");
+
+    expect(hasil).toMatchObject({
+      ok: true,
+      message: "Aplikasi dihapus dari server. Repo GitHub tidak disentuh.",
+    });
+  });
+
+  it("menampilkan output 422 apa adanya, tidak menimpanya dengan pesan generik", async () => {
+    mockFetch(() => ({
+      status: 422,
+      body: {
+        ok: false,
+        status: 422,
+        error: "aksi remove keluar dengan kode 1",
+        output: "dilewati: backup gagal\nlangkah lain",
+      },
+    }));
+
+    const hasil = await runAction("remove", "app-a", "app-a");
+
+    expect(hasil.ok).toBe(false);
+    expect(hasil.message).toBe("aksi remove keluar dengan kode 1 — dilewati: backup gagal");
+  });
+
   it("melaporkan kegagalan jaringan tanpa redirect", async () => {
     vi.stubGlobal(
       "fetch",

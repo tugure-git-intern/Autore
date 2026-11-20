@@ -56,6 +56,19 @@ function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void
         Lihat SBOM
       </Link>
       <ActionButton label="Scan Keamanan" action="scan" app={app} onDone={onDone} />
+      <ActionButton
+        label="Hapus"
+        action="remove"
+        app={app}
+        confirm={{
+          title: "Hapus aplikasi ini dari server?",
+          warning:
+            "Container, job Jenkins, registry, environments, dan folder app dihapus. Repo GitHub tidak disentuh. Riwayat build ikut hilang.",
+          confirmLabel: "Hapus permanen",
+          requireTypedName: app,
+        }}
+        onDone={onDone}
+      />
     </div>
   );
 }

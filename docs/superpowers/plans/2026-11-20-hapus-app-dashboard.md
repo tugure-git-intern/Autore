@@ -414,7 +414,8 @@ Dijalankan 2026-11-20 di VPS `svru-gitdock1` (100.80.3.14), user `tugure`.
   dipasang ke `/usr/local/lib/autore-ci/autore` dan `/usr/local/bin/autore`; cadangan `/usr/local/lib/autore-ci/autore.bak-20261120-211538`.
 - `autore hapus-app --help` menampilkan `--konfirmasi` (biner baru benar-benar aktif).
 - Dashboard: `npm run build:dashboard` sukses (11 route), unit `autore-web-api` + `autore-web-dashboard` di-restart;
-  `healthz` 200, `/api/status` 200, `/login` 200.
+  `healthz` 200, `/api/status` 200, `/login` 200. Dijalankan ulang 22:06 dari `75b249b` setelah gerbang E2E CI menemukan
+  regresi (lihat Penyimpangan 4); `BUILD_ID` 22:06:25, `/` 307 ke `/login`, `/api/status` 200.
 - App uji: `hapus-uji-211800` (repo `tugure-git-intern/audit-uji3`, port 8083) via `autore connect`, 21:18.
 - Playwright live: **2 passed** — sesi dev ditolak 403 tanpa dilempar ke `/login`, sesi admin menghapus app uji dari daftar.
   Perintah: `E2E_LIVE=1 AUTORE_E2E_HAPUS_APP=hapus-uji-211800 npx dotenv -e .env -- npx playwright test --config apps/dashboard/playwright.config.ts hapus-app`.
@@ -436,6 +437,29 @@ Dijalankan 2026-11-20 di VPS `svru-gitdock1` (100.80.3.14), user `tugure`.
 2. Suite lokal dijalankan dengan Node 22.23.2 (`web/.nvmrc` = 22): `923/923` tes vitest lulus. Berkas
    `apps/dashboard/src/middleware.test.ts` gagal dimuat hanya di worktree (artifact symlink `node_modules`); di clone utama
    berkas yang sama lulus 7/7.
+3. Pipeline `autore-e2e` #281 FAILURE di stage 4: tes CLI `backup_gagal_menahan_registry_environments_dan_folder` menginjeksi
+   kegagalan `fs::copy` lewat `chmod 0555` pada workspace. Runner Jenkins berjalan sebagai root, dan root menembus permission
+   bit, jadi backup justru berhasil dan assert "backup gagal" meledak. Diperbaiki (`ab30988`): sumber kegagalan diganti
+   `environments.json` berupa direktori — `fs::copy` dari direktori selalu gagal `EISDIR` di uid mana pun. Assert "data utuh"
+   ikut disesuaikan (isi direktori masih ada).
+4. Pipeline #282 FAILURE di stage 5.5 (gerbang regresi E2E): regresi nyata dari fitur ini. `<dialog>` konfirmasi Hapus
+   terpasang di **tiap baris** tabel aplikasi dan isinya dirender walau tertutup, sehingga `getByLabel("Nama Aplikasi")`
+   di spek lama cocok **14 elemen** (input dialog quick-start + 13 input `aria-label="Ketik nama aplikasi untuk konfirmasi"`)
+   dan Playwright menggagalkan locator dengan strict mode violation; `getByRole("button", { name: "Batal" })` akan bentrok
+   sama. Diperbaiki (`75b249b`): isi `<dialog>` dirender hanya saat `open`, jadi kelas bentrok ini mati sekaligus (label
+   maupun tombol) tanpa menyentuh satu pun spec lama. Tes kontrak baru: dialog tertutup tidak menyumbang input/tombol,
+   setelah dibuka muncul. #283 SUCCESS seluruh 10 stage.
+
+**Verifikasi ulang lawan sistem nyata (22:10, dashboard `75b249b`)**
+
+- `quick-start-e2e.spec.ts` live: **5 passed / 2 skipped** — dua tes yang tadinya tumbang karena ambiguitas locator kini lulus.
+- `hapus-app.spec.ts` live dengan app uji baru `hapus-uji-2225` (`autore connect`, port 8083): **2 passed** — sesi dev ditolak
+  403 tanpa dilempar ke `/login`; sesi admin menghapus app dari daftar.
+- Bukti lima tempat untuk `hapus-uji-2225`: container 0, job Jenkins 404 (kontrol `autore-dummy` 200), `registry.tsv` 0 baris,
+  `environments.json` 0 kunci, folder tidak ada.
+- `audit.spec.ts` live gagal 2 tes karena `429` dan timeout `audit-rail`: spek matriks aksi butuh `AUTORE_RATE_LIMIT=1000`
+  yang hanya disuntik mode hermetik; di produksi batas default 10 aksi/menit. Spec itu memang bukan untuk mode live
+  (mode live dipakai untuk fitur yang diuji), bukan efek cabang ini.
 
 ---
 

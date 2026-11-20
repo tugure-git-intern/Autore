@@ -139,23 +139,33 @@ pub(crate) fn catat_port(workspace: &Path, nama: &str, app_port: u16, deploy_por
     }
 }
 
-/// Buang baris `nama` dari `registry.tsv`. `true` bila ada baris yang dibuang;
-/// berkas ditulis ulang hanya kalau berubah, dengan format baris yang sama
-/// seperti `catat_port`.
+/// Buang baris `nama` dari `registry.tsv`. Baris lain ditulis kembali apa
+/// adanya (verbatim, termasuk baris legacy/rusak), jadi format baris yang
+/// tersisa tidak berubah. `false` berarti tidak ada baris yang dibuang ATAU
+/// gagal tulis (lihat WARNING stderr) — caller wajib verifikasi ulang lewat
+/// `entri_registry` sebelum mengklaim sukses. Berkas ditulis ulang hanya
+/// kalau ada baris yang dibuang.
 // Call site menyusul di task aksi Hapus; hapus allow ini saat sudah dipakai.
 #[allow(dead_code)]
 pub(crate) fn hapus_port(workspace: &Path, nama: &str) -> bool {
-    let semua = entri_registry(workspace);
-    let sisa: Vec<&(String, u16, u16)> = semua.iter().filter(|(n, _, _)| n != nama).collect();
-    if sisa.len() == semua.len() {
+    let reg = workspace.join("registry.tsv");
+    let isi = match std::fs::read_to_string(&reg) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    // split_inclusive mempertahankan penutup baris sehingga baris tersisa
+    // tersalin verbatim; entri_registry sengaja tidak dipakai karena ia
+    // membuang baris legacy dua kolom.
+    let baris: Vec<&str> = isi.split_inclusive('\n').collect();
+    let sisa: Vec<&str> = baris
+        .iter()
+        .copied()
+        .filter(|b| b.split('\t').next() != Some(nama))
+        .collect();
+    if sisa.len() == baris.len() {
         return false;
     }
-    let isi: String = sisa
-        .iter()
-        .map(|(n, a, d)| format!("{n}\t{a}\t{d}\n"))
-        .collect();
-    let reg = workspace.join("registry.tsv");
-    if let Err(e) = std::fs::write(&reg, isi) {
+    if let Err(e) = std::fs::write(&reg, sisa.concat()) {
         eprintln!("WARNING: gagal menulis {}: {e}", reg.display());
         return false;
     }
@@ -455,7 +465,20 @@ mod tests {
         .unwrap();
         assert!(hapus_port(tmp.path(), "a"));
         assert_eq!(entri_registry(tmp.path()).len(), 1);
-        assert_eq!(entri_registry(tmp.path())[0].0, "b");
+        assert_eq!(entri_registry(tmp.path())[0], ("b".to_string(), 8000, 8093));
+    }
+
+    #[test]
+    fn hapus_port_mempertahankan_baris_legacy_app_lain_verbatim() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let reg = tmp.path().join("registry.tsv");
+        std::fs::write(&reg, "a\t8000\t8083\nlegacy\t9000\nb\t8000\t8093\n").unwrap();
+        assert!(hapus_port(tmp.path(), "a"));
+        assert_eq!(
+            std::fs::read_to_string(&reg).unwrap(),
+            "legacy\t9000\nb\t8000\t8093\n",
+            "baris legacy milik app lain harus utuh apa adanya"
+        );
     }
 
     #[test]

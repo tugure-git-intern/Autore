@@ -23,7 +23,7 @@
 ## Global Constraints
 
 - Tanpa dependensi baru di sisi mana pun.
-- Nama app divalidasi sebelum efek samping apa pun; pola yang sudah dipakai API: `/^[A-Za-z0-9._-]{1,64}$/`. Sisi Rust memakai `connect::nama_sah` (jadikan `pub(crate)`).
+- Nama app divalidasi sebelum efek samping apa pun; pola yang sudah dipakai API: `/^[A-Za-z0-9._-]{1,64}$/`. Sisi Rust memakai `connect::nama_sah` (jadikan `pub(crate)`) PLUS batas `nama.chars().count() <= 64` di `hapus::periksa` — `nama_sah` sendiri tidak boleh diperketat karena `parse_repo_url` memakainya untuk nama repo GitHub yang bisa lebih panjang.
 - Tidak ada perintah yang dirakit lewat shell; `docker` dan `curl` dipanggil dengan argv.
 - Repo sumber Autore tidak boleh dihapus: `main::is_autore_source_repo` tetap jadi penolak.
 - Gerbang Rust: `cargo test --bin autore` (baseline 335 lulus), `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`.

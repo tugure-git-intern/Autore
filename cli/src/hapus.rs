@@ -487,18 +487,15 @@ mod tests {
         let tmp_docker = TempDir::new().unwrap();
         let _docker = DockerPalsu::pasang(tmp_docker.path());
         std::fs::write(ws.join("registry.tsv"), "app-a\t8000\t8083\n").unwrap();
-        std::fs::write(
-            ws.join("environments.json"),
-            r#"{"app-a":{"staging":{"deploy_port":8300}}}"#,
-        )
-        .unwrap();
+        // environments.json sengaja dibuat DIREKTORI: `fs::copy` dari direktori
+        // selalu gagal (EISDIR) di uid mana pun, sedangkan chmod read-only pada
+        // workspace tidak menahan root — CI menjalankan tes ini sebagai root,
+        // jadi injeksi lama membuat backup justru BERHASIL dan tes gagal.
+        std::fs::create_dir_all(ws.join("environments.json")).unwrap();
+        std::fs::write(ws.join("environments.json/catatan.txt"), "isi asli").unwrap();
         std::fs::create_dir_all(ws.join("app-a")).unwrap();
         std::fs::write(ws.join("app-a/Dockerfile"), "FROM scratch").unwrap();
-        // Workspace read-only -> fs::copy ke .bak gagal -> langkah backup GAGAL.
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(ws, std::fs::Permissions::from_mode(0o555)).unwrap();
         let (kode, langkah) = jalankan_dengan("app-a", "app-a", ws, None);
-        std::fs::set_permissions(ws, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(kode, 1);
         let backup = langkah
             .iter()
@@ -520,14 +517,15 @@ mod tests {
         // Container dan job tetap jalan.
         assert!(langkah.iter().any(|l| l.nama == "container" && l.berhasil));
         assert!(langkah.iter().any(|l| l.nama == "job Jenkins"));
-        // Data user utuh.
+        // Data user utuh: registry tak termutasi, isi environments.json masih ada.
         assert_eq!(
             std::fs::read_to_string(ws.join("registry.tsv")).unwrap(),
             "app-a\t8000\t8083\n"
         );
-        assert!(std::fs::read_to_string(ws.join("environments.json"))
-            .unwrap()
-            .contains("app-a"));
+        assert_eq!(
+            std::fs::read_to_string(ws.join("environments.json/catatan.txt")).unwrap(),
+            "isi asli"
+        );
         assert!(ws.join("app-a/Dockerfile").exists());
     }
 

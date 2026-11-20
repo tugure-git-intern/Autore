@@ -384,12 +384,12 @@ README: satu baris tabel untuk `autore hapus-app <nama> --konfirmasi <nama>` plu
 
 `hapus-app.spec.ts`: buat app uji lewat CLI (`connect` pada repo uji tanpa `/health`), buka `/applications` dengan cookie sesi admin, klik Hapus, ketik nama, konfirmasi, harapkan toast sukses dan app hilang dari daftar. Sesi qa/dev diuji menolak: tombol tetap ada, jawaban 403, app masih ada.
 
-- [ ] **Step 3: Deploy ke VPS dan jalankan Playwright**
+- [x] **Step 3: Deploy ke VPS dan jalankan Playwright**
 
 Run (di VPS setelah `git am`): `cargo build --release --bin autore`, pasang ke dua path dengan backup, build dashboard, restart unit, lalu `npx playwright test` di `web/apps/dashboard`.
 Expected: semua spec lulus, termasuk spec baru.
 
-- [ ] **Step 4: Bukti manual lima tempat**
+- [x] **Step 4: Bukti manual lima tempat**
 
 Jalankan satu hapus lewat dashboard pada app uji, lalu cek: `docker ps -a | grep <app>` kosong, job Jenkins 404, `registry.tsv` tidak memuat `<app>`, `environments.json` tidak memuat kunci `<app>`, folder tidak ada. Simpan keluaran ini di catatan eksekusi plan.
 
@@ -406,7 +406,36 @@ Lalu `git format-patch`, `scp`, `git am` di VPS, `git push origin main`, dan tun
 
 ## Catatan Eksekusi
 
-(Diisi saat eksekusi: nomor build Jenkins, sha256 biner, keluaran bukti lima tempat, penyimpangan dari plan.)
+Dijalankan 2026-11-20 di VPS `svru-gitdock1` (100.80.3.14), user `tugure`.
+
+**Deploy (Step 3)**
+
+- Biner: `cargo build --release --bin autore` (11s, incremental), sha256 `020ad87e6e342fbc08ffbe3b37a735d63b7a1ebee16da4fbd7a145db496b240d`,
+  dipasang ke `/usr/local/lib/autore-ci/autore` dan `/usr/local/bin/autore`; cadangan `/usr/local/lib/autore-ci/autore.bak-20261120-211538`.
+- `autore hapus-app --help` menampilkan `--konfirmasi` (biner baru benar-benar aktif).
+- Dashboard: `npm run build:dashboard` sukses (11 route), unit `autore-web-api` + `autore-web-dashboard` di-restart;
+  `healthz` 200, `/api/status` 200, `/login` 200.
+- App uji: `hapus-uji-211800` (repo `tugure-git-intern/audit-uji3`, port 8083) via `autore connect`, 21:18.
+- Playwright live: **2 passed** — sesi dev ditolak 403 tanpa dilempar ke `/login`, sesi admin menghapus app uji dari daftar.
+  Perintah: `E2E_LIVE=1 AUTORE_E2E_HAPUS_APP=hapus-uji-211800 npx dotenv -e .env -- npx playwright test --config apps/dashboard/playwright.config.ts hapus-app`.
+
+**Bukti lima tempat (Step 4)** — app `hapus-uji-211800` setelah hapus lewat dashboard:
+
+- `docker ps -a | grep hapus-uji-211800` → 0 baris
+- job Jenkins → 404 dengan kredensial (`~/.config/autore/jenkins.conf`); kontrol `autore-dummy` → 200, tanpa auth → 403
+- `registry.tsv` → 0 baris
+- `environments.json` → 0 kunci
+- folder `~/autore-workspace/hapus-uji-211800` → tidak ada
+
+**Penyimpangan dari plan**
+
+1. E2e live gagal dua kali lebih dulu: `playwright.config.ts` menimpa `AUTH_SECRET` dengan rahasia hermetik juga di mode
+   `E2E_LIVE=1`, sehingga cookie suite ditandatangani kunci berbeda dari server produksi dan dashboard menyajikan `/login`.
+   Dibuktikan dengan mengirim cookie buatan sendiri: rahasia `NEXTAUTH_SECRET` dari `web/.env` → 200, rahasia hermetik → 307 ke `/login`.
+   Diperbaiki: rahasia hermetik hanya disuntik di mode hermetik, mode LIVE wajib punya rahasia `.env` (gagal keras bila kosong).
+2. Suite lokal dijalankan dengan Node 22.23.2 (`web/.nvmrc` = 22): `923/923` tes vitest lulus. Berkas
+   `apps/dashboard/src/middleware.test.ts` gagal dimuat hanya di worktree (artifact symlink `node_modules`); di clone utama
+   berkas yang sama lulus 7/7.
 
 ---
 

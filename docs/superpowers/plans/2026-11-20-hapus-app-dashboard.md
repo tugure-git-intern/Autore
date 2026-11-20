@@ -118,7 +118,7 @@ git commit -m "feat(cli): pembuang baris registry dan entri environments per app
   - `pub fn hapus_job(cfg: &JenkinsConfig, job_name: &str) -> Result<bool, String>` — ambil crumb (boleh tidak ada bila CSRF mati), `POST {base}/job/{job_name}/doDelete`, terjemahkan lewat `kode_hapus_job`.
   - `pub(crate) fn hapus_container(nama: &str) -> bool` — `docker rm -f <nama>`; true bila keluar 0; nama divalidasi `connect::nama_sah` dulu, nama tidak sah → false tanpa memanggil docker.
 
-- [ ] **Step 1: Tulis tes gagal**
+- [x] **Step 1: Tulis tes gagal**
 
 ```rust
 #[test]
@@ -138,21 +138,21 @@ fn hapus_container_menolak_nama_tidak_sah() {
 }
 ```
 
-- [ ] **Step 2: Jalankan tes, pastikan gagal**
+- [x] **Step 2: Jalankan tes, pastikan gagal**
 
 Run: `cd cli && cargo test --bin autore kode_hapus_job`
 Expected: FAIL, fungsi belum ada.
 
-- [ ] **Step 3: Implement ketiga perubahan**
+- [x] **Step 3: Implement ketiga perubahan**
 
 `hapus_job` meniru bentuk `register_and_trigger_jenkins` (cookie jar + `--config -` untuk kredensial, `-w "\n__HTTP_CODE__:%{http_code}"`), hanya saja metodenya POST ke `doDelete` dan tanpa berkas XML. `hapus_container` memakai `Command::new("docker").args(["rm", "-f", nama])`.
 
-- [ ] **Step 4: Jalankan tes, pastikan lulus**
+- [x] **Step 4: Jalankan tes, pastikan lulus**
 
 Run: `cd cli && cargo test --bin autore && cargo clippy --all-targets -- -D warnings`
 Expected: PASS semua, clippy bersih.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cli/src/jenkins.rs cli/src/workspace.rs cli/src/connect.rs

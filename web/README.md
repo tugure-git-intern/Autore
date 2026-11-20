@@ -142,6 +142,19 @@ tanpa `..` dan tanpa awalan `-`). Keduanya lewat modal konfirmasi ketik ulang
 nama, karena keduanya menulis ke GitHub. Timeout connect 180 s (clone+push+build
 trigger).
 
+**Peringatan `/health` (tidak memblokir).** Setelah kerangka pipeline dibuat, CLI
+memeriksa berkas kode repo (`.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`,
+`.java`, `.go`) mencari substring `/health` — jadi `/actuator/health` milik Spring
+Boot ikut dihitung. Dokumentasi, file test (`test_*`, `*_test.*`, `*.test.*`,
+`*.spec.*`, folder `tests`/`test`/`__tests__`), folder dependensi, dan berkas
+> 512 KiB dilewati; pemeriksaan berhenti setelah 2.000 berkas. Bila tidak ada,
+CLI mencetak `PERINGATAN_HEALTH: <pesan>`, API meneruskannya sebagai field
+`peringatan` pada hasil sukses quick-start/connect, dan dialog menampilkannya
+sebagai `role="note"` yang tetap terbaca setelah dialog tertutup (toast sukses
+hilang dalam 4 detik). Connect tetap lanjut: ini peringatan dini, bukan gerbang —
+pipeline tetap penentu, dan deploy akan gagal di tahap health check bila aplikasi
+tidak menjawab `/health` di port bawaan stack.
+
 Deploy bukan sekadar "build": CLI menjalankan `git add`/`git commit` di
 direktori aplikasi, push ke remote, lalu memicu build Jenkins. Karena itu tombol
 deploy dan jalankan-ulang selalu lewat modal konfirmasi yang menyebut

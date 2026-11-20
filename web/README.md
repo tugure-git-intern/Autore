@@ -142,6 +142,18 @@ tanpa `..` dan tanpa awalan `-`). Keduanya lewat modal konfirmasi ketik ulang
 nama, karena keduanya menulis ke GitHub. Timeout connect 180 s (clone+push+build
 trigger).
 
+**Hapus Aplikasi** (`POST /api/actions/remove`, body `{app, konfirmasi}`) ada di
+tiap baris `/applications` dan hanya untuk peran **admin**: rute memakai
+`requireSession(auth, "admin")`, jadi sesi dev/qa menerima `403` dengan pesan
+`Aksi ini butuh role admin; role Anda <role>.` yang tampil sebagai toast gagal
+TANPA dilempar ke `/login` (beda dari 401). Tombolnya terlihat untuk semua peran
+— dashboard tidak tahu peran di klien, server yang menolak. Karena aksi ini
+permanen, dialog meminta user mengetik ulang nama app persis (`konfirmasi` wajib
+sama dengan `app`; beda = `400`). Yang dibuang: container, job Jenkins (`<app>`,
+`<app>-rollback`, `<app>-promote`), baris `registry.tsv`, kunci
+`environments.json`, dan folder app. Repo GitHub **tidak disentuh**, tetapi
+riwayat build Jenkins ikut hilang bersama job-nya.
+
 **Peringatan `/health` (tidak memblokir).** Setelah kerangka pipeline dibuat, CLI
 memeriksa berkas kode repo (`.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`,
 `.java`, `.go`) mencari substring `/health` — jadi `/actuator/health` milik Spring
@@ -244,7 +256,8 @@ Callback URL OAuth App GitHub harus `http://<host>:9120/api/auth/callback/github
 | `AUTH_SECRET` kosong di unit API | **503** — fail closed, bukan 200 tanpa pemeriksaan |
 
 UI menampilkan "Sesi Anda sudah berakhir. Silakan login ulang." lalu berpindah ke
-`/login` begitu API menjawab 401/403.
+`/login` begitu API menjawab 401. Jawaban 403 (mis. aksi yang butuh role admin)
+tampil sebagai toast gagal berisi pesan server, tanpa redirect.
 
 ### Batas jujur
 

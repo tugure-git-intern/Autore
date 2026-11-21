@@ -76,7 +76,9 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // CI: satu percobaan ulang menyerap blip jaringan host runner
+  // (net::ERR_NETWORK_CHANGED) tanpa menutupi bug nyata yang tetap gagal dua kali.
+  retries: process.env.CI ? 1 : 0,
   timeout: 30_000,
   reporter: [["list"], ["html", { open: "never" }]],
   // Sesi palsu yang sah: cookie `authjs.session-token` asli (encode() Auth.js)

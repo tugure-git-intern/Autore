@@ -99,6 +99,9 @@ test.describe("Hapus aplikasi dari /applications", () => {
     await baris.getByRole("button", { name: "Hapus", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Hapus aplikasi ini dari server?" });
     await expect(dialog).toBeVisible();
+    // Dialog harus MENYEBUT nama yang wajib diketik: user tak perlu menebak persis
+    // (huruf besar & tanda hubung ikut dinilai) dari kolom tabel yang tertutup dialog.
+    await expect(dialog).toContainText(`Ketik ${APP} untuk konfirmasi`);
     // Repo GitHub tidak disentuh, riwayat build Jenkins ikut hilang — disebut dialog.
     await expect(dialog).toContainText("Repo GitHub tidak disentuh");
     await expect(dialog).toContainText("Riwayat build ikut hilang");

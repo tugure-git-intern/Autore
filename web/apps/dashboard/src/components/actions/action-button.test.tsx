@@ -251,6 +251,29 @@ test("requireTypedName: konfirmasi terkunci sampai nama diketik persis", async (
   expect(tombol).toBeEnabled();
 });
 
+test("requireTypedName: nama yang harus diketik tampil di dialog", async () => {
+  // Tanpa ini user harus menebak nama persis (huruf besar/spasi ikut dinilai)
+  // hanya dari kolom tabel yang tertutup dialog.
+  mockFetch(() => ({ body: { ok: true } }));
+  render(
+    <ActionButton
+      label="Hapus"
+      action="remove"
+      app="hapus-uji-2225"
+      confirm={{
+        title: "Hapus aplikasi ini dari server?",
+        confirmLabel: "Hapus permanen",
+        requireTypedName: "hapus-uji-2225",
+      }}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
+
+  const dialog = screen.getByRole("dialog", { hidden: true });
+  expect(dialog).toHaveTextContent("Ketik hapus-uji-2225 untuk konfirmasi");
+});
+
 test("requireTypedName: menekan konfirmasi mengirim konfirmasi ke server", async () => {
   const fetchMock = mockFetch(() => ({ body: { ok: true, action: "remove", target: "app-a" } }));
   render(

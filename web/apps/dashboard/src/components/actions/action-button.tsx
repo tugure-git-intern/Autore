@@ -132,7 +132,11 @@ export function ActionButton({
               {confirm.requireTypedName !== undefined ? (
                 <div className="mt-3">
                   <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
-                    Ketik nama aplikasi untuk konfirmasi
+                    Ketik{" "}
+                    <span className="font-mono font-semibold text-gray-900 dark:text-[var(--color-ink)]">
+                      {confirm.requireTypedName}
+                    </span>{" "}
+                    untuk konfirmasi
                   </label>
                   <input
                     id={inputId}

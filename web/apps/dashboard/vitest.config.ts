@@ -5,6 +5,7 @@ export default defineConfig({
   // tsconfig uses "jsx": "preserve" for Next; tests need real JSX transform.
   esbuild: { jsx: "automatic" },
   resolve: {
+    preserveSymlinks: true,
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   test: {
@@ -13,6 +14,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    exclude: ["e2e/**"],
     passWithNoTests: true,
     // next-auth mengimpor "next/server" tanpa ekstensi; Node 18 menolaknya
     // (paket `next` tidak punya peta `exports`). Di-inline supaya resolver vite

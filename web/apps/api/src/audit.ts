@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -52,8 +52,22 @@ export function jalurAudit(): string {
 export async function catatAudit(baris: BarisAudit, jalur = jalurAudit()): Promise<void> {
   const lengkap = { ts: new Date().toISOString(), ...baris };
   try {
-    await mkdir(dirname(jalur), { recursive: true });
-    await appendFile(jalur, `${JSON.stringify(lengkap)}\n`, "utf8");
+    const folder = dirname(jalur);
+    const stateDir = process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state");
+    const stateFolder = join(stateDir, "autore");
+    if (folder === stateFolder && !process.env.XDG_STATE_HOME) {
+      const localDir = dirname(stateDir);
+      await mkdir(localDir, { recursive: true, mode: 0o750 });
+      await chmod(localDir, 0o750);
+    }
+    if (folder === stateFolder) {
+      await mkdir(stateDir, { recursive: true, mode: 0o710 });
+      if ((await stat(stateDir)).mode & 0o020) await chmod(stateDir, 0o710);
+    }
+    await mkdir(folder, { recursive: true, mode: 0o700 });
+    if (folder === stateFolder) await chmod(folder, 0o700);
+    await appendFile(jalur, `${JSON.stringify(lengkap)}\n`, { encoding: "utf8", mode: 0o600 });
+    await chmod(jalur, 0o600);
   } catch (error) {
     console.error(`audit log gagal ditulis ke ${jalur}: ${String(error)}`);
   }

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -30,6 +30,68 @@ describe("catatAudit", () => {
     expect(isi).toHaveLength(1);
     expect(JSON.parse(isi[0])).toMatchObject(BARIS);
     expect(JSON.parse(isi[0]).ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+
+  it("membatasi folder dan berkas audit untuk pemilik saja", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-mode-"));
+    const stateDir = join(dir, "state");
+    const jalur = join(stateDir, "autore", "audit.log");
+    vi.stubEnv("XDG_STATE_HOME", stateDir);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await catatAudit(BARIS);
+
+    expect((await stat(stateDir)).mode & 0o777).toBe(0o710);
+    expect((await stat(join(stateDir, "autore"))).mode & 0o777).toBe(0o700);
+    expect((await stat(jalur)).mode & 0o777).toBe(0o600);
+  });
+
+  it("merapatkan folder dan berkas lama yang dibuat longgar", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-mode-lama-"));
+    const stateDir = join(dir, "state");
+    const folder = join(stateDir, "autore");
+    const jalur = join(folder, "audit.log");
+    vi.stubEnv("XDG_STATE_HOME", stateDir);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await mkdir(folder, { recursive: true });
+    await chmod(stateDir, 0o775);
+    await chmod(folder, 0o775);
+    await writeFile(jalur, "");
+    await chmod(jalur, 0o664);
+
+    await catatAudit(BARIS);
+
+    expect((await stat(stateDir)).mode & 0o777).toBe(0o710);
+    expect((await stat(folder)).mode & 0o777).toBe(0o700);
+    expect((await stat(jalur)).mode & 0o777).toBe(0o600);
+  });
+
+  it("membatasi local parent ke 0750 bila audit pakai default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-state-shared-"));
+    const localDir = join(dir, ".local");
+    const stateDir = join(localDir, "state");
+    const jalur = join(stateDir, "autore", "audit.log");
+    vi.stubEnv("HOME", dir);
+    vi.stubEnv("XDG_STATE_HOME", undefined);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await catatAudit(BARIS);
+
+    expect((await stat(localDir)).mode & 0o777).toBe(0o750);
+    expect((await stat(stateDir)).mode & 0o777).toBe(0o710);
+    expect((await stat(join(stateDir, "autore"))).mode & 0o777).toBe(0o700);
+    expect((await stat(jalur)).mode & 0o777).toBe(0o600);
+  });
+
+  it("tidak mengubah izin folder custom", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "autore-audit-custom-"));
+    await chmod(dir, 0o777);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await catatAudit(BARIS, join(dir, "audit.log"));
+
+    expect((await stat(dir)).mode & 0o777).toBe(0o777);
+    expect((await stat(join(dir, "audit.log"))).mode & 0o777).toBe(0o600);
   });
 
   it("menambah baris, bukan menimpa: lima engineer = lima baris", async () => {

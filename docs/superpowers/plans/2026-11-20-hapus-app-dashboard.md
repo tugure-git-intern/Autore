@@ -450,6 +450,13 @@ Dijalankan 2026-11-20 di VPS `svru-gitdock1` (100.80.3.14), user `tugure`.
    maupun tombol) tanpa menyentuh satu pun spec lama. Tes kontrak baru: dialog tertutup tidak menyumbang input/tombol,
    setelah dibuka muncul. #283 SUCCESS seluruh 10 stage.
 
+5. Celah UX ketemu saat verifikasi live: dialog menyuruh "Ketik nama aplikasi untuk konfirmasi" tapi **tidak
+   pernah menyebut nama mana** — user harus menebak huruf besar dan tanda hubung dari kolom tabel yang tertutup
+   dialog. Diperbaiki (`aa51e97`): label berbunyi `Ketik <nama> untuk konfirmasi` (nama monospace tebal,
+   `aria-label` input tidak diubah supaya locator spec lama aman); tes kontrak unit + assertion `toContainText`
+   di spek live. Terverifikasi lawan dashboard terpasang (`BUILD_ID 4UJyjrQwlaXhGpsxdCcDP`, sesi admin nyata,
+   tanpa berkas probe tertinggal).
+
 **Verifikasi ulang lawan sistem nyata (22:10, dashboard `75b249b`)**
 
 - `quick-start-e2e.spec.ts` live: **5 passed / 2 skipped** — dua tes yang tadinya tumbang karena ambiguitas locator kini lulus.

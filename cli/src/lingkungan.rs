@@ -67,20 +67,7 @@ where
         }
 
         let (staging, production) = alokasi_dua(&mut dipakai, &bebas)?;
-        doc.insert(
-            nama.clone(),
-            json!({
-                "staging": {
-                    "target": STAGING_TARGET,
-                    "deploy_port": staging
-                },
-                "production": {
-                    "target": format!("127.0.0.1:{production}"),
-                    "deploy_port": production,
-                    "container_port": app_port
-                }
-            }),
-        );
+        doc.insert(nama.clone(), entri_json(staging, production, app_port));
         laporan.ditambah.push(nama);
     }
 
@@ -88,6 +75,70 @@ where
         tulis_env(&path, &doc)?;
     }
     Ok(laporan)
+}
+
+/// Pastikan `nama` punya entri staging + production, lalu kembalikan
+/// `(staging_port, production_port, baru_dibuat)`. Dipanggil sebelum Jenkinsfile
+/// dirender supaya `deployPort` di repo = port di ledger, dan container staging
+/// sudah bisa diakses begitu pipeline pertama selesai (tanpa `env init` terpisah).
+pub(crate) fn pastikan_entri(
+    workspace: &Path,
+    nama: &str,
+    app_port: u16,
+) -> Result<(u16, u16, bool), String> {
+    pastikan_entri_dengan(workspace, nama, app_port, workspace::port_bebas)
+}
+
+fn pastikan_entri_dengan<F>(
+    workspace: &Path,
+    nama: &str,
+    app_port: u16,
+    bebas: F,
+) -> Result<(u16, u16, bool), String>
+where
+    F: Fn(u16) -> bool,
+{
+    let path = workspace.join("environments.json");
+    let mut doc = baca_env(&path)?;
+    if let Some(pair) = port_lingkungan(&doc, nama) {
+        return Ok((pair.0, pair.1, false));
+    }
+
+    let mut dipakai = port_dipakai(&doc, &workspace::entri_registry(workspace));
+    let (staging, production) = alokasi_dua(&mut dipakai, &bebas)?;
+    doc.insert(nama.to_string(), entri_json(staging, production, app_port));
+    tulis_env(&path, &doc)?;
+    Ok((staging, production, true))
+}
+
+/// `(staging, production)` yang sudah tercatat untuk `nama`, bila ada.
+pub(crate) fn port_tercatat(workspace: &Path, nama: &str) -> Option<(u16, u16)> {
+    let doc = baca_env(&workspace.join("environments.json")).ok()?;
+    port_lingkungan(&doc, nama)
+}
+
+/// `(staging, production)` bila kedua port sudah tercatat untuk `nama`.
+fn port_lingkungan(doc: &Map<String, Value>, nama: &str) -> Option<(u16, u16)> {
+    let app = doc.get(nama)?;
+    let ambil = |lingkungan: &str| -> Option<u16> {
+        let port = app.get(lingkungan)?.get("deploy_port")?.as_u64()?;
+        u16::try_from(port).ok()
+    };
+    Some((ambil("staging")?, ambil("production")?))
+}
+
+fn entri_json(staging: u16, production: u16, container_port: u16) -> Value {
+    json!({
+        "staging": {
+            "target": STAGING_TARGET,
+            "deploy_port": staging
+        },
+        "production": {
+            "target": format!("127.0.0.1:{production}"),
+            "deploy_port": production,
+            "container_port": container_port
+        }
+    })
 }
 
 /// Buang kunci `nama` dari `environments.json`. `Ok(false)` bila berkas tidak
@@ -392,6 +443,75 @@ mod tests {
             fs::read_to_string(tmp.path().join("environments.json")).unwrap(),
             asli,
             "berkas rusak tidak boleh ditimpa"
+        );
+    }
+
+    #[test]
+    fn pastikan_entri_membuat_entri_lalu_idempoten() {
+        let tmp = TempDir::new().unwrap();
+        tulis_registry(tmp.path(), &[("app-baru", 8000, 8101)]);
+
+        let (staging, production, baru) =
+            pastikan_entri_dengan(tmp.path(), "app-baru", 8000, |_| true).unwrap();
+        assert!(baru, "entri belum ada, jadi harus dibuat");
+        assert_eq!(
+            (staging, production),
+            (8300, 8301),
+            "deployPort di Jenkinsfile harus port staging dari ledger"
+        );
+        let doc = baca_json(tmp.path());
+        assert_eq!(doc["app-baru"]["staging"]["target"], STAGING_TARGET);
+        assert_eq!(
+            doc["app-baru"]["production"]["container_port"].as_u64(),
+            Some(8000)
+        );
+
+        let sebelum = fs::read_to_string(tmp.path().join("environments.json")).unwrap();
+        let (staging_lagi, production_lagi, baru_lagi) =
+            pastikan_entri_dengan(tmp.path(), "app-baru", 8000, |_| true).unwrap();
+        assert_eq!((staging_lagi, production_lagi), (8300, 8301));
+        assert!(!baru_lagi, "run kedua memakai entri yang sudah ada");
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("environments.json")).unwrap(),
+            sebelum,
+            "run kedua tidak boleh mengubah file"
+        );
+    }
+
+    #[test]
+    fn pastikan_entri_lewati_port_yang_sudah_dipakai() {
+        let tmp = TempDir::new().unwrap();
+        tulis_registry(tmp.path(), &[("app-baru", 8000, 8101)]);
+        let lama = json!({
+            "app-lama": {
+                "staging": {"target": "vps-staging", "deploy_port": 8300},
+                "production": {
+                    "target": "127.0.0.1:8301",
+                    "deploy_port": 8301,
+                    "container_port": 8000
+                }
+            }
+        });
+        fs::write(
+            tmp.path().join("environments.json"),
+            serde_json::to_string_pretty(&lama).unwrap(),
+        )
+        .unwrap();
+
+        let (staging, production, _) =
+            pastikan_entri_dengan(tmp.path(), "app-baru", 8000, |_| true).unwrap();
+        assert_eq!((staging, production), (8302, 8303));
+    }
+
+    #[test]
+    fn pastikan_entri_berkas_rusak_tidak_ditimpa() {
+        let tmp = TempDir::new().unwrap();
+        let asli = "{ ini bukan json";
+        fs::write(tmp.path().join("environments.json"), asli).unwrap();
+        assert!(pastikan_entri_dengan(tmp.path(), "app-baru", 8000, |_| true).is_err());
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("environments.json")).unwrap(),
+            asli
         );
     }
 }

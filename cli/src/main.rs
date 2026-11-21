@@ -210,7 +210,11 @@ pub fn bootstrap_interactive_project(
     force: bool,
 ) -> Result<(PathBuf, Vec<PathBuf>, PathBuf, bool), String> {
     let project_dir = resolve_interactive_project_dir(base_dir, &cfg.app_name);
-    let files = generate_project_files_with(cfg, &project_dir, force)?;
+    let workspace = workspace::workspace_dir();
+    // Port staging/production dikunci di ledger sebelum Jenkinsfile dirender, supaya
+    // deployPort di repo = port staging yang benar dan promotion punya container_port.
+    let (staging_port, _, _) = lingkungan::pastikan_entri(&workspace, &cfg.app_name, cfg.app_port)?;
+    let files = generate_project_files_with(cfg, &project_dir, force, staging_port)?;
     let git_created = hooks::ensure_git_repo_main(&project_dir)?;
     let hook_path = hooks::install_pre_commit_hook(&project_dir)?;
     Ok((project_dir, files, hook_path, git_created))
@@ -1260,10 +1264,16 @@ fn execute_command(
                             cfg.app_port,
                             cfg.deploy_port,
                         );
-                        println!(
-                            "  • Port deploy   : {} (dikunci di registry)",
-                            cfg.deploy_port
-                        );
+                        if let Some((staging_port, production_port)) =
+                            lingkungan::port_tercatat(&workspace, &cfg.app_name)
+                        {
+                            println!(
+                                "  • Staging      : http://localhost:{staging_port} (otomatis dari push)"
+                            );
+                            println!(
+                                "  • Production   : http://localhost:{production_port} (setelah promotion disetujui)"
+                            );
+                        }
                         0
                     }
                     Err(e) => {
@@ -1272,7 +1282,15 @@ fn execute_command(
                     }
                 }
             } else {
-                match generate_project_files_with(&cfg, &output_dir, force) {
+                let (staging_port, production_port, _) =
+                    match lingkungan::pastikan_entri(&workspace, &cfg.app_name, cfg.app_port) {
+                        Ok(pasangan) => pasangan,
+                        Err(e) => {
+                            eprintln!("{} {}", "ERROR:".red().bold(), e);
+                            return 1;
+                        }
+                    };
+                match generate_project_files_with(&cfg, &output_dir, force, staging_port) {
                     Ok(files) => {
                         println!(
                             "\n{}",
@@ -1290,8 +1308,10 @@ fn execute_command(
                             cfg.deploy_port,
                         );
                         println!(
-                            "  • Port deploy : {} (dikunci di registry)",
-                            cfg.deploy_port
+                            "  • Staging     : http://localhost:{staging_port} (otomatis dari push)"
+                        );
+                        println!(
+                            "  • Production  : http://localhost:{production_port} (setelah promotion disetujui)"
                         );
                         peringatkan_folder_kosong(&output_dir);
                         0
@@ -1840,7 +1860,7 @@ fn execute_command(
             println!("  • Folder      : {}", target_dir.display());
             println!("  • Teknologi   : {}", cfg.stack);
             println!("  • Port app    : {}", cfg.app_port);
-            println!("  • Port deploy : {}\n", cfg.deploy_port);
+            println!("  • Port registry : {}\n", cfg.deploy_port);
 
             let pilihan_kode = kode.trim().to_lowercase();
             if pilihan_kode != "contoh" && pilihan_kode != "kosong" {
@@ -1891,7 +1911,15 @@ fn execute_command(
                     return 0;
                 }
             }
-            match generate_project_files_with(&cfg, &target_dir, effective_force) {
+            let (staging_port, production_port, _) =
+                match lingkungan::pastikan_entri(&workspace, &cfg.app_name, cfg.app_port) {
+                    Ok(pasangan) => pasangan,
+                    Err(e) => {
+                        eprintln!("{} {e}", "ERROR:".red().bold());
+                        return 1;
+                    }
+                };
+            match generate_project_files_with(&cfg, &target_dir, effective_force, staging_port) {
                 Ok(files) => {
                     println!("  {} File pipeline dibuat:", "1/4".green().bold());
                     for f in files {
@@ -1910,9 +1938,9 @@ fn execute_command(
             // Port dikunci sebelum deploy jalan: aplikasi berikutnya tidak boleh
             // diberi port ini walau container-nya belum naik.
             workspace::catat_port(&workspace, &cfg.app_name, cfg.app_port, cfg.deploy_port);
+            println!("  • Staging     : http://localhost:{staging_port} (otomatis dari push)");
             println!(
-                "  • Port deploy : {} (dikunci di registry)",
-                cfg.deploy_port
+                "  • Production  : http://localhost:{production_port} (setelah promotion disetujui)"
             );
 
             let token = match github::resolve_token() {
@@ -2321,11 +2349,18 @@ mod tests {
         let daftar = workspace::baca_registry(tmp.path());
         assert_eq!(daftar.len(), 1, "port harus langsung dikunci di registry");
         assert_eq!(daftar[0].nama, "port-satu");
+
+        // Jenkinsfile menunjuk port staging dari ledger, bukan port registry:
+        // itulah target container staging yang naik di build pertama.
+        let (staging, production) = crate::lingkungan::port_tercatat(tmp.path(), "port-satu")
+            .expect("init harus mengisi entri staging + production");
+        assert_ne!(staging, production);
         let jenkins = std::fs::read_to_string(dir.join("Jenkinsfile")).unwrap();
         assert!(
-            jenkins.contains(&format!("deployPort: {}", daftar[0].deploy_port)),
-            "registry dan Jenkinsfile harus menunjuk port yang sama"
+            jenkins.contains(&format!("deployPort: {staging}")),
+            "Jenkinsfile harus mendarat di port staging:\n{jenkins}"
         );
+        assert!(jenkins.contains("releaseEnvironment: 'staging'"));
         std::env::remove_var("AUTORE_WORKSPACE");
     }
 

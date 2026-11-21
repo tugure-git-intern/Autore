@@ -245,12 +245,20 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
         app_port: opts.app_port.unwrap_or_else(|| stack.default_port()),
         deploy_port,
     };
+    // Port staging/production dikunci di awal supaya Jenkinsfile yang dikirim ke
+    // repo memakai port yang sama dengan ledger (dan promotion punya container_port).
+    let (staging_port, production_port, entri_baru) =
+        match crate::lingkungan::pastikan_entri(&workspace, &nama, cfg.app_port) {
+            Ok(p) => p,
+            Err(e) => return gagal(&e),
+        };
     if crate::has_existing_pipeline_files(&target) {
         println!(
             "  {} Dockerfile/Jenkinsfile milik repo dipakai apa adanya",
             "2/4".green().bold()
         );
-    } else if let Err(e) = generate_project_files_with(&cfg, &target, false) {
+    } else if let Err(e) = generate_project_files_with(&cfg, &target, false, staging_port) {
+        batalkan_entri_baru(&workspace, &nama, entri_baru);
         return gagal(&e);
     } else {
         println!("  {} File pipeline dibuat", "2/4".green().bold());
@@ -264,9 +272,11 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
     let author =
         jenkins::validasi_author(opts.author_name.as_deref(), opts.author_email.as_deref());
     if let Err(e) = commit_scaffold(&target, author.as_ref()) {
+        batalkan_entri_baru(&workspace, &nama, entri_baru);
         return gagal(&e);
     }
     if !push_branch(&target, &opts.branch) {
+        batalkan_entri_baru(&workspace, &nama, entri_baru);
         return gagal(&format!(
             "Gagal push ke {git_url} (branch {}). Pastikan token GitHub punya izin tulis dan branch tidak diproteksi.",
             opts.branch
@@ -293,7 +303,12 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
             println!("  • Folder project : {}", target.display());
             println!("  • Repo GitHub    {}/{} (tersambung)", rr.owner, rr.name);
             println!("  • Job Jenkins    : {job_url}");
-            println!("  • Port deploy    : {}", cfg.deploy_port);
+            println!(
+                "  • Staging       : http://localhost:{staging_port} (build pertama otomatis)"
+            );
+            println!(
+                "  • Production    : http://localhost:{production_port} (setelah persetujuan promotion)"
+            );
             progress::tahap(
                 "jenkins",
                 "selesai",
@@ -302,6 +317,14 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
             0
         }
         Err(e) => gagal(&e),
+    }
+}
+
+/// Port hanya dikunci kalau push sukses: kalau alur batal, entri yang kita buat
+/// dibuang lagi supaya ledger tidak menyisakan slot untuk app yang tidak pernah jadi.
+fn batalkan_entri_baru(workspace: &Path, nama: &str, entri_baru: bool) {
+    if entri_baru {
+        let _ = crate::lingkungan::hapus_app(workspace, nama);
     }
 }
 

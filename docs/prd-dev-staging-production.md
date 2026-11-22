@@ -178,6 +178,11 @@ lalu atomic rename; atomic rename saja tidak mencegah lost update. Lock deploy
   otomatis, bukan sekadar tampilan); health check production gagal memicu status
   `gagal`; rollback mengaktifkan kembali deployment sehat sebelumnya tanpa rebuild;
   production tanpa target tidak pernah berstatus online.
+- **Empat mata production**: approval role minimal `qa`, promosi role `admin`, dan
+  dua aksi wajib dari login berbeda. Dashboard memeriksa identitas sesi; `Jenkinsfile.promote`
+  juga menjalankan `autore release verify-approval` sebelum deploy, jadi pemicu langsung
+  di Jenkins tidak melewati pemeriksaan approval. Batas: Jenkins menerima `PROMOTE_ACTOR`
+  sebagai parameter biasa; orang yang punya hak memicu job dapat memalsukan nama pelaku.
 
 ## 10. Risiko
 

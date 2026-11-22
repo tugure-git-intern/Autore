@@ -228,6 +228,7 @@ Access the dashboard at `http://localhost:9120` (or through your assigned host/T
 | `autore hook uninstall` | — | Removes the managed hook and restores the previous user hook from `pre-commit.user-backup`. |
 | `autore sbom` | — | Inspects software supply chain dependencies from build CycloneDX SBOM artifacts. |
 | `autore pipeline` | — | Records pipeline stage progress into the status store (called by the Jenkins pipeline, not by humans). |
+| `autore release verify-approval` | — | Gerbang empat mata promosi production (called by `Jenkinsfile.promote`, not by humans): menolak bila release belum disetujui, keputusan terakhirnya `rejected`, atau pelaku = penyetuju. Batasnya: `PROMOTE_ACTOR` di Jenkins adalah parameter, bukan identitas terautentikasi — siapa pun yang bisa memicu job bisa mengisi nama siapa pun. |
 | `autore kemampuan` | — | Prints this host's capabilities as machine-readable data (consumed by the dashboard to decide which stacks are available). |
 | `autore start / stop / restart` | — | Controls background services via systemd user manager. |
 | `autore logs` | — | Streams real-time operational logs from dashboard and API services (`--lines N`, `--no-follow`). |

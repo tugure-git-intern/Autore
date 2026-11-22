@@ -102,7 +102,14 @@ pub struct ConnectOpts {
     pub author_email: Option<String>,
 }
 
-/// Nama aplikasi = `--app-name` kalau diisi, selain itu nama repo.
+/// Apakah folder ini (atau salah satu folder di atasnya) sebuah repo git.
+/// Dipakai untuk menolak clone yang akan bersarang di dalam repo lain.
+fn di_dalam_repo_git(dir: &Path) -> bool {
+    dir.ancestors().any(|d| d.join(".git").exists())
+}
+
+/// Nama aplikasi yang dipakai Autore: dari `--app-name`, kalau tidak ada dari
+/// nama repo. Divalidasi supaya aman dipakai sebagai nama folder/job Jenkins.
 pub fn nama_aplikasi(opts: &ConnectOpts) -> Result<String, String> {
     let rr = parse_repo_url(&opts.repo)?;
     let nama = opts
@@ -227,10 +234,21 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
         Ok(n) => n,
         Err(e) => return gagal(&e),
     };
+    // Repo yang di-clone ke dalam repo git lain jadi repo bersarang dan
+    // mengotori status repo induk. Lebih baik gagal cepat daripada
+    // meninggalkan sisa aneh.
     let target = opts.path.join(&nama);
+    if di_dalam_repo_git(&opts.path) {
+        return gagal(&format!(
+            "Folder {} ada di dalam repo git lain, jadi repo akan ter-clone bersarang. \
+             Jalankan dari luar repo, atau pakai --path <folder induk> (mis. --path ~/autore-workspace).",
+            opts.path.display()
+        ));
+    }
     if target.exists() {
         return gagal(&format!(
-            "Folder {} sudah ada. Pilih nama aplikasi lain supaya folder itu tidak tertimpa.",
+            "Folder {} sudah ada. Jalankan dari folder lain, atau pakai --path <folder induk> \
+             (mis. --path ~/autore-workspace) supaya folder itu tidak tertimpa.",
             target.display()
         ));
     }
@@ -443,6 +461,21 @@ mod tests {
     fn menolak_nama_tidak_sah() {
         let o = opts("https://github.com/a/b", Some("Nama Salah"));
         assert!(nama_aplikasi(&o).is_err());
+    }
+
+    /// Clone tidak boleh bersarang di dalam repo git lain, jadi deteksi ini
+    /// harus naik ke folder induk, bukan cuma melihat folder yang dituju.
+    #[test]
+    fn mendeteksi_folder_di_dalam_repo_git() {
+        let akar = std::env::temp_dir().join(format!("autore-git-nest-{}", std::process::id()));
+        let repo = akar.join("repo");
+        let dalam = repo.join("src");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::create_dir_all(&dalam).unwrap();
+        assert!(di_dalam_repo_git(&dalam));
+        assert!(di_dalam_repo_git(&repo));
+        assert!(!di_dalam_repo_git(&akar));
+        std::fs::remove_dir_all(&akar).unwrap();
     }
 
     #[test]

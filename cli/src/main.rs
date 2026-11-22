@@ -998,7 +998,8 @@ enum Commands {
     /// Sambungkan repo GitHub yang sudah ada: clone, tambah pipeline bila belum ada, push, daftar Jenkins
     #[command(visible_alias = "sambung")]
     Connect {
-        /// URL repo, mis. https://github.com/tugure-reasuransi/autore-demo
+        /// Repo GitHub: <owner>/<repo>, github.com/<owner>/<repo>, atau URL penuh
+        /// (mis. --repo tugure-reasuransi/autore-demo)
         #[arg(long)]
         repo: String,
 

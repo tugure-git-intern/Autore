@@ -241,6 +241,172 @@ fn pesan_gagal_buat_repo(body: &str) -> String {
     }
 }
 
+/// Branch default repo (`main`, `master`, ...). Dibaca dari GitHub, bukan ditebak:
+/// repo buatan dev bisa memakai nama apa pun.
+pub fn default_branch(token: &str, full: &str) -> Result<String, String> {
+    default_branch_dengan(&curl_api, token, full)
+}
+
+fn default_branch_dengan(kirim: KirimHttp<'_>, token: &str, full: &str) -> Result<String, String> {
+    let (code, body) = kirim(token, "GET", &format!("/repos/{full}"), None)?;
+    match code {
+        200 => extract_json_string(&body, "default_branch")
+            .ok_or_else(|| format!("Respons GitHub untuk {full} tidak memuat default_branch.")),
+        401 => Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
+        404 => Err(format!("Repo {full} tidak ditemukan (HTTP 404).")),
+        _ => Err(format!("Gagal membaca repo {full} (HTTP {code}).")),
+    }
+}
+
+/// Tipe pemilik repo: `User` atau `Organization`. Dipakai memutuskan mode kunci.
+pub fn tipe_pemilik(token: &str, login: &str) -> Result<String, String> {
+    tipe_pemilik_dengan(&curl_api, token, login)
+}
+
+fn tipe_pemilik_dengan(kirim: KirimHttp<'_>, token: &str, login: &str) -> Result<String, String> {
+    let (code, body) = kirim(token, "GET", &format!("/users/{login}"), None)?;
+    match code {
+        200 => extract_json_string(&body, "type")
+            .ok_or_else(|| format!("Respons GitHub untuk {login} tidak memuat type.")),
+        404 => Err(format!("Akun GitHub '{login}' tidak ditemukan (HTTP 404).")),
+        _ => Err(format!("Gagal membaca akun {login} (HTTP {code}).")),
+    }
+}
+
+/// Jumlah kolaborator repo. `None` = tidak diketahui (token tanpa izin baca
+/// kolaborator); pemanggil harus memperlakukan ini sebagai "tidak dihitung",
+/// bukan sebagai satu orang.
+pub fn jumlah_kolaborator(token: &str, full: &str) -> Result<Option<usize>, String> {
+    jumlah_kolaborator_dengan(&curl_api, token, full)
+}
+
+fn jumlah_kolaborator_dengan(
+    kirim: KirimHttp<'_>,
+    token: &str,
+    full: &str,
+) -> Result<Option<usize>, String> {
+    let (code, body) = kirim(
+        token,
+        "GET",
+        &format!("/repos/{full}/collaborators?per_page=100"),
+        None,
+    )?;
+    match code {
+        200 => Ok(Some(body.matches("\"login\"").count())),
+        403 => Ok(None),
+        404 => Err(format!("Repo {full} tidak ditemukan (HTTP 404).")),
+        _ => Err(format!("Gagal membaca kolaborator {full} (HTTP {code}).")),
+    }
+}
+
+/// Hasil memasang kunci branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusKunci {
+    /// Belum pernah dikunci; setelan baru dipasang.
+    BaruDikunci,
+    /// Sudah terkunci dengan setelan yang sama atau lebih ketat.
+    SudahTerkunci,
+    /// Sudah terkunci lebih longgar; dinaikkan ke mode yang diminta.
+    Diperketat,
+}
+
+/// Pasang branch protection. Tidak pernah melonggarkan kunci yang sudah ada:
+/// repo yang sudah mewajibkan PR tetap penuh walau pemanggil minta mode ringan.
+pub fn protect_branch(
+    token: &str,
+    full: &str,
+    branch: &str,
+    ringan: bool,
+    review_wajib: u8,
+) -> Result<StatusKunci, String> {
+    protect_branch_dengan(&curl_api, token, full, branch, ringan, review_wajib)
+}
+
+fn protect_branch_dengan(
+    kirim: KirimHttp<'_>,
+    token: &str,
+    full: &str,
+    branch: &str,
+    ringan: bool,
+    review_wajib: u8,
+) -> Result<StatusKunci, String> {
+    let path = format!("/repos/{full}/branches/{branch}/protection");
+    let (code, lama) = kirim(token, "GET", &path, None)?;
+    let (ringan, status) = match code {
+        200 => {
+            let sudah_wajib_pr = lama.contains("\"required_pull_request_reviews\":{");
+            // Sudah penuh, atau sudah ringan dan yang diminta ringan: tidak ada
+            // yang perlu dipasang ulang. Kunci yang sudah ada tidak pernah
+            // dilonggarkan, jadi permintaan ringan pada repo penuh juga berhenti.
+            if sudah_wajib_pr || ringan {
+                return Ok(StatusKunci::SudahTerkunci);
+            }
+            (false, StatusKunci::Diperketat)
+        }
+        404 => (ringan, StatusKunci::BaruDikunci),
+        401 => return Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
+        // 403 dan lainnya: biarkan PUT yang melaporkan penyebab sebenarnya.
+        _ => (ringan, StatusKunci::BaruDikunci),
+    };
+    let payload = payload_kunci(ringan, review_wajib);
+    let (code, jawab) = kirim(token, "PUT", &path, Some(&payload))?;
+    let pesan = extract_json_string(&jawab, "message").unwrap_or_default();
+    match code {
+        200 => Ok(status),
+        401 => Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
+        403 => Err(format!(
+            "Token GitHub tidak punya hak admin di {full} (HTTP 403). Branch protection butuh izin admin repo. Pesan GitHub: {pesan}"
+        )),
+        404 => Err(format!(
+            "Branch '{branch}' belum ada di {full} (HTTP 404). Push dulu, lalu ulangi."
+        )),
+        _ => Err(format!("Gagal mengunci {full}@{branch} (HTTP {code}) {pesan}")),
+    }
+}
+
+/// Payload `PUT /branches/{branch}/protection`. Mode ringan = hanya larangan
+/// force-push/hapus; mode penuh menambah PR wajib + review.
+fn payload_kunci(ringan: bool, review_wajib: u8) -> String {
+    let ulasan = if ringan {
+        "null".to_string()
+    } else {
+        format!(
+            "{{\"dismiss_stale_reviews\":true,\"require_code_owner_reviews\":false,\"required_approving_review_count\":{review_wajib}}}"
+        )
+    };
+    format!(
+        "{{\"required_status_checks\":null,\"enforce_admins\":true,\"required_pull_request_reviews\":{ulasan},\"restrictions\":null,\"allow_force_pushes\":false,\"allow_deletions\":false,\"required_conversation_resolution\":true}}"
+    )
+}
+
+/// Nyalakan secret scanning + push protection. Repo publik: cukup `PATCH /repos`.
+/// Repo privat butuh GitHub Advanced Security; 422/403 dicatat sebagai pesan
+/// (bukan kegagalan alur) karena kunci branch tetap jalan tanpanya.
+pub fn aktifkan_secret_scanning(token: &str, full: &str) -> Result<String, String> {
+    aktifkan_secret_scanning_dengan(&curl_api, token, full)
+}
+
+fn aktifkan_secret_scanning_dengan(
+    kirim: KirimHttp<'_>,
+    token: &str,
+    full: &str,
+) -> Result<String, String> {
+    let payload = "{\"security_and_analysis\":{\"secret_scanning\":{\"status\":\"enabled\"},\"secret_scanning_push_protection\":{\"status\":\"enabled\"}}}";
+    let (code, body) = kirim(token, "PATCH", &format!("/repos/{full}"), Some(payload))?;
+    match code {
+        200 => Ok("secret scanning + push protection aktif".into()),
+        403 => Ok("secret scanning dilewati: token tidak punya izin admin repo".into()),
+        422 => Ok("secret scanning dilewati: repo privat butuh GitHub Advanced Security".into()),
+        401 => Err("Token GitHub ditolak (HTTP 401). Periksa token-nya.".into()),
+        _ => {
+            let pesan = extract_json_string(&body, "message").unwrap_or_default();
+            Err(format!(
+                "Gagal menyalakan secret scanning di {full} (HTTP {code}) {pesan}"
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,5 +666,230 @@ mod tests {
             catatan.borrow()[1],
             ("POST".to_string(), "/user/repos".to_string())
         );
+    }
+
+    /// Rekaman yang juga menyimpan body, untuk memeriksa payload PUT protection.
+    fn kirim_rekaman_body<'a>(
+        catatan: &'a std::cell::RefCell<Vec<(String, String, String)>>,
+        jawaban: Vec<(u16, &'static str)>,
+    ) -> impl Fn(&str, &str, &str, Option<&str>) -> Result<(u16, String), String> + 'a {
+        let urut = std::cell::Cell::new(0usize);
+        move |_token, method, path, body| {
+            catatan.borrow_mut().push((
+                method.to_string(),
+                path.to_string(),
+                body.unwrap_or("").to_string(),
+            ));
+            let (code, isi) = jawaban
+                .get(urut.get())
+                .copied()
+                .unwrap_or((500, "{\"message\":\"tak terduga\"}"));
+            urut.set(urut.get() + 1);
+            Ok((code, isi.to_string()))
+        }
+    }
+
+    #[test]
+    fn branch_default_dibaca_dari_github() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![(200, r#"{"default_branch":"master","private":true}"#)],
+        );
+
+        assert_eq!(
+            default_branch_dengan(&kirim, "token", "tugure-git-intern/app").unwrap(),
+            "master"
+        );
+        assert_eq!(
+            catatan.borrow()[0],
+            (
+                "GET".to_string(),
+                "/repos/tugure-git-intern/app".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn protection_pertama_kali_memasang_kunci_penuh() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman_body(
+            &catatan,
+            vec![
+                (404, r#"{"message":"Branch not protected"}"#),
+                (200, r#"{"url":"..."}"#),
+            ],
+        );
+
+        let status =
+            protect_branch_dengan(&kirim, "token", "tugure-git-intern/app", "main", false, 1)
+                .unwrap();
+
+        assert_eq!(status, StatusKunci::BaruDikunci);
+        let rekam = catatan.borrow();
+        assert_eq!(rekam[1].0, "PUT");
+        assert_eq!(
+            rekam[1].1,
+            "/repos/tugure-git-intern/app/branches/main/protection"
+        );
+        assert!(rekam[1].2.contains("\"allow_force_pushes\":false"));
+        assert!(rekam[1].2.contains("\"required_pull_request_reviews\":{"));
+        assert!(rekam[1].2.contains("\"required_approving_review_count\":1"));
+    }
+
+    #[test]
+    fn protection_sudah_terkunci_tidak_dipasang_ulang() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman_body(
+            &catatan,
+            vec![(
+                200,
+                r#"{"required_pull_request_reviews":{"required_approving_review_count":1}}"#,
+            )],
+        );
+
+        let status =
+            protect_branch_dengan(&kirim, "token", "tugure-git-intern/app", "main", false, 1)
+                .unwrap();
+
+        assert_eq!(status, StatusKunci::SudahTerkunci);
+        assert_eq!(catatan.borrow().len(), 1, "tidak boleh ada PUT ulang");
+    }
+
+    #[test]
+    fn mode_ringan_hanya_melarang_force_push_dan_hapus() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman_body(&catatan, vec![(404, "{}"), (200, "{}")]);
+
+        let status =
+            protect_branch_dengan(&kirim, "token", "pribadi/app", "main", true, 0).unwrap();
+
+        assert_eq!(status, StatusKunci::BaruDikunci);
+        let body = &catatan.borrow()[1].2;
+        assert!(body.contains("\"required_pull_request_reviews\":null"));
+        assert!(body.contains("\"allow_force_pushes\":false"));
+        assert!(body.contains("\"allow_deletions\":false"));
+    }
+
+    #[test]
+    fn kunci_tidak_pernah_dilonggarkan() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman_body(
+            &catatan,
+            vec![(
+                200,
+                r#"{"required_pull_request_reviews":{"required_approving_review_count":1}}"#,
+            )],
+        );
+
+        let status = protect_branch_dengan(&kirim, "token", "kantor/app", "main", true, 1).unwrap();
+
+        assert_eq!(status, StatusKunci::SudahTerkunci);
+        assert_eq!(
+            catatan.borrow().len(),
+            1,
+            "setelan penuh tidak boleh ditimpa"
+        );
+    }
+
+    #[test]
+    fn kunci_yang_lebih_longgar_dinaikkan_ke_penuh() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman_body(
+            &catatan,
+            vec![(200, r#"{"enforce_admins":{"enabled":true}}"#), (200, "{}")],
+        );
+
+        let status =
+            protect_branch_dengan(&kirim, "token", "kantor/app", "main", false, 2).unwrap();
+
+        assert_eq!(status, StatusKunci::Diperketat);
+        let body = &catatan.borrow()[1].2;
+        assert!(body.contains("\"required_approving_review_count\":2"));
+    }
+
+    #[test]
+    fn kunci_403_menyebut_butuh_admin() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (404, "{}"),
+                (
+                    403,
+                    r#"{"message":"Must have admin rights to Repository."}"#,
+                ),
+            ],
+        );
+
+        let err = protect_branch_dengan(&kirim, "token", "tugure-git-intern/app", "main", false, 1)
+            .unwrap_err();
+
+        assert!(err.contains("hak admin"));
+    }
+
+    #[test]
+    fn kolaborator_403_dianggap_tidak_diketahui() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(&catatan, vec![(403, "{}")]);
+
+        assert_eq!(
+            jumlah_kolaborator_dengan(&kirim, "token", "tugure-git-intern/app").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn kolaborator_200_menghitung_setiap_login() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![(200, r#"[{"login":"tugure-git-intern"},{"login":"dewi"}]"#)],
+        );
+
+        assert_eq!(
+            jumlah_kolaborator_dengan(&kirim, "token", "tugure-git-intern/app").unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            catatan.borrow()[0].1,
+            "/repos/tugure-git-intern/app/collaborators?per_page=100"
+        );
+    }
+
+    #[test]
+    fn tipe_pemilik_membedakan_organisasi_dari_user() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![
+                (
+                    200,
+                    r#"{"login":"tugure-reasuransi","type":"Organization"}"#,
+                ),
+                (200, r#"{"login":"MAliffadlan","type":"User"}"#),
+            ],
+        );
+
+        assert_eq!(
+            tipe_pemilik_dengan(&kirim, "token", "tugure-reasuransi").unwrap(),
+            "Organization"
+        );
+        assert_eq!(
+            tipe_pemilik_dengan(&kirim, "token", "MAliffadlan").unwrap(),
+            "User"
+        );
+    }
+
+    #[test]
+    fn secret_scanning_422_dicatat_bukan_digagalkan() {
+        let catatan = std::cell::RefCell::new(Vec::new());
+        let kirim = kirim_rekaman(
+            &catatan,
+            vec![(422, r#"{"message":"Advanced security is not enabled"}"#)],
+        );
+
+        let pesan = aktifkan_secret_scanning_dengan(&kirim, "token", "pribadi/app").unwrap();
+        assert!(pesan.contains("Advanced Security"));
     }
 }

@@ -81,6 +81,10 @@ pub struct ConnectOpts {
     pub app_port: Option<u16>,
     pub deploy_port: Option<u16>,
     pub branch: String,
+    /// `None` = putuskan dari `kebijakan.conf`.
+    pub kunci: Option<crate::kebijakan::Mode>,
+    /// `None` = pakai `review_wajib` dari kebijakan.
+    pub wajib_review: Option<u8>,
     pub author_name: Option<String>,
     pub author_email: Option<String>,
 }
@@ -285,6 +289,24 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
     println!("  {} Terkirim ke {}", "3/4".green().bold(), git_url);
     progress::tahap("kirim", "selesai", "Kode terkirim ke GitHub.");
 
+    // Urutan penting: push dulu, kunci sesudahnya. Kalau dikunci lebih dulu,
+    // commit pipeline pertama akan ditolak karena belum lewat PR.
+    let full = format!("{}/{}", rr.owner, rr.name);
+    match crate::github::resolve_token() {
+        Some(token) => {
+            crate::kunci_setelah_push(
+                &token,
+                &full,
+                &opts.branch,
+                opts.kunci,
+                opts.wajib_review,
+            );
+        }
+        None => println!(
+            "  i Token GitHub tidak ada — kunci branch dilewati (ulangi: autore kunci-repo --repo {full})"
+        ),
+    }
+
     // Port dikunci setelah push sukses: gagal push tidak boleh menyisakan port
     // terkunci untuk aplikasi yang tidak pernah jadi.
     workspace::catat_port(&workspace, &nama, cfg.app_port, cfg.deploy_port);
@@ -369,6 +391,8 @@ mod tests {
             app_port: None,
             deploy_port: None,
             branch: "main".to_string(),
+            kunci: None,
+            wajib_review: None,
             author_name: None,
             author_email: None,
         }

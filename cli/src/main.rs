@@ -7,6 +7,7 @@ mod github;
 mod hapus;
 mod hooks;
 mod jenkins;
+mod kebijakan;
 mod launcher;
 mod lingkungan;
 mod pipeline_record;
@@ -519,6 +520,8 @@ fn commands_for(index: usize) -> Commands {
             deploy_port: None,
             kode: "kosong".to_string(),
             org: None,
+            kunci: None,
+            wajib_review: None,
             author_name: None,
             author_email: None,
         },
@@ -558,6 +561,115 @@ fn commands_for(index: usize) -> Commands {
         8 => Commands::Update,
         _ => Commands::Doctor,
     }
+}
+
+/// Pasang kunci branch + secret scanning setelah push sukses. Gagal mengunci
+/// hanya dilaporkan, tidak menggagalkan alur: kode sudah terkirim ke GitHub dan
+/// kunci bisa diulang kapan saja dengan `autore kunci-repo`.
+pub(crate) fn kunci_setelah_push(
+    token: &str,
+    full_name: &str,
+    branch: &str,
+    kunci: Option<kebijakan::Mode>,
+    wajib_review: Option<u8>,
+) -> bool {
+    let k = kebijakan::muat();
+    let pemilik = full_name
+        .split_once('/')
+        .map(|(p, _)| p)
+        .unwrap_or(full_name);
+    let tipe = github::tipe_pemilik(token, pemilik).unwrap_or_else(|_| "User".to_string());
+    let kolaborator = github::jumlah_kolaborator(token, full_name).ok().flatten();
+    let mode = kebijakan::putuskan(&k, pemilik, &tipe, kolaborator, kunci);
+    let review = wajib_review.unwrap_or(k.review_wajib);
+    let terkunci = match github::protect_branch(token, full_name, branch, mode.ringan(), review) {
+        Ok(status) => {
+            let ket = match status {
+                github::StatusKunci::BaruDikunci => "baru dipasang",
+                github::StatusKunci::SudahTerkunci => "sudah terkunci",
+                github::StatusKunci::Diperketat => "dinaikkan ke mode penuh",
+            };
+            let aturan = if mode.ringan() {
+                "force-push & hapus branch dimatikan".to_string()
+            } else {
+                format!("PR wajib, {review} review, force-push dimatikan, admin ikut aturan")
+            };
+            println!(
+                "  {} Branch {} terkunci ({}): {}",
+                "✔".green().bold(),
+                branch,
+                ket,
+                aturan
+            );
+            true
+        }
+        Err(e) => {
+            eprintln!("  {} Kunci branch gagal: {e}", "i".yellow().bold());
+            eprintln!("     Ulangi dengan: autore kunci-repo --repo {full_name} --branch {branch}");
+            false
+        }
+    };
+    if !terkunci {
+        return false;
+    }
+    match github::aktifkan_secret_scanning(token, full_name) {
+        Ok(p) => println!("  • {p}"),
+        Err(e) => eprintln!("  • Secret scanning: {e}"),
+    }
+    true
+}
+
+/// `kunci-repo`: memasang kunci pada repo yang sudah ada, tanpa clone dan tanpa
+/// menyentuh Jenkins. Bentuk `--repo` menerima URL penuh maupun `<owner>/<repo>`.
+fn jalankan_kunci_repo(
+    repo: &str,
+    branch: Option<&str>,
+    kunci: Option<kebijakan::Mode>,
+    wajib_review: Option<u8>,
+) -> i32 {
+    let rr = match parse_repo_arg(repo) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{} {e}", "ERROR:".red().bold());
+            return 1;
+        }
+    };
+    let token = match github::resolve_token() {
+        Some(t) => t,
+        None => {
+            eprintln!(
+                "{} Token GitHub tidak ditemukan. Set AUTORE_GITHUB_TOKEN atau jalankan `autore quick-start` sekali untuk menyimpannya.",
+                "ERROR:".red().bold()
+            );
+            return 1;
+        }
+    };
+    let full = format!("{}/{}", rr.owner, rr.name);
+    let branch = match branch {
+        Some(b) => b.to_string(),
+        None => match github::default_branch(&token, &full) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("{} {e}", "ERROR:".red().bold());
+                return 1;
+            }
+        },
+    };
+    println!("\n{} Kunci branch {full}@{branch}", "●".cyan().bold());
+    if kunci_setelah_push(&token, &full, &branch, kunci, wajib_review) {
+        0
+    } else {
+        1
+    }
+}
+
+fn parse_repo_arg(input: &str) -> Result<connect::RepoRef, String> {
+    let s = input.trim();
+    if s.starts_with("https://") || s.starts_with("http://") {
+        return connect::parse_repo_url(s);
+    }
+    let s = s.strip_prefix("github.com/").unwrap_or(s);
+    connect::parse_repo_url(&format!("https://github.com/{}", s.trim_start_matches('/')))
 }
 
 /// Label menu -> index-nya. Dipakai mode teks (bukan TUI) supaya pencocokan label
@@ -863,6 +975,16 @@ enum Commands {
         #[arg(long)]
         org: Option<String>,
 
+        /// Tingkat kunci branch: `ringan` (anti force-push) atau `penuh` (PR
+        /// wajib). Tanpa flag ini, `~/.config/autore/kebijakan.conf` yang
+        /// memutuskan: repo kantor penuh, repo pribadi ringan.
+        #[arg(long, value_enum)]
+        kunci: Option<kebijakan::Mode>,
+
+        /// Jumlah review wajib di mode penuh (0-6; default dari kebijakan, 1)
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=6))]
+        wajib_review: Option<u8>,
+
         /// Identitas commit dari sesi dashboard: nama GitHub yang menekan tombol
         /// (audit trail). Tanpa ini dipakai identitas bot `Autore CLI`.
         #[arg(long)]
@@ -904,6 +1026,14 @@ enum Commands {
         #[arg(long, default_value = "main")]
         branch: String,
 
+        /// Tingkat kunci branch: `ringan` atau `penuh` (default: dari kebijakan)
+        #[arg(long, value_enum)]
+        kunci: Option<kebijakan::Mode>,
+
+        /// Jumlah review wajib di mode penuh (0-6; default dari kebijakan, 1)
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=6))]
+        wajib_review: Option<u8>,
+
         /// Identitas commit dari sesi dashboard (audit trail)
         #[arg(long)]
         author_name: Option<String>,
@@ -921,6 +1051,26 @@ enum Commands {
         /// Wajib sama persis dengan nama app (konfirmasi ketik-nama)
         #[arg(long)]
         konfirmasi: String,
+    },
+
+    /// Kunci branch repo yang sudah ada (tanpa clone, tanpa Jenkins)
+    #[command(visible_alias = "kunci")]
+    KunciRepo {
+        /// Repo: https://github.com/<owner>/<repo> atau <owner>/<repo>
+        #[arg(long)]
+        repo: String,
+
+        /// Branch yang dikunci (default: branch default repo di GitHub)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Tingkat kunci: `ringan` atau `penuh` (default: dari kebijakan)
+        #[arg(long, value_enum)]
+        kunci: Option<kebijakan::Mode>,
+
+        /// Jumlah review wajib di mode penuh (0-6; default dari kebijakan, 1)
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=6))]
+        wajib_review: Option<u8>,
     },
 
     /// Hapus folder project Autore secara interaktif
@@ -1761,6 +1911,8 @@ fn execute_command(
             deploy_port,
             kode,
             org,
+            kunci,
+            wajib_review,
             author_name,
             author_email,
         } => {
@@ -1984,11 +2136,21 @@ fn execute_command(
                     return 1;
                 }
             };
+            let kebijakan = kebijakan::muat();
+            if let Some(o) = kebijakan::org_tujuan(&kebijakan, org.as_deref(), &owner) {
+                if let Err(e) = validate_org_name(&o) {
+                    eprintln!(
+                        "{} {e} (dari --org atau org_default di kebijakan.conf)",
+                        "ERROR:".red().bold()
+                    );
+                    return 1;
+                }
+            }
             let (full_name, created) = match github::ensure_repo(
                 &token,
                 &owner,
                 &cfg.app_name,
-                org.as_deref().map(str::trim),
+                kebijakan::org_tujuan(&kebijakan, org.as_deref(), &owner).as_deref(),
             ) {
                 Ok(v) => v,
                 Err(e) => {
@@ -2029,6 +2191,7 @@ fn execute_command(
             }
             println!("      • {} terkirim", git_url);
             progress::tahap("kirim", "selesai", "Kode terkirim ke GitHub.");
+            kunci_setelah_push(&token, &full_name, "main", kunci, wajib_review);
 
             let conf_path = jenkins::default_config_path();
             let jk_cfg = match ensure_jenkins_config(&conf_path, interactive, false) {
@@ -2076,6 +2239,8 @@ fn execute_command(
             app_port,
             deploy_port,
             branch,
+            kunci,
+            wajib_review,
             author_name,
             author_email,
         } => {
@@ -2093,6 +2258,8 @@ fn execute_command(
                     app_port,
                     deploy_port,
                     branch,
+                    kunci,
+                    wajib_review,
                     author_name,
                     author_email,
                 },
@@ -2101,6 +2268,13 @@ fn execute_command(
         }
 
         Commands::HapusApp { nama, konfirmasi } => hapus::jalankan(&nama, &konfirmasi),
+
+        Commands::KunciRepo {
+            repo,
+            branch,
+            kunci,
+            wajib_review,
+        } => jalankan_kunci_repo(&repo, branch.as_deref(), kunci, wajib_review),
 
         Commands::DeleteProject => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -2462,6 +2636,8 @@ mod tests {
             deploy_port: None,
             kode: "kosong".to_string(),
             org: None,
+            kunci: None,
+            wajib_review: None,
             author_name: None,
             author_email: None,
         };
@@ -2823,5 +2999,67 @@ mod tests {
         let isi = format!("# {}\n\"/health\"\n", "x".repeat(600 * 1024));
         tulis(tmp.path(), "besar.py", &isi);
         assert!(!punya_endpoint_health(tmp.path()));
+    }
+
+    /// RED: mode kunci harus bisa dipaksa dari CLI tanpa menyunting berkas
+    /// kebijakan, dan nilai yang tidak dikenal ditolak clap.
+    #[test]
+    fn quick_start_menerima_flag_kunci_dan_wajib_review() {
+        use clap::Parser;
+        let cli = Cli::try_parse_from([
+            "autore",
+            "quick-start",
+            "--kunci",
+            "ringan",
+            "--wajib-review",
+            "2",
+        ])
+        .unwrap();
+        match cli.command {
+            Some(Commands::QuickStart {
+                kunci,
+                wajib_review,
+                ..
+            }) => {
+                assert_eq!(kunci, Some(kebijakan::Mode::Ringan));
+                assert_eq!(wajib_review, Some(2));
+            }
+            _ => panic!("perintah yang diparse bukan QuickStart"),
+        }
+        assert!(Cli::try_parse_from(["autore", "quick-start", "--kunci", "longgar"]).is_err());
+        assert!(Cli::try_parse_from(["autore", "quick-start", "--wajib-review", "9"]).is_err());
+    }
+
+    #[test]
+    fn kunci_repo_diparse_dari_argv() {
+        use clap::Parser;
+        let cli = Cli::try_parse_from([
+            "autore",
+            "kunci-repo",
+            "--repo",
+            "tugure-reasuransi/autore-demo",
+        ])
+        .unwrap();
+        match cli.command {
+            Some(Commands::KunciRepo { repo, branch, .. }) => {
+                assert_eq!(repo, "tugure-reasuransi/autore-demo");
+                assert!(
+                    branch.is_none(),
+                    "tanpa --branch, branch dibaca dari GitHub"
+                );
+            }
+            _ => panic!("perintah yang diparse bukan KunciRepo"),
+        }
+    }
+
+    #[test]
+    fn parse_repo_arg_menerima_url_penuh_dan_bentuk_pendek() {
+        let a = parse_repo_arg("https://github.com/tugure-reasuransi/autore-demo.git").unwrap();
+        let b = parse_repo_arg("tugure-reasuransi/autore-demo").unwrap();
+        let c = parse_repo_arg("github.com/tugure-reasuransi/autore-demo").unwrap();
+        assert_eq!(a.url, "https://github.com/tugure-reasuransi/autore-demo");
+        assert_eq!(b.url, a.url);
+        assert_eq!(c.url, a.url);
+        assert!(parse_repo_arg("file:///etc/passwd").is_err());
     }
 }

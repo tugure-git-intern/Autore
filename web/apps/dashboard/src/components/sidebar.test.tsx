@@ -1,11 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiStatusResponse } from "@/lib/contracts";
 
 const nav = vi.hoisted(() => ({ pathname: "/pipeline" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
-import { StatusProvider } from "./app-shell";
+import { StatusProvider, UserContext } from "./app-shell";
 import { Sidebar, indikatorServer, versiAutore } from "./sidebar";
 
 const STATUS: ApiStatusResponse = {
@@ -130,6 +130,23 @@ describe("versiAutore", () => {
 describe("Sidebar", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("menu Pengaturan hanya muncul untuk admin role", () => {
+    renderSidebar();
+    expect(screen.queryByRole("link", { name: "Pengaturan" })).toBeNull();
+    cleanup();
+
+    pasangFetch(SEGAR);
+    render(
+      <UserContext.Provider value={{ login: "alif", name: "Alif", image: null, role: "admin" }}>
+        <StatusProvider>
+          <Sidebar terbuka />
+        </StatusProvider>
+      </UserContext.Provider>,
+    );
+    expect(screen.getByRole("link", { name: "Pengaturan" })).toHaveAttribute("href", "/settings");
+    cleanup();
   });
 
   it("menaruh logo Tugu Reasuransi di samping nama Autore", () => {

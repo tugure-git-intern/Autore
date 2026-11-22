@@ -3,18 +3,20 @@
 import Link from "next/link";
 
 import { usePathname } from "next/navigation";
-import { isActiveHref, navItems } from "./nav-items";
+import { useCurrentUser } from "./app-shell";
+import { isActiveHref, navItemsUntuk, type HrefMenu } from "./nav-items";
 
 /**
  * Label pendek untuk bar bawah: empat kolom di 360px tidak cukup untuk
  * "Daftar Aplikasi" dan "Pipeline & Log" tanpa terpotong.
  */
-const LABEL_PENDEK: Record<(typeof navItems)[number]["href"], string> = {
+const LABEL_PENDEK: Record<HrefMenu, string> = {
   "/": "Dashboard",
   "/applications": "Aplikasi",
   "/pipeline": "Pipeline",
   "/security": "Keamanan",
   "/audit": "Audit",
+  "/settings": "Setelan",
 };
 
 /**
@@ -24,14 +26,21 @@ const LABEL_PENDEK: Record<(typeof navItems)[number]["href"], string> = {
  */
 export function NavBawah() {
   const pathname = usePathname() ?? "/";
+  const { role } = useCurrentUser();
+  const menu = navItemsUntuk(role);
 
   return (
     <nav
       aria-label="Navigasi bawah"
       className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-[#F0F5FE] pb-[env(safe-area-inset-bottom)] dark:border-[#50638b] dark:bg-[#282c32] lg:hidden"
     >
-      <div className="grid grid-cols-5">
-        {navItems.map(({ href, icon: Icon }) => {
+      {/* Satu kolom per menu: 5 untuk non-admin, 6 untuk admin. Kolom tetap
+          (bukan `grid-cols-5`) supaya label tidak terpotong saat menu bertambah. */}
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${menu.length}, minmax(0, 1fr))` }}
+      >
+        {menu.map(({ href, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
             <Link
@@ -45,7 +54,7 @@ export function NavBawah() {
               }`}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
-              {LABEL_PENDEK[href]}
+              {LABEL_PENDEK[href as HrefMenu]}
             </Link>
           );
         })}

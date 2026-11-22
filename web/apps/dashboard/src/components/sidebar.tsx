@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
-import { useStatus } from "./app-shell";
-import { isActiveHref, navItems } from "./nav-items";
+import { useCurrentUser, useStatus } from "./app-shell";
+import { isActiveHref, navItemsUntuk } from "./nav-items";
 
 /**
  * `NEXT_PUBLIC_APP_VERSION` disuntik `next.config.ts` dari `cli/Cargo.toml`
@@ -51,6 +51,10 @@ const KELAS_TITIK: Record<ToneServer, string> = {
 export function Sidebar({ terbuka }: { terbuka: boolean }) {
   const pathname = usePathname() ?? "/";
   const { state, failed, loading } = useStatus();
+  // Role datang dari context (diisi `layout.tsx`), bukan dari prop: Sidebar
+  // hidup di dalam AppShell yang sudah memegang user.
+  const { role } = useCurrentUser();
+  const menu = navItemsUntuk(role);
   const { tone, label, pulse } = indikatorServer({ state, failed, loading });
 
   return (
@@ -90,7 +94,7 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
         </div>
       </div>
       <nav aria-label="Navigasi utama" className="flex flex-1 flex-col gap-0.5 px-3 py-4">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {menu.map(({ href, label, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
             <Link

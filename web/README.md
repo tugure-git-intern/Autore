@@ -223,9 +223,33 @@ tempat: halaman (`apps/dashboard/src/middleware.ts`), API aksi
 - Username GitHub diperiksa dua kali — saat login (`auth.config.ts`) dan tiap
   request (`middleware.ts`) — jadi mencabut user dari whitelist berlaku begitu
   service di-restart.
-- Whitelist: `web/allowed-users.json` (array login GitHub, huruf besar-kecil
-  diabaikan). `AUTORE_ALLOWED_USERS` di `web/.env` (dipisah koma) **menimpa**
-  berkas itu kalau tidak kosong.
+- Whitelist: `web/allowed-users.json`, peta `login → role` (`{"alif":"admin"}`);
+  larik string lama masih dibaca sebagai "semua admin". Huruf besar-kecil
+  diabaikan. `AUTORE_ALLOWED_USERS` di `web/.env` (dipisah koma,
+  `login:role`) **menimpa** berkas itu kalau tidak kosong.
+- Admin bisa menyunting daftar itu dari dashboard: **Pengaturan → Pengguna &
+  Role** (`/settings`, menu hanya muncul untuk admin). Halaman itu menulis
+  berkas yang sama secara atomik (tulis `.tmp` → `fsync` → `rename`) dan
+  menyisakan `allowed-users.json.bak-<ISO>` tiap simpan. `AUTORE_ALLOWLIST_FILE`
+  memindahkan berkas ke luar repo kalau perlu.
+
+### Pengaturan → Pengguna & Role
+
+| Endpoint | Role | Perilaku |
+| --- | --- | --- |
+| `GET /api/settings/users` | admin | `{sumber, bisaDiubah, revisi, users[]}`; `sumber:"env"` = `AUTORE_ALLOWED_USERS` aktif |
+| `PUT /api/settings/users` | admin | body `{revisi, users[]}`; `409` kalau revisi basi atau env menimpa, `400` kalau login/role tidak sah atau tidak ada admin tersisa |
+
+- `revisi` = sidik SHA-256 isi berkas saat dibaca. Simpan dengan revisi basi
+  ditolak, bukan menimpa: suntingan admin lain tidak boleh hilang diam-diam.
+- Minimal satu admin wajib tersisa — kalau tidak, tidak ada yang bisa membuka
+  halaman ini lagi. Menurunkan diri sendiri tetap boleh selama ada admin lain.
+- Setiap simpan/penolakan menulis baris audit (`settings-users`, target
+  `users:<jumlah>` / `users:revisi-basi` / `users:tanpa-admin`).
+- Role dihitung ulang dari berkas tiap request, jadi perubahan berlaku pada
+  request berikutnya tanpa login ulang — tapi middleware Next.js memuat
+  `allowed-users.json` saat start, jadi **menu** sidebar baru mengikuti setelah
+  service dashboard di-restart.
 
 ### Environment
 
@@ -242,7 +266,8 @@ grep -c . .env           # memastikan berkasnya berisi
 | `NEXTAUTH_SECRET` (atau `AUTH_SECRET`) | penandatangan cookie; `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | URL yang dilihat browser, mis. `http://100.80.3.14:9120` |
 | `AUTH_TRUST_HOST` | `true` — wajib di belakang tailnet (host bukan localhost) |
-| `AUTORE_ALLOWED_USERS` | opsional; menimpa `allowed-users.json` |
+| `AUTORE_ALLOWED_USERS` | opsional; menimpa `allowed-users.json` (bentuk `login:role,...`) |
+| `AUTORE_ALLOWLIST_FILE` | opsional; jalur `allowed-users.json` di luar repo |
 
 Callback URL OAuth App GitHub harus `http://<host>:9120/api/auth/callback/github`.
 

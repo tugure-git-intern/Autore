@@ -4,7 +4,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { pathToFileURL } from "node:url";
 import { hatchActions, spawnAutore, type ActionResult, type Actions } from "./actions";
 import { loadDashboardStatus, runAutore, type RunAutore } from "./status";
-import { roleAtLeast, roleFor, type ActivePayload, type RunsPayload, type SbomResult } from "@autore/contracts";
+import { roleAtLeast, roleFor, type ActivePayload, type RunsPayload, type SbomResult, type UsersSaveBody } from "@autore/contracts";
 import { getRuns } from "./runs";
 import { getActive } from "./active";
 import { bacaBodyQuickStart, type HasilBaca } from "./quick-start";
@@ -21,6 +21,8 @@ import {
   type RollbackHandler,
 } from "./release-rollback";
 import { hatchPromote, type PromoteHandler } from "./release-promote";
+import { hatchSettings, type UsersHandler } from "./settings-users";
+import { isUsersSaveBody } from "@autore/contracts";
 
 /** Batas rate limit default 10/menit; test hermetik boleh menaikkannya lewat env. */
 const BATAS_RATE = (() => {
@@ -80,6 +82,8 @@ async function readAppBody(
 }
 
 const MAX_BODY_AKSI = 4 * 1024;
+/** Allowlist = daftar login; 200 entri masih jauh di bawah batas ini. */
+const MAX_BODY_USERS = 64 * 1024;
 
 /**
  * Ukuran body dibatasi dua kali (content-length lalu panjang teks) supaya body
@@ -89,10 +93,11 @@ const MAX_BODY_AKSI = 4 * 1024;
 async function bacaJsonTerbatas(
   request: Request,
   pesanBentuk: string,
+  batas: number = MAX_BODY_AKSI,
 ): Promise<{ ok: true; parsed: unknown } | { ok: false; error: string }> {
   const panjang = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(panjang) && panjang > MAX_BODY_AKSI) {
-    return { ok: false, error: `body terlalu besar (maks ${MAX_BODY_AKSI} byte)` };
+  if (Number.isFinite(panjang) && panjang > batas) {
+    return { ok: false, error: `body terlalu besar (maks ${batas} byte)` };
   }
 
   let teks: string;
@@ -101,8 +106,8 @@ async function bacaJsonTerbatas(
   } catch {
     return { ok: false, error: "body tidak bisa dibaca" };
   }
-  if (teks.length > MAX_BODY_AKSI) {
-    return { ok: false, error: `body terlalu besar (maks ${MAX_BODY_AKSI} byte)` };
+  if (teks.length > batas) {
+    return { ok: false, error: `body terlalu besar (maks ${batas} byte)` };
   }
 
   try {
@@ -189,6 +194,7 @@ export function createApp(
   approvals: ApprovalHandler = hatchApprovals(),
   rollback: RollbackHandler = hatchRollback(),
   promote: PromoteHandler = hatchPromote(),
+  settings: UsersHandler = hatchSettings(),
 ) {
   const app = new Hono<{ Variables: { sesi: Identitas } }>();
 
@@ -306,6 +312,39 @@ export function createApp(
     c.header("Cache-Control", "no-store");
     const hasil = await sbom(c.req.param("app"));
     return hasil.ok ? c.json(hasil.data, 200) : c.json({ error: hasil.error }, hasil.status);
+  });
+
+  // Pengaturan → Pengguna & Role: pintu masuk wewenang, jadi admin saja. GET
+  // sekalipun butuh admin (daftar login + email = PII, dan halaman ini tidak
+  // berguna bagi yang tidak bisa menyimpannya).
+  app.use("/api/settings/users", requireSession(auth, "admin"));
+  app.use("/api/settings/users", rateLimiter);
+
+  app.get("/api/settings/users", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await settings.baca(c.get("sesi")));
+  });
+
+  app.put("/api/settings/users", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const body = await bacaJsonTerbatas(
+      c.req.raw,
+      'body harus JSON {"revisi":"<sidik>","users":[{"login":"...","role":"dev|qa|admin"}]}',
+      MAX_BODY_USERS,
+    );
+    if (!body.ok) return c.json({ ok: false, status: 400 as const, error: body.error }, 400);
+    if (!isUsersSaveBody(body.parsed)) {
+      return c.json(
+        {
+          ok: false,
+          status: 400 as const,
+          error: 'body harus JSON {"revisi":"<sidik>","users":[{"login":"...","role":"dev|qa|admin"}]}',
+        },
+        400,
+      );
+    }
+    const hasil = await settings.simpan(c.get("sesi"), body.parsed as UsersSaveBody);
+    return c.json(hasil, hasil.status);
   });
 
   // Jejak audit memuat login dan email (PII), jadi butuh sesi walau read-only.

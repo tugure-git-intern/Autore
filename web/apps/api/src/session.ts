@@ -91,7 +91,8 @@ export type SumberAllowlist = () => ReadonlyMap<string, Role>;
  * `node --run`, atau vitest dari root monorepo.
  */
 export function jalurAllowlist(): string {
-  return fileURLToPath(new URL("../../../allowed-users.json", import.meta.url));
+  // Override untuk unit yang menyimpan berkas di luar repo (dan untuk tes).
+  return process.env.AUTORE_ALLOWLIST_FILE || fileURLToPath(new URL("../../../allowed-users.json", import.meta.url));
 }
 
 /**

@@ -4,6 +4,7 @@ import daftarBerkas from "../../../allowed-users.json";
 import { authConfig } from "./auth.config";
 import { authSecret } from "./lib/auth-secret";
 import { allowlistMap, isAllowed } from "./lib/allowlist";
+import { roleDariAllowlist } from "./lib/roles";
 
 const daftar = allowlistMap(daftarBerkas, process.env.AUTORE_ALLOWED_USERS);
 const TANPA_SESI = new Set(["/login", "/403"]);
@@ -28,6 +29,12 @@ export default auth((req) => {
   }
 
   if (!isAllowed(login, daftar)) {
+    return NextResponse.redirect(new URL("/403", req.nextUrl.origin));
+  }
+
+  // Halaman Pengaturan = pintu masuk wewenang, jadi admin saja. API tetap
+  // menegakkannya; gerbang ini mencegah non-admin melihat kerangkanya.
+  if (pathname.startsWith("/settings") && roleDariAllowlist(login, daftar) !== "admin") {
     return NextResponse.redirect(new URL("/403", req.nextUrl.origin));
   }
 

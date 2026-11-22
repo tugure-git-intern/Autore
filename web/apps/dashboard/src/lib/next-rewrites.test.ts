@@ -21,6 +21,14 @@ describe("rewrites /api ke unit Hono", () => {
     });
   });
 
+  it("meneruskan /api/settings/users ke API loopback", async () => {
+    // Tanpa entri ini UI dapat 404 HTML dari Next, bukan 403 JSON dari Hono.
+    expect(await rewrites()).toContainEqual({
+      source: "/api/settings/users",
+      destination: "http://127.0.0.1:9121/api/settings/users",
+    });
+  });
+
   it("tidak memakai pola liar yang akan menelan /api/auth/*", async () => {
     const sumber = (await rewrites()).map((r) => r.source);
 

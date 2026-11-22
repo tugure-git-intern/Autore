@@ -9,3 +9,4 @@ export * from "./releases";
 
 export * from "./release-events";
 export * from "./roles";
+export * from "./settings";

@@ -1,11 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // AppShell membaca pathname App Router; tes ini mengunci rute aktifnya.
 const nav = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
+import { UserContext } from "./app-shell";
 import { NavBawah } from "./nav-bawah";
+
+/** Bar dibaca dari context user: tanpa role = 5 kolom, admin = 6. */
+const renderBar = (role?: "dev" | "qa" | "admin") =>
+  render(
+    <UserContext.Provider value={{ login: "uji", name: "Uji", image: null, role }}>
+      <NavBawah />
+    </UserContext.Provider>,
+  );
 
 afterEach(() => {
   nav.pathname = "/";
@@ -28,6 +37,19 @@ describe("NavBawah", () => {
     expect(screen.queryByText("Daftar Aplikasi")).toBeNull();
   });
 
+  it("admin mendapat tujuan keenam Setelan; dev dan qa tidak", () => {
+    renderBar("admin");
+    expect(screen.getAllByRole("link").map((t) => t.textContent)).toContain("Setelan");
+    cleanup();
+
+    for (const role of ["dev", "qa"] as const) {
+      renderBar(role);
+      expect(screen.queryByRole("link", { name: "Setelan" })).toBeNull();
+      expect(screen.getAllByRole("link")).toHaveLength(5);
+      cleanup();
+    }
+  });
+
   it("menandai rute aktif saja, dan subpath ikut induknya", () => {
     nav.pathname = "/applications/sbom";
     render(<NavBawah />);
@@ -37,15 +59,17 @@ describe("NavBawah", () => {
   });
 
   it("menempel di bawah layar, aman dari home indicator, dan menyembunyikan diri di desktop", () => {
-    const { container } = render(<NavBawah />);
+    const { container } = renderBar("admin");
 
     const bar = screen.getByRole("navigation", { name: "Navigasi bawah" });
     expect(bar.className).toContain("fixed");
     expect(bar.className).toContain("bottom-0");
     expect(bar.className).toContain("lg:hidden");
     expect(bar.className).toContain("pb-[env(safe-area-inset-bottom)]");
-    // Empat kolom sama lebar: tidak ada tujuan yang terpotong.
-    expect(container.querySelector("nav > div")?.className).toContain("grid-cols-5");
+    // Satu kolom per tujuan: 6 untuk admin, tidak ada label yang terpotong.
+    expect(container.querySelector("nav > div")?.getAttribute("style")).toContain(
+      "repeat(6, minmax(0, 1fr))",
+    );
   });
 
   it("memakai latar GCP Console #F0F5FE agar menyatu dengan topbar dan kanvas", () => {

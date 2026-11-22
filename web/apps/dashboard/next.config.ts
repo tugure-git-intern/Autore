@@ -44,6 +44,7 @@ const nextConfig: NextConfig = {
       { source: "/api/actions/:path*", destination: `${API_ASAL}/api/actions/:path*` },
       { source: "/api/sbom/:app", destination: `${API_ASAL}/api/sbom/:app` },
       { source: "/api/audit/log", destination: `${API_ASAL}/api/audit/log` },
+      { source: "/api/settings/users", destination: `${API_ASAL}/api/settings/users` },
       { source: "/api/releases", destination: `${API_ASAL}/api/releases` },
       { source: "/api/releases/:id/approve", destination: `${API_ASAL}/api/releases/:id/approve` },
       { source: "/api/releases/:id/reject", destination: `${API_ASAL}/api/releases/:id/reject` },

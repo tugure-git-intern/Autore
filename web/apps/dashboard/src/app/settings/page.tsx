@@ -233,7 +233,9 @@ export default function SettingsPage() {
             {menyimpan ? "Menyimpan…" : "Simpan"}
           </button>
           <span className="text-xs text-muted">
-            Tulis atomik + backup otomatis <code>allowed-users.json.bak-*</code>. Berlaku pada request berikutnya tanpa login ulang.
+            Simpan tidak merusak berkas walau server mati di tengah. Salinan lama otomatis
+            dibuat (<code>allowed-users.json.bak-*</code>), dan izin baru langsung berlaku tanpa perlu
+            login ulang — menu sidebar baru mengikuti setelah dashboard di-restart.
           </span>
         </div>
       </div>

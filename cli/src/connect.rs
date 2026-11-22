@@ -6,7 +6,7 @@ use std::process::Command;
 
 use colored::Colorize;
 
-use crate::templates::{generate_project_files_with, InitConfig, TechStack};
+use crate::templates::{ensure_missing_pipeline_files, InitConfig, TechStack};
 use crate::{jenkins, progress, workspace};
 
 const PREFIX: &str = "https://github.com/";
@@ -100,6 +100,7 @@ pub struct ConnectOpts {
     pub wajib_review: Option<u8>,
     pub author_name: Option<String>,
     pub author_email: Option<String>,
+    pub resume: bool,
 }
 
 /// Apakah folder ini (atau salah satu folder di atasnya) sebuah repo git.
@@ -126,6 +127,35 @@ pub fn nama_aplikasi(opts: &ConnectOpts) -> Result<String, String> {
 fn gagal(pesan: &str) -> i32 {
     eprintln!("{} {pesan}", "ERROR:".red().bold());
     1
+}
+
+fn gagal_tahap(id: &str, pesan: &str) -> i32 {
+    progress::tahap(id, "gagal", pesan);
+    gagal(pesan)
+}
+
+/// Keluaran stdout git yang sukses. `None` kalau git tidak jalan atau gagal.
+fn git_out(dir: &Path, args: &[&str]) -> Option<String> {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// `--resume` hanya boleh dipakai kalau folder yang sudah ada memang checkout
+/// repo dan branch yang diminta. Tanpa pemeriksaan ini, folder aplikasi lain
+/// (atau repo lain dengan nama sama) akan di-commit dan di-push.
+fn checkout_sesuai(target: &Path, repo_url: &str, branch: &str) -> bool {
+    let remote = git_out(target, &["remote", "get-url", "origin"]);
+    let remote_sah = remote
+        .as_deref()
+        .map(|url| url.trim_end_matches(".git") == repo_url)
+        .unwrap_or(false);
+    remote_sah && git_out(target, &["branch", "--show-current"]).as_deref() == Some(branch)
 }
 
 fn clone_repo(url: &str, dir: &Path, branch: &str) -> Result<(), String> {
@@ -246,24 +276,46 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
         ));
     }
     if target.exists() {
-        return gagal(&format!(
-            "Folder {} sudah ada. Jalankan dari folder lain, atau pakai --path <folder induk> \
-             (mis. --path ~/autore-workspace) supaya folder itu tidak tertimpa.",
+        // Folder sisa `connect` yang sudah push boleh dilanjutkan: mengulang dari
+        // nol akan menolak folder, padahal semua tahap sebelum Jenkins idle.
+        if !opts.resume {
+            return gagal(&format!(
+                "Folder {} sudah ada. Jalankan dari folder lain, atau pakai --path <folder induk> \
+                 (mis. --path ~/autore-workspace) supaya folder itu tidak tertimpa. \
+                 Kalau folder itu sisa connect yang sudah push, lanjutkan dengan --resume.",
+                target.display()
+            ));
+        }
+        if !checkout_sesuai(&target, &rr.url, &opts.branch) {
+            return gagal_tahap(
+                "klon",
+                &format!(
+                    "Folder {} tidak bisa dilanjutkan: isinya bukan checkout {} pada branch {} (origin/branch harus sama). Hapus folder itu atau clone ulang tanpa --resume.",
+                    target.display(),
+                    rr.url,
+                    opts.branch
+                ),
+            );
+        }
+        println!(
+            "  {} Checkout {} dipakai ulang (--resume)",
+            "1/4".green().bold(),
             target.display()
-        ));
+        );
+        progress::tahap("klon", "selesai", "Checkout yang ada dipakai ulang.");
+    } else {
+        println!("\n{} Sambungkan repo '{}'", "●".cyan().bold(), nama.bold());
+        progress::tahap("klon", "mulai", "Mengambil repo dari GitHub.");
+        if let Err(e) = clone_repo(&rr.url, &target, &opts.branch) {
+            return gagal_tahap("klon", &e);
+        }
+        println!(
+            "  {} Repo di-clone ke {}",
+            "1/4".green().bold(),
+            target.display()
+        );
+        progress::tahap("klon", "selesai", "Repo berhasil diambil.");
     }
-
-    println!("\n{} Sambungkan repo '{}'", "●".cyan().bold(), nama.bold());
-    progress::tahap("klon", "mulai", "Mengambil repo dari GitHub.");
-    if let Err(e) = clone_repo(&rr.url, &target, &opts.branch) {
-        return gagal(&e);
-    }
-    println!(
-        "  {} Repo di-clone ke {}",
-        "1/4".green().bold(),
-        target.display()
-    );
-    progress::tahap("klon", "selesai", "Repo berhasil diambil.");
 
     let stack = match pilih_stack(opts, &target) {
         Ok(s) => s,
@@ -287,16 +339,25 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
             Ok(p) => p,
             Err(e) => return gagal(&e),
         };
-    if crate::has_existing_pipeline_files(&target) {
+    let dibuat = match ensure_missing_pipeline_files(&cfg, &target, staging_port) {
+        Ok(paths) => paths,
+        Err(e) => {
+            batalkan_entri_baru(&workspace, &nama, entri_baru);
+            return gagal_tahap("kerangka", &e);
+        }
+    };
+    if dibuat.is_empty() {
         println!(
-            "  {} Dockerfile/Jenkinsfile milik repo dipakai apa adanya",
+            "  {} Dockerfile/Jenkinsfile/.dockerignore milik repo dipakai apa adanya",
             "2/4".green().bold()
         );
-    } else if let Err(e) = generate_project_files_with(&cfg, &target, false, staging_port) {
-        batalkan_entri_baru(&workspace, &nama, entri_baru);
-        return gagal(&e);
     } else {
-        println!("  {} File pipeline dibuat", "2/4".green().bold());
+        let names = dibuat
+            .iter()
+            .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("  {} File pipeline dibuat: {names}", "2/4".green().bold());
     }
     // Peringatan dini lewat jalur yang sama dengan quick-start: repo tanpa kode
     // aplikasi atau tanpa endpoint /health akan gagal di tahap deploy nanti.
@@ -308,14 +369,17 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
         jenkins::validasi_author(opts.author_name.as_deref(), opts.author_email.as_deref());
     if let Err(e) = commit_scaffold(&target, author.as_ref()) {
         batalkan_entri_baru(&workspace, &nama, entri_baru);
-        return gagal(&e);
+        return gagal_tahap("commit", &e);
     }
     if !push_branch(&target, &opts.branch) {
         batalkan_entri_baru(&workspace, &nama, entri_baru);
-        return gagal(&format!(
-            "Gagal push ke {git_url} (branch {}). Pastikan token GitHub punya izin tulis dan branch tidak diproteksi.",
-            opts.branch
-        ));
+        return gagal_tahap(
+            "kirim",
+            &format!(
+                "Gagal push ke {git_url} (branch {}). Pastikan token GitHub punya izin tulis dan branch tidak diproteksi.",
+                opts.branch
+            ),
+        );
     }
     println!("  {} Terkirim ke {}", "3/4".green().bold(), git_url);
     progress::tahap("kirim", "selesai", "Kode terkirim ke GitHub.");
@@ -338,39 +402,48 @@ pub fn jalankan(opts: &ConnectOpts, interactive: bool) -> i32 {
         ),
     }
 
-    // Port dikunci setelah push sukses: gagal push tidak boleh menyisakan port
-    // terkunci untuk aplikasi yang tidak pernah jadi.
-    workspace::catat_port(&workspace, &nama, cfg.app_port, cfg.deploy_port);
+    // Port dikunci setelah push + Jenkins sukses: gagal Jenkins berarti app belum
+    // terdaftar di dashboard, jadi port-nya tidak boleh ikut terkunci. Ledger
+    // (`environments.json`) tetap dipertahankan karena Jenkinsfile di repo sudah
+    // membawa deployPort itu — menghapusnya akan membuat retry memakai port lain.
     let conf_path = jenkins::default_config_path();
     let jk_cfg = match crate::ensure_jenkins_config(&conf_path, interactive, false) {
         Some(c) => c,
-        None => return 1,
-    };
-    match jenkins::register_and_trigger_jenkins(&jk_cfg, &nama, &git_url, &opts.branch) {
-        Ok(job_url) => {
-            println!(
-                "\n{} Repo '{}' tersambung & build jalan!",
-                "✔".green().bold(),
-                nama
-            );
-            println!("  • Folder project : {}", target.display());
-            println!("  • Repo GitHub    {}/{} (tersambung)", rr.owner, rr.name);
-            println!("  • Job Jenkins    : {job_url}");
-            println!(
-                "  • Staging       : http://localhost:{staging_port} (build pertama otomatis)"
-            );
-            println!(
-                "  • Production    : http://localhost:{production_port} (setelah persetujuan promotion)"
-            );
-            progress::tahap(
+        None => {
+            return gagal_tahap(
                 "jenkins",
-                "selesai",
-                "Terdaftar di Jenkins, build mulai berjalan.",
-            );
-            0
+                &format!("Push GitHub sukses; konfigurasi Jenkins belum ada di {}. Atur Jenkins, lalu ulangi connect dengan --resume.", conf_path.display()),
+            )
         }
-        Err(e) => gagal(&e),
-    }
+    };
+    progress::tahap("jenkins", "mulai", "Mendaftarkan job ke Jenkins.");
+    let job_url =
+        match jenkins::register_and_trigger_jenkins(&jk_cfg, &nama, &git_url, &opts.branch) {
+            Ok(url) => url,
+            // Repo sudah ter-push: jangan hapus clone/ledger, cukup laporkan tahapnya
+            // supaya `--resume` (atau dashboard) tahu apa yang harus diulang.
+            Err(e) => return gagal_tahap("jenkins", &e),
+        };
+    workspace::catat_port(&workspace, &nama, cfg.app_port, cfg.deploy_port);
+
+    println!(
+        "\n{} Repo '{}' tersambung & build jalan!",
+        "✔".green().bold(),
+        nama
+    );
+    println!("  • Folder project : {}", target.display());
+    println!("  • Repo GitHub    {}/{} (tersambung)", rr.owner, rr.name);
+    println!("  • Job Jenkins    : {job_url}");
+    println!("  • Staging       : http://localhost:{staging_port} (build pertama otomatis)");
+    println!(
+        "  • Production    : http://localhost:{production_port} (setelah persetujuan promotion)"
+    );
+    progress::tahap(
+        "jenkins",
+        "selesai",
+        "Terdaftar di Jenkins, build mulai berjalan.",
+    );
+    0
 }
 
 /// Port hanya dikunci kalau push sukses: kalau alur batal, entri yang kita buat
@@ -435,6 +508,47 @@ mod tests {
         }
     }
 
+    /// Checkout sisa connect hanya boleh dilanjutkan kalau origin DAN branch-nya
+    /// sama dengan permintaan; folder lain yang namanya kebetulan sama harus ditolak
+    /// supaya `--resume` tidak mem-push isi repo yang salah.
+    #[test]
+    fn resume_hanya_untuk_checkout_repo_dan_branch_yang_sama() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().join("app");
+        std::fs::create_dir_all(&dir).unwrap();
+        let git = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?} gagal");
+        };
+        let url = "https://github.com/tugure-reasuransi/autore-demo";
+
+        assert!(
+            !checkout_sesuai(&dir, url, "main"),
+            "folder biasa bukan checkout"
+        );
+
+        git(&["init", "-q", "-b", "main"]);
+        git(&["remote", "add", "origin", &format!("{url}.git")]);
+        assert!(
+            checkout_sesuai(&dir, url, "main"),
+            "origin .git dan branch sama"
+        );
+        assert!(!checkout_sesuai(&dir, url, "develop"), "branch lain");
+
+        git(&[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/lain/repo",
+        ]);
+        assert!(!checkout_sesuai(&dir, url, "main"), "repo lain");
+        assert!(!checkout_sesuai(&tmp.path().join("hilang"), url, "main"));
+    }
+
     fn opts(repo: &str, app_name: Option<&str>) -> ConnectOpts {
         ConnectOpts {
             repo: repo.to_string(),
@@ -448,6 +562,7 @@ mod tests {
             wajib_review: None,
             author_name: None,
             author_email: None,
+            resume: false,
         }
     }
 

@@ -117,3 +117,29 @@ export function argvConnect(workspace: string, nilai: ConnectInput, author?: Ide
   if (author) args.push("--author-name", author.nama, "--author-email", author.email);
   return args;
 }
+
+/** Awalan baris data `progress::tahap` di CLI (cli/src/progress.rs). */
+const PENANDA_TAHAP = "@@AUTORE ";
+
+/**
+ * Tahap terakhir yang dilaporkan CLI sebagai gagal, mis. `"jenkins"`.
+ *
+ * CLI menulis satu baris JSON per tahap hanya saat `AUTORE_PROGRESS=json` (API yang
+ * menyalakannya). Tanpa ini pesan 422 hanya berisi kode keluar, padahal user perlu tahu
+ * tahap mana yang harus diulang — push sukses tapi Jenkins gagal bukan kegagalan yang sama
+ * dengan clone gagal.
+ */
+export function tahapGagalDariOutput(output: string): string | undefined {
+  let gagal: string | undefined;
+  for (const baris of output.split("\n")) {
+    const isi = baris.trim();
+    if (!isi.startsWith(PENANDA_TAHAP)) continue;
+    try {
+      const data = JSON.parse(isi.slice(PENANDA_TAHAP.length)) as { tahap?: unknown; status?: unknown };
+      if (data.status === "gagal" && typeof data.tahap === "string" && data.tahap) gagal = data.tahap;
+    } catch {
+      // Baris potong (keluaran dipotong MAX_OUTPUT) bukan alasan menggagalkan permintaan.
+    }
+  }
+  return gagal;
+}

@@ -6,7 +6,7 @@ import { bacaRegistry, catatAplikasi } from "./registry";
 import { aksiBerjalan, ambilKunci, pemegangKunci } from "./kunci";
 import { promisify } from "node:util";
 import { argvQuickStart, peringatanDariOutput, repoDariOutput, type QuickStartInput } from "./quick-start";
-import { argvConnect, type ConnectInput } from "./connect";
+import { argvConnect, tahapGagalDariOutput, type ConnectInput } from "./connect";
 import { argvHapusApp, bersihkanAnsi } from "./hapus-app";
 import type { Identitas } from "./session";
 import { loadDashboardStatus, resetStatusCache, type RunAutore } from "./status";
@@ -117,6 +117,18 @@ function capped(text: string): string {
 
 function failed(status: 400 | 404 | 409 | 422 | 503 | 504, error: string, output?: string): ActionResult {
   return output === undefined ? { ok: false, status, error } : { ok: false, status, error, output };
+}
+
+/**
+ * Pesan 422 untuk quick-start/connect. Tahap gagal dari CLI (`jenkins`, `kirim`, ...)
+ * disebut supaya user tahu bagian mana yang harus diulang: push yang sudah sukses tidak
+ * boleh terlihat seperti kegagalan total dan sebaliknya.
+ */
+export function pesanGagalBaru(kind: "quick-start" | "connect", exitCode: number, output: string): string {
+  const tahap = tahapGagalDariOutput(output);
+  return tahap
+    ? `${kind} gagal di tahap ${tahap} (kode ${exitCode})`
+    : `${kind} keluar dengan kode ${exitCode}`;
 }
 
 export type Actions = ReturnType<typeof hatchActions>;
@@ -444,7 +456,7 @@ export function hatchActions(deps: {
             ...(peringatan ? { peringatan } : {}),
             output,
           }
-        : failed(422, `${kind} keluar dengan kode ${res.exitCode}`, output);
+        : failed(422, pesanGagalBaru(kind, res.exitCode, output), output);
     } finally {
       lepas();
     }

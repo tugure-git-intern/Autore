@@ -78,6 +78,14 @@ export async function runConnect(permintaan: PermintaanConnect): Promise<HasilCo
     | { error?: string; output?: string }
     | null;
   const error = payload?.error ?? `Server menolak permintaan (HTTP ${response.status}).`;
-  const detail = payload?.output ? firstLine(payload.output) : "";
+  // `@@AUTORE {...}` adalah baris data CLI (progress::tahap), bukan kalimat untuk user.
+  const detail = payload?.output
+    ? firstLine(
+        payload.output
+          .split("\n")
+          .filter((baris) => !baris.trimStart().startsWith("@@AUTORE "))
+          .join("\n"),
+      )
+    : "";
   return { ok: false, message: detail ? `${error} — ${detail}` : error };
 }

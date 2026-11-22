@@ -1042,6 +1042,10 @@ enum Commands {
         /// Email identitas commit dari sesi dashboard
         #[arg(long)]
         author_email: Option<String>,
+
+        /// Lanjutkan checkout connect yang sudah dipush dan cocok dengan repo/branch.
+        #[arg(long, requires = "repo")]
+        resume: bool,
     },
 
     /// Hapus app di server: container, job Jenkins, registry, environments, folder
@@ -2249,6 +2253,7 @@ fn execute_command(
             wajib_review,
             author_name,
             author_email,
+            resume,
         } => {
             let base_dir = if path == std::path::Path::new(".") {
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
@@ -2268,6 +2273,7 @@ fn execute_command(
                     wajib_review,
                     author_name,
                     author_email,
+                    resume,
                 },
                 interactive,
             )

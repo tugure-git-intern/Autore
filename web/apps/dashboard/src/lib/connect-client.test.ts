@@ -100,6 +100,29 @@ test("penolakan server memakai pesan error dan baris pertama keluaran CLI", asyn
   expect(hasil.message).toBe("connect keluar dengan kode 1 — ERROR: Gagal push ke GitHub.");
 });
 
+test("baris data @AUTORE disembunyikan, pesan tetap menyebut tahap gagal", async () => {
+  mockFetch(() => ({
+    ok: false,
+    status: 422,
+    body: {
+      ok: false,
+      status: 422,
+      error: "connect gagal di tahap jenkins (kode 1)",
+      output: [
+        '@@AUTORE {"tahap":"kirim","status":"selesai","pesan":"Kode terkirim ke GitHub."}',
+        "  4/4 Push GitHub selesai",
+        '@@AUTORE {"tahap":"jenkins","status":"gagal","pesan":"Jenkins menolak job."}',
+        "ERROR: Jenkins menolak job.",
+      ].join("\n"),
+    },
+  }));
+
+  const hasil = await runConnect({ repo: "https://github.com/a/b", nama: "b", branch: "main" });
+
+  expect(hasil.message).toBe("connect gagal di tahap jenkins (kode 1) — 4/4 Push GitHub selesai");
+  expect(hasil.message).not.toContain("@@AUTORE");
+});
+
 test("sesi berakhir meminta login ulang, bukan retry diam-diam", async () => {
   mockFetch(() => ({ ok: false, status: 401, body: { error: "sesi tidak sah" } }));
 

@@ -18,12 +18,25 @@ pub struct RepoRef {
     pub url: String,
 }
 
-/// Hanya `https://github.com/<owner>/<repo>` yang diterima. URL ini masuk ke
-/// argv `git clone`, jadi ssh, `file://`, dan URL berkredensial ditolak di sini
-/// supaya tidak ada jalur lain yang membaca repo di luar GitHub.
+/// URL GitHub dinormalkan ke `https://github.com/<owner>/<repo>`. Bentuk pendek
+/// `owner/repo` dan `github.com/owner/repo` diterima supaya sama dengan
+/// `kunci-repo`; skema lain tetap ditolak. URL ini masuk ke argv `git clone`,
+/// jadi ssh, `file://`, dan URL berkredensial tidak boleh lolos.
 pub fn parse_repo_url(input: &str) -> Result<RepoRef, String> {
-    let sisa = input
-        .trim()
+    let teks = input.trim();
+    let penuh = if teks.starts_with(PREFIX) {
+        teks.to_string()
+    } else if let Some(sisa) = teks.strip_prefix("github.com/") {
+        format!("{PREFIX}{sisa}")
+    } else if !teks.contains("://") && teks.split('/').count() == 2 {
+        format!("{PREFIX}{teks}")
+    } else {
+        return Err(
+            "Repo harus berbentuk <owner>/<repo> atau https://github.com/<owner>/<repo>"
+                .to_string(),
+        );
+    };
+    let sisa = penuh
         .strip_prefix(PREFIX)
         .ok_or("URL repo harus berbentuk https://github.com/<owner>/<repo>")?;
     if sisa.contains(['@', ':', '?', '#']) {
@@ -364,6 +377,28 @@ mod tests {
         let b = parse_repo_url("https://github.com/tugure-reasuransi/autore-demo.git").unwrap();
         assert_eq!(b.name, "autore-demo");
         assert_eq!(b.url, "https://github.com/tugure-reasuransi/autore-demo");
+    }
+
+    /// Bentuk pendek harus diterima sama seperti `kunci-repo`, supaya orang
+    /// tidak perlu mengingat dua gaya argumen untuk repo yang sama.
+    #[test]
+    fn terima_bentuk_pendek_owner_repo() {
+        for masukan in [
+            "tugure-reasuransi/autore-demo",
+            "github.com/tugure-reasuransi/autore-demo",
+            "  tugure-reasuransi/autore-demo.git  ",
+        ] {
+            let r = parse_repo_url(masukan).unwrap();
+            assert_eq!(
+                r.url, "https://github.com/tugure-reasuransi/autore-demo",
+                "gagal untuk {masukan}"
+            );
+        }
+        assert!(
+            parse_repo_url("a/b/c").is_err(),
+            "tiga segmen harus ditolak"
+        );
+        assert!(parse_repo_url("gitlab.com/a/b").is_err());
     }
 
     #[test]

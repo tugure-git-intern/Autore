@@ -34,12 +34,14 @@ mode_baru=penuh
 review_wajib=1
 ```
 
-Aturannya berurutan, yang pertama menang:
+Aturannya berurutan, yang pertama menang (`cli/src/kebijakan.rs:112`):
 
-1. pemilik repo ada di `akun_pribadi` → `ringan`
-2. pemilik repo ada di `akun_kantor` → `penuh`
-3. `--kunci` disebut di CLI → nilai itu
-4. pemilik tidak dikenal → `mode_baru`
+1. `--kunci` disebut di CLI → nilai itu
+2. pemilik repo sebuah organisasi → `penuh`
+3. pemilik repo ada di `akun_pribadi` → `ringan`
+4. pemilik repo ada di `akun_kantor` → `penuh`
+5. repo punya ≥2 kolaborator → `penuh`
+6. sisanya → `mode_baru`
 
 Tidak ada berkas kebijakan = semua `penuh` dengan 1 review. Perilaku aman
 sebagai default, tanpa konfigurasi.

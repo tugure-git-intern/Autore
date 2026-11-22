@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PlusCircle, Rocket, Search, SearchX, ShieldCheck } from "lucide-react";
+import { PlusCircle, Rocket, Search, SearchX, ShieldCheck, UsersRound } from "lucide-react";
 import type { AuditEntry } from "@/lib/audit-client";
 import { inisial, relativeTime } from "@/lib/format";
 
@@ -31,6 +31,15 @@ function getActionInfo(action: string) {
         verb: "membuat proyek baru pada",
         icon: PlusCircle,
         iconTone: "bg-purple-50 text-purple-600 border-purple-200 dark:border-purple-800 dark:bg-purple-950/80 dark:text-purple-300",
+      };
+    case "settings-users":
+      // Dari halaman Pengaturan: yang berubah adalah siapa boleh masuk, bukan
+      // sebuah aplikasi — karena itu targetnya `users:<n>` dan labelnya sendiri.
+      return {
+        label: "Pengaturan",
+        verb: "mengubah daftar pengguna dashboard",
+        icon: UsersRound,
+        iconTone: "bg-amber-50 text-amber-600 border-amber-200 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300",
       };
     default:
       return {
@@ -112,6 +121,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               <option value="deploy">Deploy</option>
               <option value="scan">Scan</option>
               <option value="quick-start">Quick-Start</option>
+              <option value="settings-users">Pengaturan</option>
             </select>
           </div>
 

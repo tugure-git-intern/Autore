@@ -98,6 +98,30 @@ describe("AuditTimeline", () => {
   });
 });
 
+describe("AuditTimeline — baris dari halaman Pengaturan", () => {
+  it("aksi settings-users tidak tampil sebagai slug mentah", () => {
+    render(
+      <AuditTimeline
+        entries={[
+          {
+            ts: "2026-11-22T03:45:00.000Z",
+            login: "Tugure Git",
+            email: "bot@tugu.com",
+            action: "settings-users",
+            target: "users:5",
+            exit: 0,
+          },
+        ]}
+      />,
+    );
+
+    // Label dan narasi Indonesia, bukan `settings-users` / "menjalankan settings-users".
+    expect(screen.getByText("Pengaturan")).toBeTruthy();
+    expect(screen.getByText(/mengubah daftar pengguna dashboard/)).toBeTruthy();
+    expect(screen.queryByText(/menjalankan settings-users/)).toBeNull();
+  });
+});
+
 describe("AuditTimeline — QA audit log", () => {
   it("log benar-benar kosong: menyapa 'Belum ada aktivitas', bukan pesan filter", () => {
     render(<AuditTimeline entries={[]} />);

@@ -250,6 +250,14 @@ tempat: halaman (`apps/dashboard/src/middleware.ts`), API aksi
   request berikutnya tanpa login ulang — tapi middleware Next.js memuat
   `allowed-users.json` saat start, jadi **menu** sidebar baru mengikuti setelah
   service dashboard di-restart.
+- Berkas itu dilacak git (whitelist awal ikut repo), padahal halaman ini
+  menulisnya. Di mesin yang sering `git pull`, jalankan sekali
+  `git update-index --skip-worktree web/allowed-users.json` supaya simpanan dari
+  UI tidak bikin repo kotor dan tidak bentrok saat pull. Simpanan pertama juga
+  menormalkan format (kunci diurutkan + newline akhir), jadi byte-nya bisa
+  berbeda dari aslinya walau isinya sama. Kalau mau benar-benar lepas dari git,
+  pindahkan berkas ke luar repo lewat `AUTORE_ALLOWLIST_FILE` — tapi jangan
+  sekaligus dengan `skip-worktree`, nanti whitelist terbelah dua sumber.
 
 ### Environment
 

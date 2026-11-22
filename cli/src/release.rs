@@ -82,6 +82,9 @@ pub enum ReleaseAction {
     TriggerPromote(TriggerPromoteArgs),
     /// Cetak id event promosi berikutnya untuk satu build
     PromoteId(PromoteIdArgs),
+    /// Pastikan release disetujui oleh orang lain sebelum promosi production
+    /// (dipakai Jenkinsfile.promote: jalur Jenkins pun kena gerbang empat mata)
+    VerifyApproval(VerifyApprovalArgs),
 }
 
 #[derive(Args)]
@@ -138,6 +141,16 @@ pub struct TriggerPromoteArgs {
     git_url: Option<String>,
     #[arg(long, default_value = "main")]
     branch: String,
+}
+
+#[derive(Args)]
+pub struct VerifyApprovalArgs {
+    /// Release berformat app:commit:build
+    #[arg(long)]
+    release_id: String,
+    /// Login yang memicu promosi production
+    #[arg(long)]
+    actor: String,
 }
 
 #[derive(Args)]
@@ -277,6 +290,15 @@ pub fn run(action: ReleaseAction) -> i32 {
                 1
             }
         },
+        ReleaseAction::VerifyApproval(args) => {
+            match verify_approval_at(&workspace::workspace_dir(), &args) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("ERROR: {e}");
+                    1
+                }
+            }
+        }
         ReleaseAction::RollbackId(args) => match rollback_id_at(&workspace::workspace_dir(), &args)
         {
             Ok(id) => {
@@ -361,6 +383,51 @@ fn trigger_promote(args: TriggerPromoteArgs) -> Result<String, String> {
             jenkins::trigger_parameterized(&cfg, &args.job, &params)
         }
     }
+}
+
+/// Gerbang empat mata untuk production. Dashboard (`web/apps/api/src/release-promote.ts`)
+/// menolak promosi oleh penyetuju; jalur Jenkins tidak melewati API, jadi aturan
+/// yang sama diperiksa di sini atas ledger yang sama. Keputusan yang dipakai =
+/// event approve/reject TERAKHIR, sama seperti fold TypeScript.
+fn verify_approval_at(dir: &Path, args: &VerifyApprovalArgs) -> Result<(), String> {
+    let bagian: Vec<&str> = args.release_id.trim().split(':').collect();
+    if bagian.len() != 3 || bagian[0].is_empty() || bagian[2].is_empty() {
+        return Err(format!(
+            "release id harus berbentuk app:commit:build, diterima: {:?}",
+            args.release_id
+        ));
+    }
+    let (app, build) = (bagian[0], bagian[2]);
+    let id_setuju = format!("{app}-{build}-approved");
+    let id_tolak = format!("{app}-{build}-rejected");
+    let ledger = read_ledger_at(dir)?;
+    let terakhir = ledger
+        .events
+        .iter()
+        .rev()
+        .find(|event| event.id == id_setuju || event.id == id_tolak);
+    let Some(event) = terakhir else {
+        return Err(format!(
+            "release {} belum disetujui; promosi production butuh approval",
+            args.release_id
+        ));
+    };
+    if event.id == id_tolak {
+        let alasan = event.error.as_deref().unwrap_or("tanpa alasan");
+        return Err(format!("release {} ditolak ({alasan})", args.release_id));
+    }
+    let penyetuju = event
+        .actor
+        .as_deref()
+        .map(str::trim)
+        .filter(|teks| !teks.is_empty())
+        .ok_or_else(|| format!("event approval {} tidak punya actor", event.id))?;
+    if penyetuju.to_lowercase() == args.actor.trim().to_lowercase() {
+        return Err(format!(
+            "promosi production harus oleh orang berbeda dari penyetuju ({penyetuju})"
+        ));
+    }
+    Ok(())
 }
 
 fn promote_id_at(dir: &Path, args: &PromoteIdArgs) -> Result<String, String> {
@@ -856,5 +923,75 @@ mod tests {
     fn ledger_kosong_dibaca_sebagai_event_kosong() {
         let tmp = TempDir::new().unwrap();
         assert!(read_ledger_at(tmp.path()).unwrap().events.is_empty());
+    }
+
+    fn event_keputusan(id: &str, kind: &str, actor: &str) -> Event {
+        Event {
+            kind: kind.into(),
+            actor: Some(actor.into()),
+            ..event(id)
+        }
+    }
+
+    fn args_release(release_id: &str, actor: &str) -> VerifyApprovalArgs {
+        VerifyApprovalArgs {
+            release_id: release_id.into(),
+            actor: actor.into(),
+        }
+    }
+
+    const RILIS: &str = "tes-testing:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:4";
+
+    #[test]
+    fn verify_approval_menolak_pelaku_yang_sama_dengan_penyetuju() {
+        let tmp = TempDir::new().unwrap();
+        append_event_at(
+            tmp.path(),
+            event_keputusan("tes-testing-4-approved", "approved", "Tugure-Git-Intern"),
+        )
+        .unwrap();
+        let err =
+            verify_approval_at(tmp.path(), &args_release(RILIS, "tugure-git-intern")).unwrap_err();
+        assert!(err.contains("orang berbeda dari penyetuju"), "{err}");
+    }
+
+    #[test]
+    fn verify_approval_menerima_penyetuju_berbeda() {
+        let tmp = TempDir::new().unwrap();
+        append_event_at(
+            tmp.path(),
+            event_keputusan("tes-testing-4-approved", "approved", "qa-satu"),
+        )
+        .unwrap();
+        assert!(verify_approval_at(tmp.path(), &args_release(RILIS, "admin-dua")).is_ok());
+    }
+
+    #[test]
+    fn verify_approval_menolak_tanpa_approval_dan_penolakan_terakhir() {
+        let args = args_release(RILIS, "admin-dua");
+
+        let kosong = TempDir::new().unwrap();
+        let err = verify_approval_at(kosong.path(), &args).unwrap_err();
+        assert!(err.contains("belum disetujui"), "{err}");
+
+        let ditolak = TempDir::new().unwrap();
+        append_event_at(
+            ditolak.path(),
+            event_keputusan("tes-testing-4-approved", "approved", "qa-satu"),
+        )
+        .unwrap();
+        let mut tolak = event_keputusan("tes-testing-4-rejected", "rejected", "qa-dua");
+        tolak.error = Some("health staging merah".into());
+        append_event_at(ditolak.path(), tolak).unwrap();
+        let err = verify_approval_at(ditolak.path(), &args).unwrap_err();
+        assert!(err.contains("ditolak"), "{err}");
+    }
+
+    #[test]
+    fn verify_approval_menolak_release_id_malformed() {
+        let tmp = TempDir::new().unwrap();
+        let err = verify_approval_at(tmp.path(), &args_release("tes-testing:aaaa", "admin-dua"))
+            .unwrap_err();
+        assert!(err.contains("app:commit:build"), "{err}");
     }
 }

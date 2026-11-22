@@ -55,7 +55,33 @@ pipeline {
             }
         }
 
-        stage('2. Promosi by Digest') {
+        stage('2. Validasi Approval') {
+            steps {
+                // Dashboard sudah menolak promosi oleh penyetuju sendiri, tapi job ini
+                // bisa dipicu langsung ke Jenkins. Gerbang yang sama diperiksa di sini
+                // atas ledger yang sama (autore release verify-approval).
+                withEnv([
+                    "AUTORE_BIN=${AUTORE_BIN}",
+                    "PR_RELEASE_ID=${params.PROMOTE_RELEASE_ID}",
+                    "PR_ACTOR=${params.PROMOTE_ACTOR}",
+                ]) {
+                    sh '''#!/bin/sh
+                    set -e
+                    if [ -z "$PR_ACTOR" ]; then
+                      echo "ERROR: PROMOTE_ACTOR kosong; promosi production wajib menyebut pelaku" >&2
+                      exit 1
+                    fi
+                    if [ ! -x "$AUTORE_BIN" ]; then
+                      echo "ERROR: $AUTORE_BIN tidak ada atau tidak executable (milik admin runner)" >&2
+                      exit 1
+                    fi
+                    "$AUTORE_BIN" release verify-approval --release-id "$PR_RELEASE_ID" --actor "$PR_ACTOR"
+                    '''
+                }
+            }
+        }
+
+        stage('3. Promosi by Digest') {
             steps {
                 // Nilai Groovy dialirkan lewat environment, bukan interpolasi GString;
                 // blok sh memakai kutip tunggal supaya isinya murni shell.

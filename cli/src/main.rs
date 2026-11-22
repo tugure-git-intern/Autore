@@ -1,6 +1,7 @@
 mod active;
 mod admin;
 mod connect;
+mod dev;
 mod doctor;
 mod external;
 mod github;
@@ -837,6 +838,26 @@ enum Commands {
         force: bool,
     },
 
+    /// Jalankan project di laptop ini: buat Dockerfile kalau belum ada, build, lalu
+    /// jalankan container. Repo GitHub & Jenkins tetap manual.
+    Dev {
+        /// Nama aplikasi (default: nama folder)
+        #[arg(long)]
+        app_name: Option<String>,
+
+        /// Tech stack (default: deteksi dari isi folder): python, nodejs, java, go
+        #[arg(long)]
+        stack: Option<String>,
+
+        /// Port internal aplikasi di dalam container (default: port standar stack)
+        #[arg(long)]
+        app_port: Option<u16>,
+
+        /// Port host yang dipakai di browser (default: port bebas 8300-8400)
+        #[arg(long)]
+        port: Option<u16>,
+    },
+
     /// Jalankan Security Gate: Static Guard + Gitleaks + Trivy (via Docker).
     /// Gagal (exit 1) jika salah satu scanner tidak benar-benar berjalan.
     Scan {
@@ -1483,6 +1504,18 @@ fn execute_command(
                 }
             }
         }
+
+        Commands::Dev {
+            app_name,
+            stack,
+            app_port,
+            port,
+        } => dev::jalankan(dev::DevArgs {
+            app_name,
+            stack,
+            app_port,
+            port,
+        }),
 
         Commands::Scan {
             path,

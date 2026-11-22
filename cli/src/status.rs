@@ -275,7 +275,13 @@ pub fn save(workspace: &Path, snapshot: &Snapshot) -> Result<(), String> {
     let isi = serde_json::to_string(&capped(snapshot.clone()))
         .map_err(|e| format!("status dashboard tidak bisa disusun: {e}"))?;
     let target = file(workspace);
-    let sementara = workspace.join(format!("{SNAPSHOT_FILE}.tmp"));
+    // Nama unik per penulisan: `serve` dan `pipeline record` bisa menulis bersamaan,
+    // dan nama tmp tetap membuat satu pihak menghapus berkas pihak lain sebelum rename.
+    let unik = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let sementara = workspace.join(format!("{SNAPSHOT_FILE}.{}-{unik}.tmp", std::process::id()));
     std::fs::write(&sementara, &isi).map_err(|e| {
         format!(
             "status dashboard tidak tersimpan ({}): {e}",

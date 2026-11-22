@@ -207,14 +207,14 @@ pub fn resolve_interactive_project_dir(cwd: &std::path::Path, app_name: &str) ->
 /// buat folder `./<app_name>` -> `git init -b main` -> generate 3 file -> pasang pre-commit hook.
 pub fn bootstrap_interactive_project(
     base_dir: &std::path::Path,
+    workspace: &std::path::Path,
     cfg: &InitConfig,
     force: bool,
 ) -> Result<(PathBuf, Vec<PathBuf>, PathBuf, bool), String> {
     let project_dir = resolve_interactive_project_dir(base_dir, &cfg.app_name);
-    let workspace = workspace::workspace_dir();
     // Port staging/production dikunci di ledger sebelum Jenkinsfile dirender, supaya
     // deployPort di repo = port staging yang benar dan promotion punya container_port.
-    let (staging_port, _, _) = lingkungan::pastikan_entri(&workspace, &cfg.app_name, cfg.app_port)?;
+    let (staging_port, _, _) = lingkungan::pastikan_entri(workspace, &cfg.app_name, cfg.app_port)?;
     let files = generate_project_files_with(cfg, &project_dir, force, staging_port)?;
     let git_created = hooks::ensure_git_repo_main(&project_dir)?;
     let hook_path = hooks::install_pre_commit_hook(&project_dir)?;
@@ -1391,7 +1391,12 @@ fn execute_command(
                         return 0;
                     }
                 }
-                match bootstrap_interactive_project(&cwd, &cfg, effective_force) {
+                match bootstrap_interactive_project(
+                    &cwd,
+                    &workspace::workspace_dir(),
+                    &cfg,
+                    effective_force,
+                ) {
                     Ok((project_dir, files, hook_path, git_created)) => {
                         let _ = std::env::set_current_dir(&project_dir);
                         *active_project = Some(project_dir.clone());
@@ -2704,7 +2709,10 @@ mod tests {
             app_port: 8000,
             deploy_port: 8081,
         };
-        let (dir_a, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_a, false).unwrap();
+        let workspace = tmp.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let (dir_a, _, _, _) =
+            bootstrap_interactive_project(tmp.path(), &workspace, &cfg_a, false).unwrap();
         assert_eq!(dir_a, tmp.path().join("project-a"));
 
         // Saat sudah berada di dalam project-a lalu buat project-b, harus sejajar di samping project-a
@@ -2743,8 +2751,10 @@ mod tests {
             app_port: 8000,
             deploy_port: 8081,
         };
+        let workspace = tmp.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
         let (project_dir, files, hook_path, git_created) =
-            bootstrap_interactive_project(tmp.path(), &cfg, false).unwrap();
+            bootstrap_interactive_project(tmp.path(), &workspace, &cfg, false).unwrap();
 
         assert_eq!(project_dir, tmp.path().join("klaim-api"));
         assert!(git_created);
@@ -2777,8 +2787,12 @@ mod tests {
             app_port: 3000,
             deploy_port: 8081,
         };
-        let (dir_a, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_a, false).unwrap();
-        let (dir_b, _, _, _) = bootstrap_interactive_project(tmp.path(), &cfg_b, false).unwrap();
+        let workspace = tmp.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let (dir_a, _, _, _) =
+            bootstrap_interactive_project(tmp.path(), &workspace, &cfg_a, false).unwrap();
+        let (dir_b, _, _, _) =
+            bootstrap_interactive_project(tmp.path(), &workspace, &cfg_b, false).unwrap();
         // Folder biasa tanpa Dockerfile/Jenkinsfile tidak boleh ikut muncul
         let plain = tmp.path().join("dokumen-biasa");
         std::fs::create_dir_all(&plain).unwrap();

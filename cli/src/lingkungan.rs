@@ -212,7 +212,21 @@ where
 fn tulis_env(path: &Path, doc: &Map<String, Value>) -> Result<(), String> {
     let isi = serde_json::to_string_pretty(doc)
         .map_err(|e| format!("gagal menyusun JSON {}: {e}", path.display()))?;
-    let tmp = path.with_file_name(".environments.json.tmp");
+    // Workspace bisa belum ada (install baru / AUTORE_WORKSPACE baru); tanpa ini
+    // tulisan pertama gagal ENOENT alih-alih membuat ledger.
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("gagal membuat {}: {e}", dir.display()))?;
+    }
+    // Nama sementara unik: dua proses/thread menulis bersamaan tidak boleh saling
+    // menghapus berkas tmp sebelum rename (dulu tetap `.environments.json.tmp`).
+    let unik = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = path.with_file_name(format!(
+        ".environments.json.{}-{unik}.tmp",
+        std::process::id()
+    ));
     fs::write(&tmp, format!("{isi}\n"))
         .map_err(|e| format!("gagal menulis {}: {e}", tmp.display()))?;
     fs::rename(&tmp, path).map_err(|e| format!("gagal mengganti {}: {e}", path.display()))
@@ -258,6 +272,17 @@ mod tests {
             .map(|(nama, app, deploy)| format!("{nama}\t{app}\t{deploy}\n"))
             .collect();
         fs::write(dir.join("registry.tsv"), isi).unwrap();
+    }
+
+    #[test]
+    fn pastikan_entri_membuat_workspace_baru() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().join("belum-ada").join("workspace");
+        let (staging, production, baru) = pastikan_entri(&workspace, "app-baru", 8000).unwrap();
+        assert!(baru);
+        assert_ne!(staging, production);
+        let doc = baca_env(&workspace.join("environments.json")).unwrap();
+        assert!(doc.contains_key("app-baru"));
     }
 
     fn baca_json(dir: &Path) -> Value {

@@ -8,6 +8,12 @@ __pycache__/
 # Superpowers plan workspace (local scratch)
 .superpowers/
 
+# Hermes plan workspace (local scratch)
+.hermes/
+
+# Backup otomatis halaman Pengaturan (allowed-users.json.bak-<ISO>)
+allowed-users.json.bak-*
+
 # Rust build artifacts
 /cli/target/
 target/

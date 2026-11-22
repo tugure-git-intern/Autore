@@ -794,6 +794,47 @@ describe("connect", () => {
       expect.objectContaining({ action: "connect", target: "coba-connect", exit: 1 }),
     );
   });
+
+  it("menyebut tahap gagal dari baris data CLI di pesan 422", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () =>
+        result({
+          exitCode: 1,
+          stdout: [
+            '@@AUTORE {"tahap":"klon","status":"mulai","pesan":"Mengambil repo dari GitHub."}',
+            '@@AUTORE {"tahap":"klon","status":"selesai","pesan":"Repo berhasil diambil."}',
+            '@@AUTORE {"tahap":"kirim","status":"selesai","pesan":"Kode terkirim ke GitHub."}',
+            '@@AUTORE {"tahap":"jenkins","status":"gagal","pesan":"Jenkins menolak job."}',
+          ].join("\n"),
+          stderr: "ERROR: Jenkins menolak job.",
+        }),
+      ),
+    });
+
+    const out = await actions.connect(INPUT);
+
+    // Push sudah sukses: pesan harus menunjuk tahap sesudahnya, bukan "kode 1" saja.
+    expect(out).toMatchObject({
+      ok: false,
+      status: 422,
+      error: "connect gagal di tahap jenkins (kode 1)",
+    });
+    expect(out.ok === false && out.output).toContain("@@AUTORE");
+  });
+
+  it("tanpa baris data, pesan 422 tetap memakai kode keluar", async () => {
+    const dir = await workspace(["tes-web"]);
+    const { actions } = make(dir, {
+      spawn: vi.fn(async () => result({ exitCode: 2, stderr: "ERROR: gagal" })),
+    });
+
+    expect(await actions.connect(INPUT)).toMatchObject({
+      ok: false,
+      status: 422,
+      error: "connect keluar dengan kode 2",
+    });
+  });
 });
 
 describe("remove", () => {

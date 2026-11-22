@@ -293,6 +293,60 @@ pub fn generate_project_files(cfg: &InitConfig, output_dir: &Path) -> Result<Vec
     generate_project_files_with(cfg, output_dir, false, cfg.deploy_port)
 }
 
+/// Buat hanya file pipeline yang belum ada; file kustom repo tidak pernah ditimpa.
+pub fn ensure_missing_pipeline_files(
+    cfg: &InitConfig,
+    output_dir: &Path,
+    staging_port: u16,
+) -> Result<Vec<PathBuf>, String> {
+    use std::io::Write;
+
+    validate_app_name(&cfg.app_name)?;
+    validate_deploy_port(cfg.deploy_port)?;
+    validate_deploy_port(staging_port)?;
+    fs::create_dir_all(output_dir)
+        .map_err(|e| format!("Gagal membuat direktori '{}': {e}", output_dir.display()))?;
+
+    let targets = [
+        ("Dockerfile", render_dockerfile(cfg)),
+        ("Jenkinsfile", render_jenkinsfile(cfg, staging_port)),
+        (".dockerignore", render_dockerignore().to_string()),
+    ];
+    let mut created = Vec::new();
+    for (name, content) in targets {
+        let path = output_dir.join(name);
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && path.is_file() => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                hapus_file_baru(&created);
+                return Err(format!("'{}' sudah ada tapi bukan file", path.display()));
+            }
+            Err(e) => {
+                hapus_file_baru(&created);
+                return Err(format!("Gagal membuat '{}': {e}", path.display()));
+            }
+        };
+        if let Err(e) = file.write_all(content.as_bytes()) {
+            let _ = fs::remove_file(&path);
+            hapus_file_baru(&created);
+            return Err(format!("Gagal menulis '{}': {e}", path.display()));
+        }
+        created.push(path);
+    }
+    Ok(created)
+}
+
+fn hapus_file_baru(paths: &[PathBuf]) {
+    for path in paths {
+        let _ = fs::remove_file(path);
+    }
+}
+
 pub fn generate_project_files_with(
     cfg: &InitConfig,
     output_dir: &Path,
@@ -396,6 +450,106 @@ mod tests {
     use super::*;
     use crate::scanner::scan_directory;
     use tempfile::TempDir;
+
+    #[test]
+    fn connect_generates_only_missing_pipeline_files() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = InitConfig {
+            app_name: "uji-connect".into(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8083,
+        };
+        fs::write(tmp.path().join("Dockerfile"), "custom dockerfile\n").unwrap();
+
+        let created = ensure_missing_pipeline_files(&cfg, tmp.path(), 8084).unwrap();
+
+        assert_eq!(
+            created,
+            vec![
+                tmp.path().join("Jenkinsfile"),
+                tmp.path().join(".dockerignore")
+            ]
+        );
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("Dockerfile")).unwrap(),
+            "custom dockerfile\n"
+        );
+        let jenkinsfile = fs::read_to_string(tmp.path().join("Jenkinsfile")).unwrap();
+        assert!(jenkinsfile.contains("appName: 'uji-connect'"));
+        assert!(jenkinsfile.contains("deployPort: 8084"));
+    }
+
+    #[test]
+    fn connect_preserves_all_existing_pipeline_files() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = InitConfig {
+            app_name: "uji-connect".into(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8083,
+        };
+        let contents = [
+            ("Dockerfile", "custom dockerfile\n"),
+            ("Jenkinsfile", "custom jenkinsfile\n"),
+            (".dockerignore", "custom dockerignore\n"),
+        ];
+        for (name, value) in contents {
+            fs::write(tmp.path().join(name), value).unwrap();
+        }
+
+        let created = ensure_missing_pipeline_files(&cfg, tmp.path(), 8084).unwrap();
+
+        assert!(created.is_empty());
+        for (name, value) in contents {
+            assert_eq!(fs::read_to_string(tmp.path().join(name)).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn connect_preserves_partial_jenkinsfile_and_dockerignore() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = InitConfig {
+            app_name: "uji-connect".into(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8083,
+        };
+        fs::write(tmp.path().join("Jenkinsfile"), "custom jenkinsfile\n").unwrap();
+        fs::write(tmp.path().join(".dockerignore"), "custom dockerignore\n").unwrap();
+
+        let created = ensure_missing_pipeline_files(&cfg, tmp.path(), 8084).unwrap();
+
+        assert_eq!(created, vec![tmp.path().join("Dockerfile")]);
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("Jenkinsfile")).unwrap(),
+            "custom jenkinsfile\n"
+        );
+        assert_eq!(
+            fs::read_to_string(tmp.path().join(".dockerignore")).unwrap(),
+            "custom dockerignore\n"
+        );
+        assert!(tmp.path().join("Dockerfile").is_file());
+    }
+
+    #[test]
+    fn connect_cleans_up_files_it_created_after_a_partial_write_error() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = InitConfig {
+            app_name: "uji-connect".into(),
+            stack: TechStack::Python,
+            app_port: 8000,
+            deploy_port: 8083,
+        };
+        fs::create_dir(tmp.path().join(".dockerignore")).unwrap();
+
+        let error = ensure_missing_pipeline_files(&cfg, tmp.path(), 8084).unwrap_err();
+
+        assert!(error.contains(".dockerignore"));
+        assert!(!tmp.path().join("Dockerfile").exists());
+        assert!(!tmp.path().join("Jenkinsfile").exists());
+        assert!(tmp.path().join(".dockerignore").is_dir());
+    }
 
     #[test]
     fn kode_contoh_ditulis_sekali_dan_tidak_menimpa() {

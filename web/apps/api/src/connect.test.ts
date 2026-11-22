@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { argvConnect, bacaBodyConnect } from "./connect";
+import { argvConnect, bacaBodyConnect, tahapGagalDariOutput } from "./connect";
 import { repoDariOutput } from "./quick-start";
 
 describe("bacaBodyConnect", () => {
@@ -100,5 +100,31 @@ describe("argvConnect", () => {
     expect(repoDariOutput("  • Repo GitHub    tugure-reasuransi/autore-demo (tersambung)")).toBe(
       "https://github.com/tugure-reasuransi/autore-demo",
     );
+  });
+});
+
+function baris(tahap: string, status: string): string {
+  return `@@AUTORE {"tahap":"${tahap}","status":"${status}","pesan":"…"}`;
+}
+
+describe("tahapGagalDariOutput", () => {
+  it("mengambil tahap gagal terakhir, bukan yang selesai", () => {
+    const output = [baris("klon", "selesai"), baris("jenkins", "mulai"), baris("jenkins", "gagal")].join("\n");
+    expect(tahapGagalDariOutput(output)).toBe("jenkins");
+  });
+
+  it("tanpa baris gagal, tidak ada tahap", () => {
+    expect(tahapGagalDariOutput([baris("klon", "selesai"), baris("kirim", "selesai")].join("\n"))).toBeUndefined();
+    expect(tahapGagalDariOutput("ERROR: gagal push\n")).toBeUndefined();
+    expect(tahapGagalDariOutput("")).toBeUndefined();
+  });
+
+  it("baris data rusak atau terpotong diabaikan, bukan menggagalkan permintaan", () => {
+    const output = ['@@AUTORE {"tahap":"jenkins","stat', "@@AUTORE bukan-json", baris("kirim", "gagal")].join("\n");
+    expect(tahapGagalDariOutput(output)).toBe("kirim");
+  });
+
+  it("tahap kosong tidak dilaporkan", () => {
+    expect(tahapGagalDariOutput('@@AUTORE {"tahap":"","status":"gagal"}')).toBeUndefined();
   });
 });

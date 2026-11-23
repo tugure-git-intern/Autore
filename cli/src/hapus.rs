@@ -643,12 +643,12 @@ mod tests {
     }
 
     // --- Helper stub docker (dipakai tes di atas) ---
-    /// Docker palsu di PATH depan: tes orkestrasi tidak boleh menyentuh daemon
-    /// Docker nyata. PATH lama dipulihkan saat guard jatuh (Drop).
+    /// Docker palsu lewat override `workspace::set_docker_palsu`, bukan PATH:
+    /// PATH proses dipakai bareng semua thread tes, jadi menimpanya membuat tes
+    /// lain (git clone, doctor) ikut memakai stub dan gagal acak.
     #[cfg(unix)]
     struct DockerPalsu {
         _kunci: std::sync::MutexGuard<'static, ()>,
-        path_lama: std::ffi::OsString,
         pub(crate) log: std::path::PathBuf,
     }
 
@@ -665,11 +665,9 @@ mod tests {
             Self::dengan_skrip(tmp, "case \"$1\" in ps) exit 0 ;; esac\nexit 1\n")
         }
 
-        /// Docker tidak terpasang: PATH hanya berisi folder kosong.
+        /// Docker tidak terpasang: binary yang ditunjuk tidak ada, jadi spawn gagal.
         fn tanpa_docker(tmp: &Path) -> Self {
-            let bin = tmp.join("bin-kosong");
-            std::fs::create_dir_all(&bin).unwrap();
-            Self::pasang_path(&bin, tmp.join("docker.log"), false)
+            Self::pasang_bin(tmp.join("docker-tidak-ada"), tmp.join("docker.log"))
         }
 
         fn dengan_skrip(tmp: &Path, akhir: &str) -> Self {
@@ -688,24 +686,16 @@ mod tests {
             .unwrap();
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-            Self::pasang_path(&bin, log, true)
+            Self::pasang_bin(stub, log)
         }
 
-        /// `sisip=false` mengganti PATH seluruhnya (docker hilang), bukan menyisipkan.
-        fn pasang_path(bin: &Path, log: std::path::PathBuf, sisip: bool) -> Self {
+        fn pasang_bin(bin: std::path::PathBuf, log: std::path::PathBuf) -> Self {
             let kunci = workspace::KUNCI_ENV_WS
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            let path_lama = std::env::var_os("PATH").unwrap_or_default();
-            let path_baru = if sisip {
-                format!("{}:{}", bin.display(), path_lama.to_string_lossy())
-            } else {
-                bin.display().to_string()
-            };
-            std::env::set_var("PATH", path_baru);
+            workspace::set_docker_palsu(Some(bin));
             Self {
                 _kunci: kunci,
-                path_lama,
                 log,
             }
         }
@@ -714,7 +704,7 @@ mod tests {
     #[cfg(unix)]
     impl Drop for DockerPalsu {
         fn drop(&mut self) {
-            std::env::set_var("PATH", &self.path_lama);
+            workspace::set_docker_palsu(None);
         }
     }
 

@@ -6,19 +6,30 @@
 //! `Session::close` **selalu** mengembalikan terminal ke mode normal sebelum keluar —
 //! supaya perintah yang interaktif (tanya nama project, token, dll.) bisa jalan seperti biasa.
 
-use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::style::{Print, ResetColor};
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{execute, queue};
+// Windows: menu teks saja; implementasi TUI POSIX tidak dipakai.
+#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
+
+use crossterm::cursor::MoveTo;
+#[cfg(unix)]
+use crossterm::cursor::{Hide, Show};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::queue;
+use crossterm::style::Print;
+use crossterm::terminal::{Clear, ClearType};
+#[cfg(unix)]
+use crossterm::{
+    event::{self, Event},
+    execute,
+    style::ResetColor,
+    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use std::collections::VecDeque;
-use std::fs::File;
 use std::io::{self, Write};
-use std::os::fd::FromRawFd;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::thread;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+#[cfg(unix)]
+use std::{fs::File, os::fd::FromRawFd, sync::mpsc::Receiver, sync::Arc, thread};
 
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
@@ -29,11 +40,15 @@ const SUBTITLE: &str = "\x1b[38;2;122;104;96m";
 const REV: &str = "\x1b[7m";
 const ORANGE: &str = "\x1b[38;2;217;119;87m";
 /// fd keluaran standar (lihat `unistd.h`).
+#[cfg(unix)]
 const STDOUT_FILENO: i32 = 1;
+#[cfg(unix)]
 const STDERR_FILENO: i32 = 2;
 
 // Tiga syscall yang dipakai untuk menangkap output ke panel kanan. Ditulis langsung
-// supaya tidak menambah dependensi (`libc`) hanya untuk ini.
+// supaya tidak menambah dependensi (`libc`) hanya untuk ini. Windows tidak punya
+// padanan fd POSIX; di sana menu teks yang dipakai.
+#[cfg(unix)]
 unsafe extern "C" {
     fn pipe(fds: *mut i32) -> i32;
     fn dup(fd: i32) -> i32;
@@ -359,11 +374,13 @@ pub fn ask_yes_no(label: &str, default_ya: bool) -> Option<bool> {
 }
 
 /// Buf log panel kanan (diisi thread pembaca pipe).
+#[cfg(unix)]
 #[derive(Default)]
 struct Log {
     buf: Mutex<VecDeque<String>>,
 }
 
+#[cfg(unix)]
 impl Log {
     fn push(&self, line: String) {
         // ponytail: lock beracun (panic di thread lain) tidak boleh ikut membunuh UI.
@@ -382,6 +399,7 @@ impl Log {
 
 /// Alihkan stdout+stderr ke pipe yang isinya masuk log. `None` = gagal (tanpa pipe).
 /// Mengembalikan fd stdout asli untuk dipulihkan saat sesi selesai.
+#[cfg(unix)]
 fn pipe_to_log(log: &Arc<Log>) -> Option<i32> {
     let mut fd = [0i32; 2];
     if unsafe { pipe(fd.as_mut_ptr()) } != 0 {
@@ -401,6 +419,7 @@ fn pipe_to_log(log: &Arc<Log>) -> Option<i32> {
 }
 
 /// Baca sampai EOF, pecah per baris, masukkan ke log. Sisa tanpa `\n` ikut masuk di akhir.
+#[cfg(unix)]
 fn salurkan<R: io::Read>(mut sumber: R, log: &Log) {
     let mut buf = [0u8; 8192];
     let mut sisa = String::new();
@@ -420,6 +439,7 @@ fn salurkan<R: io::Read>(mut sumber: R, log: &Log) {
 }
 
 /// Buang karakter kendali yang bisa merusak layout; urutan ANSI (warna) dibiarkan.
+#[cfg(unix)]
 fn buang_kendali(baris: &str) -> String {
     baris
         .chars()
@@ -428,6 +448,7 @@ fn buang_kendali(baris: &str) -> String {
 }
 
 /// Satu pertanyaan yang sedang menunggu jawaban.
+#[cfg(unix)]
 struct Pending {
     label: String,
     secret: bool,
@@ -437,6 +458,7 @@ struct Pending {
     reply: Sender<Answer>,
 }
 
+#[cfg(unix)]
 impl Pending {
     fn baru(q: Question) -> Pending {
         let (label, secret, options, sel) = match q.ask {
@@ -509,6 +531,7 @@ impl Pending {
 }
 
 /// Sesi TUI penuh: menu, log, pertanyaan, status — satu layar, tidak pernah keluar.
+#[cfg(unix)]
 pub struct Session {
     tty: File,
     items: &'static [Item],
@@ -525,6 +548,7 @@ pub struct Session {
     frame: String,
 }
 
+#[cfg(unix)]
 impl Session {
     /// Mulai sesi: raw mode + alternate screen + tangkap stdout/stderr ke panel kanan.
     pub fn start(items: &'static [Item], project: Option<String>) -> Option<Session> {

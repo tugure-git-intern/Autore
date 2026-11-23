@@ -697,6 +697,7 @@ fn project_aktif_awal(cwd: &std::path::Path) -> Option<PathBuf> {
     is_autore_project_dir(cwd).then(|| cwd.to_path_buf())
 }
 
+#[cfg(unix)]
 fn project_label(active: Option<&std::path::Path>) -> Option<String> {
     active.map(|p| p.display().to_string())
 }
@@ -1243,30 +1244,40 @@ fn main() {
         text_menu_loop(&mut active_project, &mut last_note);
         return;
     }
-    let Some(mut sesi) = tui::Session::start(MENU, project_label(active_project.as_deref())) else {
+    // TUI menangkap stdout lewat fd POSIX; Windows belum punya padanannya, jadi di sana
+    // menu teks tetap dipakai (fitur lain jalan penuh).
+    #[cfg(not(unix))]
+    {
         text_menu_loop(&mut active_project, &mut last_note);
-        return;
-    };
-
-    // Folder project aktif dipakai bareng thread pekerja, jadi dibagi lewat Arc<Mutex>.
-    let proyek = std::sync::Arc::new(std::sync::Mutex::new(active_project.clone()));
-    while let Some(index) = sesi.pick() {
-        if let Some(note) = last_note.take() {
-            sesi.set_status(note);
-        }
-        let command = commands_for(index);
-        let label = MENU[index].label;
-        let proyek_thread = std::sync::Arc::clone(&proyek);
-        let code = sesi.run(label, move || {
-            let mut aktif = proyek_thread.lock().unwrap_or_else(|e| e.into_inner());
-            execute_command(command, true, &mut aktif)
-        });
-        last_note = Some(note_for(index, code));
-        sesi.set_status(note_for(index, code));
-        let kini = proyek.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        sesi.set_project(project_label(kini.as_deref()));
     }
-    sesi.close();
+    #[cfg(unix)]
+    {
+        let Some(mut sesi) = tui::Session::start(MENU, project_label(active_project.as_deref()))
+        else {
+            text_menu_loop(&mut active_project, &mut last_note);
+            return;
+        };
+
+        // Folder project aktif dipakai bareng thread pekerja, jadi dibagi lewat Arc<Mutex>.
+        let proyek = std::sync::Arc::new(std::sync::Mutex::new(active_project.clone()));
+        while let Some(index) = sesi.pick() {
+            if let Some(note) = last_note.take() {
+                sesi.set_status(note);
+            }
+            let command = commands_for(index);
+            let label = MENU[index].label;
+            let proyek_thread = std::sync::Arc::clone(&proyek);
+            let code = sesi.run(label, move || {
+                let mut aktif = proyek_thread.lock().unwrap_or_else(|e| e.into_inner());
+                execute_command(command, true, &mut aktif)
+            });
+            last_note = Some(note_for(index, code));
+            sesi.set_status(note_for(index, code));
+            let kini = proyek.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            sesi.set_project(project_label(kini.as_deref()));
+        }
+        sesi.close();
+    }
 }
 
 /// Menu utama mode teks sampai user keluar (dipakai kalau TUI tidak bisa dipakai).

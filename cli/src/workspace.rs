@@ -32,10 +32,37 @@ pub(crate) fn baca_registry(workspace: &Path) -> Vec<Proyek> {
         .collect()
 }
 
+/// Perintah docker untuk container app. Tes orkestrasi mengganti binary-nya lewat
+/// `DOCKER_PALSU`, bukan PATH proses: PATH dipakai bareng semua thread tes, dan
+/// menimpa PATH membuat tes lain (git clone, doctor) ikut memakai stub.
+fn perintah_docker() -> Command {
+    #[cfg(test)]
+    if let Some(bin) = docker_palsu() {
+        return Command::new(bin);
+    }
+    Command::new("docker")
+}
+
+#[cfg(test)]
+static DOCKER_PALSU: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+fn docker_palsu() -> Option<std::path::PathBuf> {
+    DOCKER_PALSU
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+#[cfg(test)]
+pub(crate) fn set_docker_palsu(bin: Option<std::path::PathBuf>) {
+    *DOCKER_PALSU.lock().unwrap_or_else(|e| e.into_inner()) = bin;
+}
+
 /// Nama container yang sedang jalan. `None` = docker tidak bisa ditanya, supaya
 /// pemanggil bisa bilang "tidak diketahui" alih-alih menuduh aplikasi mati.
 pub(crate) fn container_jalan() -> Option<Vec<String>> {
-    let out = Command::new("docker")
+    let out = perintah_docker()
         .args(["ps", "--format", "{{.Names}}"])
         .output()
         .ok()?;
@@ -57,7 +84,7 @@ pub(crate) fn hapus_container(nama: &str) -> bool {
     if !crate::connect::nama_sah(nama) {
         return false;
     }
-    Command::new("docker")
+    perintah_docker()
         .args(["rm", "-f", nama])
         .output()
         .map(|o| o.status.success())
@@ -72,7 +99,7 @@ pub(crate) fn container_ada(nama: &str) -> bool {
     if !crate::connect::nama_sah(nama) {
         return false;
     }
-    Command::new("docker")
+    perintah_docker()
         .args(["container", "inspect", nama])
         .output()
         .map(|o| o.status.success())

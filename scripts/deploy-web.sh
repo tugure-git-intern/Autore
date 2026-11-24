@@ -43,8 +43,15 @@ hidup() {
   [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://$host:$PORT/login" || true)" != "000" ]
 }
 
-# Dua run bersamaan saling menimpa `.next-baru`: yang satu memindahkannya saat
-# yang lain masih menulis. Satu deploy saja pada satu waktu.
+# Pemeriksaan murah lebih dulu: lock dibuat dengan `>` yang boleh jadi milik
+# pengguna lain, jadi membukanya sebelum cek pemilik menghasilkan "Permission
+# denied" mentah alih-alih pesan yang jelas.
+[ -d "$DASH" ] || bail "tidak ada $DASH"
+[ "$(id -un)" = "$(stat -c %U "$DASH")" ] || bail "jalankan sebagai $(stat -c %U "$DASH"), bukan $(id -un)"
+git -C "$REPO" diff --quiet --ignore-submodules || bail "pohon $REPO kotor; commit atau stash dulu"
+
+# Dua run bersamaan saling menimpa distDir sementara: yang satu memindahkannya
+# saat yang lain masih menulis. Satu deploy saja pada satu waktu.
 exec 9>"$LOCK"
 flock -n 9 || bail "deploy lain masih berjalan (lock $LOCK)"
 
@@ -55,9 +62,6 @@ bersih() {
 }
 trap bersih EXIT
 
-[ -d "$DASH" ] || bail "tidak ada $DASH"
-[ "$(id -un)" = "$(stat -c %U "$DASH")" ] || bail "jalankan sebagai $(stat -c %U "$DASH"), bukan $(id -un)"
-git -C "$REPO" diff --quiet --ignore-submodules || bail "pohon $REPO kotor; commit atau stash dulu"
 git -C "$REPO" pull --ff-only --quiet || bail "git pull --ff-only gagal"
 
 versi="$(grep -m1 '^version' "$REPO/cli/Cargo.toml" | cut -d'"' -f2)"

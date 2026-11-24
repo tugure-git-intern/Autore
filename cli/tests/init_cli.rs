@@ -81,6 +81,33 @@ fn stack_tidak_bisa_dideteksi_ditolak_dengan_pesan_jelas() {
     );
     assert_eq!(out.status.code(), Some(1));
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("--stack"), "stderr harus menyebut --stack: {err}");
+    assert!(
+        err.contains("--stack"),
+        "stderr harus menyebut --stack: {err}"
+    );
     assert!(!tmp.path().join("out/Dockerfile").exists());
+}
+
+#[test]
+fn tanpa_stack_mendeteksi_dari_isi_folder() {
+    let tmp = TempDir::new().unwrap();
+    let ws = tmp.path().join("ws");
+    fs::create_dir_all(&ws).unwrap();
+    let proyek = tmp.path().join("layanan-go");
+    fs::create_dir_all(&proyek).unwrap();
+    fs::write(proyek.join("go.mod"), "module layanan-go\n").unwrap();
+    let out = init(
+        &ws,
+        &proyek,
+        &["--app-name", "layanan-go", "--output-dir", "out"],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let dockerfile = isi(&proyek.join("out/Dockerfile"));
+    assert!(dockerfile.contains("FROM golang:"), "{dockerfile}");
+    assert!(dockerfile.contains("EXPOSE 8080"));
 }

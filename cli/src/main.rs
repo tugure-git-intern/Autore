@@ -397,6 +397,22 @@ fn tui_hidup() -> bool {
     tui::hub_active()
 }
 
+/// Prompt hanya kalau ada yang bisa menjawab: sesi TUI, atau terminal asli.
+/// `interactive` menandai sesi menu, bukan ada-tidaknya TTY: subcommand selalu
+/// `interactive=false` walau di terminal.
+fn bisa_tanya() -> bool {
+    tui_hidup() || std::io::stdin().is_terminal()
+}
+
+/// Nama app bawaan dari folder, disamakan dengan `quickstart`.
+fn nama_app_bawaan(cwd: &std::path::Path) -> String {
+    cwd.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n.to_ascii_lowercase().replace(' ', "-"))
+        .filter(|n| validate_app_name(n).is_ok())
+        .unwrap_or_else(|| "project-baru".to_string())
+}
+
 fn ui_ask_text(label: &str, default: &str) -> Option<String> {
     if tui_hidup() {
         tui::ask_text(label, default)
@@ -1323,12 +1339,16 @@ fn execute_command(
             output_dir,
             force,
         } => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let resolved_name = match app_name {
                 Some(n) => n,
-                None => match ui_ask_text("Nama aplikasi", "") {
-                    Some(n) => n.trim().to_string(),
-                    None => return 1,
-                },
+                None if bisa_tanya() => {
+                    match ui_ask_text("Nama aplikasi", &nama_app_bawaan(&cwd)) {
+                        Some(n) => n.trim().to_string(),
+                        None => return 1,
+                    }
+                }
+                None => nama_app_bawaan(&cwd),
             };
             if let Err(e) = validate_app_name(&resolved_name) {
                 eprintln!("{} {}", "ERROR:".red().bold(), e);
@@ -1347,23 +1367,36 @@ fn execute_command(
                         return 1;
                     }
                 },
-                None => match ui_ask_choose("Pilih bahasa / Tech Stack", &stack_labels())
-                    .and_then(stack_at)
-                {
+                None if bisa_tanya() => {
+                    match ui_ask_choose("Pilih bahasa / Tech Stack", &stack_labels())
+                        .and_then(stack_at)
+                    {
+                        Some(st) => st,
+                        None => return 1,
+                    }
+                }
+                None => match connect::deteksi_stack(&cwd) {
                     Some(st) => st,
-                    None => return 1,
+                    None => {
+                        eprintln!(
+                            "{} Stack tidak bisa dideteksi dari isi folder; sebut --stack python|nodejs|java|go",
+                            "ERROR:".red().bold()
+                        );
+                        return 1;
+                    }
                 },
             };
 
             let resolved_port = match app_port {
                 Some(p) => p,
-                None => match ui_ask_u16(
+                None if bisa_tanya() => match ui_ask_u16(
                     "Port aplikasi di dalam container",
                     resolved_stack.default_port(),
                 ) {
                     Some(p) => p,
                     None => return 1,
                 },
+                None => resolved_stack.default_port(),
             };
 
             // Satu alokator untuk kedua jalur (CLI & dashboard): lihat registry
@@ -1412,7 +1445,6 @@ fn execute_command(
             };
 
             if interactive {
-                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                 let target_dir = resolve_interactive_project_dir(&cwd, &cfg.app_name);
                 let mut effective_force = force;
                 if !effective_force && has_existing_pipeline_files(&target_dir) {
@@ -2513,42 +2545,6 @@ mod tests {
         assert_eq!(ui_ask_choose("Pilih", &["a".to_string()]), None);
         assert_eq!(ui_ask_confirm("Yakin?", false), None);
         assert_eq!(ui_ask_u16("Port", 8081), None);
-    }
-
-    fn init_cmd(stack: Option<&str>, app_port: Option<u16>) -> Commands {
-        Commands::Init {
-            app_name: Some("demo-app".to_string()),
-            stack: stack.map(str::to_string),
-            app_port,
-            deploy_port: None,
-            output_dir: PathBuf::from("."),
-            force: false,
-        }
-    }
-
-    #[test]
-    fn init_interaktif_berhenti_saat_prompt_batal() {
-        // Tanpa TTY setiap kotak tanya = batal -> alur berhenti (kode 1), tidak menulis file.
-        let mut act = None;
-        let tanpa_nama = Commands::Init {
-            app_name: None,
-            stack: None,
-            app_port: None,
-            deploy_port: None,
-            output_dir: PathBuf::from("."),
-            force: false,
-        };
-        assert_eq!(execute_command(tanpa_nama, true, &mut act), 1);
-        assert_eq!(execute_command(init_cmd(None, None), true, &mut act), 1);
-        assert_eq!(
-            execute_command(init_cmd(Some("python"), None), true, &mut act),
-            1
-        );
-        assert_eq!(
-            execute_command(init_cmd(Some("python"), Some(8000)), true, &mut act),
-            1
-        );
-        assert!(act.is_none());
     }
 
     /// Workspace sementara untuk tes init: registry kosong/terisi + AUTORE_WORKSPACE.

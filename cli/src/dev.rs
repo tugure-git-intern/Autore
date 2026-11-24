@@ -24,6 +24,7 @@ pub(crate) struct DevArgs {
     pub(crate) stack: Option<String>,
     pub(crate) app_port: Option<u16>,
     pub(crate) port: Option<u16>,
+    pub(crate) project_name: Option<String>,
 }
 
 pub(crate) fn jalankan(args: DevArgs) -> i32 {
@@ -73,6 +74,8 @@ pub(crate) fn jalankan(args: DevArgs) -> i32 {
             stack,
             app_port,
             requested_port: args.port,
+            app_name: nama.clone(),
+            project_name: args.project_name,
         },
         || compose_watch_version().map(|_| ()),
         || {
@@ -551,6 +554,32 @@ struct ComposeWatchOptions {
     stack: TechStack,
     app_port: u16,
     requested_port: Option<u16>,
+    app_name: String,
+    project_name: Option<String>,
+}
+
+const PROJECT_PREFIX: &str = "autore-dev-";
+
+/// Nama project Compose: `--project-name` apa adanya; kalau kosong
+/// `autore-dev-<nama-app>-<pid>`, dipotong agar tetap ≤63 karakter. PID
+/// membuat dua sesi di folder yang sama tidak saling recreate container.
+fn nama_project(app_name: &str, pilihan: Option<&str>) -> Result<String, String> {
+    if let Some(nama) = pilihan {
+        let nama = nama.trim();
+        validate_project_name(nama).map_err(|e| {
+            format!("{e}; sebut nama lain: --project-name <huruf-kecil-angka-dash>")
+        })?;
+        return Ok(nama.to_string());
+    }
+    let akhiran = format!("-{}", std::process::id());
+    let batas = 63 - PROJECT_PREFIX.len() - akhiran.len();
+    let isi: String = app_name.chars().take(batas).collect();
+    let id = format!(
+        "{PROJECT_PREFIX}{}{akhiran}",
+        isi.trim_end_matches(['-', '_'])
+    );
+    validate_project_name(&id)?;
+    Ok(id)
 }
 
 fn run_compose_watch_with(
@@ -565,6 +594,8 @@ fn run_compose_watch_with(
         stack,
         app_port,
         requested_port,
+        app_name,
+        project_name,
     } = options;
     check_version()?;
     let generated_files = ensure_files()?;
@@ -579,13 +610,12 @@ fn run_compose_watch_with(
             .ok_or_else(|| format!("tidak ada port bebas di {PORT_AWAL}-{PORT_AKHIR}"))?,
     };
     let sync_enabled = generated_watch_enabled(project_dir);
-    let sequence = TEMP_COMPOSE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let project_id = format!("autore-dev-{}-{sequence}", std::process::id());
-    validate_project_name(&project_id)?;
+    let project_id = nama_project(&app_name, project_name.as_deref())?;
     let yaml = compose_watch_yaml(project_dir, stack, sync_enabled, host_port, app_port)?;
     let mut compose_file = TempComposeFile::create(project_dir, &yaml)?;
     println!("{} http://localhost:{host_port}", "➜".green().bold());
-    println!("  Ctrl+C untuk berhenti\n");
+    println!("  Ctrl+C untuk berhenti");
+    println!("  • project : {project_id}\n");
     for file in generated_files {
         println!("  • dibuat: {}", file.display());
     }
@@ -691,6 +721,8 @@ mod tests {
                 stack: TechStack::Python,
                 app_port: 8000,
                 requested_port: Some(8301),
+                app_name: "watch-project".to_string(),
+                project_name: None,
             },
             || {
                 version_events.borrow_mut().push("version".to_string());
@@ -770,6 +802,8 @@ mod tests {
                 stack: TechStack::Python,
                 app_port: 8000,
                 requested_port: Some(8301),
+                app_name: "watch-project".to_string(),
+                project_name: None,
             },
             || Err("Compose too old".to_string()),
             || {
@@ -800,6 +834,8 @@ mod tests {
                 stack: TechStack::Python,
                 app_port: 8000,
                 requested_port: Some(8301),
+                app_name: "watch-project".to_string(),
+                project_name: None,
             },
             || Ok(()),
             || Ok(Vec::new()),
@@ -825,6 +861,8 @@ mod tests {
                 stack: TechStack::Python,
                 app_port: 8000,
                 requested_port: Some(8301),
+                app_name: "watch-project".to_string(),
+                project_name: None,
             },
             || Ok(()),
             || Ok(Vec::new()),
@@ -851,6 +889,8 @@ mod tests {
                 stack: TechStack::Python,
                 app_port: 8000,
                 requested_port: Some(8301),
+                app_name: "watch-project".to_string(),
+                project_name: None,
             },
             || Ok(()),
             || Ok(Vec::new()),
@@ -1226,6 +1266,60 @@ mod tests {
                 "accepted {invalid:?}"
             );
         }
+    }
+
+    #[test]
+    fn nama_project_compose_bawaan_dari_nama_app() {
+        let pid = std::process::id();
+        assert_eq!(
+            nama_project("tes-dari-nol", None).unwrap(),
+            format!("autore-dev-tes-dari-nol-{pid}")
+        );
+        let panjang = "a".repeat(60);
+        let id = nama_project(&panjang, None).unwrap();
+        assert_eq!(id.len(), 63, "nama harus dipotong agar muat: {id}");
+        assert!(id.ends_with(&format!("-{pid}")), "{id}");
+        assert!(validate_project_name(&id).is_ok());
+    }
+
+    #[test]
+    fn nama_project_pilihan_dev_menang_dan_divalidasi() {
+        assert_eq!(
+            nama_project("tes-dari-nol", Some("cek-app")).unwrap(),
+            "cek-app",
+            "--project-name menang atas nama folder"
+        );
+        let e = nama_project("tes-dari-nol", Some("Bad Name")).unwrap_err();
+        assert!(e.contains("--project-name"), "saran flag wajib ada: {e}");
+    }
+
+    #[test]
+    fn compose_watch_memakai_nama_app_sebagai_project_id() {
+        let project = tempfile::tempdir().unwrap();
+        let mut up_args = Vec::new();
+        let pid = std::process::id();
+        run_compose_watch_with(
+            project.path(),
+            ComposeWatchOptions {
+                stack: TechStack::Python,
+                app_port: 8000,
+                requested_port: Some(8301),
+                app_name: "tes-dari-nol".to_string(),
+                project_name: None,
+            },
+            || Ok(()),
+            || Ok(Vec::new()),
+            |_| true,
+            |args, _, _| {
+                up_args = args.to_vec();
+                Ok(ComposeRunResult::Exited(0))
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            up_args[2],
+            OsString::from(format!("autore-dev-tes-dari-nol-{pid}"))
+        );
     }
 
     #[test]

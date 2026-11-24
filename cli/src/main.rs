@@ -857,6 +857,10 @@ enum Commands {
         /// Port host yang dipakai di browser (default: port bebas 8300-8400)
         #[arg(long)]
         port: Option<u16>,
+
+        /// Nama project Docker Compose (default: autore-dev-<app>-<pid>)
+        #[arg(long)]
+        project_name: Option<String>,
     },
 
     /// Jalankan Security Gate: Static Guard + Gitleaks + Trivy (via Docker).
@@ -1521,11 +1525,13 @@ fn execute_command(
             stack,
             app_port,
             port,
+            project_name,
         } => dev::jalankan(dev::DevArgs {
             app_name,
             stack,
             app_port,
             port,
+            project_name,
         }),
 
         Commands::Scan {

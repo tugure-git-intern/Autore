@@ -694,10 +694,7 @@ mod tests {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             workspace::set_docker_palsu(Some(bin));
-            Self {
-                _kunci: kunci,
-                log,
-            }
+            Self { _kunci: kunci, log }
         }
     }
 

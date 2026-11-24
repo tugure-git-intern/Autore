@@ -303,6 +303,81 @@ fn dev_keyboard_interrupt_cleans_generated_compose_project() {
     assert!(!calls[2].contains("--rmi"));
     assert!(!calls[2].contains("-v"));
 }
+#[cfg(unix)]
+#[test]
+fn dev_project_name_dipilih_manual_dan_yang_tidak_sah_ditolak_sebelum_docker() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    let bin = tmp.path().join("bin");
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(&bin).unwrap();
+    fs::write(project.join("app.py"), "print(1)\n").unwrap();
+    let log = tmp.path().join("docker.log");
+    let docker = bin.join("docker");
+    fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nif [ \"$1 $2 $3\" = 'compose version --short' ]; then echo 2.23.1; exit 0; fi\nif [ \"$1\" = compose ]; then exit 23; fi\nexit 99\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&docker, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = autore()
+        .env("HOME", &home)
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .args([
+            "dev",
+            "--stack",
+            "python",
+            "--port",
+            "8381",
+            "--project-name",
+            "cek-app",
+        ])
+        .current_dir(&project)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(23), "stderr: {stderr}");
+    let calls = fs::read_to_string(&log).unwrap();
+    let compose = calls.lines().nth(1).unwrap();
+    assert_eq!(
+        compose.split_whitespace().take(3).collect::<Vec<_>>(),
+        ["compose", "-p", "cek-app"],
+        "{compose}"
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("cek-app"),
+        "nama project harus tampil di keluaran"
+    );
+
+    let out = autore()
+        .env("HOME", &home)
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .args([
+            "dev",
+            "--stack",
+            "python",
+            "--port",
+            "8382",
+            "--project-name",
+            "Bad Name",
+        ])
+        .current_dir(&project)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "stderr: {stderr}");
+    assert!(stderr.contains("--project-name"), "{stderr}");
+}
+
 #[test]
 fn dev_tampil_di_bantuan() {
     let out = autore().arg("--help").output().unwrap();

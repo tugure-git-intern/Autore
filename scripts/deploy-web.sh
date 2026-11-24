@@ -16,10 +16,19 @@ LAMA="$DASH/.next-lama"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 bail() { echo "GAGAL: $*" >&2; exit 1; }
+
+# Alamat dengar diambil dari socket, bukan ditebak: dashboard di-bind ke IP
+# tailnet (`next start -H 100.80.3.14`), jadi 127.0.0.1 tidak selalu hidup.
+alamat() {
+  ss -ltnH "sport = :$PORT" 2>/dev/null | awk '{print $4}' | sed 's/.*://' | head -1
+}
+
+# Proses menjawab = kode HTTP apa pun selain 000 (307 ke /login itu normal).
 hidup() {
-  local kode
-  kode="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$PORT/login" || true)"
-  [[ "$kode" == "200" || "$kode" == "307" ]]
+  local host
+  host="$(alamat)"
+  [ -n "$host" ] || return 1
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://$host:$PORT/login" || true)" != "000" ]
 }
 
 [ -d "$DASH" ] || bail "tidak ada $DASH"
@@ -28,23 +37,22 @@ git -C "$REPO" diff --quiet --ignore-submodules || bail "pohon $REPO kotor; comm
 git -C "$REPO" pull --ff-only --quiet || bail "git pull --ff-only gagal"
 
 versi="$(grep -m1 '^version' "$REPO/cli/Cargo.toml" | cut -d'"' -f2)"
-sekarang="$(grep -rho 'v[0-9]\+\.[0-9]\+\.[0-9]\+' "$AKTIF/static/chunks" 2>/dev/null | sort -u | tr '\n' ' ')"
-if [ "$sekarang" = "v$versi " ] && [ -z "${AUTORE_WEB_FORCE:-}" ]; then
-  echo "dashboard sudah v$versi, tak perlu build"
-  exit 0
-fi
+[ "${AUTORE_WEB_BUILD_FORCE_FAIL:-}" = "1" ] && bail "build dipaksa gagal (uji coba)"
 
 rm -rf "$BARU"
 ( cd "$WEB" && AUTORE_NEXT_DIST=.next-baru npm run build:dashboard ) || bail "build gagal; dashboard lama tetap jalan"
+# `next build` menulis ulang tsconfig.json (menambah include distDir sementara);
+# pohon sudah dijamin bersih di atas, jadi aman dikembalikan.
+git -C "$REPO" checkout -- web/apps/dashboard/tsconfig.json 2>/dev/null || true
 
 [ -d "$AKTIF" ] && mv "$AKTIF" "$LAMA" || true
 mv "$BARU" "$AKTIF" || bail "tukar direktori gagal"
 
 systemctl --user restart "$UNIT"
-for _ in $(seq 10); do
+for _ in $(seq 20); do
   if hidup; then
     rm -rf "$LAMA"
-    echo "dashboard v$versi aktif"
+    echo "dashboard v$versi aktif di $(alamat):$PORT"
     exit 0
   fi
   sleep 1

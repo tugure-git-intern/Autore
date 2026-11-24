@@ -43,6 +43,10 @@ hidup() {
   [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://$host:$PORT/login" || true)" != "000" ]
 }
 
+# Root tidak boleh: `$HOME` jadi /root, jadi REPO menunjuk pohon yang salah, dan
+# artefak `.next` akan dimiliki root sehingga run berikutnya sebagai pemilik gagal.
+[ "$(id -u)" -ne 0 ] || bail "jangan jalankan sebagai root; jalankan sebagai pemilik pohon Autore"
+
 # Pemeriksaan murah lebih dulu: lock dibuat dengan `>` yang boleh jadi milik
 # pengguna lain, jadi membukanya sebelum cek pemilik menghasilkan "Permission
 # denied" mentah alih-alih pesan yang jelas.

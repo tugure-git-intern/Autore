@@ -73,20 +73,30 @@ versi="$(grep -m1 '^version' "$REPO/cli/Cargo.toml" | cut -d'"' -f2)"
 [ "${AUTORE_WEB_BUILD_FORCE_FAIL:-}" = "1" ] && bail "build dipaksa gagal (uji coba)"
 
 rm -rf "$BARU"
-( cd "$WEB" && exec setsid env AUTORE_NEXT_DIST=.next-e2e npm run build:dashboard ) >"$LOG" 2>&1 &
+# distDir harus diturunkan dari variabel yang sama dengan $BARU, kalau tidak
+# build menulis ke satu direktori dan `mv` mencari yang lain.
+( cd "$WEB" && exec setsid env AUTORE_NEXT_DIST="$(basename "$BARU")" npm run build:dashboard ) >"$LOG" 2>&1 &
 BUILD=$!
 wait "$BUILD" || { tail -20 "$LOG" >&2; bail "build gagal; dashboard lama tetap jalan"; }
 BUILD=
 rm -f "$LOG"
+[ -d "$BARU" ] || bail "build selesai tapi $BARU tidak ada; dashboard lama tetap jalan"
 # `next build` menulis ulang tsconfig.json (menambah include distDir sementara);
 # pohon sudah dijamin bersih di atas, jadi aman dikembalikan.
 git -C "$REPO" checkout -- web/apps/dashboard/tsconfig.json 2>/dev/null || true
 
-# Sisa `.next-lama` dari run yang pernah gagal harus dibuang dulu: `mv .next
-# .next-lama` saat target sudah ada akan menyarangkan pohon, bukan menukarnya.
+# Urutan tukar: `.next-lama` kosong dulu (sisa run gagal membuat `mv` menyarangkan
+# pohon), lalu `.next` -> `.next-lama`, lalu `.next-baru` -> `.next`. Kalau langkah
+# mana pun gagal, `.next` dikembalikan dari `.next-lama` supaya unit tidak pernah
+# ditinggal tanpa pohon build.
 rm -rf "$LAMA"
-[ -d "$AKTIF" ] && mv "$AKTIF" "$LAMA" || true
-mv "$BARU" "$AKTIF" || bail "tukar direktori gagal"
+if [ -d "$AKTIF" ]; then
+  mv "$AKTIF" "$LAMA" || bail "gagal memindahkan $AKTIF ke $LAMA"
+fi
+if ! mv "$BARU" "$AKTIF"; then
+  [ -d "$LAMA" ] && mv "$LAMA" "$AKTIF"
+  bail "tukar direktori gagal; dashboard memakai versi lama"
+fi
 
 systemctl --user restart "$UNIT"
 for _ in $(seq 20); do

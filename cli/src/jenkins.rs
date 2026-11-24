@@ -3,6 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+const PROMOTE_REPO: &str = "https://github.com/tugure-git-intern/Autore.git";
+const PROMOTE_BRANCH: &str = "main";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JenkinsConfig {
     pub url: String,
@@ -225,27 +228,25 @@ pub fn render_rollback_job_xml(git_url: &str, branch: &str) -> String {
     )
 }
 
-/// Job promosi production: pipeline `Jenkinsfile.promote`, tanpa pemicu SCM,
-/// dengan parameter PROMOTE_* terdaftar sejak job dibuat.
-pub fn render_promote_job_xml(git_url: &str, branch: &str) -> String {
+/// Job promosi production memakai definisi terkelola dari repo Autore `main`.
+pub fn render_promote_job_xml() -> String {
     render_job_xml(
-        git_url,
-        branch,
+        PROMOTE_REPO,
+        PROMOTE_BRANCH,
         "Jenkinsfile.promote",
         &PROMOTE_PARAMS,
         false,
     )
 }
 
-/// Picu build berparameter. Job harus sudah ada; kalau belum, Jenkins menjawab
-/// 404 dan pemanggil mendapat pesan yang menyebutkan itu (bukan build tanpa parameter).
+/// Trigger build berparameter; job harus sudah terdaftar.
 pub fn trigger_parameterized(
     cfg: &JenkinsConfig,
     job_name: &str,
     params: &[(&str, &str)],
 ) -> Result<String, String> {
     let base = normalize_jenkins_url(&cfg.url)?;
-    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-rollback-{}", std::process::id()));
+    let tmp_dir = dir_sementara("autore-jk-rollback");
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
@@ -311,6 +312,19 @@ pub fn trigger_parameterized(
 
     let _ = fs::remove_dir_all(&tmp_dir);
     result
+}
+
+/// Folder sementara unik per panggilan. Nama lama hanya `pid` + label, jadi dua
+/// pendaftaran bersamaan (dua app dipromosikan sekaligus) saling menimpa XML dan
+/// cookie jar, lalu salah satunya menghapus folder yang masih dipakai.
+fn dir_sementara(awalan: &str) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static URUT: AtomicU64 = AtomicU64::new(0);
+    std::env::temp_dir().join(format!(
+        "{awalan}-{}-{}",
+        std::process::id(),
+        URUT.fetch_add(1, Ordering::Relaxed)
+    ))
 }
 
 pub fn infer_project_job_name(project_dir: &Path) -> String {
@@ -591,7 +605,7 @@ pub fn register_and_trigger_jenkins(
     branch: &str,
 ) -> Result<String, String> {
     let base = normalize_jenkins_url(&cfg.url)?;
-    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-{}", std::process::id()));
+    let tmp_dir = dir_sementara("autore-jk");
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
@@ -737,19 +751,8 @@ pub fn register_rollback_job(
     )
 }
 
-/// Daftarkan job promosi production dari `Jenkinsfile.promote`.
-pub fn register_promote_job(
-    cfg: &JenkinsConfig,
-    job_name: &str,
-    git_url: &str,
-    branch: &str,
-) -> Result<String, String> {
-    daftarkan_job(
-        cfg,
-        job_name,
-        &render_promote_job_xml(git_url, branch),
-        "promote",
-    )
+pub fn register_promote_job(cfg: &JenkinsConfig, job_name: &str) -> Result<String, String> {
+    daftarkan_job(cfg, job_name, &render_promote_job_xml(), "promote")
 }
 
 /// Inti pendaftaran job pipeline berparameter; dipakai rollback dan promosi.
@@ -760,8 +763,8 @@ fn daftarkan_job(
     label: &str,
 ) -> Result<String, String> {
     let base = normalize_jenkins_url(&cfg.url)?;
-    let tmp_dir =
-        std::env::temp_dir().join(format!("autore-jk-{label}-xml-{}", std::process::id()));
+    let tmp_dir = dir_sementara(&format!("autore-jk-{label}-xml"));
+
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
@@ -818,7 +821,19 @@ fn daftarkan_job(
             &user_cfg,
         )?;
 
-        let post_url = if check_code == 200 {
+        if check_code == 401 || check_code == 403 {
+            return Err(
+                "Autentikasi Jenkins ditolak (HTTP 401/403). Periksa username/password."
+                    .to_string(),
+            );
+        }
+        if check_code != 200 && check_code != 404 {
+            return Err(format!(
+                "Gagal memeriksa job {label} '{job_name}' di Jenkins (HTTP {check_code})"
+            ));
+        }
+        let sudah_ada = check_code == 200;
+        let post_url = if sudah_ada {
             format!("{base}/job/{job_name}/config.xml")
         } else {
             format!("{base}/createItem?name={job_name}")
@@ -851,7 +866,12 @@ fn daftarkan_job(
         ]);
 
         let (code, body) = curl_with_stdin_config(&post_args, &user_cfg)?;
-        if code >= 400 {
+        let sukses = if sudah_ada {
+            code == 200 || code == 302
+        } else {
+            code == 200 || code == 201 || code == 302
+        };
+        if !sukses {
             return Err(format!(
                 "Gagal mendaftarkan job {label} '{job_name}' (HTTP {code}): {}",
                 body.lines().next().unwrap_or("")
@@ -886,7 +906,7 @@ pub fn hapus_job(cfg: &JenkinsConfig, job_name: &str) -> Result<bool, String> {
         return Err("Nama job tidak sah".to_string());
     }
     let base = normalize_jenkins_url(&cfg.url)?;
-    let tmp_dir = std::env::temp_dir().join(format!("autore-jk-hapus-{}", std::process::id()));
+    let tmp_dir = dir_sementara("autore-jk-hapus");
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Gagal menyiapkan direktori sementara: {e}"))?;
     let cookie_jar = tmp_dir.join("cookies.txt");
@@ -1136,6 +1156,22 @@ mod tests {
     }
 
     #[test]
+    fn promote_xml_memakai_repo_autore_main_dengan_parameter_tanpa_trigger() {
+        let xml = render_promote_job_xml();
+        assert!(xml.contains("<scriptPath>Jenkinsfile.promote</scriptPath>"));
+        assert!(xml.contains("https://github.com/tugure-git-intern/Autore.git"));
+        assert!(xml.contains("<name>*/main</name>"));
+        assert!(!xml.contains("SCMTrigger"));
+        assert_eq!(xml.matches("<name>PROMOTE_").count(), PROMOTE_PARAMS.len());
+        for nama in PROMOTE_PARAMS {
+            assert!(
+                xml.contains(&format!("<name>{nama}</name>")),
+                "parameter {nama} hilang"
+            );
+        }
+    }
+
+    #[test]
     fn infers_job_name_from_jenkinsfile_or_directory() {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().join("folder-fallback");
@@ -1247,5 +1283,221 @@ mod tests {
         };
         let err = hapus_job(&cfg, "../lain").unwrap_err();
         assert!(err.contains("tidak sah"), "pesan: {err}");
+    }
+
+    /// Server Jenkins palsu: menjawab tiap permintaan sesuai urutan `jawaban`
+    /// (crumb, cek job, simpan, ...) dan mencatat baris permintaan + apakah
+    /// badan POST membawa sumber kanonik.
+    fn jenkins_palsu(
+        jawaban: Vec<(u16, &'static str)>,
+    ) -> (JenkinsConfig, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+        use std::sync::{Arc, Mutex};
+        use std::time::{Duration, Instant};
+
+        fn cari(jarum: &[u8], pola: &[u8]) -> Option<usize> {
+            jarum
+                .windows(pola.len())
+                .position(|jendela| jendela == pola)
+        }
+
+        fn baca(stream: &mut TcpStream) -> String {
+            let mut buf: Vec<u8> = Vec::new();
+            let mut potong = [0u8; 8192];
+            let mut sudah_100 = false;
+            loop {
+                let n = match stream.read(&mut potong) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
+                buf.extend_from_slice(&potong[..n]);
+                let Some(pos) = cari(&buf, b"\r\n\r\n") else {
+                    continue;
+                };
+                let kepala = String::from_utf8_lossy(&buf[..pos]).to_string();
+                // curl menahan badan POST sampai server setuju (Expect: 100-continue).
+                if !sudah_100 && kepala.to_ascii_lowercase().contains("expect: 100-continue") {
+                    let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
+                    sudah_100 = true;
+                }
+                let panjang = kepala
+                    .lines()
+                    .find_map(|baris| {
+                        let (nama, nilai) = baris.split_once(':')?;
+                        nama.eq_ignore_ascii_case("content-length")
+                            .then(|| nilai.trim().parse::<usize>().ok())?
+                    })
+                    .unwrap_or(0);
+                if buf.len() >= pos + 4 + panjang {
+                    break;
+                }
+            }
+            String::from_utf8_lossy(&buf).to_string()
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let catatan = Arc::new(Mutex::new(Vec::new()));
+        let simpan = catatan.clone();
+        std::thread::spawn(move || {
+            // Batas waktu: tes yang gagal lebih awal tidak boleh menggantung.
+            let batas = Instant::now() + Duration::from_secs(5);
+            let mut ke = 0;
+            while ke < jawaban.len() && Instant::now() < batas {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).ok();
+                        stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
+                        let mentah = baca(&mut stream);
+                        let (kode, isi) = jawaban[ke];
+                        ke += 1;
+                        let baris = mentah.lines().next().unwrap_or("").to_string();
+                        simpan.lock().unwrap().push(format!(
+                            "{baris} kanonik={}",
+                            mentah.contains("https://github.com/tugure-git-intern/Autore.git")
+                        ));
+                        let respon = format!(
+                            "HTTP/1.1 {kode} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{isi}",
+                            isi.len()
+                        );
+                        let _ = stream.write_all(respon.as_bytes());
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        (
+            JenkinsConfig {
+                url: format!("http://{addr}"),
+                user: "admin".to_string(),
+                token: "tok".to_string(),
+            },
+            catatan,
+        )
+    }
+
+    #[test]
+    fn promote_job_ada_diperbarui_dari_sumber_kanonik_lalu_trigger() {
+        let (cfg, catatan) = jenkins_palsu(vec![
+            (
+                200,
+                "{\"crumb\":\"c1\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (200, "{}"),
+            (200, ""),
+            (
+                200,
+                "{\"crumb\":\"c2\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (201, ""),
+        ]);
+        register_promote_job(&cfg, "tes-promote").unwrap();
+        trigger_parameterized(&cfg, "tes-promote", &[("PROMOTE_APP", "tes-testing")]).unwrap();
+
+        let rekaman = catatan.lock().unwrap().clone();
+        assert_eq!(rekaman.len(), 5, "{rekaman:?}");
+        assert!(
+            rekaman[1].contains("/job/tes-promote/api/json"),
+            "{rekaman:?}"
+        );
+        assert!(
+            rekaman[2].starts_with("POST /job/tes-promote/config.xml"),
+            "job lama harus ditimpa, bukan dibuat ulang: {rekaman:?}"
+        );
+        assert!(
+            rekaman[2].contains("kanonik=true"),
+            "XML harus dari repo Autore"
+        );
+        assert!(
+            rekaman[4].contains("/buildWithParameters?PROMOTE_APP=tes-testing"),
+            "{rekaman:?}"
+        );
+    }
+
+    #[test]
+    fn promote_job_absen_dibuat_lalu_trigger() {
+        let (cfg, catatan) = jenkins_palsu(vec![
+            (
+                200,
+                "{\"crumb\":\"c1\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (404, ""),
+            (200, ""),
+            (
+                200,
+                "{\"crumb\":\"c2\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (201, ""),
+        ]);
+        register_promote_job(&cfg, "tes-baru").unwrap();
+        trigger_parameterized(&cfg, "tes-baru", &[("PROMOTE_APP", "tes-testing")]).unwrap();
+
+        let rekaman = catatan.lock().unwrap().clone();
+        assert_eq!(rekaman.len(), 5, "{rekaman:?}");
+        assert!(
+            rekaman[2].starts_with("POST /createItem?name=tes-baru"),
+            "{rekaman:?}"
+        );
+        assert!(
+            rekaman[2].contains("kanonik=true"),
+            "XML harus dari repo Autore"
+        );
+        assert!(rekaman[4].contains("/buildWithParameters?"), "{rekaman:?}");
+    }
+
+    #[test]
+    fn promote_registrasi_gagal_tidak_menyentuh_trigger() {
+        let (cfg, catatan) = jenkins_palsu(vec![
+            (
+                200,
+                "{\"crumb\":\"c1\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (200, "{}"),
+            (500, "boom"),
+        ]);
+        let err = register_promote_job(&cfg, "tes-promote").unwrap_err();
+        assert!(err.contains("Gagal mendaftarkan"), "{err}");
+
+        let rekaman = catatan.lock().unwrap().clone();
+        assert_eq!(
+            rekaman.len(),
+            3,
+            "tidak boleh ada permintaan lain: {rekaman:?}"
+        );
+        assert!(
+            !rekaman
+                .iter()
+                .any(|baris| baris.contains("buildWithParameters")),
+            "registrasi gagal tidak boleh memicu build: {rekaman:?}"
+        );
+    }
+
+    #[test]
+    fn cek_job_status_aneh_gagal_tanpa_menimpa_config() {
+        let (cfg, catatan) = jenkins_palsu(vec![
+            (
+                200,
+                "{\"crumb\":\"c1\",\"crumbRequestField\":\"Jenkins-Crumb\"}",
+            ),
+            (500, "rusak"),
+        ]);
+        let err = register_promote_job(&cfg, "tes-promote").unwrap_err();
+        assert!(err.contains("Gagal memeriksa job"), "{err}");
+
+        let rekaman = catatan.lock().unwrap().clone();
+        assert_eq!(
+            rekaman.len(),
+            2,
+            "cek gagal tidak boleh lanjut POST: {rekaman:?}"
+        );
+        assert!(
+            !rekaman.iter().any(|baris| baris.starts_with("POST")),
+            "{rekaman:?}"
+        );
     }
 }

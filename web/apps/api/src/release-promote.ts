@@ -27,7 +27,10 @@ export type PromoteDeps = {
   ledger?: string | (() => string);
   bin?: string;
   job?: (app: string) => string | undefined;
-  spawn?: (bin: string, args: string[]) => Promise<{ code: number; stderr: string }>;
+  spawn?: (
+    bin: string,
+    args: string[],
+  ) => Promise<{ code: number; stderr: string }>;
   /** Konfigurasi environment per app; default membaca `environments.json`. */
   lingkungan?: (app: string) => KonfigLingkungan;
 };
@@ -36,15 +39,22 @@ export type PromoteHandler = {
   promote(id: string, aktor: Identitas): Promise<HasilPromote>;
 };
 
-async function jalankanAutore(bin: string, args: string[]): Promise<{ code: number; stderr: string }> {
+async function jalankanAutore(
+  bin: string,
+  args: string[],
+): Promise<{ code: number; stderr: string }> {
   return await new Promise((resolve) => {
-    const anak = spawnProses(bin, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const anak = spawnProses(bin, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     let stderr = "";
     anak.stderr?.on("data", (potongan: Buffer) => {
       if (stderr.length < 4000) stderr += potongan.toString();
     });
     anak.on("error", (error) => resolve({ code: 127, stderr: error.message }));
-    anak.on("close", (code) => resolve({ code: code ?? 1, stderr: stderr.trim() }));
+    anak.on("close", (code) =>
+      resolve({ code: code ?? 1, stderr: stderr.trim() }),
+    );
   });
 }
 
@@ -53,16 +63,25 @@ export function jobPromote(app: string): string {
 }
 
 /** Production aktif sudah memakai digest ini: promosi tidak boleh mengulang. */
-function sudahDiProduction(production: Environment | null, deployments: Deployment[], digest: string): boolean {
+function sudahDiProduction(
+  production: Environment | null,
+  deployments: Deployment[],
+  digest: string,
+): boolean {
   if (!production?.active_deployment_id) return false;
-  const aktif = deployments.find((item) => item.id === production.active_deployment_id);
+  const aktif = deployments.find(
+    (item) => item.id === production.active_deployment_id,
+  );
   return aktif?.image_digest === digest;
 }
 
 export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
-  const jalur = typeof deps.ledger === "function" ? deps.ledger() : (deps.ledger ?? jalurLedger());
+  const jalur =
+    typeof deps.ledger === "function" ? deps.ledger() : (deps.ledger ?? jalurLedger());
   const bin = deps.bin ?? process.env.AUTORE_BIN ?? "autore";
-  const job = deps.job ?? ((app: string) => process.env.AUTORE_PROMOTE_JOB ?? jobPromote(app));
+  const job =
+    deps.job ??
+    ((app: string) => process.env.AUTORE_PROMOTE_JOB ?? jobPromote(app));
   const spawn = deps.spawn ?? jalankanAutore;
   const konfig = deps.lingkungan ?? bacaLingkungan;
 
@@ -76,7 +95,11 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
       // menulis container aktif yang sama.
       const lepas = ambilKunci(app, "promote");
       if (!lepas) {
-        return { ok: false, status: 409, error: `promosi ${app} sedang berjalan` };
+        return {
+          ok: false,
+          status: 409,
+          error: `promosi ${app} sedang berjalan`,
+        };
       }
       try {
         const events: ReleaseEvent[] = [];
@@ -87,11 +110,20 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
         try {
           hasilFold = foldReleaseEvents(events, konfig(app).productionTarget);
         } catch {
-          return { ok: false, status: 409, error: "ledger release tidak konsisten" };
+          return {
+            ok: false,
+            status: 409,
+            error: "ledger release tidak konsisten",
+          };
         }
-        const release = hasilFold.releases.find((item) => item.id === id) ?? null;
+        const release =
+          hasilFold.releases.find((item) => item.id === id) ?? null;
         if (!release) {
-          return { ok: false, status: 404, error: `release ${id} tidak ditemukan` };
+          return {
+            ok: false,
+            status: 404,
+            error: `release ${id} tidak ditemukan`,
+          };
         }
         // Hanya rilis yang sudah lolos gerbang manual qa yang boleh jalan ke production.
         if (release.status !== "disetujui") {
@@ -102,7 +134,10 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
           };
         }
         // Dua orang untuk production: penyetuju tidak boleh menekan tombol promosi.
-        if (release.approved_by && release.approved_by.toLowerCase() === aktor.login.toLowerCase()) {
+        if (
+          release.approved_by &&
+          release.approved_by.toLowerCase() === aktor.login.toLowerCase()
+        ) {
           return {
             ok: false,
             status: 403,
@@ -111,7 +146,11 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
         }
         // Production hanya menerima build yang benar-benar sedang jalan di staging:
         // rilis lama yang pointer staging-nya sudah pindah tidak dipromosikan.
-        const pengganti = digantikanDiStaging(release.id, hasilFold.environments, hasilFold.deployments);
+        const pengganti = digantikanDiStaging(
+          release.id,
+          hasilFold.environments,
+          hasilFold.deployments,
+        );
         if (pengganti) {
           return {
             ok: false,
@@ -121,15 +160,29 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
         }
         const digest = release.image_digest;
         if (!digest) {
-          return { ok: false, status: 409, error: `release ${id} belum punya digest` };
+          return {
+            ok: false,
+            status: 409,
+            error: `release ${id} belum punya digest`,
+          };
         }
-        const staging = hasilFold.environments.find((item) => item.nama === "staging") ?? null;
-        const production = hasilFold.environments.find((item) => item.nama === "production") ?? null;
+        const staging =
+          hasilFold.environments.find((item) => item.nama === "staging") ??
+          null;
+        const production =
+          hasilFold.environments.find((item) => item.nama === "production") ??
+          null;
         if (!staging || staging.status_konfigurasi !== "terkonfigurasi") {
-          return { ok: false, status: 409, error: `environment staging belum dikonfigurasi untuk ${app}` };
+          return {
+            ok: false,
+            status: 409,
+            error: `environment staging belum dikonfigurasi untuk ${app}`,
+          };
         }
         const aktifStaging = staging.active_deployment_id
-          ? hasilFold.deployments.find((item) => item.id === staging.active_deployment_id)
+          ? hasilFold.deployments.find(
+              (item) => item.id === staging.active_deployment_id,
+            )
           : undefined;
         // Production memakai gambar yang sudah lolos staging, bukan hasil build lain.
         if (!aktifStaging || aktifStaging.image_digest !== digest) {
@@ -140,16 +193,30 @@ export function hatchPromote(deps: PromoteDeps = {}): PromoteHandler {
           };
         }
         if (!production || production.status_konfigurasi !== "terkonfigurasi") {
-          return { ok: false, status: 409, error: `environment production belum dikonfigurasi untuk ${app}` };
+          return {
+            ok: false,
+            status: 409,
+            error: `environment production belum dikonfigurasi untuk ${app}`,
+          };
         }
         if (sudahDiProduction(production, hasilFold.deployments, digest)) {
-          return { ok: false, status: 409, error: `production ${app} sudah memakai digest ${digest}` };
+          return {
+            ok: false,
+            status: 409,
+            error: `production ${app} sudah memakai digest ${digest}`,
+          };
         }
         const konfigProd = konfig(app);
-        const containerPort = process.env.AUTORE_PROMOTE_CONTAINER_PORT ??
-          (konfigProd.productionContainerPort === null ? "" : String(konfigProd.productionContainerPort));
-        const deployPort = process.env.AUTORE_PROMOTE_DEPLOY_PORT ??
-          (konfigProd.productionDeployPort === null ? "" : String(konfigProd.productionDeployPort));
+        const containerPort =
+          process.env.AUTORE_PROMOTE_CONTAINER_PORT ??
+          (konfigProd.productionContainerPort === null
+            ? ""
+            : String(konfigProd.productionContainerPort));
+        const deployPort =
+          process.env.AUTORE_PROMOTE_DEPLOY_PORT ??
+          (konfigProd.productionDeployPort === null
+            ? ""
+            : String(konfigProd.productionDeployPort));
         // Port wajib eksplisit: default diam-diam 8080 pernah memetakan container
         // production ke port yang salah, health kandidat gagal, dan rilis tercatat
         // gagal tanpa sebab yang kelihatan di dashboard.

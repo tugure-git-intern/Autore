@@ -136,11 +136,6 @@ pub struct TriggerPromoteArgs {
     /// Port host untuk production
     #[arg(long, default_value_t = 8154)]
     deploy_port: u16,
-    /// Daftarkan job dari `Jenkinsfile.promote` kalau job-nya belum ada
-    #[arg(long)]
-    git_url: Option<String>,
-    #[arg(long, default_value = "main")]
-    branch: String,
 }
 
 #[derive(Args)]
@@ -369,20 +364,8 @@ fn trigger_promote(args: TriggerPromoteArgs) -> Result<String, String> {
         ("PROMOTE_CONTAINER_PORT", container_port.as_str()),
         ("PROMOTE_DEPLOY_PORT", deploy_port.as_str()),
     ];
-    match jenkins::trigger_parameterized(&cfg, &args.job, &params) {
-        Ok(url) => Ok(url),
-        Err(e) => {
-            // Job belum ada: daftarkan dari Jenkinsfile.promote lalu picu sekali lagi.
-            let Some(ref git_url) = args.git_url else {
-                return Err(e);
-            };
-            if !e.contains("404") {
-                return Err(e);
-            }
-            jenkins::register_promote_job(&cfg, &args.job, git_url, &args.branch)?;
-            jenkins::trigger_parameterized(&cfg, &args.job, &params)
-        }
-    }
+    jenkins::register_promote_job(&cfg, &args.job)?;
+    jenkins::trigger_parameterized(&cfg, &args.job, &params)
 }
 
 /// Gerbang empat mata untuk production. Dashboard (`web/apps/api/src/release-promote.ts`)
@@ -782,8 +765,6 @@ mod tests {
             actor: "budi".into(),
             container_port: 8080,
             deploy_port: 8154,
-            git_url: None,
-            branch: "main".into(),
         };
         let err = trigger_promote(args).unwrap_err();
         assert!(err.contains("sha256"), "pesan harus menyebut sha256: {err}");

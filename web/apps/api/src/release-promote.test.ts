@@ -11,13 +11,23 @@ const COMMIT = "a".repeat(40);
 const APP = "tes-testing";
 const DIGEST_1 = "sha256:" + "1".repeat(64);
 const DIGEST_2 = "sha256:" + "2".repeat(64);
-const orang = (login: string): Identitas => ({ login, nama: login, email: `${login}@contoh.test` });
+const REPO_URL = "https://github.com/MAliffadlan/tes-dari-nol";
+const BRANCH = "main";
+const orang = (login: string): Identitas => ({
+  login,
+  nama: login,
+  email: `${login}@contoh.test`,
+});
 
 /** Ledger di temp dir: tes tidak boleh menyentuh state produksi (~/.autore). */
 function ledgerTemp(events: ReleaseEvent[]): string {
   const dir = mkdtempSync(join(tmpdir(), "autore-promote-"));
   const berkas = join(dir, "release-state.json");
-  writeFileSync(berkas, JSON.stringify({ version: 1, events }, null, 2), "utf8");
+  writeFileSync(
+    berkas,
+    JSON.stringify({ version: 1, events }, null, 2),
+    "utf8",
+  );
   return berkas;
 }
 
@@ -32,6 +42,8 @@ function ev(overrides: Partial<ReleaseEvent> = {}): ReleaseEvent {
     commit: COMMIT,
     build_number: 1,
     actor: "operator",
+    repo_url: REPO_URL,
+    branch: BRANCH,
     ...overrides,
   };
 }
@@ -40,7 +52,12 @@ function dasar(build: number, digest: string): ReleaseEvent[] {
   return [
     ev({ id: `req-${build}`, kind: "requested", build_number: build }),
     ev({ id: `build-${build}`, kind: "build_started", build_number: build }),
-    ev({ id: `digest-${build}`, kind: "digest_verified", digest, build_number: build }),
+    ev({
+      id: `digest-${build}`,
+      kind: "digest_verified",
+      digest,
+      build_number: build,
+    }),
     ev({
       id: `deploy-stg-${build}`,
       kind: "deploy_result",
@@ -61,12 +78,24 @@ function menunggu(build: number, digest: string): ReleaseEvent[] {
 }
 
 function disetujui(build: number, digest: string): ReleaseEvent[] {
-  return [...dasar(build, digest), ev({ id: `approve-${build}`, kind: "approved", build_number: build, actor: "sari" })];
+  return [
+    ...dasar(build, digest),
+    ev({
+      id: `approve-${build}`,
+      kind: "approved",
+      build_number: build,
+      actor: "sari",
+    }),
+  ];
 }
 
 type Panggilan = { bin: string; args: string[] };
 
-function handler(events: ReleaseEvent[], panggilan: Panggilan[] = [], code = 0) {
+function handler(
+  events: ReleaseEvent[],
+  panggilan: Panggilan[] = [],
+  code = 0,
+) {
   const berkas = ledgerTemp(events);
   return {
     berkas,
@@ -142,6 +171,33 @@ describe("handler promosi production", () => {
     }
   });
 
+  it.each<[string, Partial<ReleaseEvent>]>([
+    ["source metadata hilang", { repo_url: undefined, branch: undefined }],
+    [
+      "metadata mengarah ke repo aplikasi",
+      { repo_url: REPO_URL, branch: BRANCH },
+    ],
+  ])(
+    "R42 promosi tidak bergantung metadata repo release (%s)",
+    async (_kasus, overrides) => {
+      const h = handler(
+        disetujui(1, DIGEST_1).map((event) => ({ ...event, ...overrides })),
+      );
+      try {
+        const hasil = await h.hatch.promote(
+          `${APP}:${COMMIT}:1`,
+          orang("budi"),
+        );
+        expect(hasil).toMatchObject({ ok: true, status: 202 });
+        expect(h.panggilan).toHaveLength(1);
+        expect(h.panggilan[0].args).not.toContain("--git-url");
+        expect(h.panggilan[0].args).not.toContain("--branch");
+      } finally {
+        lepasSemuaKunci();
+      }
+    },
+  );
+
   it("R48 menolak promosi bila container_port production belum dikonfigurasi (409)", async () => {
     const h = handler(disetujui(1, DIGEST_1));
     const hatch = hatchPromote({
@@ -167,10 +223,7 @@ describe("handler promosi production", () => {
   });
 
   it("R43 menolak bila staging aktif sudah bukan digest release (409)", async () => {
-    const h = handler([
-      ...disetujui(1, DIGEST_2),
-      ...dasar(2, DIGEST_1),
-    ]);
+    const h = handler([...disetujui(1, DIGEST_2), ...dasar(2, DIGEST_1)]);
     try {
       const hasil = await h.hatch.promote(`${APP}:${COMMIT}:1`, orang("budi"));
       expect(hasil).toMatchObject({ ok: false, status: 409 });
@@ -221,7 +274,10 @@ describe("handler promosi production", () => {
     const tahan = handler(disetujui(1, DIGEST_1));
     try {
       const pertama = h.hatch.promote(`${APP}:${COMMIT}:1`, orang("budi"));
-      const kedua = await tahan.hatch.promote(`${APP}:${COMMIT}:1`, orang("budi"));
+      const kedua = await tahan.hatch.promote(
+        `${APP}:${COMMIT}:1`,
+        orang("budi"),
+      );
       expect(kedua).toMatchObject({ ok: false, status: 409 });
       await pertama;
     } finally {

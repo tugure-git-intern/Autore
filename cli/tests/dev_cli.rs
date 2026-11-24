@@ -179,8 +179,8 @@ fn dev_prints_url_and_ctrl_c_instructions_and_keeps_paths_as_one_arg() {
     assert!(stdout.contains("http://localhost:8301"), "{stdout}");
     assert!(stdout.contains("Ctrl+C"), "{stdout}");
     let calls = fs::read_to_string(log).unwrap();
-    assert_eq!(calls.lines().count(), 2, "{calls}");
-    let compose = calls.lines().nth(1).unwrap();
+    assert_eq!(calls.lines().count(), 3, "{calls}");
+    let compose = calls.lines().nth(2).unwrap();
     assert!(compose.contains("compose -p autore-dev-"), "{compose}");
     let argv: Vec<_> = fs::read_to_string(argv_log)
         .unwrap()
@@ -288,9 +288,9 @@ fn dev_keyboard_interrupt_cleans_generated_compose_project() {
     );
     let calls = fs::read_to_string(log).unwrap();
     let calls: Vec<_> = calls.lines().collect();
-    assert_eq!(calls.len(), 3, "{calls:?}");
-    let up: Vec<_> = calls[1].split_whitespace().collect();
-    let down: Vec<_> = calls[2].split_whitespace().collect();
+    assert_eq!(calls.len(), 4, "{calls:?}");
+    let up: Vec<_> = calls[2].split_whitespace().collect();
+    let down: Vec<_> = calls[3].split_whitespace().collect();
     assert_eq!(&up[..2], &["compose", "-p"]);
     assert_eq!(&down[..2], &["compose", "-p"]);
     assert_eq!(up[2], down[2], "cleanup must target generated project");
@@ -300,8 +300,8 @@ fn dev_keyboard_interrupt_cleans_generated_compose_project() {
         &["down", "--remove-orphans"],
         "down argv: {down:?}"
     );
-    assert!(!calls[2].contains("--rmi"));
-    assert!(!calls[2].contains("-v"));
+    assert!(!calls[3].contains("--rmi"));
+    assert!(!calls[3].contains("-v"));
 }
 #[cfg(unix)]
 #[test]
@@ -346,7 +346,7 @@ fn dev_project_name_dipilih_manual_dan_yang_tidak_sah_ditolak_sebelum_docker() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(23), "stderr: {stderr}");
     let calls = fs::read_to_string(&log).unwrap();
-    let compose = calls.lines().nth(1).unwrap();
+    let compose = calls.lines().nth(2).unwrap();
     assert_eq!(
         compose.split_whitespace().take(3).collect::<Vec<_>>(),
         ["compose", "-p", "cek-app"],

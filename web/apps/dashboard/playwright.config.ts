@@ -64,10 +64,7 @@ const webServer: PlaywrightTestConfig["webServer"] = HIDUP
         },
       },
       {
-        // `.next-e2e` sama dengan distDir sementara yang dipakai scripts/deploy-web.sh,
-        // jadi keduanya memakai satu kunci yang sama: build E2E dan deploy tak boleh
-        // saling memindah atau menghapus direktori di tengah jalan.
-        command: `flock /tmp/autore-deploy-web.lock -c 'npm exec -w @autore/dashboard -- next build && npm exec -w @autore/dashboard -- next start -H 127.0.0.1 -p ${PORT_WEB}'`,
+        command: `npm exec -w @autore/dashboard -- next build && npm exec -w @autore/dashboard -- next start -H 127.0.0.1 -p ${PORT_WEB}`,
         cwd: path.join(AKAR, "..", ".."),
         url: `http://127.0.0.1:${PORT_WEB}/login`,
         reuseExistingServer: !process.env.CI,

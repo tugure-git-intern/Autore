@@ -10,10 +10,11 @@ DASH="$WEB/apps/dashboard"
 UNIT="${AUTORE_WEB_UNIT:-autore-web-dashboard}"
 PORT="${AUTORE_WEB_PORT:-9120}"
 AKTIF="$DASH/.next"
-# distDir sementara memakai nama yang sudah tercantum di `tsconfig.json`
-# (`.next-e2e`), supaya `next build` tidak menulis ulang tsconfig hanya untuk
-# menambah `include` baru.
-BARU="$DASH/.next-e2e"
+# distDir sementara milik deploy sendiri, terpisah dari `.next-e2e` milik
+# Playwright: kalau keduanya sama, deploy bisa menghapus direktori yang sedang
+# dipakai server E2E. `.next-baru` sudah tercantum di `include` tsconfig, jadi
+# `next build` tidak menulis ulang tsconfig hanya untuk menambah entri.
+BARU="$DASH/.next-baru"
 LAMA="$DASH/.next-lama"
 LOG="${TMPDIR:-/tmp}/autore-deploy-web.log"
 LOCK="${AUTORE_WEB_LOCK:-/tmp/autore-deploy-web.lock}"

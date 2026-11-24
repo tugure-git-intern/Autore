@@ -233,9 +233,11 @@ Access the dashboard at `http://localhost:9120` (or through your assigned host/T
 | `autore kemampuan` | — | Prints this host's capabilities as machine-readable data (consumed by the dashboard to decide which stacks are available). |
 | `autore start / stop / restart` | — | Controls background services via systemd user manager. |
 | `autore logs` | — | Streams real-time operational logs from dashboard and API services (`--lines N`, `--no-follow`). |
-| `autore update` | — | Downloads and atomicity verifies the latest binary release from GitHub Releases. |
+| `autore update` | — | Downloads and atomicity verifies the latest binary release from GitHub Releases. It replaces the CLI binary only; the dashboard is a separate Next.js build, so its sidebar version stays stale until the web app is rebuilt |
 
 Branch locking has its own page: [`BRANCH-PROTECTION.md`](BRANCH-PROTECTION.md) — the two tiers, the `kebijakan.conf` rules, and what each GitHub error means.
+
+`autore update` does not rebuild the dashboard. On a host that serves it, run `scripts/deploy-web.sh` (installed as `~/bin/autore-deploy-web`) after updating: it pulls, builds into `.next-baru`, swaps, restarts the unit, and rolls back to `.next-lama` if the new build does not answer. Run it as the repo owner, never as root.
 
 ```bash
 # Example usages

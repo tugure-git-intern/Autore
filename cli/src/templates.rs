@@ -77,8 +77,6 @@ RUN if find . -maxdepth 3 \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q
 
 FROM python:3.12-slim
 WORKDIR /app
-COPY --from=test /usr/local /usr/local
-COPY --from=test /app /app
 # Tambal paket OS dari repo security. Base `python:3.12-slim` masih membawa apt
 # 3.0.3, dan CVE-2026-109518 sudah punya perbaikan (3.0.4 di trixie-security),
 # sehingga gerbang Trivy memblokir image. Hanya stage ini yang dikirim, jadi
@@ -88,11 +86,15 @@ COPY --from=test /app /app
 # nilai berubah tiap build dan cache layer di bawahnya batal — `apt-get upgrade`
 # benar-benar dieksekusi ulang. Tanpa ini image memakai layer cache berhari-hari
 # lalu (terukur: zlib1g 1+b1, 2 CVE HIGH) dan gerbang Trivy kembali merah.
+# Harus mendahului COPY kode: kalau tidak, tiap perubahan kode membatalkan cache
+# layer apt dan `apt-get upgrade` (jaringan + dpkg) jalan ulang di tiap rebuild.
 ARG AUTORE_APT_REFRESH=0
 RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --no-create-home appuser
+COPY --from=test /usr/local /usr/local
+COPY --from=test /app /app
 # AUTORE_WATCH_SYNC_APP_V1
 RUN chown -R appuser:appuser /app
 USER appuser
@@ -746,6 +748,16 @@ mod tests {
             .find("ARG AUTORE_APT_REFRESH=0")
             .expect("ARG cache-bust ada di template");
         assert!(arg_bust < tambalan, "ARG cache-bust harus sebelum RUN apt");
+        // Cache layer: kode aplikasi berubah tiap commit, jadi COPY kode harus
+        // SETELAH tambalan apt. Kalau mendahului, `apt-get upgrade` (jaringan +
+        // dpkg, terukur puluhan detik) dieksekusi ulang di tiap rebuild.
+        let salin_kode = dockerfile
+            .rfind("COPY --from=test /app /app")
+            .expect("COPY kode dari stage test ada");
+        assert!(
+            tambalan < salin_kode,
+            "tambalan apt harus mendahului COPY kode supaya cache-nya tidak batal tiap perubahan"
+        );
     }
 
     #[test]

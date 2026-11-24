@@ -79,6 +79,11 @@ pub(crate) fn jalankan(args: DevArgs) -> i32 {
         },
         || compose_watch_version().map(|_| ()),
         || {
+            let _ = sapu_project_mati(&dir, daftar_project_compose, pid_hidup, |id| {
+                turunkan_project(&dir, id)
+            });
+        },
+        || {
             let cfg = InitConfig {
                 app_name: nama.clone(),
                 stack,
@@ -582,10 +587,118 @@ fn nama_project(app_name: &str, pilihan: Option<&str>) -> Result<String, String>
     Ok(id)
 }
 
+/// Project Compose `autore-dev-<app>-<pid>` yang PID-nya sudah mati ditinggal
+/// container-nya saat terminal ditutup paksa (tidak ada Ctrl+C → tanpa `down`).
+/// Hanya project di folder ini yang disentuh, dan hanya kalau PID-nya benar-benar
+/// mati, supaya sesi hidup di terminal lain tidak ikut turun.
+/// ponytail: PID bisa dipakai ulang proses lain → project dianggap hidup dan
+/// dibiarkan; arah aman (tidak pernah menghapus yang salah).
+fn sapu_project_mati(
+    project_dir: &Path,
+    daftar: impl FnOnce() -> Result<Vec<(String, String)>, String>,
+    pid_hidup: impl Fn(u32) -> bool,
+    mut down: impl FnMut(&str) -> Result<(), String>,
+) -> Vec<String> {
+    let Ok(daftar) = daftar() else {
+        return Vec::new();
+    };
+    let dir = path_kunci(project_dir);
+    let mut dibuang = Vec::new();
+    for (id, workdir) in daftar {
+        if path_kunci(Path::new(&workdir)) != dir || !id.starts_with(PROJECT_PREFIX) {
+            continue;
+        }
+        let Some(pid) = id.rsplit('-').next().and_then(|s| s.parse::<u32>().ok()) else {
+            continue;
+        };
+        if pid_hidup(pid) {
+            continue;
+        }
+        match down(&id) {
+            Ok(()) => {
+                println!("  • dibersihkan: {id} (sisa sesi lama)");
+                dibuang.push(id);
+            }
+            Err(error) => eprintln!("{} gagal membersihkan {id}: {error}", "!".yellow()),
+        }
+    }
+    dibuang
+}
+
+fn path_kunci(path: &Path) -> String {
+    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    tanpa_prefix_verbatim(&path)
+        .to_string_lossy()
+        .to_lowercase()
+}
+
+fn daftar_project_compose() -> Result<Vec<(String, String)>, String> {
+    let format = "{{.Label \"com.docker.compose.project\"}}\t{{.Label \"com.docker.compose.project.working_dir\"}}";
+    let args = ["ps", "-a", "--format", format].map(OsString::from);
+    let mut command = compose_command(OsStr::new("docker"), &args, None);
+    let output = command
+        .output()
+        .map_err(|error| format!("docker ps gagal: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .filter(|(id, dir)| !id.is_empty() && !dir.is_empty())
+        .map(|(id, dir)| (id.to_string(), dir.to_string()))
+        .collect())
+}
+
+fn turunkan_project(project_dir: &Path, id: &str) -> Result<(), String> {
+    let args: Vec<OsString> = vec![
+        OsString::from("compose"),
+        OsString::from("-p"),
+        OsString::from(id),
+        OsString::from("--project-directory"),
+        tanpa_prefix_verbatim(project_dir).into_os_string(),
+        OsString::from("down"),
+        OsString::from("--remove-orphans"),
+    ];
+    let mut command = compose_command(OsStr::new("docker"), &args, Some(project_dir));
+    let output = command
+        .output()
+        .map_err(|error| format!("docker compose down gagal: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn pid_hidup(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(true)
+}
+
+#[cfg(windows)]
+fn pid_hidup(pid: u32) -> bool {
+    let filter = format!("PID eq {pid}");
+    Command::new("tasklist")
+        .args(["/FI", &filter, "/NH"])
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        .unwrap_or(true)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn pid_hidup(_pid: u32) -> bool {
+    true
+}
+
 fn run_compose_watch_with(
     project_dir: &Path,
     options: ComposeWatchOptions,
     check_version: impl FnOnce() -> Result<(), String>,
+    sapu_sisa: impl FnOnce(),
     ensure_files: impl FnOnce() -> Result<Vec<PathBuf>, String>,
     port_is_free: impl Fn(u16) -> bool,
     mut run: impl FnMut(&[OsString], &Path, &Path) -> Result<ComposeRunResult, String>,
@@ -598,6 +711,7 @@ fn run_compose_watch_with(
         project_name,
     } = options;
     check_version()?;
+    sapu_sisa();
     let generated_files = ensure_files()?;
     let host_port = match requested_port {
         Some(port) if port > 0 && port_is_free(port) => port,
@@ -728,6 +842,7 @@ mod tests {
                 version_events.borrow_mut().push("version".to_string());
                 Ok(())
             },
+            || {},
             || {
                 files_events.borrow_mut().push("files".to_string());
                 std::fs::write(
@@ -806,6 +921,7 @@ mod tests {
                 project_name: None,
             },
             || Err("Compose too old".to_string()),
+            || {},
             || {
                 files_called.set(true);
                 Ok(Vec::new())
@@ -838,6 +954,7 @@ mod tests {
                 project_name: None,
             },
             || Ok(()),
+            || {},
             || Ok(Vec::new()),
             |_| false,
             |_, _, _| {
@@ -865,6 +982,7 @@ mod tests {
                 project_name: None,
             },
             || Ok(()),
+            || {},
             || Ok(Vec::new()),
             |_| true,
             |_, _, file| {
@@ -893,6 +1011,7 @@ mod tests {
                 project_name: None,
             },
             || Ok(()),
+            || {},
             || Ok(Vec::new()),
             |_| true,
             |args, _, file| {
@@ -952,6 +1071,86 @@ mod tests {
             PathBuf::from("/home/app"),
             "unix path must stay untouched"
         );
+    }
+
+    #[test]
+    fn sapu_project_membuang_hanya_pid_mati_di_folder_yang_sama() {
+        let project = tempfile::tempdir().unwrap();
+        let dir = project.path().canonicalize().unwrap();
+        let dir = dir.to_string_lossy().to_string();
+        let lain = tempfile::tempdir().unwrap();
+        let daftar = vec![
+            ("autore-dev-tes-111".to_string(), dir.clone()),
+            ("autore-dev-tes-222".to_string(), dir.clone()),
+            (
+                "autore-dev-tes-333".to_string(),
+                lain.path().to_string_lossy().to_string(),
+            ),
+            ("autore-dev-tes-bukan-angka".to_string(), dir.clone()),
+            ("project-manual".to_string(), dir.clone()),
+        ];
+        let mut down = Vec::new();
+
+        let dibuang = sapu_project_mati(
+            project.path(),
+            || Ok(daftar.clone()),
+            |pid| pid == 222,
+            |id| {
+                down.push(id.to_string());
+                Ok(())
+            },
+        );
+
+        assert_eq!(dibuang, ["autore-dev-tes-111"]);
+        assert_eq!(down, ["autore-dev-tes-111"]);
+    }
+
+    #[test]
+    fn sapu_project_abaikan_docker_yang_gagal_dibaca() {
+        let project = tempfile::tempdir().unwrap();
+        let mut down = Vec::new();
+
+        let dibuang = sapu_project_mati(
+            project.path(),
+            || Err("docker tidak ada".to_string()),
+            |_| false,
+            |id| {
+                down.push(id.to_string());
+                Ok(())
+            },
+        );
+
+        assert!(dibuang.is_empty());
+        assert!(
+            down.is_empty(),
+            "gagal membaca daftar tidak boleh menurunkan apa pun"
+        );
+    }
+
+    #[test]
+    fn sapu_project_tetap_jalan_walau_satu_project_gagal_diturunkan() {
+        let project = tempfile::tempdir().unwrap();
+        let dir = project.path().canonicalize().unwrap();
+        let dir = dir.to_string_lossy().to_string();
+        let daftar = vec![
+            ("autore-dev-tes-111".to_string(), dir.clone()),
+            ("autore-dev-tes-222".to_string(), dir.clone()),
+        ];
+
+        let dibuang = sapu_project_mati(
+            project.path(),
+            || Ok(daftar.clone()),
+            |_| false,
+            |id| {
+                if id == "autore-dev-tes-111" {
+                    Err("compose down gagal".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+
+        assert_eq!(dibuang, ["autore-dev-tes-222"]);
     }
 
     #[test]
@@ -1308,6 +1507,7 @@ mod tests {
                 project_name: None,
             },
             || Ok(()),
+            || {},
             || Ok(Vec::new()),
             |_| true,
             |args, _, _| {

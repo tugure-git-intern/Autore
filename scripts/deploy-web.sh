@@ -20,7 +20,7 @@ bail() { echo "GAGAL: $*" >&2; exit 1; }
 # Alamat dengar diambil dari socket, bukan ditebak: dashboard di-bind ke IP
 # tailnet (`next start -H 100.80.3.14`), jadi 127.0.0.1 tidak selalu hidup.
 alamat() {
-  ss -ltnH "sport = :$PORT" 2>/dev/null | awk '{print $4}' | sed 's/.*://' | head -1
+  ss -ltnH "sport = :$PORT" 2>/dev/null | awk '{print $4}' | sed 's/:[^:]*$//' | head -1
 }
 
 # Proses menjawab = kode HTTP apa pun selain 000 (307 ke /login itu normal).

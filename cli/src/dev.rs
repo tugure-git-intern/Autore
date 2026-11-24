@@ -324,8 +324,7 @@ fn compose_watch_yaml(
     let root = dir
         .canonicalize()
         .map_err(|e| format!("gagal menentukan folder project: {e}"))?;
-    #[cfg(windows)]
-    let root = root.strip_prefix(r"\\?\").unwrap_or(&root);
+    let root = tanpa_prefix_verbatim(&root);
     let context = yaml_scalar(&root.to_string_lossy().replace('\\', "/"));
     let mut yaml = format!(
         r#"services:
@@ -512,6 +511,22 @@ enum ComposeRunResult {
     Interrupted,
 }
 
+/// Windows `canonicalize` memberi bentuk verbatim `\\?\C:\...`; Docker Compose
+/// gagal mengevaluasinya (`failed to evaluate path "/?/C:/..."`), jadi prefix
+/// dibuang sebelum path dikirim ke Compose. `Path::strip_prefix(r"\\?\")` tidak
+/// bisa dipakai: prefix Windows adalah satu komponen utuh (`VerbatimDisk('C')`),
+/// bukan potongan teks yang bisa dicocokkan sebagian — jadi buang sebagai teks.
+fn tanpa_prefix_verbatim(path: &Path) -> PathBuf {
+    let teks = path.to_string_lossy();
+    if let Some(sisa) = teks.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{sisa}"));
+    }
+    match teks.strip_prefix(r"\\?\") {
+        Some(sisa) => PathBuf::from(sisa),
+        None => path.to_path_buf(),
+    }
+}
+
 fn compose_watch_args(
     project_id: &str,
     project_dir: &Path,
@@ -523,9 +538,9 @@ fn compose_watch_args(
         OsString::from("-p"),
         OsString::from(project_id),
         OsString::from("-f"),
-        compose_file.as_os_str().to_os_string(),
+        tanpa_prefix_verbatim(compose_file).into_os_string(),
         OsString::from("--project-directory"),
-        project_dir.as_os_str().to_os_string(),
+        tanpa_prefix_verbatim(project_dir).into_os_string(),
     ]
     .into_iter()
     .chain(command.iter().map(OsString::from))
@@ -873,6 +888,30 @@ mod tests {
         assert!(!down
             .iter()
             .any(|arg| { arg == "--rmi" || arg == "-v" || arg == "--volumes" }));
+    }
+
+    #[test]
+    fn tanpa_prefix_verbatim_membuang_prefix_windows_untuk_compose() {
+        assert_eq!(
+            tanpa_prefix_verbatim(Path::new(r"\\?\D:\Users\Magang\tes-dari-nol")),
+            PathBuf::from(r"D:\Users\Magang\tes-dari-nol"),
+            "drive verbatim prefix must be removed"
+        );
+        assert_eq!(
+            tanpa_prefix_verbatim(Path::new(r"\\?\UNC\server\share\app")),
+            PathBuf::from(r"\\server\share\app"),
+            "UNC verbatim prefix must become a plain UNC path"
+        );
+        assert_eq!(
+            tanpa_prefix_verbatim(Path::new(r"C:\Users\app")),
+            PathBuf::from(r"C:\Users\app"),
+            "plain Windows path must stay untouched"
+        );
+        assert_eq!(
+            tanpa_prefix_verbatim(Path::new("/home/app")),
+            PathBuf::from("/home/app"),
+            "unix path must stay untouched"
+        );
     }
 
     #[test]

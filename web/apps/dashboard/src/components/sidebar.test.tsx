@@ -1,6 +1,15 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiStatusResponse } from "@/lib/contracts";
+
+/** Versi satu sumber: `cli/Cargo.toml`, sama dengan yang disuntik `next.config.ts`. */
+const VERSI_CLI = `v${
+  readFileSync(resolve(__dirname, "../../../../../cli/Cargo.toml"), "utf8").match(
+    /^version\s*=\s*"([^"]+)"/m,
+  )![1]
+}`;
 
 const nav = vi.hoisted(() => ({ pathname: "/pipeline" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
@@ -122,8 +131,8 @@ describe("versiAutore", () => {
     expect(versiAutore()).toBe("v9.9.9");
   });
 
-  it("jatuh ke v0.6.2 saat env kosong (sinkron cli/Cargo.toml)", () => {
-    expect(versiAutore()).toBe("v0.6.2");
+  it("jatuh ke versi cli/Cargo.toml saat env kosong", () => {
+    expect(versiAutore()).toBe(VERSI_CLI);
   });
 });
 

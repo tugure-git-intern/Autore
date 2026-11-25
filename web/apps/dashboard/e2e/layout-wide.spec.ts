@@ -1,4 +1,16 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test, expect } from "@playwright/test";
+
+/**
+ * Versi yang disuntik `next.config.ts` ke bundel dari `cli/Cargo.toml`. Tes ikut
+ * sumber itu, bukan literal, supaya bump rilis tak memerahkan suite ini.
+ */
+const VERSI = `v${
+  readFileSync(join(__dirname, "../../../../cli/Cargo.toml"), "utf8").match(
+    /^version\s*=\s*"([^"]+)"/m,
+  )![1]
+}`;
 
 // Cookie uji harus menempel di host yang benar-benar dibuka suite; di mode
 // hermetik host-nya 127.0.0.1, bukan VPS.
@@ -588,7 +600,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(html).toHaveCSS("background-color", "rgb(53, 59, 67)");
   });
 
-  test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi v0.6.2 di kanan", async ({
+  test("indikator status di pojok bawah sidebar: [•] Server Online di kiri dan versi terbaru di kanan", async ({
     page,
     context,
   }) => {
@@ -606,7 +618,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(textOnline).toBeVisible();
     await expect(textOnline).toHaveClass(/text-gray-900/);
 
-    const textVersi = footer.getByText("v0.6.2");
+    const textVersi = footer.getByText(VERSI);
     await expect(textVersi).toBeVisible();
     await expect(textVersi).toHaveClass(/text-gray-[56]00/);
     // Garis tipis di atas indikator status dihapus

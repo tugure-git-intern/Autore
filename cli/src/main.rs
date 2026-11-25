@@ -1951,8 +1951,14 @@ fn execute_command(
 
         Commands::Status { json } => {
             // Satu sumber: apa yang ditulis pipeline (serve) + registry + docker.
-            // Peringatan (kalau ada) harus ke stderr supaya stdout tetap satu JSON.
+            // Peringatan harus ke stderr supaya stdout `--json` tetap satu JSON.
             let snap = status::build(&workspace::workspace_dir());
+            if let Some(pesan) = status::peringatan_versi_dashboard(
+                &status::dir_dashboard(),
+                env!("CARGO_PKG_VERSION"),
+            ) {
+                eprintln!("PERINGATAN: {pesan}");
+            }
             if json {
                 println!("{}", status::canonical(&snap));
                 return 0;

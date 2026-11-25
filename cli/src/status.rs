@@ -416,6 +416,49 @@ fn infra_status(hidup: &Option<Vec<String>>, container: &str) -> String {
     }
 }
 
+/// Direktori build dashboard yang disajikan unit `autore-web-dashboard`.
+/// `AUTORE_WEB_DASHBOARD` menimpa; default mengikuti lokasi repo di mesin ini.
+// ponytail: default satu path tetap, cukup untuk laptop + VPS yang sama-sama
+// checkout di ~/Autore; jadikan config kalau lokasinya mulai bervariasi.
+pub fn dir_dashboard() -> std::path::PathBuf {
+    if let Some(p) = std::env::var_os("AUTORE_WEB_DASHBOARD") {
+        let p = std::path::PathBuf::from(p);
+        if !p.as_os_str().is_empty() {
+            return p;
+        }
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(home).join("Autore/web/apps/dashboard")
+}
+
+/// Versi yang benar-benar tertanam di build dashboard, dibaca dari
+/// `.next/required-server-files.json` — `next build` menyalin `env` milik
+/// `next.config.ts` ke situ, dan nilai yang sama ikut ke bundel klien.
+/// Dibaca dari disk, bukan dari `Cargo.toml`: yang ingin diketahui adalah build
+/// yang tersaji, bukan versi sumber.
+pub fn versi_dashboard(dir: &Path) -> Option<String> {
+    let teks = std::fs::read_to_string(dir.join(".next/required-server-files.json")).ok()?;
+    let nilai: serde_json::Value = serde_json::from_str(&teks).ok()?;
+    let versi = nilai["config"]["env"]["NEXT_PUBLIC_APP_VERSION"].as_str()?;
+    let versi = versi.trim();
+    (!versi.is_empty()).then(|| versi.to_string())
+}
+
+/// Peringatan saat build dashboard berasal dari CLI versi lain. `None` berarti
+/// tidak ada dashboard di mesin ini atau versinya sudah sama. Hanya mendeteksi;
+/// membangun ulang tetap tugas `scripts/deploy-web.sh`.
+pub fn peringatan_versi_dashboard(dir: &Path, versi_cli: &str) -> Option<String> {
+    let versi_dash = versi_dashboard(dir)?;
+    let sama = |v: &str| v.trim_start_matches('v').to_string();
+    if sama(&versi_dash) == sama(versi_cli) {
+        return None;
+    }
+    Some(format!(
+        "dashboard menyajikan {versi_dash}, CLI ini v{} — jalankan scripts/deploy-web.sh untuk menyamakan",
+        sama(versi_cli)
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -744,5 +787,44 @@ mod tests {
     fn canonical_tidak_mengubah_teks_kosong_menjadi_null() {
         let json = canonical(&Snapshot::default());
         assert!(!json.contains(":null"), "{json}");
+    }
+
+    fn dashboard_versi(tmp: &Path, versi: &str) {
+        std::fs::create_dir_all(tmp.join(".next")).unwrap();
+        std::fs::write(
+            tmp.join(".next/required-server-files.json"),
+            format!(r#"{{"config":{{"env":{{"NEXT_PUBLIC_APP_VERSION":"{versi}"}}}}}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn versi_dashboard_dibaca_dari_build_yang_tersaji() {
+        let tmp = TempDir::new().unwrap();
+        assert_eq!(versi_dashboard(tmp.path()), None, "tanpa build = tak tahu");
+
+        dashboard_versi(tmp.path(), "v0.6.1");
+        assert_eq!(versi_dashboard(tmp.path()).as_deref(), Some("v0.6.1"));
+    }
+
+    #[test]
+    fn peringatan_hanya_kalau_versi_beda() {
+        let tmp = TempDir::new().unwrap();
+
+        // Tanpa build: tak ada yang perlu diperingatkan.
+        assert_eq!(peringatan_versi_dashboard(tmp.path(), "0.6.8"), None);
+
+        dashboard_versi(tmp.path(), "v0.6.8");
+        assert_eq!(
+            peringatan_versi_dashboard(tmp.path(), "0.6.8"),
+            None,
+            "v0.6.8 dan 0.6.8 adalah versi yang sama"
+        );
+
+        dashboard_versi(tmp.path(), "v0.6.1");
+        let pesan = peringatan_versi_dashboard(tmp.path(), "0.6.8").expect("harus memperingatkan");
+        assert!(pesan.contains("v0.6.1"), "{pesan}");
+        assert!(pesan.contains("v0.6.8"), "{pesan}");
+        assert!(pesan.contains("deploy-web.sh"), "{pesan}");
     }
 }

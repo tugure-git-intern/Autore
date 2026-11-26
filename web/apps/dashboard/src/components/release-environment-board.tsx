@@ -281,11 +281,18 @@ export function ReleaseEnvironmentBoard({
   /** Role efektif penampil; qa ke atas boleh melihat tombol approval. */
   role?: Role | null;
 }) {
-  // Satu record lama yang tidak konsisten tidak boleh mematikan seluruh halaman:
-  // dilaporkan sebagai peringatan, bukan throw yang memicu error boundary.
+  // Catatan historis yang tidak lagi ditunjuk environment tetap menjadi ledger,
+  // tetapi hanya deployment aktif yang memengaruhi status dashboard.
+  const activeDeploymentIds = new Set(
+    environments.flatMap((environment) =>
+      environment.active_deployment_id ? [environment.active_deployment_id] : [],
+    ),
+  );
   const inkonsisten = deployments.filter((deployment) => {
+    if (!activeDeploymentIds.has(deployment.id)) return false;
     const release = releases.find((item) => item.id === deployment.release_id);
-    return !release || release.image_digest !== deployment.image_digest;
+    return !release || !release.image_digest || !deployment.image_digest
+      || release.image_digest !== deployment.image_digest;
   });
 
   const baris = releases.map((release) => ({
@@ -306,7 +313,7 @@ export function ReleaseEnvironmentBoard({
           data-testid="deployment-inkonsisten"
           className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
         >
-          {inkonsisten.length} deployment lama tidak cocok dengan release-nya (digest kosong atau berbeda):{" "}
+          {inkonsisten.length} deployment aktif tidak cocok dengan release-nya (digest kosong atau berbeda):{" "}
           <span className="font-mono text-xs">{inkonsisten.map((item) => item.id).join(", ")}</span>
         </div>
       ) : null}

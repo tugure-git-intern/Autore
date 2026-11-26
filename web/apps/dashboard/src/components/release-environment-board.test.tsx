@@ -154,11 +154,77 @@ describe("ReleaseEnvironmentBoard", () => {
     expect(lipat).toHaveAttribute("open");
   });
 
-  it("menandai deployment dengan digest berbeda tanpa melempar", () => {
-    const salah = [{ ...deployments[0], image_digest: "sha256:" + "b".repeat(64) }];
-    render(<ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={salah} />);
+  it("menandai deployment aktif dengan digest berbeda tanpa melempar", () => {
+    const salah = [{ ...deployments[0]!, image_digest: "sha256:" + "b".repeat(64) }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments.map((environment) => ({
+          ...environment,
+          active_deployment_id: environment.nama === "staging" ? salah[0]!.id : null,
+        }))}
+        deployments={salah}
+      />,
+    );
 
-    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent(deployments[0].id);
+    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent(salah[0]!.id);
+    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent("deployment aktif");
+  });
+
+  it("mengabaikan digest berbeda pada riwayat rollback yang tidak aktif", () => {
+    const rollback = {
+      ...deployments[0]!,
+      id: "dep-rollback",
+      release_id: "rel-rollback",
+      image_digest: "sha256:" + "b".repeat(64),
+    };
+    const envTanpaDeploymentAktif = environments.map((environment) => ({
+      ...environment,
+      active_deployment_id: null,
+    }));
+
+    render(
+      <ReleaseEnvironmentBoard
+        releases={[...releases, { ...releases[0]!, id: "rel-rollback", image_digest: null }]}
+        environments={envTanpaDeploymentAktif}
+        deployments={[...deployments, rollback]}
+      />,
+    );
+
+    expect(screen.queryByTestId("deployment-inkonsisten")).toBeNull();
+  });
+
+  it("memperingatkan deployment aktif yang release-nya tidak ada", () => {
+    const tanpaRelease = { ...deployments[0]!, release_id: "rel-hilang" };
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releases}
+        environments={environments.map((environment) => ({
+          ...environment,
+          active_deployment_id: environment.nama === "staging" ? tanpaRelease.id : null,
+        }))}
+        deployments={[tanpaRelease]}
+      />,
+    );
+
+    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent(tanpaRelease.id);
+  });
+
+  it("memperingatkan deployment aktif dengan digest kosong", () => {
+    const releaseKosong: Release[] = [{ ...releases[0]!, image_digest: null }];
+    const deploymentKosong = deployments[0]!;
+    render(
+      <ReleaseEnvironmentBoard
+        releases={releaseKosong}
+        environments={environments.map((environment) => ({
+          ...environment,
+          active_deployment_id: environment.nama === "staging" ? deploymentKosong.id : null,
+        }))}
+        deployments={[deploymentKosong]}
+      />,
+    );
+
+    expect(screen.getByTestId("deployment-inkonsisten")).toHaveTextContent(deploymentKosong.id);
   });
 
   it("menampilkan pembuat dan status approval pada kartu release", () => {

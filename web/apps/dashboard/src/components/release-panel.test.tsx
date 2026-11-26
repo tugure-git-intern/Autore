@@ -74,6 +74,17 @@ describe("ReleasePanel", () => {
     expect(screen.queryByText("Aktif")).toBeNull();
   });
 
+  it("tidak menampilkan catatan teknis pipeline di atas environment", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+
+    render(<ReleasePanel appId="tes-testing" appName="tes-testing" />);
+
+    await waitFor(() => expect(screen.getByTestId("release-panel")).toBeVisible());
+    expect(screen.queryByText("Build + auto-deploy staging. Sumber: event pipeline nyata.")).toBeNull();
+    expect(screen.getByRole("region", { name: "Environment tes-testing" })).toBeVisible();
+    expect(screen.getByText("Menunggu Persetujuan")).toBeVisible();
+  });
+
   it("tidak merender apa pun saat event kosong atau request gagal", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: { releases: [], deployments: [], environments: [] }, stale: false }), { status: 200 })));
     const kosong = render(<ReleasePanel appId="tes-testing" appName="tes-testing" />);

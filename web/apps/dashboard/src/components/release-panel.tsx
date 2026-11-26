@@ -28,9 +28,6 @@ export function ReleasePanel({ appId, appName }: { appId: string; appName: strin
 
   return (
     <section data-testid="release-panel" className="space-y-2">
-      <p className="text-xs text-muted">
-        Build + auto-deploy staging. Sumber: event pipeline nyata.
-      </p>
       <ReleaseEnvironmentBoard
         appName={appName}
         role={role ?? null}

@@ -65,6 +65,26 @@ const deployments: Deployment[] = [
 ];
 
 describe("ReleaseEnvironmentBoard", () => {
+  it("menampilkan alasan penolakan kepada role dev", () => {
+    const ditolak: Release[] = [{
+      ...releases[0]!,
+      status: "ditolak",
+      alasan: "Perlu perbaiki validasi input sebelum rilis.",
+    }];
+    render(
+      <ReleaseEnvironmentBoard
+        releases={ditolak}
+        environments={environments}
+        deployments={deployments}
+        role="dev"
+      />,
+    );
+
+    expect(screen.getByTestId("release-alasan")).toHaveTextContent(
+      "Alasan penolakan: Perlu perbaiki validasi input sebelum rilis.",
+    );
+  });
+
   it("menampilkan staging dan production pada satu dashboard", () => {
     render(<ReleaseEnvironmentBoard releases={releases} environments={environments} deployments={deployments} />);
 

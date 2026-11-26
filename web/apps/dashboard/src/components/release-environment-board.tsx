@@ -238,6 +238,11 @@ function ReleaseRow({
           </>
         ) : null}
       </p>
+      {release.status === "ditolak" && release.alasan ? (
+        <p data-testid="release-alasan" className="text-xs text-muted">
+          Alasan penolakan: {release.alasan}
+        </p>
+      ) : null}
 
       {/* Digest penuh tetap ada di tooltip; baris tidak lagi memenuhi lebar kartu. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

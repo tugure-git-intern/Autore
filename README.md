@@ -373,7 +373,7 @@ Autore/
 ├── scripts/                      # Release, SonarQube, Nexus, and Telegram notification utility scripts
 ├── runner/                       # Jenkins agent provisioning and service configuration
 ├── sandbox/                      # Testbed environments (SonarQube, Nexus, local Docker registry)
-├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md, plans/ (implementation plans), specifications
+├── docs/                         # PRODUCTION-ISOLATION-DESIGN.md, RUNBOOK-{PROMOTE,ROLLBACK,WATCHDOG}.md, plans/ (implementation plans), specifications
 ├── assets/banner.png             # Official project banner asset
 └── Jenkinsfile                   # Self-hosting CI/CD pipeline for the Autore repository
 ```

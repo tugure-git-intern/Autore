@@ -1,0 +1,18 @@
+[Unit]
+Description=Autore watchdog infrastruktur (Nexus/SonarQube/Jenkins)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tugure
+Group=tugure
+WorkingDirectory=/home/tugure/Autore
+EnvironmentFile=/etc/autore/watchdog.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=AUTORE_WORKSPACE=/home/tugure/autore-workspace
+Environment=AUTORE_NOTIFY_BIN=/usr/local/lib/autore-ci/notify-kabar.sh
+ExecStart=/home/tugure/Autore/scripts/watchdog-infra.sh
+
+[Install]
+WantedBy=multi-user.target

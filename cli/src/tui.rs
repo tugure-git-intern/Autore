@@ -397,25 +397,52 @@ impl Log {
     }
 }
 
-/// Alihkan stdout+stderr ke pipe yang isinya masuk log. `None` = gagal (tanpa pipe).
-/// Mengembalikan fd stdout asli untuk dipulihkan saat sesi selesai.
+/// Pengalih stdout+stderr ke pipe selama sesi: isinya masuk log, dan `lepas`
+/// mengembalikan kedua fd ke aslinya. Tanpa ini, keluaran job menimpa layar.
 #[cfg(unix)]
-fn pipe_to_log(log: &Arc<Log>) -> Option<i32> {
-    let mut fd = [0i32; 2];
-    if unsafe { pipe(fd.as_mut_ptr()) } != 0 {
-        return None;
+struct Tangkap {
+    /// fd stdout asli; negatif = tidak memasang apa pun (mode uji).
+    asli: i32,
+}
+
+#[cfg(unix)]
+impl Tangkap {
+    /// Pasang pipe. `None` = gagal; sesi tetap jalan tanpa panel log.
+    fn pasang(log: &Arc<Log>) -> Option<Tangkap> {
+        let mut fd = [0i32; 2];
+        if unsafe { pipe(fd.as_mut_ptr()) } != 0 {
+            return None;
+        }
+        let (baca, tulis) = (fd[0], fd[1]);
+        let asli = unsafe { dup(STDOUT_FILENO) };
+        let ok =
+            unsafe { dup2(tulis, STDOUT_FILENO) } >= 0 && unsafe { dup2(tulis, STDERR_FILENO) } >= 0;
+        unsafe { close(tulis) };
+        if !ok || asli < 0 {
+            return None;
+        }
+        let log = Arc::clone(log);
+        thread::spawn(move || salurkan(unsafe { File::from_raw_fd(baca) }, &log));
+        Some(Tangkap { asli })
     }
-    let (baca, tulis) = (fd[0], fd[1]);
-    let asli = unsafe { dup(STDOUT_FILENO) };
-    let ok =
-        unsafe { dup2(tulis, STDOUT_FILENO) } >= 0 && unsafe { dup2(tulis, STDERR_FILENO) } >= 0;
-    unsafe { close(tulis) };
-    if !ok || asli < 0 {
-        return None;
+
+    /// Untuk unit test: tidak menyentuh fd proses sama sekali.
+    fn uji() -> Tangkap {
+        Tangkap { asli: -1 }
     }
-    let log = Arc::clone(log);
-    thread::spawn(move || salurkan(unsafe { File::from_raw_fd(baca) }, &log));
-    Some(asli)
+
+    /// Kembalikan stdout+stderr ke fd asli. Aman dipanggil lebih dari sekali.
+    fn lepas(&mut self) {
+        if self.asli < 0 {
+            return;
+        }
+        unsafe {
+            dup2(self.asli, STDOUT_FILENO);
+            dup2(self.asli, STDERR_FILENO);
+            close(self.asli);
+        }
+        self.asli = -1;
+    }
 }
 
 /// Baca sampai EOF, pecah per baris, masukkan ke log. Sisa tanpa `\n` ikut masuk di akhir.
@@ -541,7 +568,7 @@ pub struct Session {
     status: String,
     project: Option<String>,
     rx: Receiver<Question>,
-    stdout_asli: i32,
+    tangkap: Tangkap,
     /// Baris digeser dari bawah di panel log (0 = selalu ikut baris terbaru).
     scroll: usize,
     /// Frame terakhir yang sudah digambar — frame identik tidak ditulis ulang (kedip).
@@ -559,7 +586,7 @@ impl Session {
             .ok()?;
         let (tx, rx) = channel();
         let log = Arc::new(Log::default());
-        let stdout_asli = pipe_to_log(&log)?;
+        let tangkap = Tangkap::pasang(&log)?;
         let _ = HUB.set(tx);
         terminal::enable_raw_mode().ok()?;
         let mut sesi = Session {
@@ -571,7 +598,7 @@ impl Session {
             status: "siap".to_string(),
             project,
             rx,
-            stdout_asli,
+            tangkap,
             scroll: 0,
             frame: String::new(),
         };
@@ -590,11 +617,7 @@ impl Session {
     fn restore(&mut self) {
         let _ = execute!(self.tty, ResetColor, LeaveAlternateScreen, Show);
         let _ = terminal::disable_raw_mode();
-        unsafe {
-            dup2(self.stdout_asli, STDOUT_FILENO);
-            dup2(self.stdout_asli, STDERR_FILENO);
-            close(self.stdout_asli);
-        }
+        self.tangkap.lepas();
     }
 
     /// Status yang tampil di segmen tengah baris bawah (mis. "jalan: Deploy", "siap").
@@ -1663,11 +1686,54 @@ mod tests {
             status: "siap".to_string(),
             project: None,
             rx,
-            stdout_asli: -1,
+            tangkap: Tangkap::uji(),
             scroll: 0,
             frame: String::new(),
         };
         (sesi, layar, tx)
+    }
+
+    /// Kontrak Tangkap: selama terpasang, tulisan ke fd 1 (seperti anak proses)
+    /// masuk log; setelah `lepas`, fd 1 kembali dan tidak lagi masuk log.
+    #[test]
+    fn tangkap_menyalurkan_stdout_lalu_mengembalikannya() {
+        use std::io::Write;
+        use std::mem::ManuallyDrop;
+
+        // Tulis langsung ke fd 1: print! tidak bisa dipakai karena test harness
+        // menangkapnya di dalam proses, bukan lewat fd.
+        fn tulis_fd1(teks: &str) {
+            let mut f = ManuallyDrop::new(unsafe { File::from_raw_fd(1) });
+            f.write_all(teks.as_bytes()).unwrap();
+            f.flush().unwrap();
+        }
+
+        let log = Arc::new(Log::default());
+        let mut t = Tangkap::pasang(&log).expect("pipe harus bisa dipasang");
+
+        tulis_fd1("masuk-log\n");
+        let mut masuk = false;
+        for _ in 0..200 {
+            if log.semua().iter().any(|l| l.contains("masuk-log")) {
+                masuk = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            masuk,
+            "tulisan ke fd 1 selama tangkap harus masuk log: {:?}",
+            log.semua()
+        );
+
+        t.lepas();
+        tulis_fd1("lewat-setelah-lepas\n");
+        thread::sleep(Duration::from_millis(50));
+        assert!(
+            !log.semua().iter().any(|l| l.contains("lewat-setelah-lepas")),
+            "setelah lepas, fd 1 tidak boleh lagi masuk log: {:?}",
+            log.semua()
+        );
     }
 
     /// Pembaca pipe: per baris, CRLF dibuang, karakter kendali dibuang, sisa akhir ikut.

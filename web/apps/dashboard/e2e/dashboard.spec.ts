@@ -366,7 +366,7 @@ test.describe("section Active Pipelines", () => {
   });
 });
 
-test.describe("kartu Repository Health", () => {
+test.describe("kartu Kesehatan Repo", () => {
   type Health = { score_percent: number; total_repos: number; gold: number; silver: number; bronze: number };
 
   const paksaStatus = (
@@ -413,11 +413,11 @@ test.describe("kartu Repository Health", () => {
 
     const statistik = page.locator('section[aria-label="Statistik"]');
     await expect(statistik.locator("> *")).toHaveCount(5);
-    await expect(statistik.getByText("Repository Health", { exact: true })).toBeVisible();
+    await expect(statistik.getByText("Kesehatan Repo", { exact: true })).toBeVisible();
     await expect(statistik.getByText("10%", { exact: true })).toBeVisible();
-    await expect(statistik.getByText("10 repos · 1 gold · 0 silver · 9 bronze")).toBeVisible();
+    await expect(statistik.getByText("10 repo · 1 gold · 0 silver · 9 bronze")).toBeVisible();
 
-    const judul = (await statistik.getByText("Repository Health", { exact: true }).boundingBox())!;
+    const judul = (await statistik.getByText("Kesehatan Repo", { exact: true }).boundingBox())!;
     const tetangga = (await statistik.getByText("Status Pipeline", { exact: true }).boundingBox())!;
     expect(judul.x).toBeGreaterThan(tetangga.x);
     // Sebaris, bukan turun ke baris kedua: grid 5 kolom di 1280px.
@@ -431,7 +431,7 @@ test.describe("kartu Repository Health", () => {
 
     const statistik = page.locator('section[aria-label="Statistik"]');
     await expect(statistik.locator("svg.lucide-medal")).toHaveCount(1);
-    await expect(statistik.getByText("0 repos · 0 gold · 0 silver · 0 bronze")).toBeVisible();
+    await expect(statistik.getByText("0 repo · 0 gold · 0 silver · 0 bronze")).toBeVisible();
     await expect(statistik.getByText("NaN")).toHaveCount(0);
   });
 
@@ -441,7 +441,7 @@ test.describe("kartu Repository Health", () => {
     await page.goto("/");
 
     const statistik = page.locator('section[aria-label="Statistik"]');
-    const rincian = statistik.getByText(/\d+ repos · \d+ gold · \d+ silver · \d+ bronze/);
+    const rincian = statistik.getByText(/\d+ repo · \d+ gold · \d+ silver · \d+ bronze/);
     await expect(rincian).toBeVisible();
 
     const [total, gold, silver, bronze] = (await rincian.textContent())!.match(/\d+/g)!.map(Number);

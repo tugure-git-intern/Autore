@@ -73,7 +73,7 @@ describe("topbar route context", () => {
     expect(banner.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
     expect(banner.queryByText(/Autore \//)).toBeNull();
     expect(banner.queryByRole("status")).toBeNull();
-    expect(banner.getByRole("button", { name: "Sync" })).toBeVisible();
+    expect(banner.getByRole("button", { name: "Sinkronkan" })).toBeVisible();
   });
 
   it("mengecat kanvas kerangka #F0F5FE supaya celah di luar panel ikut biru muda", () => {
@@ -169,7 +169,7 @@ describe("Navbar", () => {
     // Indikator koneksi hanya milik footer sidebar, bukan topbar.
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByTestId("connection-dot")).toBeNull();
-    const syncBtn = screen.getByRole("button", { name: "Sync" });
+    const syncBtn = screen.getByRole("button", { name: "Sinkronkan" });
     expect(syncBtn).toBeVisible();
     expect(syncBtn.className).toContain("text-[#545F72]");
     expect(screen.getByAltText("tugure-git-intern")).toBeVisible();
@@ -211,7 +211,7 @@ describe("Navbar", () => {
 
     const banner = within(screen.getByRole("banner"));
     expect(banner.getByTestId("topbar-tagline")).toHaveTextContent("Automation Tugure");
-    expect(banner.getByRole("button", { name: "Sync" }).className).toContain("text-[#545F72]");
+    expect(banner.getByRole("button", { name: "Sinkronkan" }).className).toContain("text-[#545F72]");
     expect(banner.getByText("Alif").className).toContain("text-[#545F72]");
   });
 
@@ -223,7 +223,7 @@ describe("Navbar", () => {
     expect(banner.queryByText("Terhubung")).toBeNull();
     expect(banner.queryByText((c) => c.includes("Autore /"), { selector: "p" })).toBeNull();
     // Kontrol kanan tetap utuh, jadi topbar tidak runtuh tanpa judul jalur.
-    expect(banner.getByRole("button", { name: "Sync" })).toBeVisible();
+    expect(banner.getByRole("button", { name: "Sinkronkan" })).toBeVisible();
   });
 
   it("tidak menampilkan menu pengguna saat belum ada sesi", () => {
@@ -251,7 +251,7 @@ describe("Navbar", () => {
     };
 
     const { rerender } = render(<Navbar {...props} refreshing />);
-    const berjalan = screen.getByRole("button", { name: "Sync" });
+    const berjalan = screen.getByRole("button", { name: "Sinkronkan" });
     expect(berjalan).toBeDisabled();
     expect(berjalan).toHaveAttribute("aria-busy", "true");
     expect(berjalan.querySelector("svg")?.getAttribute("class")).toContain(
@@ -259,7 +259,7 @@ describe("Navbar", () => {
     );
 
     rerender(<Navbar {...props} />);
-    const diam = screen.getByRole("button", { name: "Sync" });
+    const diam = screen.getByRole("button", { name: "Sinkronkan" });
     expect(diam).toBeEnabled();
     expect(diam).not.toHaveAttribute("aria-busy");
     expect(diam.querySelector("svg")?.getAttribute("class")).not.toContain("animate-spin");
@@ -274,7 +274,7 @@ describe("Navbar", () => {
     expect(screen.queryByTestId("theme-toggle")).toBeNull();
     const avatar = screen.getByAltText("tugure-git-intern");
     const kebab = screen.getByRole("button", { name: "Menu lainnya" });
-    const sync = screen.getByRole("button", { name: "Sync" });
+    const sync = screen.getByRole("button", { name: "Sinkronkan" });
     // Urutan kiri ke kanan: Sync -> kebab -> avatar.
     expect(sync.compareDocumentPosition(kebab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(kebab.compareDocumentPosition(avatar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -301,7 +301,7 @@ describe("AppShell", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(jalurTerpakai()).toEqual(new Set(["/api/status", "/api/runs", "/api/active"]));
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sinkronkan" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
     for (const url of ["/api/status", "/api/runs", "/api/active"]) {

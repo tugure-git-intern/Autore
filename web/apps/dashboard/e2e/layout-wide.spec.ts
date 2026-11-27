@@ -175,7 +175,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     const urutan = await page.evaluate(() => {
       const header = document.querySelector("header") as HTMLElement;
       const sync = Array.from(header.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("Sync"),
+        b.textContent?.includes("Sinkronkan"),
       ) as HTMLElement;
       const kebab = header.querySelector('[aria-label="Menu lainnya"]') as HTMLElement;
       const kebabIkon = kebab.querySelector("svg") as SVGSVGElement;
@@ -385,7 +385,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     page,
   }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    const sync = page.getByRole("button", { name: "Sync" });
+    const sync = page.getByRole("button", { name: "Sinkronkan" });
     await expect(sync).toBeVisible();
 
     const gaya = await sync.evaluate((el) => {
@@ -491,7 +491,7 @@ test.describe("kerangka melayang di layar lebar", () => {
     for (const [nama, ruteTarget] of [
       ["Pipeline & Log", "/pipeline"],
       ["Keamanan", "/security"],
-      ["Audit Log", "/audit"],
+      ["Catatan Audit", "/audit"],
       ["Dashboard", "/"],
     ] as const) {
       await page.locator("aside").getByRole("link", { name: nama }).click();
@@ -648,5 +648,67 @@ test.describe("kerangka melayang di layar lebar", () => {
     await expect(textOnline).toHaveCSS("color", "rgb(255, 255, 255)"); // dark:text-white
     await expect(textVersi).toHaveCSS("color", /oklch\(0\.707|rgb\(156, 163, 175\)/); // dark:text-gray-400
     await expect(footer).toHaveCSS("border-top-width", "0px");
+  });
+});
+
+
+// Preferensi bahasa disimpan di cookie `autore-bahasa` (dibaca layout di server),
+// bukan localStorage, jadi pilihan yang sama juga menentukan `<html lang>` pada
+// HTML pertama setelah reload. Dua kartu bergambar bendera, chrome sama dengan
+// modal tema.
+test.describe("pemilih bahasa", () => {
+  test("kebab > Bahasa mengganti teks shell ke Inggris, lalu balik ke Indonesia", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const sidebar = page.locator("aside");
+    const navUtama = page.locator("aside nav[aria-label]");
+    await expect(navUtama).toHaveAttribute("aria-label", "Navigasi utama");
+
+    await page.getByRole("button", { name: "Menu lainnya" }).click();
+    await expect(page.getByRole("menuitem")).toHaveText(["Penampilan", "Bahasa"]);
+    await page.getByRole("menuitem", { name: "Bahasa" }).click();
+
+    // Locator modal jangan dipakukan ke judulnya: begitu bahasa berganti, judulnya
+    // ikut berganti ("Choose Language") dan locator itu berhenti cocok. Hanya satu
+    // <dialog> yang terbuka, jadi getByRole("dialog") sudah cukup.
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("heading", { name: "Pilih Bahasa" })).toBeVisible();
+    await expect(modal.getByTestId("bendera-id")).toBeVisible();
+    await expect(modal.getByTestId("bendera-en")).toBeVisible();
+
+    await modal.getByRole("radio", { name: /Inggris/ }).click();
+    await expect(modal.getByRole("radio", { name: /English/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    // Teks shell ikut tanpa reload; cookie yang membuatnya bertahan.
+    await expect(sidebar.getByRole("link", { name: "Applications" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Security" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    const cookie = (await page.context().cookies()).find((c) => c.name === "autore-bahasa");
+    expect(cookie?.value).toBe("en");
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator("aside nav[aria-label]")).toHaveAttribute(
+      "aria-label",
+      "Main navigation",
+    );
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+
+    // Arah sebaliknya: kembali ke Indonesia.
+    await page.getByRole("button", { name: "More options" }).click();
+    await page.getByRole("menuitem", { name: "Language" }).click();
+    await page.getByRole("dialog").getByRole("radio", { name: /Indonesian/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "id");
+    await expect(page.locator("aside nav[aria-label]")).toHaveAttribute(
+      "aria-label",
+      "Navigasi utama",
+    );
   });
 });

@@ -26,7 +26,7 @@ describe("AuditPage", () => {
     render(<AuditPage />);
 
     // Header terlihat
-    expect(screen.getByRole("heading", { name: "Audit Log" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Catatan Audit" })).toBeTruthy();
     expect(screen.getByText(/jejak audit aktivitas operasional dan pipeline/i)).toBeTruthy();
 
     await waitFor(() => {

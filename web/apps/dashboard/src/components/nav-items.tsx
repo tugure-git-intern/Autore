@@ -8,10 +8,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { roleAtLeast, type Role } from "@autore/contracts";
+import type { KunciTerjemah } from "@/lib/i18n";
 
 export type NavItem = {
   href: string;
-  label: string;
+  /** Kunci kamus, bukan teks: label ikut bahasa aktif saat dirender. */
+  kunci: KunciTerjemah;
   icon: LucideIcon;
   /** Kosong = semua role. Isi = hanya role itu ke atas (dev < qa < admin). */
   peran?: Role;
@@ -19,12 +21,12 @@ export type NavItem = {
 
 // PRD shell menu. Real routes only; no create-app entry — registration stays in the CLI.
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/applications", label: "Daftar Aplikasi", icon: Layers },
-  { href: "/pipeline", label: "Pipeline & Log", icon: Workflow },
-  { href: "/security", label: "Keamanan", icon: ShieldCheck },
-  { href: "/audit", label: "Audit Log", icon: History },
-  { href: "/settings", label: "Pengaturan", icon: Settings, peran: "admin" },
+  { href: "/", kunci: "nav.dashboard", icon: LayoutDashboard },
+  { href: "/applications", kunci: "nav.aplikasi", icon: Layers },
+  { href: "/pipeline", kunci: "nav.pipeline", icon: Workflow },
+  { href: "/security", kunci: "nav.keamanan", icon: ShieldCheck },
+  { href: "/audit", kunci: "nav.audit", icon: History },
+  { href: "/settings", kunci: "nav.pengaturan", icon: Settings, peran: "admin" },
 ] as const satisfies readonly NavItem[];
 
 export type HrefMenu = (typeof NAV_ITEMS)[number]["href"];

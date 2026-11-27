@@ -109,10 +109,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
         <div className="flex items-center gap-2">
           <div>
-            <label htmlFor="filter-aksi" className="sr-only">Filter Aksi</label>
+            <label htmlFor="filter-aksi" className="sr-only">Saring Aksi</label>
             <select
               id="filter-aksi"
-              aria-label="Filter aksi"
+              aria-label="Saring aksi"
               value={filterAksi}
               onChange={(e) => setFilterAksi(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
@@ -126,10 +126,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
           </div>
 
           <div>
-            <label htmlFor="filter-status" className="sr-only">Filter Status</label>
+            <label htmlFor="filter-status" className="sr-only">Saring Status</label>
             <select
               id="filter-status"
-              aria-label="Filter status"
+              aria-label="Saring status"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
@@ -154,7 +154,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
           <p className="mt-1 text-xs text-gray-500 dark:text-[var(--color-muted)]">
             {kosong
               ? "Deploy, scan, dan quick-start akan tercatat di sini."
-              : "Coba ubah kata kunci pencarian atau reset filter."}
+              : "Coba ubah kata kunci pencarian atau setel ulang saringan."}
           </p>
           {kosong ? null : (
             <button
@@ -162,7 +162,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               onClick={resetFilter}
               className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-sidebar)]"
             >
-              Reset Filter
+              Setel Ulang Saringan
             </button>
           )}
         </div>

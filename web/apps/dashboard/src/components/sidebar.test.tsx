@@ -184,9 +184,9 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: /pipeline/i })).toHaveAttribute("aria-current", "page");
   });
 
-  it("merender menu Audit Log di bawah Keamanan", () => {
+  it("merender menu Catatan Audit di bawah Keamanan", () => {
     renderSidebar();
-    const auditLink = screen.getByRole("link", { name: /audit log/i });
+    const auditLink = screen.getByRole("link", { name: /catatan audit/i });
     expect(auditLink).toHaveAttribute("href", "/audit");
   });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import { useCurrentUser, useStatus } from "./app-shell";
+import { useBahasa } from "./bahasa-provider";
 import { isActiveHref, navItemsUntuk } from "./nav-items";
 
 /**
@@ -54,6 +55,7 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
   // Role datang dari context (diisi `layout.tsx`), bukan dari prop: Sidebar
   // hidup di dalam AppShell yang sudah memegang user.
   const { role } = useCurrentUser();
+  const { t } = useBahasa();
   const menu = navItemsUntuk(role);
   const { tone, label, pulse } = indikatorServer({ state, failed, loading });
 
@@ -90,11 +92,11 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
         />
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-tight text-ink dark:text-white">Autore</p>
-          <p className="text-xs leading-tight text-muted dark:text-[#c9d1d9]">CI/CD Workspace</p>
+          <p className="text-xs leading-tight text-muted dark:text-[#c9d1d9]">{t("nav.ruangKerja")}</p>
         </div>
       </div>
-      <nav aria-label="Navigasi utama" className="flex flex-1 flex-col gap-0.5 px-3 py-4">
-        {menu.map(({ href, label, icon: Icon }) => {
+      <nav aria-label={t("nav.navigasiUtama")} className="flex flex-1 flex-col gap-0.5 px-3 py-4">
+        {menu.map(({ href, kunci, icon: Icon }) => {
           const active = isActiveHref(pathname, href);
           return (
             <Link
@@ -108,7 +110,7 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
+              {t(kunci)}
             </Link>
           );
         })}

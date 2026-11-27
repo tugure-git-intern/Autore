@@ -1,8 +1,11 @@
 "use client";
 
-import { MoreVertical, Palette, X } from "lucide-react";
+import { Languages, MoreVertical, Palette, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { useBahasa } from "./bahasa-provider";
+import { PemilihBahasa } from "./pemilih-bahasa";
+import type { KunciTerjemah } from "@/lib/i18n";
 
 const KUNCI_KONTRAS = "autore-high-contrast";
 
@@ -81,12 +84,14 @@ function Pratinjau({ mode }: { mode: Mode }) {
 }
 
 /**
- * Pengaturan tampilan ala Google Cloud Console: menu kebab di topbar memuat item
- * "Penampilan" yang membuka modal tiga kartu radio (Terang, Gelap, Ikuti Sistem)
- * dengan miniatur UI + sakelar Kontras Tinggi di bawahnya.
+ * Menu kebab di topbar: host dua pengaturan yang tidak punya tempat lain di
+ * halaman — "Penampilan" (modal tiga kartu tema + sakelar Kontras Tinggi) dan
+ * "Bahasa" (modal dua kartu Indonesia/Inggris). Satu tombol pemicu untuk
+ * keduanya; dua batang kebab di topbar akan berebut ruang dengan tombol Sync.
  */
 export function AppearanceMenu() {
   const { theme, setTheme } = useTheme();
+  const { t } = useBahasa();
 
   const simpanTema = (nilai: Mode) => {
     setTheme(nilai);
@@ -104,6 +109,7 @@ export function AppearanceMenu() {
   }, [theme]);
   const [menuTerbuka, setMenuTerbuka] = useState(false);
   const [modalTerbuka, setModalTerbuka] = useState(false);
+  const [bahasaTerbuka, setBahasaTerbuka] = useState(false);
   const [kontrasTinggi, setKontrasTinggi] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -153,17 +159,17 @@ export function AppearanceMenu() {
   const aktif: Mode =
     theme === "dark" || theme === "system" || theme === "light" ? theme : "light";
 
-  const pilihan: { nilai: Mode; label: string }[] = [
-    { nilai: "light", label: "Terang" },
-    { nilai: "dark", label: "Gelap" },
-    { nilai: "system", label: "Ikuti Sistem" },
+  const pilihan: { nilai: Mode; label: KunciTerjemah }[] = [
+    { nilai: "light", label: "tampilan.terang" },
+    { nilai: "dark", label: "tampilan.gelap" },
+    { nilai: "system", label: "tampilan.ikutiSistem" },
   ];
 
   return (
     <div ref={menuRef} className="relative">
       <button
         type="button"
-        aria-label="Menu lainnya"
+        aria-label={t("menu.lainnya")}
         aria-haspopup="menu"
         aria-expanded={menuTerbuka}
         onClick={() => setMenuTerbuka((buka) => !buka)}
@@ -175,7 +181,7 @@ export function AppearanceMenu() {
       {menuTerbuka ? (
         <div
           role="menu"
-          aria-label="Menu aplikasi"
+          aria-label={t("menu.aplikasi")}
           className="absolute right-0 z-30 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-[#50638b] dark:bg-[#282c32]"
         >
           <button
@@ -188,10 +194,25 @@ export function AppearanceMenu() {
             className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-sm text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:text-white dark:hover:bg-[#353b43]"
           >
             <Palette className="h-4 w-4" aria-hidden="true" />
-            Penampilan
+            {t("menu.penampilan")}
+          </button>
+          {/* Bahasa tepat di bawah Penampilan: dua-duanya preferensi tampilan. */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuTerbuka(false);
+              setBahasaTerbuka(true);
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-sm text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:text-white dark:hover:bg-[#353b43]"
+          >
+            <Languages className="h-4 w-4" aria-hidden="true" />
+            {t("menu.bahasa")}
           </button>
         </div>
       ) : null}
+
+      <PemilihBahasa terbuka={bahasaTerbuka} onTutup={() => setBahasaTerbuka(false)} />
 
       <dialog
         ref={dialogRef}
@@ -204,11 +225,11 @@ export function AppearanceMenu() {
       >
         <div className="flex items-start justify-between gap-4">
           <h2 id={judulId} className="text-base font-semibold">
-            Pilih Tema Tampilan
+            {t("tampilan.judul")}
           </h2>
           <button
             type="button"
-            aria-label="Tutup"
+            aria-label={t("tampilan.tutup")}
             onClick={() => setModalTerbuka(false)}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
@@ -246,7 +267,7 @@ export function AppearanceMenu() {
                   >
                     {dipilih ? <span className="h-2 w-2 rounded-full bg-blue-400" /> : null}
                   </span>
-                  {label}
+                  {t(label)}
                 </span>
               </button>
             );
@@ -256,10 +277,10 @@ export function AppearanceMenu() {
         <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/15 pt-4">
           <div>
             <p id={`${judulId}-kontras`} className="text-sm font-medium text-white">
-              Kontras Tinggi
+              {t("tampilan.kontras")}
             </p>
             <p className="mt-0.5 text-xs text-white/75">
-              Meningkatkan kontras antara teks dan latar belakang.
+              {t("tampilan.kontrasSub")}
             </p>
           </div>
           <button

@@ -11,7 +11,7 @@ test.describe("Aksesibilitas Otomatis (WCAG 2.1 AA)", () => {
     { nama: "Pipeline & Runs", path: "/pipeline" },
     { nama: "Applications Registry", path: "/applications" },
     { nama: "SBOM Viewer", path: "/applications/sbom" },
-    { nama: "Audit Log", path: "/audit" },
+    { nama: "Catatan Audit", path: "/audit" },
     { nama: "Security Center", path: "/security" },
   ];
 
@@ -46,7 +46,7 @@ test.describe("Aksesibilitas Otomatis (WCAG 2.1 AA)", () => {
       localStorage.setItem("autore-theme", "dark");
     });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Sync" }).click();
+    await page.getByRole("button", { name: "Sinkronkan" }).click();
 
     const toast = page.getByTestId("toast");
     await expect(toast).toBeVisible();

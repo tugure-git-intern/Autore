@@ -253,7 +253,7 @@ test.describe("section Active Pipelines", () => {
       running: 2,
       queued: 0,
     });
-    await page.getByRole("button", { name: "Sync" }).click();
+    await page.getByRole("button", { name: "Sinkronkan" }).click();
 
     // Satu frame: teks hitungan dan jumlah kartu harus dari snapshot yang sama.
     await expect.poll(() => frameAktif(page)).toEqual({ hitungan: 2, kartu: 2 });
@@ -511,7 +511,7 @@ test.describe("tombol Sync", () => {
     await page.route("**/api/active", tahan);
 
     await page.goto("/");
-    const tombol = page.getByRole("button", { name: "Sync" });
+    const tombol = page.getByRole("button", { name: "Sinkronkan" });
     await expect(tombol).toBeEnabled();
     // Tunggu sampai tarikan awal selesai. Kalau masih ada permintaan menggantung,
     // Sync sengaja memakai permintaan itu alih-alih menambah hit — jadi tes ini
@@ -543,7 +543,7 @@ test.describe("tombol Sync", () => {
 
   test("toast hilang sendiri sekitar 4 detik", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Sync" }).click();
+    await page.getByRole("button", { name: "Sinkronkan" }).click();
 
     const toast = page.getByText("Data berhasil disinkronkan.");
     await expect(toast).toBeVisible();
@@ -561,7 +561,7 @@ test.describe("tombol Sync", () => {
 
   test("toast bertahan selama kursor menempel di atasnya", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Sync" }).click();
+    await page.getByRole("button", { name: "Sinkronkan" }).click();
 
     const toast = page.getByTestId("toast");
     await expect(toast).toBeVisible();

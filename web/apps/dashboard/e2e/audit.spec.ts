@@ -12,13 +12,13 @@ test.describe("Audit Log Feature", () => {
     await page.goto("/audit");
 
     // Heading utama & subtitle
-    await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Catatan Audit" })).toBeVisible();
     await expect(page.getByText("Jejak audit aktivitas operasional dan pipeline DevSecOps secara kronologis.")).toBeVisible();
 
     // Toolbar pencarian & filter aksi/status
     await expect(page.getByPlaceholder("Cari pengguna atau nama aplikasi...")).toBeVisible();
-    await expect(page.getByLabel("Filter aksi")).toBeVisible();
-    await expect(page.getByLabel("Filter status")).toBeVisible();
+    await expect(page.getByLabel("Saring aksi")).toBeVisible();
+    await expect(page.getByLabel("Saring status")).toBeVisible();
 
     // Tombol Muat Ulang
     await expect(page.getByRole("button", { name: "Muat Ulang" })).toBeVisible();
@@ -28,12 +28,12 @@ test.describe("Audit Log Feature", () => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/");
 
-    const auditNav = page.locator("aside").getByRole("link", { name: "Audit Log" });
+    const auditNav = page.locator("aside").getByRole("link", { name: "Catatan Audit" });
     await expect(auditNav).toBeVisible();
     await auditNav.click();
 
     await expect(page).toHaveURL(/.*\/audit/);
-    await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Catatan Audit" })).toBeVisible();
   });
 
   test("navigasi bottom bar mobile memiliki menu Audit", async ({ page }) => {
@@ -45,7 +45,7 @@ test.describe("Audit Log Feature", () => {
     await bottomAuditNav.click();
 
     await expect(page).toHaveURL(/.*\/audit/);
-    await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Catatan Audit" })).toBeVisible();
   });
 
   test("nol scroll horizontal di /audit pada layar mobile", async ({ page }) => {

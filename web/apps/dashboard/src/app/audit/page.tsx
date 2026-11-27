@@ -49,7 +49,7 @@ export default function AuditPage() {
     <div className="space-y-0">
       {/* Header Tab Card ala Google Cloud Console */}
       <PageTabHeader
-        title="Audit Log"
+        title="Catatan Audit"
         description="Jejak audit aktivitas operasional dan pipeline DevSecOps secara kronologis."
         icon={History}
         action={

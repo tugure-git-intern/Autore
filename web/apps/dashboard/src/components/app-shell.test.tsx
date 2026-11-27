@@ -82,8 +82,8 @@ describe("AppShell — tombol Sync", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(jalur(fetchMock)).toEqual(new Set(["/api/status", "/api/runs", "/api/active"]));
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
-    expect(screen.getByRole("button", { name: "Sync" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Sinkronkan" }));
+    expect(screen.getByRole("button", { name: "Sinkronkan" })).toBeDisabled();
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
     for (const url of ["/api/status", "/api/runs", "/api/active"]) {
@@ -91,7 +91,7 @@ describe("AppShell — tombol Sync", () => {
     }
 
     expect(await screen.findByText("Data berhasil disinkronkan.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sinkronkan" })).toBeEnabled();
   });
 
   it("toast gagal kalau satu endpoint menolak, dan tombol kembali aktif", async () => {
@@ -109,11 +109,11 @@ describe("AppShell — tombol Sync", () => {
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sinkronkan" }));
 
     expect(await screen.findByText("Gagal menyinkronkan data.")).toBeVisible();
     expect(screen.queryByText("Data berhasil disinkronkan.")).toBeNull();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sinkronkan" })).toBeEnabled());
   });
 
   it("klik beruntun saat sync berjalan tidak menambah permintaan", async () => {
@@ -141,7 +141,7 @@ describe("AppShell — tombol Sync", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
     tahan = true;
-    const tombol = screen.getByRole("button", { name: "Sync" });
+    const tombol = screen.getByRole("button", { name: "Sinkronkan" });
     fireEvent.click(tombol);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
     fireEvent.click(tombol);
@@ -297,7 +297,7 @@ describe("AppShell — Smart Adaptive Polling", () => {
       await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/status")).toHaveLength(2));
 
       // Polling background tidak mengunci atau menampilkan spinner pada tombol Sync
-      expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Sinkronkan" })).toBeEnabled();
     } finally {
       vi.useRealTimers();
     }
@@ -331,7 +331,7 @@ describe("AppShell — Smart Adaptive Polling", () => {
       );
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-      await waitFor(() => expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Sinkronkan" })).toBeEnabled());
 
       await act(async () => {
         vi.advanceTimersByTime(5_000);

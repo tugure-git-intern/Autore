@@ -4,19 +4,21 @@ import Link from "next/link";
 
 import { usePathname } from "next/navigation";
 import { useCurrentUser } from "./app-shell";
+import { useBahasa } from "./bahasa-provider";
 import { isActiveHref, navItemsUntuk, type HrefMenu } from "./nav-items";
+import type { KunciTerjemah } from "@/lib/i18n";
 
 /**
  * Label pendek untuk bar bawah: empat kolom di 360px tidak cukup untuk
  * "Daftar Aplikasi" dan "Pipeline & Log" tanpa terpotong.
  */
-const LABEL_PENDEK: Record<HrefMenu, string> = {
-  "/": "Dashboard",
-  "/applications": "Aplikasi",
-  "/pipeline": "Pipeline",
-  "/security": "Keamanan",
-  "/audit": "Audit",
-  "/settings": "Setelan",
+const LABEL_PENDEK: Record<HrefMenu, KunciTerjemah> = {
+  "/": "nav.dashboard",
+  "/applications": "nav.aplikasiPendek",
+  "/pipeline": "nav.pipelinePendek",
+  "/security": "nav.keamananPendek",
+  "/audit": "nav.auditPendek",
+  "/settings": "nav.pengaturanPendek",
 };
 
 /**
@@ -27,11 +29,12 @@ const LABEL_PENDEK: Record<HrefMenu, string> = {
 export function NavBawah() {
   const pathname = usePathname() ?? "/";
   const { role } = useCurrentUser();
+  const { t } = useBahasa();
   const menu = navItemsUntuk(role);
 
   return (
     <nav
-      aria-label="Navigasi bawah"
+      aria-label={t("nav.navigasiBawah")}
       className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-[#F0F5FE] pb-[env(safe-area-inset-bottom)] dark:border-[#50638b] dark:bg-[#282c32] lg:hidden"
     >
       {/* Satu kolom per menu: 5 untuk non-admin, 6 untuk admin. Kolom tetap
@@ -54,7 +57,7 @@ export function NavBawah() {
               }`}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
-              {LABEL_PENDEK[href as HrefMenu]}
+              {t(LABEL_PENDEK[href as HrefMenu])}
             </Link>
           );
         })}

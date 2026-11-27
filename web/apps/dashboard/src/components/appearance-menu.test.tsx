@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppearanceMenu } from "./appearance-menu";
+import { BahasaProvider } from "./bahasa-provider";
 
 const tema = vi.hoisted(() => ({ nilai: "light", setTheme: vi.fn() }));
 
@@ -8,10 +9,23 @@ vi.mock("next-themes", () => ({
   useTheme: () => ({ theme: tema.nilai, resolvedTheme: tema.nilai, setTheme: tema.setTheme }),
 }));
 
+/**
+ * Provider bahasa ikut dipasang: menu kebab membaca `useBahasa()` untuk label
+ * Penampilan/Bahasa, sama seperti di layout asli.
+ */
+const renderShell = () =>
+  render(
+    <BahasaProvider awal="id">
+      <AppearanceMenu />
+    </BahasaProvider>,
+  );
+
 const bukaModal = () => {
   fireEvent.click(screen.getByRole("button", { name: "Menu lainnya" }));
   fireEvent.click(screen.getByRole("menuitem", { name: /Penampilan/ }));
-  return screen.getByRole("dialog", { hidden: true });
+  // Dua <dialog> hidup berdampingan (tema + bahasa); ambil yang panel temanya.
+  const modal = screen.getByRole("heading", { name: "Pilih Tema Tampilan" }).closest("dialog");
+  return modal as HTMLElement;
 };
 
 describe("AppearanceMenu", () => {
@@ -23,7 +37,7 @@ describe("AppearanceMenu", () => {
   });
 
   it("menu kebab tertutup awalnya dan membuka item Penampilan saat diklik", () => {
-    render(<AppearanceMenu />);
+    renderShell();
     const kebab = screen.getByRole("button", { name: "Menu lainnya" });
     expect(kebab).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("menuitem", { name: /Penampilan/ })).toBeNull();
@@ -36,7 +50,7 @@ describe("AppearanceMenu", () => {
   });
 
   it("modal lebar #3c444e memuat 3 kartu radio dengan miniatur UI masing-masing", () => {
-    render(<AppearanceMenu />);
+    renderShell();
     const modal = bukaModal();
 
     expect(modal).toHaveAttribute("open");
@@ -66,7 +80,7 @@ describe("AppearanceMenu", () => {
   });
 
   it("klik kartu mengganti tema ke light, dark, atau system lewat next-themes", () => {
-    render(<AppearanceMenu />);
+    renderShell();
     bukaModal();
 
     fireEvent.click(screen.getByRole("radio", { name: "Gelap" }));
@@ -79,14 +93,14 @@ describe("AppearanceMenu", () => {
 
   it("kartu aktif mengikuti nilai theme (termasuk system)", () => {
     tema.nilai = "system";
-    render(<AppearanceMenu />);
+    renderShell();
     bukaModal();
     expect(screen.getByRole("radio", { name: "Ikuti Sistem" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Terang" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("sakelar Kontras Tinggi memiliki subteks, menyetel html.high-contrast, dan tersimpan di localStorage", () => {
-    render(<AppearanceMenu />);
+    renderShell();
     bukaModal();
 
     expect(
@@ -108,7 +122,7 @@ describe("AppearanceMenu", () => {
   });
 
   it("tombol X dan klik di luar panel menutup modal, klik di dalam tidak", () => {
-    render(<AppearanceMenu />);
+    renderShell();
     let modal = bukaModal();
     fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
     expect(modal).not.toHaveAttribute("open");
@@ -118,5 +132,20 @@ describe("AppearanceMenu", () => {
     expect(modal).toHaveAttribute("open");
     fireEvent.click(modal);
     expect(modal).not.toHaveAttribute("open");
+  });
+
+  it("item Bahasa duduk di bawah Penampilan dan membuka modal bahasa", () => {
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Menu lainnya" }));
+
+    const item = screen.getAllByRole("menuitem");
+    expect(item.map((i) => i.textContent?.trim())).toEqual(["Penampilan", "Bahasa"]);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /Bahasa/ }));
+    // Menu kebab menutup diri; modal bahasa memakai chrome modal yang sama.
+    expect(screen.queryByRole("menu")).toBeNull();
+    const judul = screen.getByRole("heading", { name: "Pilih Bahasa" });
+    expect(judul).toBeVisible();
+    expect(judul.closest("dialog")?.className).toContain("bg-[#3c444e]");
   });
 });

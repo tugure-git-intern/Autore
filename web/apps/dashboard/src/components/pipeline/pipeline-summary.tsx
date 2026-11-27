@@ -29,7 +29,7 @@ export function PipelineSummary({ pipeline }: { pipeline: DashboardStatus["lates
           <dd className="break-all font-mono text-ink">{dash(pipeline.commit_sha)}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-muted">Author</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted">Penulis</dt>
           <dd className="break-all font-mono text-ink">{dash(pipeline.author)}</dd>
         </div>
       </dl>

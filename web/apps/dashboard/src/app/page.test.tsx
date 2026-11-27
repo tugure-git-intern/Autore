@@ -268,7 +268,7 @@ test("Sync menukar angka di layar ke payload baru, tanpa reload", async () => {
   expect(await screen.findByText("0%")).toBeInTheDocument();
   expect(await screen.findByText("tes-web #9")).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+  fireEvent.click(screen.getByRole("button", { name: "Sinkronkan" }));
 
   expect(await screen.findByText("10%")).toBeInTheDocument();
   expect(await screen.findByText("tes-web #21")).toBeInTheDocument();

@@ -3,6 +3,7 @@
 import { Menu, RefreshCw } from "lucide-react";
 import type { SessionUser } from "@/lib/current-user";
 import { AppearanceMenu } from "./appearance-menu";
+import { useBahasa } from "./bahasa-provider";
 import { UserMenu } from "./user-menu";
 
 export function Navbar({
@@ -19,6 +20,8 @@ export function Navbar({
   sidebarTerbuka: boolean;
   onToggleSidebar: () => void;
 }) {
+  const { t } = useBahasa();
+
   return (
     /* z-30 + latar transparan di desktop: tombol hamburger digambar di atas kartu
        sidebar (z-20) yang warnanya sama dengan topbar, jadi tidak ada garis sambung.
@@ -42,7 +45,7 @@ export function Navbar({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label={sidebarTerbuka ? "Tutup sidebar" : "Buka sidebar"}
+              aria-label={sidebarTerbuka ? t("navbar.tutupSidebar") : t("navbar.bukaSidebar")}
               aria-expanded={sidebarTerbuka}
               aria-controls="sidebar-utama"
               onClick={onToggleSidebar}
@@ -77,7 +80,7 @@ export function Navbar({
               }
               aria-hidden="true"
             />
-            Sync
+            {t("navbar.sinkron")}
           </button>
           <AppearanceMenu />
           {user.login ? <UserMenu user={user} /> : null}

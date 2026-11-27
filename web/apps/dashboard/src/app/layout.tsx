@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 import "@fontsource-variable/google-sans-flex";
 import "@fontsource/jetbrains-mono/400.css";
 import { AppShell } from "@/components/app-shell";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { currentUser } from "@/lib/current-user";
+import { BAHASA_BAWAAN, COOKIE_BAHASA, ialahBahasa } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata = {
@@ -46,10 +48,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const [user, cookieStore] = await Promise.all([currentUser(), cookies()]);
   const themeCookie = cookieStore.get("autore-theme")?.value;
   const isDark = themeCookie === "dark";
+  // Cookie bahasa dibaca di server supaya teks pertama yang dicetak sudah dalam
+  // bahasa pilihan; nilai asing (cookie lama/dirusak) jatuh ke bahasa bawaan.
+  const bahasaCookie = cookieStore.get(COOKIE_BAHASA)?.value;
+  const bahasa = ialahBahasa(bahasaCookie) ? bahasaCookie : BAHASA_BAWAAN;
 
   return (
     <html
-      lang="id"
+      lang={bahasa}
       className={`[--font-google-sans-flex:'Google_Sans_Flex_Variable'] bg-canvas text-ink ${isDark ? "dark" : ""}`}
       suppressHydrationWarning
     >
@@ -58,9 +64,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <style dangerouslySetInnerHTML={{ __html: CRITICAL_CSS }} />
       </head>
       <body className="min-h-screen bg-canvas text-ink antialiased">
-        <ThemeProvider>
-          <AppShell user={user}>{children}</AppShell>
-        </ThemeProvider>
+        <BahasaProvider awal={bahasa}>
+          <ThemeProvider>
+            <AppShell user={user}>{children}</AppShell>
+          </ThemeProvider>
+        </BahasaProvider>
       </body>
     </html>
   );

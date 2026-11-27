@@ -9,7 +9,7 @@ export default function NotFound() {
           <FileQuestion className="h-6 w-6" aria-hidden="true" />
         </div>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
-          Error 404
+          Galat 404
         </p>
         <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-[var(--color-ink)]">
           Halaman Tidak Ditemukan

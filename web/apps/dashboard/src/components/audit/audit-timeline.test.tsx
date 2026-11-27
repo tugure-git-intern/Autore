@@ -65,7 +65,7 @@ describe("AuditTimeline", () => {
   it("menyaring item berdasarkan filter dropdown aksi", () => {
     render(<AuditTimeline entries={ENTRIES} />);
 
-    const aksiSelect = screen.getByLabelText(/filter aksi/i);
+    const aksiSelect = screen.getByLabelText(/saring aksi/i);
     fireEvent.change(aksiSelect, { target: { value: "scan" } });
 
     expect(screen.getByText("java-tes")).toBeTruthy();
@@ -76,7 +76,7 @@ describe("AuditTimeline", () => {
   it("menyaring item berdasarkan filter dropdown status", () => {
     render(<AuditTimeline entries={ENTRIES} />);
 
-    const statusSelect = screen.getByLabelText(/filter status/i);
+    const statusSelect = screen.getByLabelText(/saring status/i);
     fireEvent.change(statusSelect, { target: { value: "failed" } });
 
     expect(screen.getByText("java-tes")).toBeTruthy();
@@ -84,14 +84,14 @@ describe("AuditTimeline", () => {
     expect(screen.queryByText("audit-uji3")).toBeNull();
   });
 
-  it("menampilkan empty state jika hasil pencarian kosong dan tombol reset filter bekerja", () => {
+  it("menampilkan empty state jika hasil pencarian kosong dan tombol setel ulang saringan bekerja", () => {
     render(<AuditTimeline entries={ENTRIES} />);
 
     const searchInput = screen.getByPlaceholderText(/cari pengguna atau nama aplikasi/i);
     fireEvent.change(searchInput, { target: { value: "tidak-ada-aplikasi" } });
 
     expect(screen.getByText(/tidak ada aktivitas yang cocok/i)).toBeTruthy();
-    const resetBtn = screen.getByRole("button", { name: /reset filter/i });
+    const resetBtn = screen.getByRole("button", { name: /setel ulang saringan/i });
     fireEvent.click(resetBtn);
 
     expect(screen.getByText("tes-web")).toBeTruthy();
@@ -128,7 +128,7 @@ describe("AuditTimeline — QA audit log", () => {
 
     expect(screen.getByText("Belum ada aktivitas")).toBeTruthy();
     expect(screen.queryByText(/tidak ada aktivitas yang cocok/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /reset filter/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /setel ulang saringan/i })).toBeNull();
   });
 
   it("baris tanpa login, email, target, dan exit tidak pernah mencetak undefined", () => {

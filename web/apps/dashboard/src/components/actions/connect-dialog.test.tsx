@@ -106,7 +106,7 @@ test("sukses mengirim repo/nama/branch ke API lalu menutup dialog dan memuat ula
   sampaiKonfirmasi();
   // Branch ada di langkah 1: kembali dulu untuk mengubahnya.
   fireEvent.click(screen.getByRole("button", { name: "Kembali" }));
-  fireEvent.change(screen.getByLabelText("Branch"), { target: { value: "master" } });
+  fireEvent.change(screen.getByLabelText("Cabang"), { target: { value: "master" } });
   fireEvent.click(screen.getByRole("button", { name: "Lanjut" }));
   fireEvent.change(screen.getByLabelText("Ketik nama aplikasi untuk konfirmasi"), {
     target: { value: "autore-demo" },

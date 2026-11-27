@@ -10,7 +10,7 @@ test.describe("pengaturan untuk non-admin", () => {
   test("menu Pengaturan tidak muncul untuk dev", async ({ page }) => {
     await page.goto("/");
     const sidebar = page.getByRole("navigation").first();
-    await expect(sidebar.getByRole("link", { name: "Audit Log" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Catatan Audit" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Pengaturan", exact: true })).toHaveCount(0);
   });
 

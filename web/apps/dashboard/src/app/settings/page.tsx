@@ -158,7 +158,7 @@ export default function SettingsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-[var(--color-muted)]">
-              <th scope="col" className="pb-2">Login GitHub</th>
+              <th scope="col" className="pb-2">Akun GitHub</th>
               <th scope="col" className="pb-2">Role</th>
               <th scope="col" className="pb-2"><span className="sr-only">Aksi</span></th>
             </tr>

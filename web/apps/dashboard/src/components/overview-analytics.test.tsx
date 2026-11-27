@@ -131,7 +131,7 @@ describe("OverviewAnalytics", () => {
     renderAnalytics();
     expect(await screen.findByText("tes-web #8")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sinkronkan" }));
 
     expect(await screen.findByText("tes-web #21")).toBeInTheDocument();
     expect(screen.queryByText("tes-web #8")).toBeNull();

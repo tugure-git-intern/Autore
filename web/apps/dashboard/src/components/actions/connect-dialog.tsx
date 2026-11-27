@@ -165,7 +165,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
 
               <div>
                 <label htmlFor="cn-branch" className="text-sm font-medium text-ink">
-                  Branch
+                  Cabang
                 </label>
                 <input
                   id="cn-branch"
@@ -176,7 +176,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
                 />
                 <p className="mt-1 text-xs text-muted">
-                  Kalau repo memakai branch utama lain (mis. master), isi di sini.
+                  Kalau repo memakai cabang utama lain (mis. master), isi di sini.
                 </p>
               </div>
 
@@ -204,7 +204,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                   <dd className="font-mono text-ink">{namaBersih}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Branch</dt>
+                  <dt className="w-28 text-muted">Cabang</dt>
                   <dd className="font-mono text-ink">{branchBersih}</dd>
                 </div>
               </dl>

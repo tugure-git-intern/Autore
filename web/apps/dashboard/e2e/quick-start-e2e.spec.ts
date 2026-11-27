@@ -37,7 +37,9 @@ test.describe("Buat Aplikasi Baru (quick-start) @1280x720", () => {
 
     await nama.fill("coba-web");
     await expect(lanjut).toBeEnabled();
-    await page.getByLabel("Bahasa").selectOption("go");
+    // getByLabel cocok substring: label "Bahasa" kini juga ada di modal bahasa di
+    // shell. Persempit ke dialog quick-start supaya pilihannya tidak ambigu.
+    await page.getByRole("dialog").getByLabel("Bahasa").selectOption("go");
     await lanjut.click();
 
     await expect(page.getByText(/repository PUBLIK di GitHub/)).toBeVisible();

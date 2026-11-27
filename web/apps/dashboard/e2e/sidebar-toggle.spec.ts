@@ -190,7 +190,7 @@ test.describe("sidebar buka/tutup menggeser konten", () => {
       const gaya = getComputedStyle(el);
       const gayaSync = getComputedStyle(
         Array.from(document.querySelectorAll("header button")).find((b) =>
-          b.textContent?.includes("Sync"),
+          b.textContent?.includes("Sinkronkan"),
         ) as HTMLElement,
       );
       return {

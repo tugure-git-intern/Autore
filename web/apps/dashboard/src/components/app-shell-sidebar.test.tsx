@@ -164,13 +164,13 @@ describe("AppShell — sidebar buka/tutup konten", () => {
     expect(tagline.className).toContain("lg:inline-block");
   });
 
-  it("kepala sidebar bersih: hanya logo, Autore, dan CI/CD Workspace", () => {
+  it("kepala sidebar bersih: hanya logo, Autore, dan Ruang Kerja CI/CD", () => {
     renderShell();
 
     const merek = screen.getByTestId("sidebar-brand");
     const logo = screen.getByRole("img", { name: "Tugu Reasuransi" });
     const autore = screen.getByText("Autore");
-    const cicd = screen.getByText("CI/CD Workspace");
+    const cicd = screen.getByText("Ruang Kerja CI/CD");
 
     // Satu baris, logo di depan kolom teks, tanpa elemen di sisi kanan.
     expect(merek.className).toContain("flex");
@@ -178,7 +178,7 @@ describe("AppShell — sidebar buka/tutup konten", () => {
     expect(merek.className).toContain("gap-3");
     expect(merek.firstElementChild).toBe(logo);
 
-    // Autore dan CI/CD Workspace tetap satu kolom vertikal.
+    // Autore dan Ruang Kerja CI/CD tetap satu kolom vertikal.
     expect(cicd.parentElement).toBe(autore.parentElement);
 
     // Tagline sudah pindah ke topbar: bukan bagian blok merek lagi.

@@ -16,13 +16,13 @@ DRY_RUN=0
 
 pakai() {
   cat <<'TXT'
-Pakai: watchdog-infra.sh [--dry-run] [--self-test] [-h|--help]
+Pakai: watchdog-infra.sh [--dry-run] [-h|--help]
 
   --dry-run    cetak keputusan, jangan restart apa pun dan jangan tulis state
-  --self-test  jalankan scripts/test-watchdog-infra.sh (hermetic)
   -h, --help   tampilkan bantuan ini
 
 Env: AUTORE_WORKSPACE (dir state), AUTORE_NOTIFY_BIN (path notify-kabar.sh)
+Uji: bash scripts/test-watchdog-infra.sh
 TXT
 }
 
@@ -134,7 +134,6 @@ main() {
 while (( $# )); do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
-    --self-test) exec bash "$(dirname "$0")/test-watchdog-infra.sh" ;;
     -h|--help) pakai; exit 0 ;;
     *) echo "ERROR: argumen tidak dikenal: $1" >&2; pakai >&2; exit 2 ;;
   esac

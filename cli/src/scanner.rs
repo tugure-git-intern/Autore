@@ -113,6 +113,7 @@ fn should_skip_dir(name: &str, opts: &ScanOptions) -> bool {
                 | ".next"
                 | ".next-e2e"
                 | ".worktrees"
+                | "playwright-report"
         );
     }
     false
@@ -691,6 +692,21 @@ mod tests {
             fs::create_dir_all(tmp.path().join(dir)).unwrap();
             fs::write(tmp.path().join(dir).join("bundle.js"), OS_SYSTEM).unwrap();
         }
+        let opts = ScanOptions {
+            skip_build_dirs: true,
+        };
+        assert!(scan_directory_with(tmp.path(), &opts).unwrap().is_clean());
+    }
+
+    #[test]
+    fn skip_build_dirs_covers_playwright_report() {
+        let tmp = TempDir::new().unwrap();
+        let report = tmp.path().join("playwright-report");
+        fs::create_dir_all(&report).unwrap();
+        let bundle = concat!("ex", "ec('id');\n");
+        fs::write(report.join("index.html"), bundle).unwrap();
+
+        assert!(!scan_directory(tmp.path()).unwrap().is_clean());
         let opts = ScanOptions {
             skip_build_dirs: true,
         };

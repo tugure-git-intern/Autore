@@ -65,3 +65,48 @@ Yang harus terlihat: entri `"aksi":"rollback"` dengan `"ok":true`, job Jenkins
   tidak dibaca `bacaLingkungan`); rollback staging manual tidak terpengaruh.
 - Kalau tidak ada deployment sehat sebelumnya, watchdog hanya mengabari Telegram
   dan keluar 1 — production perlu tindakan manual.
+
+## Watchdog infrastruktur (Nexus / SonarQube / Jenkins)
+
+`scripts/watchdog-infra.sh` memeriksa healthcheck Docker service sandbox tiap menit.
+Container dengan `health=unhealthy` atau yang berhenti dihitung gagal; `starting` dan
+`none` tidak memicu restart. Setelah 3 pemeriksaan gagal untuk Nexus/Jenkins atau 5
+untuk SonarQube, watchdog menjalankan satu restart lalu mengirim kabar Telegram.
+Maksimal 2 restart per container; setelah itu ia mengabari perlunya tindakan manual.
+Status disimpan atomik di `$AUTORE_WORKSPACE/watchdog-infra.json`; status sehat
+mereset counter dan kuota restart.
+
+### Pasang
+
+1. Pastikan kedua compose sudah memuat blok `healthcheck`, lalu terapkan di jam
+   perawatan (langkah ini recreate container; volume data tetap):
+
+```sh
+docker compose -f sandbox/services/docker-compose.yml up -d
+docker compose -f sandbox/jenkins/docker-compose.yml up -d
+docker compose ps   # tunggu sampai ketiga container "healthy"
+```
+
+2. Instal timer dan service (backup berkas lama dulu bila ada):
+
+```sh
+sudo install -m 0755 scripts/watchdog-infra.sh /usr/local/bin/watchdog-infra.sh
+sudo install -m 0644 deploy/systemd/autore-watchdog-infra.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/autore-watchdog-infra.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now autore-watchdog-infra.timer
+```
+
+3. Periksa `journalctl -u autore-watchdog-infra.service -n 20 -o cat` dan state file.
+   `--dry-run` hanya mencetak keputusan: tidak menulis state, tidak restart.
+
+4. Rollback: `sudo systemctl disable --now autore-watchdog-infra.timer`, pulihkan
+   backup unit/script/compose, lalu re-apply compose lama bila container perlu
+   kembali. Jangan hapus volume Nexus/SonarQube/Jenkins.
+
+Unit memakai user `tugure`, `WorkingDirectory=/home/tugure/Autore`,
+`AUTORE_WORKSPACE=/home/tugure/autore-workspace`, env Telegram
+`/etc/autore/watchdog.env`, dan notifier `/usr/local/lib/autore-ci/notify-kabar.sh`.
+Timer berjalan tiap menit (OnBootSec 120s).
+
+Uji hermetic: `bash scripts/test-watchdog-infra.sh` (8 skenario, stub Docker + notifier).

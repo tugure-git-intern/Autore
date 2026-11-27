@@ -69,9 +69,15 @@ log "Mempersiapkan rilis image immutable: ${IMAGE_TAG}"
 # 2. Nexus Repository Preflight & Kebijakan Disable Redeploy (ALLOW_ONCE)
 # ---------------------------------------------------------------------------
 log "Memeriksa kebijakan repositori Nexus (Disable redeploy)..."
-policy_resp="$(printf 'user = "%s:%s"\nurl = "%s/service/rest/v1/repositories/docker/hosted/docker-hosted"\n' \
+policy_err="$(mktemp)"
+trap 'rm -f "${policy_err}"' EXIT
+if ! policy_resp="$(printf 'user = "%s:%s"\nurl = "%s/service/rest/v1/repositories/docker/hosted/docker-hosted"\n' \
   "${NEXUS_USER}" "${NEXUS_PASS}" "${NEXUS_API_URL}" \
-  | curl -fsS --max-time 15 --config - 2>/dev/null)"
+  | curl -fsS --max-time 15 --config - 2>"${policy_err}")"; then
+  echo "ERROR: gagal menghubungi Nexus (${NEXUS_API_URL}); kebijakan repositori tidak bisa diverifikasi. Detail:" >&2
+  cat "${policy_err}" >&2
+  exit 1
+fi
 
 write_policy="$(python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('storage', {}).get('writePolicy', ''))" <<< "${policy_resp}" 2>/dev/null)"
 

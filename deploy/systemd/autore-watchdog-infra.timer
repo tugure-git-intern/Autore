@@ -1,0 +1,11 @@
+[Unit]
+Description=Jalankan watchdog infrastruktur tiap menit
+
+[Timer]
+OnBootSec=120s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=autore-watchdog-infra.service
+
+[Install]
+WantedBy=timers.target

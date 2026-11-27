@@ -15,11 +15,21 @@ services:
     image: jenkins/jenkins:lts-jdk21
     container_name: autore-jenkins
     restart: unless-stopped
+    dns:
+      - 192.168.0.252
+      - 192.168.0.253
     ports:
       - "127.0.0.1:8080:8080"
       - "100.80.3.14:8080:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
+    # Dibaca scripts/watchdog-infra.sh; jangan hapus tanpa memperbarui runbook.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
 
 volumes:
   jenkins_home:

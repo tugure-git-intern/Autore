@@ -19,6 +19,13 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+    # Dibaca scripts/watchdog-infra.sh; jangan hapus tanpa memperbarui runbook.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:9000/api/system/status | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
 
   nexus:
     image: sonatype/nexus3:3.96.5-alpine@sha256:d70482a3d5d44c8733fb244742fef5ca8ac967da56ccb97398f807bb8d3e585e
@@ -32,6 +39,13 @@ services:
       - INSTALL4J_ADD_VM_PARAMS=-Xms768m -Xmx768m -XX:MaxDirectMemorySize=512m -Djava.util.prefs.userRoot=/nexus-data/javaprefs
     volumes:
       - nexus_data:/nexus-data
+    # Dibaca scripts/watchdog-infra.sh; jangan hapus tanpa memperbarui runbook.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8081/service/rest/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
 
 volumes:
   sonar_data:

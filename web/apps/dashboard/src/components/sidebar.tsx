@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ApiStatusResponse } from "@/lib/contracts";
 import { useCurrentUser, useStatus } from "./app-shell";
+import type { KunciTerjemah } from "@/lib/i18n";
 import { useBahasa } from "./bahasa-provider";
 import { isActiveHref, navItemsUntuk } from "./nav-items";
 
@@ -18,7 +19,7 @@ export function versiAutore(): string {
 
 export type ToneServer = "green" | "amber" | "red" | "neutral";
 
-export type IndikatorServer = { tone: ToneServer; label: string; pulse: boolean };
+export type IndikatorServer = { tone: ToneServer; label: KunciTerjemah; pulse: boolean };
 
 /**
  * Satu-satunya penentu status koneksi di UI. `failed` (API tak menjawab) =
@@ -34,12 +35,12 @@ export function indikatorServer({
   failed: boolean;
   loading: boolean;
 }): IndikatorServer {
-  if (failed) return { tone: "red", label: "Server Offline", pulse: false };
-  if (state?.stale) return { tone: "amber", label: "Data Lama", pulse: false };
-  if (state) return { tone: "green", label: "Server Online", pulse: true };
+  if (failed) return { tone: "red", label: "shell.serverOffline", pulse: false };
+  if (state?.stale) return { tone: "amber", label: "shell.dataLama", pulse: false };
+  if (state) return { tone: "green", label: "shell.serverOnline", pulse: true };
   return loading
-    ? { tone: "neutral", label: "Memuat status", pulse: true }
-    : { tone: "neutral", label: "Status belum tersedia", pulse: false };
+    ? { tone: "neutral", label: "shell.memuatStatus", pulse: true }
+    : { tone: "neutral", label: "shell.statusBelum", pulse: false };
 }
 
 const KELAS_TITIK: Record<ToneServer, string> = {
@@ -128,7 +129,7 @@ export function Sidebar({ terbuka }: { terbuka: boolean }) {
             data-tone={tone}
             className={`h-2.5 w-2.5 rounded-full ${KELAS_TITIK[tone]}${pulse ? " animate-pulse" : ""}`}
           />
-          <span className="text-sm font-medium text-gray-900 dark:text-white">{label}</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-white">{t(label)}</span>
         </div>
         <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
           {versiAutore()}

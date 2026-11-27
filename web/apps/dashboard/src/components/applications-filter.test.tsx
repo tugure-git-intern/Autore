@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { BahasaProvider } from "./bahasa-provider";
 import { ApplicationsFilter } from "./applications-filter";
 
 function pasang(over: Partial<Parameters<typeof ApplicationsFilter>[0]> = {}) {
@@ -47,5 +48,33 @@ describe("ApplicationsFilter", () => {
     pasang({ total: 10, shown: 3 });
 
     expect(screen.getByText("3 dari 10 aplikasi")).toBeVisible();
+  });
+});
+
+describe("ApplicationsFilter dalam bahasa Inggris", () => {
+  it("menerjemahkan label, opsi status, dan hitungan", () => {
+    const props = {
+      query: "",
+      onQueryChange: vi.fn(),
+      status: "all" as const,
+      onStatusChange: vi.fn(),
+      total: 10,
+      shown: 3,
+    };
+    render(
+      <BahasaProvider awal="en">
+        <ApplicationsFilter {...props} />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByRole("searchbox", { name: "Search applications" })).toBeVisible();
+    const pilihan = screen.getByRole("combobox", { name: "Status" });
+    expect(Array.from((pilihan as HTMLSelectElement).options).map((opt) => opt.textContent)).toEqual([
+      "All statuses",
+      "Passed",
+      "Failed",
+      "Unknown",
+    ]);
+    expect(screen.getByText("3 of 10 applications")).toBeVisible();
   });
 });

@@ -4,6 +4,7 @@ import { Loader2, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { goToLogin } from "@/lib/actions-client";
 import { STACK, namaSah, orgSah, runQuickStart, type Kode, type Stack } from "@/lib/quick-start-client";
+import { useBahasa } from "@/components/bahasa-provider";
 import { Toast, type JenisToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,7 @@ const LABEL_STACK: Record<Stack, string> = {
  * lalu ketik ulang nama aplikasi sebagai konfirmasi ganda.
  */
 export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
+  const { t, tf } = useBahasa();
   const dialog = useRef<HTMLDialogElement>(null);
   const judulId = useId();
   const [terbuka, setTerbuka] = useState(false);
@@ -63,7 +65,10 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
     setToast(null);
     const hasil = await runQuickStart({ nama: namaBersih, stack, kode, org: orgBersih });
     setPending(false);
-    setToast({ jenis: hasil.ok ? "sukses" : "gagal", pesan: hasil.message });
+    setToast({
+      jenis: hasil.ok ? "sukses" : "gagal",
+      pesan: hasil.kunci ? tf(hasil.kunci, hasil.isi ?? {}) : hasil.message,
+    });
 
     if (hasil.redirectTo) {
       goToLogin(hasil.redirectTo);
@@ -81,7 +86,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
     <span className="inline-flex flex-col items-end gap-2">
       <Button variant="primary" onClick={() => setTerbuka(true)} disabled={pending}>
         <Plus className="h-4 w-4" aria-hidden="true" />
-        Buat Aplikasi Baru
+        {t("buat.tombol")}
       </Button>
 
       {toast ? (
@@ -94,7 +99,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
         className="m-auto w-[min(30rem,92vw)] rounded-lg border border-gray-200 bg-white p-5 text-left shadow-lg backdrop:bg-black/40 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] backdrop:dark:bg-black/60"
       >
         <h2 id={judulId} className="text-base font-semibold text-ink">
-          {langkah === 1 ? "Buat Aplikasi Baru" : "Konfirmasi pembuatan aplikasi"}
+          {t(langkah === 1 ? "buat.tombol" : "buat.judul2")}
         </h2>
 
         {terbuka ? (
@@ -103,7 +108,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
             <div className="mt-4 space-y-4">
               <div>
                 <label htmlFor="qs-nama" className="text-sm font-medium text-ink">
-                  Nama Aplikasi
+                  {t("buat.nama")}
                 </label>
                 <input
                   id="qs-nama"
@@ -115,15 +120,14 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                 />
                 {namaBersih !== "" && !namaSah(namaBersih) ? (
                   <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                    Nama aplikasi tidak sah. Pakai huruf kecil/angka di awal, boleh `-` dan `_`
-                    (contoh: coba-web).
+                    {t("buat.namaSalah")}
                   </p>
                 ) : null}
               </div>
 
               <div>
                 <label htmlFor="qs-stack" className="text-sm font-medium text-ink">
-                  Bahasa
+                  {t("buat.bahasa")}
                 </label>
                 <select
                   id="qs-stack"
@@ -141,7 +145,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
 
               <div>
                 <label htmlFor="qs-org" className="text-sm font-medium text-ink">
-                  Organisasi (opsional)
+                  {t("buat.org")}
                 </label>
                 <input
                   id="qs-org"
@@ -154,11 +158,11 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                 />
                 {orgBersih !== "" && !orgSah(orgBersih) ? (
                   <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                    Nama organisasi tidak sah. Pakai huruf/angka di awal, boleh `.`, `-`, `_`.
+                    {t("buat.orgSalah")}
                   </p>
                 ) : null}
                 <p className="mt-1 text-xs text-muted">
-                  Kosong = org bawaan server. Tanpa org bawaan, repo dibuat di akun pemilik token.
+                  {t("buat.orgBantuan")}
                 </p>
               </div>
 
@@ -168,53 +172,52 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                   checked={kode === "contoh"}
                   onChange={(e) => setKode(e.target.checked ? "contoh" : "kosong")}
                 />
-                Isi kode contoh (tanpa centang: repo kosong)
+                {t("buat.kodeContoh")}
               </label>
 
               <div className="flex justify-end gap-2">
-                <Button onClick={tutup}>Batal</Button>
+                <Button onClick={tutup}>{t("aksi.batal")}</Button>
                 <Button
                   variant="primary"
                   disabled={!namaSah(namaBersih) || (orgBersih !== "" && !orgSah(orgBersih))}
                   onClick={() => setLangkah(2)}
                 >
-                  Lanjut
+                  {t("aksi.lanjut")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="mt-4 space-y-4">
               <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300">
-                Aplikasi ini akan membuat repository PUBLIK di GitHub.
+                {t("buat.peringatanPublik")}
               </p>
 
               <dl className="space-y-1 text-sm">
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Nama</dt>
+                  <dt className="w-28 text-muted">{t("buat.labelNama")}</dt>
                   <dd className="font-mono text-ink">{namaBersih}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Bahasa</dt>
+                  <dt className="w-28 text-muted">{t("buat.labelBahasa")}</dt>
                   <dd className="text-ink">{LABEL_STACK[stack]}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Organisasi</dt>
-                  <dd className="font-mono text-ink">{orgBersih || "org bawaan server"}</dd>
+                  <dt className="w-28 text-muted">{t("buat.labelOrg")}</dt>
+                  <dd className="font-mono text-ink">{orgBersih || t("buat.orgBawaan")}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Isi kode</dt>
-                  <dd className="text-ink">{kode === "contoh" ? "Kode contoh" : "Repo kosong"}</dd>
+                  <dt className="w-28 text-muted">{t("buat.labelIsiKode")}</dt>
+                  <dd className="text-ink">{t(kode === "contoh" ? "buat.kodeContohNilai" : "buat.repoKosong")}</dd>
                 </div>
               </dl>
 
               <p className="text-sm text-muted">
-                Langkah ini tidak bisa dibatalkan: repo GitHub, push kode, job Jenkins, dan build
-                pertama dijalankan sekaligus.
+                {t("buat.tidakBisaDibatalkan")}
               </p>
 
               <div>
                 <label htmlFor="qs-konfirmasi" className="text-sm font-medium text-ink">
-                  Ketik nama aplikasi untuk konfirmasi
+                  {t("aksi.ketikNama")}
                 </label>
                 <input
                   id="qs-konfirmasi"
@@ -236,7 +239,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
 
               <div className="flex justify-end gap-2">
                 <Button disabled={pending} onClick={() => setLangkah(1)}>
-                  Kembali
+                  {t("aksi.kembali")}
                 </Button>
                 <Button
                   variant="primary"
@@ -250,7 +253,7 @@ export function QuickStartDialog({ onSelesai }: { onSelesai?: () => void }) {
                       Membuat…
                     </>
                   ) : (
-                    "Buat Aplikasi"
+                    t("buat.buat")
                   )}
                 </Button>
               </div>

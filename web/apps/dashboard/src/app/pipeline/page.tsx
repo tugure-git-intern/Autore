@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { Search, Workflow } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStatus } from "@/components/app-shell";
+import { useBahasa } from "@/components/bahasa-provider";
 import { EmptyApplications } from "@/components/empty-applications";
 import { AppDetail } from "@/components/pipeline/app-detail";
 import { AppPicker } from "@/components/pipeline/app-picker";
@@ -18,8 +19,19 @@ import { filterApps } from "@/lib/filter-apps";
 import { pilihAwal } from "@/lib/pilih-app";
 
 export default function PipelinePage() {
+  const { t } = useBahasa();
   return (
-    <Suspense fallback={<LoadingSkeleton />}>
+    <Suspense
+      fallback={
+        <section aria-label={t("pipeline.memuat")} aria-busy="true">
+          <Skeleton className="h-7 w-40" />
+          <div className="mt-4 grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-96" />
+          </div>
+        </section>
+      }
+    >
       <PipelineSplit />
     </Suspense>
   );
@@ -29,6 +41,7 @@ function PipelineSplit() {
   const appId = (useSearchParams().get("app") ?? "").trim();
   const router = useRouter();
   const { state, loading, failed, reload, runs, aktif } = useStatus();
+  const { t, tf } = useBahasa();
   const [query, setQuery] = useState("");
   // Layar sempit: daftar dan detail bergantian, bukan berdampingan.
   const [lihatDaftar, setLihatDaftar] = useState(false);
@@ -39,13 +52,11 @@ function PipelineSplit() {
     return (
       <Card className="p-6">
         <div role="alert">
-          <p className="font-medium text-red-700 dark:text-red-300">Status Autore belum tersedia.</p>
-          <p className="mt-1 text-sm text-red-600 dark:text-red-300">
-            Server tidak mengembalikan data. Coba lagi setelah pipeline berjalan.
-          </p>
+          <p className="font-medium text-red-700 dark:text-red-300">{t("pipeline.gagal")}</p>
+          <p className="mt-1 text-sm text-red-600 dark:text-red-300">{t("pipeline.gagalIsi")}</p>
         </div>
         <Button className="mt-4" onClick={reload}>
-          Coba lagi
+          {t("pipeline.cobaLagi")}
         </Button>
       </Card>
     );
@@ -73,11 +84,11 @@ function PipelineSplit() {
 
       {appId && !terpilih ? (
         <Card className="p-6">
-          <p className="font-medium text-ink">{`Aplikasi "${appId}" tidak ditemukan.`}</p>
+          <p className="font-medium text-ink">{tf("pipeline.tidakDitemukan", { app: appId })}</p>
           <p className="mt-1 text-sm text-muted">
-            Pilih aplikasi dari daftar di samping, atau buka halaman{" "}
+            {t("pipeline.tidakDitemukanIsi")}{" "}
             <Link href="/applications" className="text-blue-600 hover:underline dark:text-blue-300">
-              Aplikasi
+              {t("nav.aplikasiPendek")}
             </Link>
             .
           </p>
@@ -86,8 +97,8 @@ function PipelineSplit() {
 
       <div className="space-y-0">
         <PageTabHeader
-          title="Pipeline & Log"
-          description="Status eksekusi tahapan CI/CD dan riwayat build."
+          title={t("pipeline.judul")}
+          description={t("pipeline.deskripsi")}
           icon={Workflow}
         />
 
@@ -112,14 +123,14 @@ function PipelineSplit() {
                       type="search"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Cari aplikasi..."
-                      aria-label="Cari aplikasi"
+                      placeholder={t("filter.cari")}
+                      aria-label={t("filter.cariLabel")}
                       className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
                     />
                   </div>
                   <Card className="max-h-[calc(100vh-15rem)] overflow-y-auto p-1">
                     {daftar.length === 0 ? (
-                      <p className="px-3 py-4 text-sm text-muted">Tidak ada aplikasi yang cocok.</p>
+                      <p className="px-3 py-4 text-sm text-muted">{t("aplikasi.tidakCocok")}.</p>
                     ) : (
                       <AppPicker applications={daftar} terpilih={terpilih?.id} onPilih={pilih} />
                     )}
@@ -156,8 +167,9 @@ function PipelineSplit() {
 }
 
 function LoadingSkeleton() {
+  const { t } = useBahasa();
   return (
-    <section aria-label="Memuat pipeline" aria-busy="true">
+    <section aria-label={t("pipeline.memuat")} aria-busy="true">
       <Skeleton className="h-7 w-40" />
       <div className="mt-4 grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <Skeleton className="h-64" />

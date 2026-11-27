@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SbomPayload } from "@/lib/contracts";
 
@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => params,
 }));
 
+import { BahasaProvider } from "@/components/bahasa-provider";
 import SbomPage from "./page";
 
 afterEach(() => {
@@ -38,6 +39,13 @@ function mockFetch(response: { status: number; body: unknown }) {
 }
 
 const renderPage = () => render(<SbomPage />);
+
+const renderPageEn = () =>
+  render(
+    <BahasaProvider awal="en">
+      <SbomPage />
+    </BahasaProvider>,
+  );
 
 describe("halaman SBOM", () => {
   it("memuat SBOM aplikasi dari URL dan menampilkan tabelnya", async () => {
@@ -90,5 +98,48 @@ describe("halaman SBOM", () => {
 
     expect(await screen.findByText("Aplikasi tidak disebutkan.")).toBeVisible();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("halaman SBOM dalam bahasa Inggris", () => {
+  it("menerjemahkan jalan kembali, ringkasan paket, dan kolom tabel", async () => {
+    mockFetch({ status: 200, body: PAYLOAD });
+
+    renderPageEn();
+
+    expect(await screen.findByRole("link", { name: /Back to application details/ })).toBeVisible();
+    expect(screen.getByText(/2 packages · generated/)).toBeVisible();
+    const header = screen.getAllByRole("row")[0];
+    expect(
+      within(header)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual(["Library Name", "Version", "Type"]);
+  });
+
+  it("menerjemahkan penjelasan SBOM yang belum ada", async () => {
+    mockFetch({ status: 404, body: { error: "SBOM belum ada untuk `tes-web`" } });
+
+    renderPageEn();
+
+    expect(await screen.findByText("No SBOM available for this application yet.")).toBeVisible();
+    expect(screen.getByText(/stage 6/)).toBeVisible();
+  });
+
+  it("menerjemahkan kegagalan dan tombol coba lagi", async () => {
+    mockFetch({ status: 500, body: { error: "boom" } });
+
+    renderPageEn();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the SBOM.");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+
+  it("meminta id aplikasi dalam bahasa Inggris", async () => {
+    params = new URLSearchParams("");
+
+    renderPageEn();
+
+    expect(await screen.findByText("No application specified.")).toBeVisible();
   });
 });

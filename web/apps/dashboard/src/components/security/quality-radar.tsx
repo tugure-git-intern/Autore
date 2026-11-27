@@ -9,21 +9,23 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useTheme } from "next-themes";
+import { useBahasa } from "@/components/bahasa-provider";
 import { CHART_COLORS, toRadar } from "@/lib/charts";
 import type { Score } from "@/lib/score";
 
 /** Radar lima sumbu terukur. Sumbu tanpa data dibuang, bukan digambar sebagai nol. */
 export function QualityRadar({ score }: { score: Score }) {
+  const { bahasa, t } = useBahasa();
   const { theme, resolvedTheme } = useTheme();
   const isDark = (resolvedTheme ?? theme) === "dark";
   const gridColor = isDark ? "#50638b" : CHART_COLORS.grid;
   const axisStroke = isDark ? "#50638b" : "#64748b";
   const tickColor = isDark ? "#ffffff" : "#64748b";
 
-  const sumbu = toRadar(score);
+  const sumbu = toRadar(score, bahasa);
 
   if (sumbu.length === 0) {
-    return <p className="text-sm text-gray-500 dark:text-white">Belum ada data untuk dinilai</p>;
+    return <p className="text-sm text-gray-500 dark:text-white">{t("keamanan.radarKosong")}</p>;
   }
 
   return (

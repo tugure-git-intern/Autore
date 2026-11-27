@@ -12,9 +12,11 @@ import {
 import { useTheme } from "next-themes";
 import { CHART_COLORS, toTrend } from "@/lib/charts";
 import type { DailyPoint } from "@/lib/contracts";
+import { useBahasa } from "../bahasa-provider";
 
 /** Tren build 7 hari terakhir. Hari tanpa build tetap jadi titik nol, bukan celah. */
 export function RunTrends({ daily }: { daily: readonly DailyPoint[] }) {
+  const { t } = useBahasa();
   const { theme, resolvedTheme } = useTheme();
   const isDark = (resolvedTheme ?? theme) === "dark";
   const gridColor = isDark ? "#50638b" : CHART_COLORS.grid;
@@ -26,9 +28,7 @@ export function RunTrends({ daily }: { daily: readonly DailyPoint[] }) {
 
   if (!adaBuild) {
     return (
-      <p className="text-sm text-gray-500 dark:text-white">
-        Belum ada build dalam 7 hari terakhir
-      </p>
+      <p className="text-sm text-gray-500 dark:text-white">{t("grafik.trenKosong")}</p>
     );
   }
 

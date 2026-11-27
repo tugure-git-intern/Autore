@@ -24,6 +24,8 @@ export function orgSah(org: string): boolean {
   return NAMA_ORG.test(org.trim());
 }
 
+import type { KunciTerjemah } from "./i18n";
+
 export interface PermintaanQuickStart {
   nama: string;
   stack: Stack;
@@ -35,6 +37,9 @@ export interface PermintaanQuickStart {
 export interface HasilQuickStart {
   ok: boolean;
   message: string;
+  /** Kunci kamus; `message` tetap cadangan teks mentah. */
+  kunci?: KunciTerjemah;
+  isi?: Record<string, string | number>;
   /** URL repo GitHub yang dibuat CLI, kalau barisnya terbaca di keluaran. */
   repo?: string;
   /** Diisi kalau server menolak karena sesi; pemanggil yang memindahkan halaman. */
@@ -58,7 +63,11 @@ export async function runQuickStart(permintaan: PermintaanQuickStart): Promise<H
       }),
     });
   } catch {
-    return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };
+    return {
+      ok: false,
+      message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi.",
+      kunci: "aksi.gagalHubungi",
+    };
   }
 
   if (response.ok) {
@@ -66,6 +75,8 @@ export async function runQuickStart(permintaan: PermintaanQuickStart): Promise<H
     return {
       ok: true,
       message: `Aplikasi "${nama}" dibuat. Build pertama sedang berjalan di Jenkins.`,
+      kunci: "aksi.buatSukses",
+      isi: { nama },
       ...(payload?.repo ? { repo: payload.repo } : {}),
     };
   }
@@ -75,6 +86,7 @@ export async function runQuickStart(permintaan: PermintaanQuickStart): Promise<H
     return {
       ok: false,
       message: "Sesi Anda sudah berakhir. Silakan login ulang.",
+      kunci: "aksi.sesiBerakhir",
       redirectTo: "/login",
     };
   }

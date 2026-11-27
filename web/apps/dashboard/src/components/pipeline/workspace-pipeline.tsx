@@ -1,9 +1,10 @@
 "use client";
 
+import { useBahasa } from "@/components/bahasa-provider";
 import { Card } from "@/components/ui/card";
 import { PipelineSummary } from "@/components/pipeline/pipeline-summary";
 import { StageMatrix } from "@/components/pipeline/stage-matrix";
-import type { DashboardStatus } from "@/lib/contracts";
+import { type DashboardStatus } from "@/lib/contracts";
 import { shortSha } from "@/lib/format";
 import { petunjukPortBentrok } from "@/lib/petunjuk-port";
 import { stageRows } from "@/lib/stages";
@@ -14,11 +15,15 @@ import { stageRows } from "@/lib/stages";
  * tahapan dan log tidak pernah tampil sebagai milik aplikasi lain.
  */
 export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["latest_pipeline"] }) {
+  const { t, tf } = useBahasa();
   const petunjukPort = petunjukPortBentrok(pipeline.raw_log);
   return (
     <div className="space-y-4">
       <p className="text-xs uppercase tracking-wide text-muted">
-        Pipeline terakhir workspace · commit {shortSha(pipeline.commit_sha)} · {pipeline.author || "—"}
+        {tf("ws.ringkas", {
+          sha: shortSha(pipeline.commit_sha),
+          penulis: pipeline.author || "—",
+        })}
       </p>
 
       <PipelineSummary pipeline={pipeline} />
@@ -40,7 +45,7 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
 
       {/* Matriks selebar halaman: 5 kartu + panah tidak muat di kolom sempit. */}
       <Card className="min-w-0 overflow-hidden p-5">
-        <h2 className="text-sm font-semibold text-ink">Tahapan Pipeline</h2>
+        <h2 className="text-sm font-semibold text-ink">{t("ws.tahapan")}</h2>
         <div className="mt-4">
           <StageMatrix
             rows={stageRows(pipeline.stage_times, pipeline.finished_at, pipeline.status)}
@@ -52,7 +57,7 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
 
       <Card className="min-w-0 p-5">
         <h2 id="pipeline-log-title" className="text-sm font-semibold text-ink">
-          Detail Log
+          {t("ws.logJudul")}
         </h2>
         <section
           aria-labelledby="pipeline-log-title"
@@ -60,7 +65,7 @@ export function WorkspacePipeline({ pipeline }: { pipeline: DashboardStatus["lat
         >
           <pre tabIndex={0} className="max-h-[26rem] overflow-auto p-4 font-mono text-xs leading-6 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
             {pipeline.raw_log.length === 0
-              ? "Belum ada log."
+              ? t("ws.logKosong")
               : pipeline.raw_log.map((line, index) => (
                   <span key={index} className="block whitespace-pre-wrap">
                     {line}

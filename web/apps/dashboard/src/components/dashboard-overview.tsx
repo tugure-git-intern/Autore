@@ -4,8 +4,10 @@ import { Boxes, Container, Timer, Workflow } from "lucide-react";
 import type { StatusValue } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { parseLeadTime, type PipelineWaktu } from "@/lib/format";
+import type { Bahasa, KunciTerjemah } from "@/lib/i18n";
 import { AnimatedNumber } from "./ui/animated-number";
 import { useStatus } from "./app-shell";
+import { useBahasa } from "./bahasa-provider";
 import { EmptyApplications } from "./empty-applications";
 import { OverviewAnalytics } from "./overview-analytics";
 import { RepositoryHealthCard } from "./repository-health-card";
@@ -16,14 +18,14 @@ import { Card } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 import { StatusBanner } from "./status-banner";
 
-const pipelineLabels: Record<StatusValue, string> = {
-  idle: "Siaga",
-  running: "Berjalan",
-  passed: "Lulus",
-  failed: "Gagal",
-  unknown: "Tidak diketahui",
-  pending: "Menunggu",
-  skipped: "Dilewati",
+const pipelineLabels: Record<StatusValue, KunciTerjemah> = {
+  idle: "status.siaga",
+  running: "status.berjalan",
+  passed: "status.lulus",
+  failed: "status.gagal",
+  unknown: "status.tidakDiketahui",
+  pending: "status.menunggu",
+  skipped: "status.dilewati",
 };
 
 /** Only a recorded gate result may style an app as passed/running/failed. */
@@ -31,16 +33,23 @@ function toBadge(status: StatusValue): AppStatus {
   return status === "passed" || status === "running" || status === "failed" ? status : "unknown";
 }
 
-const buildTime = new Intl.DateTimeFormat("id-ID", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Jakarta",
-});
+const buildTime: Record<Bahasa, Intl.DateTimeFormat> = {
+  id: new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }),
+  en: new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }),
+};
 
-export function formatBuild(value: string | null): string {
+export function formatBuild(value: string | null, bahasa: Bahasa = "id"): string {
   if (!value || !value.trim()) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : buildTime.format(date);
+  return Number.isNaN(date.getTime()) ? "—" : buildTime[bahasa].format(date);
 }
 
 function AnimatedLeadTime({ pipeline }: { pipeline?: PipelineWaktu | null }) {
@@ -62,6 +71,7 @@ function AnimatedLeadTime({ pipeline }: { pipeline?: PipelineWaktu | null }) {
 export function DashboardOverview() {
   // Status and the Sync action live in the shared shell navbar.
   const { state, loading, failed, reload } = useStatus();
+  const { bahasa, t } = useBahasa();
 
   if (loading && !state) return <LoadingSkeleton />;
 
@@ -69,13 +79,11 @@ export function DashboardOverview() {
     return (
       <Card className="p-6">
         <div role="alert">
-          <p className="font-medium text-red-700">Status Autore belum tersedia.</p>
-          <p className="mt-1 text-sm text-red-600">
-            Server tidak mengembalikan data. Coba lagi setelah pipeline berjalan.
-          </p>
+          <p className="font-medium text-red-700">{t("beranda.gagal")}</p>
+          <p className="mt-1 text-sm text-red-600">{t("beranda.gagalSub")}</p>
         </div>
         <Button className="mt-4" onClick={reload}>
-          Coba lagi
+          {t("beranda.cobaLagi")}
         </Button>
       </Card>
     );
@@ -91,36 +99,36 @@ export function DashboardOverview() {
       <StatusBanner stale={stale} failed={failed} />
 
       <section
-        aria-label="Statistik"
+        aria-label={t("beranda.statistik")}
         className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5"
       >
         <StatCard
-          label="Total Terdaftar"
+          label={t("beranda.totalTerdaftar")}
           value={<AnimatedNumber value={data.stats.total_apps} />}
           icon={Boxes}
           tone="blue"
-          hint="Aplikasi di registri"
+          hint={t("beranda.totalTerdaftarSub")}
         />
         <StatCard
-          label="Container Berjalan"
+          label={t("beranda.containerBerjalan")}
           value={<AnimatedNumber value={data.stats.running_containers} />}
           icon={Container}
           tone="green"
-          hint="Container aktif"
+          hint={t("beranda.containerBerjalanSub")}
         />
         <StatCard
           label="Lead Time"
           value={<AnimatedLeadTime pipeline={data.latest_pipeline} />}
           icon={Timer}
           tone="violet"
-          hint="Waktu proses"
+          hint={t("beranda.waktuProses")}
         />
         <StatCard
-          label="Status Pipeline"
-          value={pipelineLabels[data.latest_pipeline.status] ?? pipelineLabels.unknown}
+          label={t("beranda.statusPipeline")}
+          value={t(pipelineLabels[data.latest_pipeline.status] ?? pipelineLabels.unknown)}
           icon={Workflow}
           tone="amber"
-          hint="Build terakhir"
+          hint={t("beranda.buildTerakhir")}
         />
         <RepositoryHealthCard health={data.repository_health} />
       </section>
@@ -129,7 +137,7 @@ export function DashboardOverview() {
 
       <Card className="mt-6 overflow-hidden">
         <div className="border-b border-gray-200 dark:border-[#50638b] px-5 py-4">
-          <h2 className="text-sm font-semibold text-ink dark:text-white">Aplikasi</h2>
+          <h2 className="text-sm font-semibold text-ink dark:text-white">{t("beranda.aplikasi")}</h2>
         </div>
         {applications.length === 0 ? (
           <EmptyApplications />
@@ -139,18 +147,18 @@ export function DashboardOverview() {
               <thead className="bg-gray-50 dark:bg-[#282c32] text-xs uppercase tracking-wide text-muted dark:text-white">
                 <tr>
                   <th scope="col" className="px-5 py-3 font-medium">
-                    Nama Aplikasi
+                    {t("beranda.kolomNama")}
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
-                    Status Keamanan
+                    {t("beranda.kolomStatus")}
                   </th>
                   {/* Empat kolom = 625px; "Terakhir Diperbarui" menyusul di >= sm
                       supaya tabelnya muat di 390px tanpa geser. */}
                   <th scope="col" className="hidden px-5 py-3 font-medium sm:table-cell">
-                    Terakhir Diperbarui
+                    {t("beranda.kolomTerakhir")}
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
-                    Aksi
+                    {t("beranda.kolomAksi")}
                   </th>
                 </tr>
               </thead>
@@ -169,14 +177,14 @@ export function DashboardOverview() {
                       <StatusBadge status={toBadge(app.status)} />
                     </td>
                     <td className="hidden px-5 py-4 text-muted sm:table-cell">
-                      {formatBuild(app.last_build)}
+                      {formatBuild(app.last_build, bahasa)}
                     </td>
                     <td className="px-5 py-4">
                       <a
                         href={`/pipeline?app=${encodeURIComponent(app.id)}`}
                         className="text-blue-600 dark:text-blue-300 hover:underline"
                       >
-                        Detail
+                        {t("beranda.detail")}
                       </a>
                     </td>
                   </tr>
@@ -191,8 +199,10 @@ export function DashboardOverview() {
 }
 
 function LoadingSkeleton() {
+  const { t } = useBahasa();
+
   return (
-    <section aria-label="Memuat status" aria-busy="true">
+    <section aria-label={t("beranda.memuat")} aria-busy="true">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
         {[0, 1, 2, 3, 4].map((key) => (
           <Skeleton key={key} className="h-28" />

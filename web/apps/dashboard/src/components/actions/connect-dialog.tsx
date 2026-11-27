@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { goToLogin } from "@/lib/actions-client";
 import { namaRepo, repoSah, runConnect } from "@/lib/connect-client";
 import { namaSah } from "@/lib/quick-start-client";
+import { useBahasa } from "@/components/bahasa-provider";
 import { Toast, type JenisToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
  * konfirmasi ganda — sama seperti Buat Aplikasi Baru.
  */
 export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
+  const { t, tf } = useBahasa();
   const dialog = useRef<HTMLDialogElement>(null);
   const judulId = useId();
   const [terbuka, setTerbuka] = useState(false);
@@ -68,7 +70,10 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
     setPeringatan(null);
     const hasil = await runConnect({ repo: repoBersih, nama: namaBersih, branch: branchBersih });
     setPending(false);
-    setToast({ jenis: hasil.ok ? "sukses" : "gagal", pesan: hasil.message });
+    setToast({
+      jenis: hasil.ok ? "sukses" : "gagal",
+      pesan: hasil.kunci ? tf(hasil.kunci, hasil.isi ?? {}) : hasil.message,
+    });
     if (hasil.peringatan) setPeringatan(hasil.peringatan);
 
     if (hasil.redirectTo) {
@@ -95,7 +100,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
         disabled={pending}
       >
         <Link2 className="h-4 w-4" aria-hidden="true" />
-        Sambungkan Repo
+        {t("sambung.tombol")}
       </Button>
 
       {toast ? (
@@ -114,7 +119,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
         className="m-auto w-[min(30rem,92vw)] rounded-lg border border-gray-200 bg-white p-5 text-left shadow-lg backdrop:bg-black/40 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] backdrop:dark:bg-black/60"
       >
         <h2 id={judulId} className="text-base font-semibold text-ink">
-          {langkah === 1 ? "Sambungkan Repo yang Sudah Ada" : "Konfirmasi penyambungan repo"}
+          {t(langkah === 1 ? "sambung.judul1" : "sambung.judul2")}
         </h2>
 
         {terbuka ? (
@@ -123,7 +128,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
             <div className="mt-4 space-y-4">
               <div>
                 <label htmlFor="cn-repo" className="text-sm font-medium text-ink">
-                  URL Repo GitHub
+                  {t("sambung.repo")}
                 </label>
                 <input
                   id="cn-repo"
@@ -136,14 +141,14 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                 />
                 {repoBersih !== "" && !repoSah(repoBersih) ? (
                   <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                    Pakai URL https://github.com/&lt;owner&gt;/&lt;nama&gt; tanpa token dan tanpa SSH.
+                    {t("sambung.repoSalah")}
                   </p>
                 ) : null}
               </div>
 
               <div>
                 <label htmlFor="cn-nama" className="text-sm font-medium text-ink">
-                  Nama Aplikasi
+                  {t("sambung.nama")}
                 </label>
                 <input
                   id="cn-nama"
@@ -158,14 +163,14 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                 />
                 {namaBersih !== "" && !namaSah(namaBersih) ? (
                   <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">
-                    Nama aplikasi tidak sah. Pakai huruf kecil/angka di awal, boleh `-` dan `_`.
+                    {t("sambung.namaSalah")}
                   </p>
                 ) : null}
               </div>
 
               <div>
                 <label htmlFor="cn-branch" className="text-sm font-medium text-ink">
-                  Cabang
+                  {t("sambung.cabang")}
                 </label>
                 <input
                   id="cn-branch"
@@ -176,46 +181,45 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
                 />
                 <p className="mt-1 text-xs text-muted">
-                  Kalau repo memakai cabang utama lain (mis. master), isi di sini.
+                  {t("sambung.cabangBantuan")}
                 </p>
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button onClick={tutup}>Batal</Button>
+                <Button onClick={tutup}>{t("aksi.batal")}</Button>
                 <Button variant="primary" disabled={!siap} onClick={() => setLangkah(2)}>
-                  Lanjut
+                  {t("aksi.lanjut")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="mt-4 space-y-4">
               <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
-                Autore akan mengirim commit berisi Dockerfile/Jenkinsfile ke repo ini, lalu membuat
-                job Jenkins dan memicu build pertama.
+                {t("sambung.peringatan")}
               </p>
 
               <dl className="space-y-1 text-sm">
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Repo</dt>
+                  <dt className="w-28 text-muted">{t("sambung.labelRepo")}</dt>
                   <dd className="break-all font-mono text-ink">{repoBersih}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Nama</dt>
+                  <dt className="w-28 text-muted">{t("sambung.labelNama")}</dt>
                   <dd className="font-mono text-ink">{namaBersih}</dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-28 text-muted">Cabang</dt>
+                  <dt className="w-28 text-muted">{t("sambung.labelCabang")}</dt>
                   <dd className="font-mono text-ink">{branchBersih}</dd>
                 </div>
               </dl>
 
               <p className="text-sm text-muted">
-                Dockerfile/Jenkinsfile yang sudah ada di repo dipakai apa adanya — tidak ditimpa.
+                {t("sambung.berkasAda")}
               </p>
 
               <div>
                 <label htmlFor="cn-konfirmasi" className="text-sm font-medium text-ink">
-                  Ketik nama aplikasi untuk konfirmasi
+                  {t("aksi.ketikNama")}
                 </label>
                 <input
                   id="cn-konfirmasi"
@@ -231,13 +235,13 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
               {pending ? (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Sedang clone, push, dan mendaftarkan ke Jenkins… (maks 180 detik)
+                  {t("sambung.proses")}
                 </p>
               ) : null}
 
               <div className="flex justify-end gap-2">
                 <Button disabled={pending} onClick={() => setLangkah(1)}>
-                  Kembali
+                  {t("aksi.kembali")}
                 </Button>
                 <Button
                   variant="primary"
@@ -251,7 +255,7 @@ export function ConnectDialog({ onSelesai }: { onSelesai?: () => void }) {
                       Menyambungkan…
                     </>
                   ) : (
-                    "Sambungkan Sekarang"
+                    t("sambung.sekarang")
                   )}
                 </Button>
               </div>

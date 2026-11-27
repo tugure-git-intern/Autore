@@ -105,14 +105,14 @@ describe("DashboardOverview", () => {
     expect(screen.getByText("-")).toBeVisible();
     expect(screen.getByText("Waktu proses")).toBeVisible();
     expect(screen.getByText("Status Pipeline")).toBeVisible();
-    expect(screen.getByText("Repository Health")).toBeVisible();
+    expect(screen.getByText("Kesehatan Repo")).toBeVisible();
     expect(screen.getByText("10%")).toBeVisible();
-    expect(screen.getByText("10 repos · 1 gold · 0 silver · 9 bronze")).toBeVisible();
+    expect(screen.getByText("10 repo · 1 gold · 0 silver · 9 bronze")).toBeVisible();
     // Kartu kesehatan ditaruh paling kanan: setelah Status Pipeline.
     const statistik = screen.getByRole("region", { name: "Statistik" });
     expect(
       within(statistik).getByText("Status Pipeline").compareDocumentPosition(
-        within(statistik).getByText("Repository Health"),
+        within(statistik).getByText("Kesehatan Repo"),
       ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByText("a1b2c3d4e5f6")).toHaveClass("font-mono");

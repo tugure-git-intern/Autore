@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, History, RefreshCw } from "lucide-react";
 import { AuditTimeline } from "@/components/audit/audit-timeline";
+import { useBahasa } from "@/components/bahasa-provider";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { BATAS_AUDIT, fetchAuditLog, type AuditEntry } from "@/lib/audit-client";
 
 export default function AuditPage() {
+  const { t, tf } = useBahasa();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Pesan server dipakai apa adanya; cadangan diterjemahkan saat render.
+  const [error, setError] = useState<{ pesan: string } | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -18,7 +21,7 @@ export default function AuditPage() {
       const res = await fetchAuditLog();
       setEntries(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat memuat log audit.");
+      setError({ pesan: err instanceof Error ? err.message : "" });
     } finally {
       setLoading(false);
     }
@@ -35,7 +38,7 @@ export default function AuditPage() {
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Terjadi kesalahan saat memuat log audit.");
+          setError({ pesan: err instanceof Error ? err.message : "" });
           setLoading(false);
         }
       });
@@ -49,8 +52,8 @@ export default function AuditPage() {
     <div className="space-y-0">
       {/* Header Tab Card ala Google Cloud Console */}
       <PageTabHeader
-        title="Catatan Audit"
-        description="Jejak audit aktivitas operasional dan pipeline DevSecOps secara kronologis."
+        title={t("audit.judul")}
+        description={t("audit.deskripsi")}
         icon={History}
         action={
           <button
@@ -60,7 +63,7 @@ export default function AuditPage() {
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Muat Ulang
+            {t("audit.muatUlang")}
           </button>
         }
       />
@@ -72,14 +75,16 @@ export default function AuditPage() {
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-200">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-300" />
             <div className="text-sm">
-              <p className="font-semibold">Gagal memuat data audit log</p>
-              <p className="mt-1 text-xs text-rose-700 dark:text-rose-200">{error}</p>
+              <p className="font-semibold">{t("audit.gagalJudul")}</p>
+              <p className="mt-1 text-xs text-rose-700 dark:text-rose-200">
+                {error.pesan || t("audit.gagalUmum")}
+              </p>
               <button
                 type="button"
                 onClick={loadData}
                 className="mt-3 rounded border border-rose-300 bg-white px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-50 dark:border-rose-800 dark:bg-transparent dark:text-rose-200 dark:hover:bg-rose-950"
               >
-                Coba Lagi
+                {t("audit.cobaLagi")}
               </button>
             </div>
           </div>
@@ -114,7 +119,7 @@ export default function AuditPage() {
                 menyimpulkan log-nya memang cuma segitu. */}
             {entries.length > 0 ? (
               <p className="mt-2 text-xs text-gray-500 dark:text-[var(--color-muted)]">
-                Menampilkan maksimal {BATAS_AUDIT} aktivitas terbaru.
+                {tf("audit.batas", { n: BATAS_AUDIT })}
               </p>
             ) : null}
           </>

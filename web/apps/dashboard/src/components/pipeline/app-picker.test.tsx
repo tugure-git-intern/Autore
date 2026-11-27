@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import type { ApplicationRecord } from "@/lib/contracts";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import { AppPicker } from "./app-picker";
 
 const app = (ubah: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
@@ -84,4 +85,14 @@ test("ArrowDown memindahkan fokus ke baris berikutnya, End ke baris terakhir", (
 
   fireEvent.keyDown(baris()[2], { key: "Home" });
   expect(document.activeElement).toBe(baris()[0]);
+});
+test("daftar aplikasi ikut bahasa Inggris", () => {
+  render(
+    <BahasaProvider awal="en">
+      <AppPicker applications={[app()]} onPilih={() => {}} />
+    </BahasaProvider>,
+  );
+
+  expect(screen.getByRole("navigation", { name: "Application list" })).toBeVisible();
+  expect(baris()[0]).toHaveTextContent("No builds yet");
 });

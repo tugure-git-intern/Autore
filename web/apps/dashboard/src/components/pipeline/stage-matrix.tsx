@@ -1,5 +1,9 @@
+"use client";
+
+import { useBahasa } from "@/components/bahasa-provider";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { formatDuration } from "@/lib/format";
+import type { KunciTerjemah } from "@/lib/i18n";
 import type { StageResult, StageRow } from "@/lib/stages";
 
 /** Nama manusia untuk id tahap kanonik. Id tak dikenal tampil apa adanya. */
@@ -19,10 +23,10 @@ const TONE: Record<StageResult, BadgeTone> = {
   running: "amber",
 };
 
-const LABEL: Record<StageResult, string> = {
-  passed: "Lulus",
-  failed: "Gagal",
-  running: "Berjalan",
+const LABEL: Record<StageResult, KunciTerjemah> = {
+  passed: "status.lulus",
+  failed: "status.gagal",
+  running: "status.berjalan",
 };
 
 const WARNA: Record<StageResult, string> = {
@@ -60,15 +64,16 @@ export function StageMatrix({
   stages: readonly string[];
   pipelineStatus: string;
 }) {
+  const { t } = useBahasa();
   const isi = larik(rows, stages, pipelineStatus);
 
   if (isi.length === 0) {
-    return <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">Tidak ada data pipeline untuk ditampilkan.</p>;
+    return <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">{t("tahap.kosong")}</p>;
   }
 
   return (
     <ol
-      aria-label="Tahapan pipeline"
+      aria-label={t("tahap.aria")}
       tabIndex={0}
       className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:overflow-x-auto pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
     >
@@ -92,7 +97,7 @@ export function StageMatrix({
             </p>
             <div className="mt-2">
               <Badge tone={TONE[tahap.result]} role={tahap.result === "failed" ? "alert" : undefined}>
-                {LABEL[tahap.result]}
+                {t(LABEL[tahap.result])}
               </Badge>
             </div>
           </div>

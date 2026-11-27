@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useKirimToast } from "@/components/toast";
+import { useBahasa } from "@/components/bahasa-provider";
 import { runAction, goToLogin, type ActionKind } from "@/lib/actions-client";
 
 export interface ActionConfirmation {
@@ -44,6 +45,7 @@ export function ActionButton({
   const titleId = useId();
   const inputId = useId();
   const kirimToast = useKirimToast();
+  const { t, tf } = useBahasa();
 
   // Konfirmasi hanya aktif kalau nama diketik persis (tanpa trim): spasi di
   // ujung tetap dianggap belum cocok, sama seperti pengecekan server.
@@ -79,7 +81,8 @@ export function ActionButton({
     );
     setPending(false);
     mengirim.current = false;
-    kirimToast(outcome.message, outcome.ok ? "sukses" : "gagal");
+    const pesan = outcome.kunci ? tf(outcome.kunci, outcome.isi ?? {}) : outcome.message;
+    kirimToast(pesan, outcome.ok ? "sukses" : "gagal");
     onDone?.();
     // Pindah halaman setelah pesan terkirim: user sempat membaca alasannya.
     if (outcome.redirectTo) goToLogin(outcome.redirectTo);
@@ -101,7 +104,7 @@ export function ActionButton({
         {pending ? (
           <>
             <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-            Menjalankan…
+            {t("aksi.menjalankan")}
           </>
         ) : (
           label
@@ -132,11 +135,11 @@ export function ActionButton({
               {confirm.requireTypedName !== undefined ? (
                 <div className="mt-3">
                   <label htmlFor={inputId} className="block text-xs text-gray-700 dark:text-[var(--color-muted)]">
-                    Ketik{" "}
+                    {t("aksi.ketikPra")}{" "}
                     <span className="font-mono font-semibold text-gray-900 dark:text-[var(--color-ink)]">
                       {confirm.requireTypedName}
                     </span>{" "}
-                    untuk konfirmasi
+                    {t("aksi.ketikPasca")}
                   </label>
                   <input
                     id={inputId}
@@ -144,13 +147,13 @@ export function ActionButton({
                     onChange={(event) => setTyped(event.target.value)}
                     // autoComplete off: nama app bukan data yang mau diisi browser.
                     autoComplete="off"
-                    aria-label="Ketik nama aplikasi untuk konfirmasi"
+                    aria-label={t("aksi.ketikNama")}
                     className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)]"
                   />
                 </div>
               ) : null}
               <div className="mt-4 flex justify-end gap-2">
-                <Button onClick={() => setOpen(false)}>Batal</Button>
+                <Button onClick={() => setOpen(false)}>{t("aksi.batal")}</Button>
                 <Button
                   variant="primary"
                   disabled={!namaCocok}

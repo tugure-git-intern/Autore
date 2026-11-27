@@ -9,8 +9,12 @@ import {
 import { ReleaseKeputusan } from "./release-keputusan";
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "./ui/badge";
+import { useBahasa } from "./bahasa-provider";
+import { isiPola, terjemah, type Bahasa, type KunciTerjemah } from "@/lib/i18n";
 
 const MAKS_TERLIHAT = 3;
+
+type TF = (kunci: KunciTerjemah, isi: Record<string, string | number>) => string;
 
 function BoardCard({ testId, children }: { testId?: string; children: ReactNode }) {
   return (
@@ -23,19 +27,19 @@ function BoardCard({ testId, children }: { testId?: string; children: ReactNode 
   );
 }
 
-const LABEL_RELEASE: Record<StatusRelease, string> = {
-  draft: "Draf",
-  build_berjalan: "Build Berjalan",
-  siap_staging: "Siap Staging",
-  staging_berjalan: "Staging Berjalan",
-  menunggu_persetujuan: "Menunggu Persetujuan",
-  disetujui: "Disetujui",
-  production_berjalan: "Production Berjalan",
-  aktif: "Aktif",
-  digantikan: "Digantikan",
-  gagal: "Gagal",
-  ditolak: "Ditolak",
-  rolled_back: "Dikembalikan",
+const KUNCI_RELEASE: Record<StatusRelease, KunciTerjemah> = {
+  draft: "rilis.draf",
+  build_berjalan: "rilis.buildBerjalan",
+  siap_staging: "rilis.siapStaging",
+  staging_berjalan: "rilis.stagingBerjalan",
+  menunggu_persetujuan: "rilis.menungguPersetujuan",
+  disetujui: "rilis.disetujui",
+  production_berjalan: "rilis.productionBerjalan",
+  aktif: "rilis.aktif",
+  digantikan: "rilis.digantikan",
+  gagal: "rilis.gagal",
+  ditolak: "rilis.ditolak",
+  rolled_back: "rilis.rolledBack",
 };
 
 /** Tautan commit hanya jika pipeline merekam URL repo; event lama tidak punya. */
@@ -49,28 +53,34 @@ function nomorBuild(id: string): string {
   return id.slice(id.lastIndexOf(":") + 1);
 }
 
+const TF_ID: TF = (kunci, isi) => isiPola(terjemah("id", kunci), isi);
+
 /**
  * Umur antrean approval dalam bahasa manusia. Dihitung dari waktu event staging
  * sehat, bukan waktu render, supaya angkanya sama di semua penonton.
  */
-export function umurPersetujuan(sejak: string | null, sekarang = Date.now()): string | null {
+export function umurPersetujuan(
+  sejak: string | null,
+  sekarang = Date.now(),
+  tf: TF = TF_ID,
+): string | null {
   if (!sejak) return null;
   const mulai = Date.parse(sejak);
   if (Number.isNaN(mulai)) return null;
   const menit = Math.floor((sekarang - mulai) / 60_000);
-  if (menit < 1) return "baru saja";
-  if (menit < 60) return `${menit} menit`;
+  if (menit < 1) return tf("rilis.umurBaru", {});
+  if (menit < 60) return tf("rilis.umurMenit", { n: menit });
   const jam = Math.floor(menit / 60);
-  if (jam < 24) return `${jam} jam`;
-  return `${Math.floor(jam / 24)} hari`;
+  if (jam < 24) return tf("rilis.umurJam", { n: jam });
+  return tf("rilis.umurHari", { n: Math.floor(jam / 24) });
 }
 
 /** Siapa yang perlu bergerak pada status ini; status tenang tidak diberi label. */
-const TINDAKAN: Partial<Record<StatusRelease, string>> = {
-  menunggu_persetujuan: "Perlu QA/Admin menyetujui",
-  gagal: "Perlu developer memperbaiki build",
-  ditolak: "Perlu developer revisi lalu build ulang",
-  rolled_back: "Perlu developer memeriksa penyebab rollback",
+const TINDAKAN: Partial<Record<StatusRelease, KunciTerjemah>> = {
+  menunggu_persetujuan: "rilis.tindakanMenunggu",
+  gagal: "rilis.tindakanGagal",
+  ditolak: "rilis.tindakanDitolak",
+  rolled_back: "rilis.tindakanRolledBack",
 };
 
 const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
@@ -88,17 +98,18 @@ const TONE_RELEASE: Record<StatusRelease, BadgeTone> = {
   rolled_back: "gray",
 };
 
-const FORMAT_WAKTU = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "Asia/Jakarta",
-});
-
-function waktuBuild(iso: string): string {
+function waktuBuild(iso: string, bahasa: Bahasa): string {
   const waktu = Date.parse(iso);
-  return Number.isNaN(waktu) ? "—" : FORMAT_WAKTU.format(waktu).replace(",", "");
+  if (Number.isNaN(waktu)) return "—";
+  return new Intl.DateTimeFormat(bahasa === "id" ? "id-ID" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  })
+    .format(waktu)
+    .replace(",", "");
 }
 
 function ringkasDigest(digest: string | null): string {
@@ -139,11 +150,11 @@ function ReleaseRow({
   pengganti: string | null;
   role: Role | null;
 }) {
+  const { t, tf, bahasa } = useBahasa();
   const commitUrl = tautanCommit(release.repo_url, release.commit_sha);
-  const tindakan = TINDAKAN[release.status];
-  const umur = release.status === "menunggu_persetujuan"
-    ? umurPersetujuan(release.menunggu_sejak)
-    : null;
+  const kunciTindakan = TINDAKAN[release.status];
+  const umur =
+    release.status === "menunggu_persetujuan" ? umurPersetujuan(release.menunggu_sejak) : null;
   // Rilis pengganti tidak bisa disetujui, dan umur antreannya sudah tidak relevan.
   const tampilkanTindakan = !(pengganti && release.status === "menunggu_persetujuan");
   const tampilkanUmur = tampilkanTindakan && umur !== null;
@@ -178,7 +189,7 @@ function ReleaseRow({
           ) : null}
         </div>
         <Badge tone={TONE_RELEASE[release.status]} className="shrink-0">
-          {LABEL_RELEASE[release.status]}
+          {t(KUNCI_RELEASE[release.status])}
         </Badge>
       </div>
 
@@ -188,42 +199,44 @@ function ReleaseRow({
         title={release.commit_subject ?? undefined}
       >
         {release.commit_subject ?? (
-          <span className="font-normal italic text-muted">Tanpa pesan commit</span>
+          <span className="font-normal italic text-muted">{t("rilis.tanpaPesanCommit")}</span>
         )}
       </p>
 
       <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
-        <span>
-          Dibuat oleh <span data-testid="release-dibuat-oleh">{release.dibuat_oleh}</span>
+        <span data-testid="release-dibuat-oleh">
+          {tf("rilis.dibuatOleh", { nama: release.dibuat_oleh })}
         </span>
         <span aria-hidden="true">·</span>
         {release.approved_by ? (
-          <span>
-            disetujui <span data-testid="release-approved-by">{release.approved_by}</span>
+          <span data-testid="release-approved-by">
+            {tf("rilis.disetujuiOleh", { nama: release.approved_by })}
           </span>
         ) : (
-          <span data-testid="release-approved-by">belum disetujui</span>
+          <span data-testid="release-approved-by">{t("rilis.belumDisetujui")}</span>
         )}
         <span aria-hidden="true">·</span>
         <time data-testid="release-waktu" dateTime={release.dibuat_pada}>
-          {waktuBuild(release.dibuat_pada)}
+          {waktuBuild(release.dibuat_pada, bahasa)}
         </time>
         {pengganti ? (
           <>
             <span aria-hidden="true">·</span>
-            <span data-testid="release-digantikan">Digantikan build {nomorBuild(pengganti)}</span>
+            <span data-testid="release-digantikan">
+              {tf("rilis.digantikanBuild", { n: nomorBuild(pengganti) })}
+            </span>
           </>
         ) : null}
-        {tampilkanTindakan && (tindakan || tampilkanUmur) ? (
+        {tampilkanTindakan && (kunciTindakan || tampilkanUmur) ? (
           <>
-            {tindakan ? (
+            {kunciTindakan ? (
               <>
                 <span aria-hidden="true">·</span>
                 <span
                   data-testid="release-tindakan"
                   className="font-medium text-amber-700 dark:text-amber-300"
                 >
-                  {tindakan}
+                  {t(kunciTindakan)}
                 </span>
               </>
             ) : null}
@@ -231,7 +244,7 @@ function ReleaseRow({
               <>
                 <span aria-hidden="true">·</span>
                 <span data-testid="release-umur" className="text-amber-700 dark:text-amber-300">
-                  menunggu {umur}
+                  {tf("rilis.menungguUmur", { umur })}
                 </span>
               </>
             ) : null}
@@ -240,7 +253,7 @@ function ReleaseRow({
       </p>
       {release.status === "ditolak" && release.alasan ? (
         <p data-testid="release-alasan" className="text-xs text-muted">
-          Alasan penolakan: {release.alasan}
+          {tf("rilis.alasanPenolakan", { alasan: release.alasan })}
         </p>
       ) : null}
 
@@ -251,7 +264,7 @@ function ReleaseRow({
           <code
             data-testid="release-digest"
             title={release.image_digest ?? undefined}
-            aria-label={release.image_digest ?? "digest belum tersedia"}
+            aria-label={release.image_digest ?? t("rilis.digestBelum")}
             className="min-w-0 truncate font-mono"
           >
             {ringkasDigest(release.image_digest)}
@@ -286,6 +299,7 @@ export function ReleaseEnvironmentBoard({
   /** Role efektif penampil; qa ke atas boleh melihat tombol approval. */
   role?: Role | null;
 }) {
+  const { t, tf } = useBahasa();
   // Catatan historis yang tidak lagi ditunjuk environment tetap menjadi ledger,
   // tetapi hanya deployment aktif yang memengaruhi status dashboard.
   const activeDeploymentIds = new Set(
@@ -296,8 +310,12 @@ export function ReleaseEnvironmentBoard({
   const inkonsisten = deployments.filter((deployment) => {
     if (!activeDeploymentIds.has(deployment.id)) return false;
     const release = releases.find((item) => item.id === deployment.release_id);
-    return !release || !release.image_digest || !deployment.image_digest
-      || release.image_digest !== deployment.image_digest;
+    return (
+      !release ||
+      !release.image_digest ||
+      !deployment.image_digest ||
+      release.image_digest !== deployment.image_digest
+    );
   });
 
   const baris = releases.map((release) => ({
@@ -308,9 +326,11 @@ export function ReleaseEnvironmentBoard({
   const sisa = baris.slice(MAKS_TERLIHAT);
 
   return (
-    <section aria-label={`Environment ${appName}`} className="space-y-4">
+    <section aria-label={tf("rilis.ariaEnvironment", { app: appName })} className="space-y-4">
       <header>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Environment</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+          {t("rilis.judulEnvironment")}
+        </p>
         <h2 className="text-lg font-semibold">{appName}</h2>
       </header>
       {inkonsisten.length > 0 ? (
@@ -318,7 +338,7 @@ export function ReleaseEnvironmentBoard({
           data-testid="deployment-inkonsisten"
           className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
         >
-          {inkonsisten.length} deployment aktif tidak cocok dengan release-nya (digest kosong atau berbeda):{" "}
+          {tf("rilis.inkonsisten", { n: inkonsisten.length })}{" "}
           <span className="font-mono text-xs">{inkonsisten.map((item) => item.id).join(", ")}</span>
         </div>
       ) : null}
@@ -328,33 +348,39 @@ export function ReleaseEnvironmentBoard({
           return (
             <BoardCard key={environment.id} testId={`environment-${environment.nama}`}>
               <div className="flex items-center justify-between gap-3">
-                <h3 className="font-medium">{environment.nama === "staging" ? "Staging" : "Production"}</h3>
+                <h3 className="font-medium">
+                  {environment.nama === "staging" ? "Staging" : "Production"}
+                </h3>
                 {environment.status_konfigurasi === "belum_dikonfigurasi" ? (
-                  <Badge tone="gray">Belum dikonfigurasi</Badge>
+                  <Badge tone="gray">{t("rilis.belumDikonfigurasi")}</Badge>
                 ) : aktif?.status === "sehat" ? (
-                  <Badge tone="green">{environment.nama === "production" ? "Aktif" : "Sehat"}</Badge>
+                  <Badge tone="green">
+                    {environment.nama === "production" ? t("rilis.aktif") : t("rilis.sehat")}
+                  </Badge>
                 ) : (
-                  <Badge tone="gray">Belum ada deployment</Badge>
+                  <Badge tone="gray">{t("rilis.belumAdaDeployment")}</Badge>
                 )}
               </div>
               {environment.status_konfigurasi === "belum_dikonfigurasi" ? (
-                <p className="mt-3 text-sm text-muted">Target production belum diisi oleh admin.</p>
+                <p className="mt-3 text-sm text-muted">{t("rilis.targetKosong")}</p>
               ) : (
-                <p className="mt-3 text-sm text-muted">Target: {environment.target || "-"}</p>
+                <p className="mt-3 text-sm text-muted">
+                  {tf("rilis.target", { target: environment.target || "-" })}
+                </p>
               )}
             </BoardCard>
           );
         })}
       </div>
       <BoardCard>
-        <h3 className="font-medium">Release Terbaru</h3>
-        <DaftarRelease items={terlihat} label="Release terbaru" role={role} />
+        <h3 className="font-medium">{t("rilis.ptReleaseTerbaru")}</h3>
+        <DaftarRelease items={terlihat} label={t("rilis.releaseTerbaruAria")} role={role} />
         {sisa.length > 0 ? (
           <details className="border-t border-gray-200 pt-3 dark:border-[var(--color-line)]">
             <summary className="cursor-pointer select-none text-xs font-medium text-muted hover:text-ink">
-              Lihat semua {releases.length} rilis
+              {tf("rilis.lihatSemua", { n: releases.length })}
             </summary>
-            <DaftarRelease items={sisa} label="Release sebelumnya" role={role} />
+            <DaftarRelease items={sisa} label={t("rilis.releaseSebelumnyaAria")} role={role} />
           </details>
         ) : null}
       </BoardCard>

@@ -3,14 +3,15 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, Boxes, ExternalLink } from "lucide-react";
 import { ActionButton } from "@/components/actions/action-button";
+import { useBahasa } from "@/components/bahasa-provider";
+import { ReleasePanel } from "@/components/release-panel";
+import { StatusBadge, type AppStatus } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import type { ActivePipeline, ApplicationRecord, DashboardStatus, RunRecord } from "@/lib/contracts";
+import { type ActivePipeline, type ApplicationRecord, type DashboardStatus, type RunRecord } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { formatDuration, relativeTime, shortSha } from "@/lib/format";
 import { cocokPipeline } from "@/lib/pilih-app";
-import { StatusBadge, type AppStatus } from "../status-badge";
-import { ReleasePanel } from "@/components/release-panel";
 import { WorkspacePipeline } from "./workspace-pipeline";
 
 const MAKS_RUN = 5;
@@ -22,14 +23,6 @@ const IKON: Record<string, string> = {
   pending: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/60 dark:text-yellow-300",
 };
 
-// "Jalankan Ulang" memakai jalur deploy: commit + push lokal lalu trigger Jenkins.
-const RERUN_CONFIRM = {
-  title: "Jalankan ulang pipeline?",
-  warning:
-    "Tindakan ini akan melakukan commit dan push kode lokal Anda ke repository, lalu memicu build Jenkins.",
-  confirmLabel: "Ya, jalankan ulang",
-};
-
 function Fakta({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-md border border-gray-200 bg-white p-3 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]">
@@ -38,11 +31,6 @@ function Fakta({ label, children }: { label: string; children: ReactNode }) {
     </div>
   );
 }
-
-const jumlahTemuan = (jumlah: number) => (jumlah === 0 ? "Tidak ada temuan" : `${jumlah} temuan keamanan`);
-
-const statusDeploy = (deployed: boolean | undefined) =>
-  deployed === undefined ? "—" : deployed ? "Terpasang" : "Belum terpasang";
 
 /** Detail satu aplikasi. Semuanya presentational — data datang dari halaman. */
 export function AppDetail({
@@ -64,11 +52,25 @@ export function AppDetail({
   onDaftar?: () => void;
   onSelesai?: () => void;
 }) {
+  const { bahasa, t, tf } = useBahasa();
   const riwayat = runs.filter((run) => run.app === app.id).slice(0, MAKS_RUN);
   const sedangAktif = aktif.filter((baris) => baris.app === app.id);
   const cocok = cocokPipeline(pipeline, app, applications);
   const jobUrl = riwayat[0]?.url ?? "";
   const buildGagal = riwayat.find((run) => run.status === "failed");
+
+  // "Jalankan Ulang" memakai jalur deploy: commit + push lokal lalu trigger Jenkins.
+  const rerunConfirm = {
+    title: t("detail.rerunJudul"),
+    warning: t("detail.rerunPeringatan"),
+    confirmLabel: t("detail.rerunKonfirmasi"),
+  };
+
+  const jumlahTemuan = (jumlah: number) =>
+    jumlah === 0 ? t("detail.tidakAdaTemuan") : tf("detail.temuanKeamanan", { n: jumlah });
+
+  const statusDeploy = (deployed: boolean | undefined) =>
+    deployed === undefined ? "—" : deployed ? t("detail.terpasang") : t("detail.belumTerpasang");
 
   return (
     <div className="space-y-4">
@@ -81,7 +83,7 @@ export function AppDetail({
               className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Daftar aplikasi
+              {t("detail.daftarAplikasi")}
             </button>
           ) : null}
           <span
@@ -93,17 +95,17 @@ export function AppDetail({
             <Boxes className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-ink">Detail Pipeline</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-ink">{t("detail.judul")}</h1>
             <p className="mt-1 text-sm text-muted">
               {app.name} · {app.id}
             </p>
           </div>
         </div>
         <ActionButton
-          label="Jalankan Ulang"
+          label={t("detail.jalankanUlang")}
           action="deploy"
           app={app.id}
-          confirm={RERUN_CONFIRM}
+          confirm={rerunConfirm}
           onDone={onSelesai}
         />
       </div>
@@ -118,12 +120,12 @@ export function AppDetail({
           {sedangAktif.map((baris) => (
             <span key={`${baris.app}#${baris.number}`} className="flex items-center gap-2">
               <Badge tone={baris.status === "queued" ? "yellow" : "blue"}>
-                {baris.status === "queued" ? "Menunggu" : "Berjalan"}
+                {baris.status === "queued" ? t("detail.menunggu") : t("detail.berjalan")}
               </Badge>
-              {baris.status === "queued" ? "Sedang menunggu di antrean Jenkins" : "Sedang dibangun sekarang"}
+              {baris.status === "queued" ? t("detail.antrean") : t("detail.dibangun")}
               {baris.url ? (
                 <a href={baris.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-300">
-                  Buka Jenkins
+                  {t("detail.bukaJenkins")}
                 </a>
               ) : null}
             </span>
@@ -132,27 +134,27 @@ export function AppDetail({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Fakta label="Build terakhir">
-          {app.last_build ? relativeTime(app.last_build) : "Belum ada build"}
+        <Fakta label={t("detail.buildTerakhir")}>
+          {app.last_build ? relativeTime(app.last_build, Date.now(), bahasa) : t("detail.belumBuild")}
         </Fakta>
-        <Fakta label="Commit">
+        <Fakta label={t("detail.commit")}>
           <span className="font-mono">{shortSha(app.commit_sha ?? "")}</span>
         </Fakta>
-        <Fakta label="Penulis">{app.author?.trim() || "—"}</Fakta>
-        <Fakta label="Keamanan">{jumlahTemuan(app.security_issues)}</Fakta>
-        <Fakta label="Deploy">{statusDeploy(app.deployed)}</Fakta>
-        <Fakta label="Status">
+        <Fakta label={t("detail.penulis")}>{app.author?.trim() || "—"}</Fakta>
+        <Fakta label={t("detail.keamanan")}>{jumlahTemuan(app.security_issues)}</Fakta>
+        <Fakta label={t("detail.deploy")}>{statusDeploy(app.deployed)}</Fakta>
+        <Fakta label={t("detail.status")}>
           <StatusBadge status={app.status as AppStatus} />
         </Fakta>
       </div>
 
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-ink">Riwayat Build</h2>
-        <p className="mt-1 text-xs text-muted">Lima build terakhir aplikasi ini dari Jenkins.</p>
+        <h2 className="text-sm font-semibold text-ink">{t("riwayat.judul")}</h2>
+        <p className="mt-1 text-xs text-muted">{t("detail.riwayatSub")}</p>
         {riwayat.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">Belum ada build untuk aplikasi ini</p>
+          <p className="mt-3 text-sm text-muted">{t("detail.riwayatKosong")}</p>
         ) : (
-          <ul aria-label="Riwayat build aplikasi ini" className="mt-3 divide-y divide-gray-100 dark:divide-[var(--color-line)]">
+          <ul aria-label={t("detail.riwayatAria")} className="mt-3 divide-y divide-gray-100 dark:divide-[var(--color-line)]">
             {riwayat.map((run) => (
               <li
                 key={`${run.app}#${run.number}`}
@@ -171,7 +173,9 @@ export function AppDetail({
                 <span className="font-mono text-xs text-muted">{shortSha(run.commit_sha)}</span>
                 <span className="text-gray-600 dark:text-[var(--color-muted)]">{dash(run.author)}</span>
                 <span className="text-gray-500 dark:text-[var(--color-muted)]">{formatDuration(run.duration_ms)}</span>
-                <span className="text-gray-500 dark:text-[var(--color-muted)]">{relativeTime(run.started_at)}</span>
+                <span className="text-gray-500 dark:text-[var(--color-muted)]">
+                  {relativeTime(run.started_at, Date.now(), bahasa)}
+                </span>
               </li>
             ))}
           </ul>
@@ -186,12 +190,13 @@ export function AppDetail({
         <Card className="p-5">
           <div data-testid="detail-gagal">
             <p role="alert" className="text-sm font-medium text-red-700 dark:text-red-300">
-              Pipeline gagal, cek log Jenkins.
+              {t("detail.gagalJudul")}
             </p>
             <p className="mt-1 text-sm text-muted">
-              Build terakhir <span className="font-medium">{app.name}</span> tidak lulus
-              {buildGagal ? ` (build #${buildGagal.number})` : ""}. Tahapan dan log workspace tidak
-              ditampilkan karena commit terakhir di workspace bukan milik aplikasi ini.
+              {tf("detail.gagalIsi", {
+                app: app.name,
+                build: buildGagal ? tf("detail.buildKe", { n: buildGagal.number }) : "",
+              })}
             </p>
             {buildGagal?.url ? (
               <a
@@ -201,7 +206,7 @@ export function AppDetail({
                 className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                Buka log build #{buildGagal.number} di Jenkins
+                {tf("detail.bukaLogBuild", { n: buildGagal.number })}
               </a>
             ) : jobUrl ? (
               <a
@@ -211,7 +216,7 @@ export function AppDetail({
                 className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                Buka job Jenkins {app.name}
+                {tf("detail.bukaJob", { app: app.name })}
               </a>
             ) : null}
           </div>
@@ -219,11 +224,10 @@ export function AppDetail({
       ) : (
         <Card className="p-5">
           <p className="text-sm text-ink">
-            Pipeline terakhir di workspace ini bukan milik {app.name} (commit{" "}
+            {tf("detail.bukanMilikPra", { app: app.name })}{" "}
             <span className="font-mono">{shortSha(pipeline.commit_sha)}</span> vs{" "}
             <span className="font-mono">{shortSha(app.commit_sha ?? "")}</span>
-            ). Itu wajar kalau build terakhir dijalankan dari repo lain; tahapan dan lognya tidak
-            ditampilkan di sini supaya tidak tertukar dengan build {app.name} sendiri.
+            {tf("detail.bukanMilikPasca", { app: app.name })}
           </p>
           {jobUrl ? (
             <a
@@ -233,7 +237,7 @@ export function AppDetail({
               className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline dark:text-blue-300"
             >
               <ExternalLink className="h-4 w-4" aria-hidden="true" />
-              Buka job Jenkins {app.name}
+              {tf("detail.bukaJob", { app: app.name })}
             </a>
           ) : null}
         </Card>

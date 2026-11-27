@@ -3,10 +3,12 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { toSlices } from "@/lib/charts";
 import type { RunTotals } from "@/lib/contracts";
+import { useBahasa } from "../bahasa-provider";
 
 /** Donut hasil build. Tiga irisan selalu ada supaya warna legenda tidak berpindah. */
 export function RunDistribution({ totals }: { totals: RunTotals }) {
-  const irisan = toSlices(totals);
+  const { bahasa, t } = useBahasa();
+  const irisan = toSlices(totals, bahasa);
   const total = totals.passed + totals.failed + totals.running;
 
   return (
@@ -37,7 +39,7 @@ export function RunDistribution({ totals }: { totals: RunTotals }) {
           >
             {total}
           </span>
-          <span className="text-xs text-gray-500 dark:text-[#c9d1d9]">total build</span>
+          <span className="text-xs text-gray-500 dark:text-[#c9d1d9]">{t("grafik.totalBuild")}</span>
         </div>
       </div>
 

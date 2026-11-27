@@ -8,13 +8,22 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { BAHASA_BAWAAN, COOKIE_BAHASA, terjemah, type Bahasa, type KunciTerjemah } from "@/lib/i18n";
+import {
+  BAHASA_BAWAAN,
+  COOKIE_BAHASA,
+  isiPola,
+  terjemah,
+  type Bahasa,
+  type KunciTerjemah,
+} from "@/lib/i18n";
 
 type KonteksBahasa = {
   bahasa: Bahasa;
   setBahasa: (baru: Bahasa) => void;
   /** Terjemahan satu kunci di bahasa aktif. */
   t: (kunci: KunciTerjemah) => string;
+  /** Sama seperti `t()`, tapi mengisi placeholder `{nama}` di dalam kalimat. */
+  tf: (kunci: KunciTerjemah, isi: Record<string, string | number>) => string;
 };
 
 /**
@@ -25,6 +34,7 @@ const Konteks = createContext<KonteksBahasa>({
   bahasa: BAHASA_BAWAAN,
   setBahasa: () => {},
   t: (kunci) => terjemah(BAHASA_BAWAAN, kunci),
+  tf: (kunci, isi) => isiPola(terjemah(BAHASA_BAWAAN, kunci), isi),
 });
 
 export function useBahasa(): KonteksBahasa {
@@ -46,7 +56,12 @@ export function BahasaProvider({ awal, children }: { awal: Bahasa; children: Rea
   }, []);
 
   const nilai = useMemo<KonteksBahasa>(
-    () => ({ bahasa, setBahasa, t: (kunci) => terjemah(bahasa, kunci) }),
+    () => ({
+      bahasa,
+      setBahasa,
+      t: (kunci) => terjemah(bahasa, kunci),
+      tf: (kunci, isi) => isiPola(terjemah(bahasa, kunci), isi),
+    }),
     [bahasa, setBahasa],
   );
 

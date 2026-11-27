@@ -2,6 +2,7 @@
 
 import { ActivePipelines } from "./active-pipelines";
 import { useStatus } from "./app-shell";
+import { useBahasa } from "./bahasa-provider";
 import { RunDistribution } from "./charts/run-distribution";
 import { RunTrends } from "./charts/run-trends";
 import { RecentRuns } from "./recent-runs";
@@ -20,6 +21,7 @@ const TOTALS_KOSONG = { passed: 0, failed: 0, running: 0 };
  */
 export function OverviewAnalytics() {
   const { runs: hasilRuns, aktif } = useStatus();
+  const { t } = useBahasa();
 
   const data = hasilRuns.hasil?.data;
   const daily = data?.daily ?? [];
@@ -33,12 +35,12 @@ export function OverviewAnalytics() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2">
-          <ChartCard title="Tren 7 Hari" subtitle="Build lulus dan gagal per hari">
+          <ChartCard title={t("grafik.tren")} subtitle={t("grafik.trenSub")}>
             {hasilRuns.memuat ? <Skeleton className="h-[220px]" /> : <RunTrends daily={daily} />}
           </ChartCard>
         </div>
         <div className="md:col-span-1">
-          <ChartCard title="Distribusi" subtitle="Hasil build dalam 7 hari">
+          <ChartCard title={t("grafik.distribusi")} subtitle={t("grafik.distribusiSub")}>
             {hasilRuns.memuat ? <Skeleton className="h-[180px]" /> : <RunDistribution totals={totals} />}
           </ChartCard>
         </div>

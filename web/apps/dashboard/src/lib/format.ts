@@ -1,14 +1,27 @@
 /** Waktu dan durasi untuk tabel Recent Runs. Angka yang belum ada jadi "—", bukan nol palsu. */
 
-export function relativeTime(iso: string, now: number = Date.now()): string {
+import { BAHASA_BAWAAN, type Bahasa } from "./i18n";
+
+/** Inggris dan Indonesia beda urutan kata, jadi frasanya dipisah, bukan ditempel. */
+const SATUAN_RELATIF = {
+  id: { baruSaja: "baru saja", menit: "menit lalu", jam: "jam lalu", hari: "hari lalu" },
+  en: { baruSaja: "just now", menit: "min ago", jam: "h ago", hari: "d ago" },
+} as const;
+
+export function relativeTime(
+  iso: string,
+  now: number = Date.now(),
+  bahasa: Bahasa = BAHASA_BAWAAN,
+): string {
   const waktu = Date.parse(iso);
   if (Number.isNaN(waktu)) return "—";
 
+  const satuan = SATUAN_RELATIF[bahasa];
   const detik = Math.max(0, Math.floor((now - waktu) / 1000));
-  if (detik < 60) return "baru saja";
-  if (detik < 3600) return `${Math.floor(detik / 60)} menit lalu`;
-  if (detik < 86_400) return `${Math.floor(detik / 3600)} jam lalu`;
-  return `${Math.floor(detik / 86_400)} hari lalu`;
+  if (detik < 60) return satuan.baruSaja;
+  if (detik < 3600) return `${Math.floor(detik / 60)} ${satuan.menit}`;
+  if (detik < 86_400) return `${Math.floor(detik / 3600)} ${satuan.jam}`;
+  return `${Math.floor(detik / 86_400)} ${satuan.hari}`;
 }
 
 export function formatDuration(ms: number): string {

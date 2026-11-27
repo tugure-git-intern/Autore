@@ -11,6 +11,13 @@ describe("relativeTime", () => {
     expect(relativeTime("2026-11-01T10:00:00Z", SEKARANG)).toBe("3 hari lalu");
   });
 
+  it("memakai satuan Inggris saat bahasa aktif en", () => {
+    expect(relativeTime("2026-11-04T09:59:40Z", SEKARANG, "en")).toBe("just now");
+    expect(relativeTime("2026-11-04T09:55:00Z", SEKARANG, "en")).toBe("5 min ago");
+    expect(relativeTime("2026-11-04T07:00:00Z", SEKARANG, "en")).toBe("3 h ago");
+    expect(relativeTime("2026-11-01T10:00:00Z", SEKARANG, "en")).toBe("3 d ago");
+  });
+
   it("tidak pernah menghasilkan waktu negatif", () => {
     expect(relativeTime("2026-11-04T10:01:00Z", SEKARANG)).toBe("baru saja");
   });

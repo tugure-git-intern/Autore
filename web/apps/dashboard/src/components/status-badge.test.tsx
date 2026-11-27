@@ -6,6 +6,7 @@ import { Folder } from "lucide-react";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
 import { StatusProvider } from "./app-shell";
+import { BahasaProvider } from "./bahasa-provider";
 import { EmptyApplications } from "./empty-applications";
 import { Sidebar } from "./sidebar";
 import { StatCard, type StatTone } from "./stat-card";
@@ -35,6 +36,18 @@ describe("StatusBadge", () => {
   it("flags failures with an alert role", () => {
     render(<StatusBadge status="failed" />);
     expect(screen.getByRole("alert")).toHaveTextContent("Gagal");
+  });
+
+  it("ikut bahasa aktif dan tetap membawa warna yang sama", () => {
+    render(
+      <BahasaProvider awal="en">
+        <StatusBadge status="passed" />
+        <StatusBadge status="failed" />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByText("Passed")).toHaveClass("bg-green-100", "text-green-700");
+    expect(screen.getByText("Failed")).toHaveClass("bg-red-100", "text-red-700");
   });
 });
 
@@ -120,6 +133,15 @@ describe("EmptyApplications", () => {
   it("states the registry is empty without inventing data", () => {
     render(<EmptyApplications />);
     expect(screen.getByText("Belum ada aplikasi yang didaftarkan.")).toBeVisible();
+  });
+
+  it("menerjemahkan kalimat kosong di mode Inggris", () => {
+    render(
+      <BahasaProvider awal="en">
+        <EmptyApplications />
+      </BahasaProvider>,
+    );
+    expect(screen.getByText("No applications registered yet.")).toBeVisible();
   });
 
   it("adds no second border box inside the already-bordered panel", () => {

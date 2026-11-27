@@ -39,6 +39,12 @@ describe("toSlices", () => {
     expect(irisan).toHaveLength(3);
     expect(irisan.every((s) => s.value === 0)).toBe(true);
   });
+
+  it("nama irisan mengikuti bahasa aktif", () => {
+    const irisan = toSlices({ passed: 5, failed: 2, running: 1 }, "en");
+
+    expect(irisan.map((s) => s.name)).toEqual(["Passed", "Failed", "Running"]);
+  });
 });
 
 describe("toRadar", () => {

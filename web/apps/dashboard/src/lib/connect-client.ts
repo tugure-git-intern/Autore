@@ -20,6 +20,8 @@ export function namaRepo(url: string): string {
   return cocok ? cocok[2] : "";
 }
 
+import type { KunciTerjemah } from "./i18n";
+
 export interface PermintaanConnect {
   repo: string;
   nama: string;
@@ -29,6 +31,9 @@ export interface PermintaanConnect {
 export interface HasilConnect {
   ok: boolean;
   message: string;
+  /** Kunci kamus; `message` tetap cadangan teks mentah. */
+  kunci?: KunciTerjemah;
+  isi?: Record<string, string | number>;
   /** URL repo GitHub yang dibaca CLI dari keluarannya. */
   repo?: string;
   /** Peringatan CLI (mis. repo belum punya endpoint /health); connect tetap sukses. */
@@ -50,7 +55,11 @@ export async function runConnect(permintaan: PermintaanConnect): Promise<HasilCo
       body: JSON.stringify({ repo, nama, branch }),
     });
   } catch {
-    return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };
+    return {
+      ok: false,
+      message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi.",
+      kunci: "aksi.gagalHubungi",
+    };
   }
 
   if (response.ok) {
@@ -60,6 +69,8 @@ export async function runConnect(permintaan: PermintaanConnect): Promise<HasilCo
     return {
       ok: true,
       message: `Repo "${nama}" tersambung. Build pertama sedang berjalan di Jenkins.`,
+      kunci: "aksi.sambungSukses",
+      isi: { nama },
       ...(payload?.repo ? { repo: payload.repo } : {}),
       ...(payload?.peringatan ? { peringatan: payload.peringatan } : {}),
     };
@@ -70,6 +81,7 @@ export async function runConnect(permintaan: PermintaanConnect): Promise<HasilCo
     return {
       ok: false,
       message: "Sesi Anda sudah berakhir. Silakan login ulang.",
+      kunci: "aksi.sesiBerakhir",
       redirectTo: "/login",
     };
   }

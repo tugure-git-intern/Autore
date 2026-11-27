@@ -4,17 +4,22 @@ import { LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import type { SessionUser } from "@/lib/current-user";
 import type { Role } from "@/lib/roles";
+import { useBahasa } from "./bahasa-provider";
 import { Button } from "./ui/button";
 
 /** Label wewenang untuk ditampilkan; null = token tanpa role (hanya baca). */
-export const LABEL_ROLE: Record<Role | "tanpa-role", string> = {
+export const LABEL_ROLE: Record<Role | "tanpa-role", string | null> = {
   dev: "Developer",
   qa: "QA",
   admin: "Admin",
-  "tanpa-role": "Hanya baca",
+  // null = teks dari kamus; label role nyata tidak diterjemahkan.
+  "tanpa-role": null,
 };
 
 export function UserMenu({ user }: { user: SessionUser }) {
+  const { t } = useBahasa();
+  const labelRole = (role: Role | null | undefined) =>
+    LABEL_ROLE[role ?? "tanpa-role"] ?? t("shell.roleBaca");
   // Nama GitHub bisa kosong; login selalu ada karena whitelist yang mengizinkan.
   const label = user.name.trim() || user.login;
 
@@ -45,13 +50,13 @@ export function UserMenu({ user }: { user: SessionUser }) {
           data-testid="badge-role"
           className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted dark:border-[#50638b] dark:text-[#c9d1d9]"
         >
-          {LABEL_ROLE[user.role ?? "tanpa-role"]}
+          {labelRole(user.role)}
         </span>
       </summary>
       <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-sm dark:border-[#50638b] dark:bg-[#353b43]">
         <p className="px-2 py-1 text-xs text-muted dark:text-[#c9d1d9]">@{user.login}</p>
         <p data-testid="role-menu" className="px-2 pb-1 text-xs text-muted dark:text-[#c9d1d9]">
-          Role: {LABEL_ROLE[user.role ?? "tanpa-role"]}
+          Role: {labelRole(user.role)}
         </p>
         <Button
           variant="ghost"
@@ -59,7 +64,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
           onClick={() => void signOut({ callbackUrl: "/login" })}
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
-          Keluar
+          {t("shell.keluar")}
         </Button>
       </div>
     </details>

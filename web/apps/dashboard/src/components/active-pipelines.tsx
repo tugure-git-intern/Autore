@@ -1,14 +1,16 @@
 import type { ActiveCounts, ActivePipeline } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { inisial, shortSha } from "@/lib/format";
+import type { KunciTerjemah } from "@/lib/i18n";
+import { useBahasa } from "./bahasa-provider";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { ChartCard } from "./ui/chart-card";
 import { CheckCircle2, GitBranch, Zap } from "lucide-react";
 
-const STATUS: Record<ActivePipeline["status"], { label: string; tone: "blue" | "yellow" }> = {
-  running: { label: "Berjalan", tone: "blue" },
-  queued: { label: "Menunggu", tone: "yellow" },
+const STATUS: Record<ActivePipeline["status"], { label: KunciTerjemah; tone: "blue" | "yellow" }> = {
+  running: { label: "status.berjalan", tone: "blue" },
+  queued: { label: "status.menunggu", tone: "yellow" },
 };
 
 /**
@@ -24,11 +26,12 @@ export function ActivePipelines({
   counts: ActiveCounts;
   stale?: boolean;
 }) {
+  const { t } = useBahasa();
   const total = counts.running + counts.queued;
 
   return (
     <ChartCard
-      title="Pipeline Aktif"
+      title={t("aktif.judul")}
       action={
         <div className="flex items-center gap-2 text-xs">
           <span
@@ -36,9 +39,9 @@ export function ActivePipelines({
             className="inline-flex items-center gap-1 text-green-700 dark:text-green-300"
           >
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-            {total} berjalan atau menunggu
+            {total} {t("aktif.hitungan")}
           </span>
-          {stale ? <span className="text-amber-600">data terakhir</span> : null}
+          {stale ? <span className="text-amber-600">{t("banner.dataTerakhir")}</span> : null}
         </div>
       }
     >
@@ -50,10 +53,11 @@ export function ActivePipelines({
           <div className="mb-4 rounded-full bg-green-50 dark:bg-green-950/60 p-3">
             <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Semua Pipeline Selesai</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t("aktif.kosongJudul")}
+          </h3>
           <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-white">
-            Tidak ada pipeline yang sedang berjalan atau menunggu. Saat pipeline dimulai, statusnya
-            akan muncul di sini secara langsung.
+            {t("aktif.kosongIsi")}
           </p>
         </div>
       ) : (
@@ -94,7 +98,7 @@ export function ActivePipelines({
                   ) : null}
 
                   <div>
-                    <Badge tone={tone}>{label}</Badge>
+                    <Badge tone={tone}>{t(label)}</Badge>
                   </div>
 
                   {p.status === "running" ? (

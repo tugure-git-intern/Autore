@@ -15,6 +15,7 @@ const nav = vi.hoisted(() => ({ pathname: "/pipeline" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
 import { StatusProvider, UserContext } from "./app-shell";
+import { BahasaProvider } from "./bahasa-provider";
 import { Sidebar, indikatorServer, versiAutore } from "./sidebar";
 
 const STATUS: ApiStatusResponse = {
@@ -76,7 +77,7 @@ describe("indikatorServer", () => {
   it("hijau saat status segar dan tidak ada kegagalan", () => {
     expect(indikatorServer({ state: SEGAR, failed: false, loading: false })).toEqual({
       tone: "green",
-      label: "Server Online",
+      label: "shell.serverOnline",
       pulse: true,
     });
   });
@@ -84,7 +85,7 @@ describe("indikatorServer", () => {
   it("kuning Data Lama saat snapshot basi walau API menjawab", () => {
     expect(indikatorServer({ state: BASI, failed: false, loading: false })).toEqual({
       tone: "amber",
-      label: "Data Lama",
+      label: "shell.dataLama",
       pulse: false,
     });
   });
@@ -92,7 +93,7 @@ describe("indikatorServer", () => {
   it("merah saat tarikan API gagal", () => {
     expect(indikatorServer({ state: null, failed: true, loading: false })).toEqual({
       tone: "red",
-      label: "Server Offline",
+      label: "shell.serverOffline",
       pulse: false,
     });
   });
@@ -100,7 +101,7 @@ describe("indikatorServer", () => {
   it("netral selama tarikan pertama belum selesai", () => {
     expect(indikatorServer({ state: null, failed: false, loading: true })).toEqual({
       tone: "neutral",
-      label: "Memuat status",
+      label: "shell.memuatStatus",
       pulse: true,
     });
   });
@@ -108,7 +109,7 @@ describe("indikatorServer", () => {
   it("netral saat tarikan selesai tanpa data dan gagal", () => {
     expect(indikatorServer({ state: null, failed: false, loading: false })).toEqual({
       tone: "neutral",
-      label: "Status belum tersedia",
+      label: "shell.statusBelum",
       pulse: false,
     });
   });
@@ -302,4 +303,18 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Server Offline")).toBeNull();
   });
 
+});
+
+it("footer status dan navigasi ikut bahasa Inggris", async () => {
+  pasangFetch(SEGAR);
+  render(
+    <BahasaProvider awal="en">
+      <StatusProvider>
+        <Sidebar terbuka />
+      </StatusProvider>
+    </BahasaProvider>,
+  );
+
+  await tungguStatus("Server Online");
+  expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeTruthy();
 });

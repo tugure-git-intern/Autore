@@ -1,9 +1,12 @@
 import { Inbox } from "lucide-react";
+import { useBahasa } from "./bahasa-provider";
 
 // Borderless on purpose: this sits inside the already-bordered Aplikasi card,
 // so a second frame here would double the edge. The heading is the only copy:
 // callers already state the count, and the tile stays neutral (one accent max).
 export function EmptyApplications() {
+  const { t } = useBahasa();
+
   return (
     <div className="flex min-h-[160px] flex-col items-center justify-center gap-2.5 px-6 py-6 text-center text-muted dark:text-[var(--color-muted)]">
       <span
@@ -12,7 +15,9 @@ export function EmptyApplications() {
       >
         <Inbox className="h-5 w-5" />
       </span>
-      <p className="text-sm font-medium text-ink dark:text-[var(--color-ink)]">Belum ada aplikasi yang didaftarkan.</p>
+      <p className="text-sm font-medium text-ink dark:text-[var(--color-ink)]">
+        {t("beranda.aplikasiKosong")}
+      </p>
     </div>
   );
 }

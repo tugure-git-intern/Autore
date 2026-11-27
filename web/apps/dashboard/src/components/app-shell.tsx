@@ -17,11 +17,10 @@ import { Navbar } from "./navbar";
 import { NavBawah } from "./nav-bawah";
 import { Sidebar } from "./sidebar";
 import { Toast, ToastSink, type JenisToast } from "./toast";
+import { useBahasa } from "./bahasa-provider";
 import { useActivePipelines, type HasilActive } from "./use-active-pipelines";
 import { useRuns, type HasilRuns } from "./use-runs";
 
-const COPY_SUKSES = "Data berhasil disinkronkan.";
-const COPY_GAGAL = "Gagal menyinkronkan data.";
 
 export type StatusState = {
   state: ApiStatusResponse | null;
@@ -74,6 +73,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [toast, setToast] = useState<{ pesan: string; jenis: JenisToast } | null>(null);
+  const { t } = useBahasa();
   const controller = useRef<AbortController | null>(null);
 
   const runs = useRuns();
@@ -168,13 +168,15 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       const hasil = await Promise.all([load(), refreshRuns(), refreshAktif()]);
       const sukses = hasil.every(Boolean);
       setToast(
-        sukses ? { pesan: COPY_SUKSES, jenis: "sukses" } : { pesan: COPY_GAGAL, jenis: "gagal" },
+        sukses
+          ? { pesan: t("shell.sinkronSukses"), jenis: "sukses" }
+          : { pesan: t("shell.sinkronGagal"), jenis: "gagal" },
       );
       return sukses;
     } finally {
       setRefreshing(false);
     }
-  }, [load, refreshRuns, refreshAktif]);
+  }, [load, refreshRuns, refreshAktif, t]);
 
   const tutupToast = useCallback(() => setToast(null), []);
 

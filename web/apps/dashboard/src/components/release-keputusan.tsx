@@ -5,6 +5,7 @@ import type { Role, StatusRelease } from "@autore/contracts";
 import { roleAtLeast } from "@autore/contracts";
 import { Check, RotateCcw, Rocket, Send, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { useBahasa } from "./bahasa-provider";
 
 type Aksi = "approve" | "reject" | "promote" | "rollback";
 
@@ -25,6 +26,9 @@ export function ReleaseKeputusan({
   /** Rilis yang sudah digantikan build lebih baru di staging: cuma boleh ditolak. */
   digantikan?: boolean;
 }) {
+  const { t, tf } = useBahasa();
+  const tfGagal = (status: number) => tf("rilis.permintaanGagal", { status });
+  const tfJob = (job: string) => tf("rilis.jobDipicu", { job });
   const [alasan, setAlasan] = useState("");
   const [tanyaAlasan, setTanyaAlasan] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
@@ -50,19 +54,19 @@ export function ReleaseKeputusan({
       const hasil = (await res.json().catch(() => null)) as { error?: string; job?: string } | null;
       if (!res.ok) {
         setGalat(true);
-        setPesan(hasil?.error ?? `permintaan gagal (${res.status})`);
+        setPesan(hasil?.error ?? tfGagal(res.status));
         return;
       }
       // Aksi 202 memicu job Jenkins; hasil akhir baru terlihat setelah build,
       // jadi kartu tidak dimuat ulang diam-diam sekarang.
       if (hasil?.job) {
-        setPesan(`job ${hasil.job} dipicu, muat ulang halaman setelah build selesai`);
+        setPesan(tfJob(hasil.job));
         return;
       }
       window.location.reload();
     } catch {
       setGalat(true);
-      setPesan("jaringan gagal, coba lagi");
+      setPesan(t("rilis.jaringanGagal"));
     } finally {
       setKirim(false);
     }
@@ -76,7 +80,7 @@ export function ReleaseKeputusan({
         {bolehSetujui ? (
           <Button variant="primary" disabled={kirim} onClick={() => void jalankan("approve", {})}>
             <Check size={16} aria-hidden="true" />
-            Setujui
+            {t("rilis.setujui")}
           </Button>
         ) : null}
         {bolehTolak ? (
@@ -87,13 +91,13 @@ export function ReleaseKeputusan({
             onClick={() => setTanyaAlasan((lama) => !lama)}
           >
             <X size={16} aria-hidden="true" />
-            Tolak
+            {t("rilis.tolak")}
           </Button>
         ) : null}
         {bolehPromosi ? (
           <Button variant="primary" disabled={kirim} onClick={() => void jalankan("promote", {})}>
             <Rocket size={16} aria-hidden="true" />
-            Promosikan ke Production
+            {t("rilis.promosikan")}
           </Button>
         ) : null}
         {bolehRollback ? (
@@ -103,14 +107,14 @@ export function ReleaseKeputusan({
             onClick={() => void jalankan("rollback", { environment: "production" })}
           >
             <RotateCcw size={16} aria-hidden="true" />
-            Rollback Production
+            {t("rilis.rollback")}
           </Button>
         ) : null}
       </div>
       {bolehTolak && tanyaAlasan ? (
         <div className="space-y-2">
           <label className="block text-xs text-muted" htmlFor={`alasan-${releaseId}`}>
-            Alasan penolakan (wajib)
+            {t("rilis.alasanWajib")}
           </label>
           <textarea
             id={`alasan-${releaseId}`}
@@ -122,7 +126,7 @@ export function ReleaseKeputusan({
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" disabled={kirim} onClick={() => setTanyaAlasan(false)}>
               <X size={16} aria-hidden="true" />
-              Batal
+              {t("rilis.batal")}
             </Button>
             <Button
               variant="primary"
@@ -130,7 +134,7 @@ export function ReleaseKeputusan({
               onClick={() => void jalankan("reject", { alasan })}
             >
               <Send size={16} aria-hidden="true" />
-              Kirim penolakan
+              {t("rilis.kirimPenolakan")}
             </Button>
           </div>
         </div>

@@ -2,33 +2,38 @@
 
 import { useMemo, useState } from "react";
 import { PlusCircle, Rocket, Search, SearchX, ShieldCheck, UsersRound } from "lucide-react";
+import { useBahasa } from "@/components/bahasa-provider";
 import type { AuditEntry } from "@/lib/audit-client";
+import type { KunciTerjemah } from "@/lib/i18n";
 import { inisial, relativeTime } from "@/lib/format";
 
 export interface AuditTimelineProps {
   entries: AuditEntry[];
 }
 
-function getActionInfo(action: string) {
+/** Label + kata kerja per aksi; teksnya hidup di kamus, ikon & tone di sini. */
+function getActionInfo(action: string): {
+  verb: KunciTerjemah;
+  aksi?: string;
+  icon: typeof Rocket;
+  iconTone: string;
+} {
   switch (action) {
     case "deploy":
       return {
-        label: "Deploy",
-        verb: "melakukan Deploy pada",
+        verb: "audit.verbDeploy",
         icon: Rocket,
         iconTone: "bg-blue-50 text-blue-600 border-blue-200 dark:border-blue-800 dark:bg-blue-950/80 dark:text-blue-300",
       };
     case "scan":
       return {
-        label: "Scan",
-        verb: "memindai keamanan pada",
+        verb: "audit.verbScan",
         icon: ShieldCheck,
         iconTone: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300",
       };
     case "quick-start":
       return {
-        label: "Quick-Start",
-        verb: "membuat proyek baru pada",
+        verb: "audit.verbQuickStart",
         icon: PlusCircle,
         iconTone: "bg-purple-50 text-purple-600 border-purple-200 dark:border-purple-800 dark:bg-purple-950/80 dark:text-purple-300",
       };
@@ -36,15 +41,14 @@ function getActionInfo(action: string) {
       // Dari halaman Pengaturan: yang berubah adalah siapa boleh masuk, bukan
       // sebuah aplikasi — karena itu targetnya `users:<n>` dan labelnya sendiri.
       return {
-        label: "Pengaturan",
-        verb: "mengubah daftar pengguna dashboard",
+        verb: "audit.verbPengaturan",
         icon: UsersRound,
         iconTone: "bg-amber-50 text-amber-600 border-amber-200 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300",
       };
     default:
       return {
-        label: action,
-        verb: `menjalankan ${action} pada`,
+        verb: "audit.verbLain",
+        aksi: action,
         icon: Rocket,
         iconTone: "bg-gray-50 text-gray-600 border-gray-200 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]",
       };
@@ -52,6 +56,7 @@ function getActionInfo(action: string) {
 }
 
 export function AuditTimeline({ entries }: AuditTimelineProps) {
+  const { bahasa, t, tf } = useBahasa();
   // Beda antara "log belum pernah diisi" dan "filter tidak menemukan apa pun":
   // pesan filter di log kosong menyesatkan.
   const kosong = entries.length === 0;
@@ -101,42 +106,46 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari pengguna atau nama aplikasi..."
-            aria-label="Cari log audit"
+            placeholder={t("audit.cari")}
+            aria-label={t("audit.cariLabel")}
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <div>
-            <label htmlFor="filter-aksi" className="sr-only">Saring Aksi</label>
+            <label htmlFor="filter-aksi" className="sr-only">
+              {t("audit.saringAksi")}
+            </label>
             <select
               id="filter-aksi"
-              aria-label="Saring aksi"
+              aria-label={t("audit.saringAksi")}
               value={filterAksi}
               onChange={(e) => setFilterAksi(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
             >
-              <option value="all">Semua Aksi</option>
+              <option value="all">{t("audit.semuaAksi")}</option>
               <option value="deploy">Deploy</option>
               <option value="scan">Scan</option>
               <option value="quick-start">Quick-Start</option>
-              <option value="settings-users">Pengaturan</option>
+              <option value="settings-users">{t("audit.labelPengaturan")}</option>
             </select>
           </div>
 
           <div>
-            <label htmlFor="filter-status" className="sr-only">Saring Status</label>
+            <label htmlFor="filter-status" className="sr-only">
+              {t("audit.saringStatus")}
+            </label>
             <select
               id="filter-status"
-              aria-label="Saring status"
+              aria-label={t("audit.saringStatus")}
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
             >
-              <option value="all">Semua Status</option>
-              <option value="success">Sukses</option>
-              <option value="failed">Gagal</option>
+              <option value="all">{t("audit.semuaStatus")}</option>
+              <option value="success">{t("audit.sukses")}</option>
+              <option value="failed">{t("status.gagal")}</option>
             </select>
           </div>
         </div>
@@ -149,12 +158,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             <SearchX className="h-6 w-6" />
           </div>
           <p className="text-sm font-semibold text-gray-900 dark:text-[var(--color-ink)]">
-            {kosong ? "Belum ada aktivitas" : "Tidak ada aktivitas yang cocok"}
+            {kosong ? t("audit.kosongJudul") : t("audit.tidakCocokJudul")}
           </p>
           <p className="mt-1 text-xs text-gray-500 dark:text-[var(--color-muted)]">
-            {kosong
-              ? "Deploy, scan, dan quick-start akan tercatat di sini."
-              : "Coba ubah kata kunci pencarian atau setel ulang saringan."}
+            {kosong ? t("audit.kosongIsi") : t("audit.tidakCocokIsi")}
           </p>
           {kosong ? null : (
             <button
@@ -162,7 +169,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               onClick={resetFilter}
               className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-sidebar)]"
             >
-              Setel Ulang Saringan
+              {t("audit.setelUlang")}
             </button>
           )}
         </div>
@@ -180,7 +187,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
           <ol className="relative space-y-4">
             {filtered.map((item, idx) => {
-              const { verb, icon: ActionIcon, iconTone } = getActionInfo(item.action);
+              const { verb, aksi, icon: ActionIcon, iconTone } = getActionInfo(item.action);
               const isSuccess = item.exit === 0;
               const tanpaStatus = typeof item.exit !== "number";
 
@@ -206,8 +213,10 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-700 dark:text-[var(--color-muted)]">
-                        <span className="font-semibold text-gray-900 dark:text-[var(--color-ink)]">{item.login || "tanpa-sesi"}</span>
-                        <span>{verb}</span>
+                        <span className="font-semibold text-gray-900 dark:text-[var(--color-ink)]">
+                          {item.login || t("audit.tanpaSesi")}
+                        </span>
+                        <span>{aksi ? tf("audit.verbLain", { aksi }) : t(verb)}</span>
                         <code className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]">
                           {item.target}
                         </code>
@@ -223,14 +232,21 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                               : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-300"
                         }`}
                       >
-                        {tanpaStatus ? "Tanpa status" : isSuccess ? "Sukses" : `Gagal (${item.exit})`}
+                        {tanpaStatus
+                          ? t("audit.tanpaStatus")
+                          : isSuccess
+                            ? t("audit.sukses")
+                            : tf("audit.statusGagal", { n: item.exit ?? 0 })}
                       </span>
                     </div>
 
                     {/* Metadata Footer */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-[var(--color-muted)]">
-                      <time dateTime={item.ts} title={new Date(item.ts).toLocaleString("id-ID")}>
-                        {relativeTime(item.ts)}
+                      <time
+                        dateTime={item.ts}
+                        title={new Date(item.ts).toLocaleString(bahasa === "id" ? "id-ID" : "en-GB")}
+                      >
+                        {relativeTime(item.ts, Date.now(), bahasa)}
                       </time>
                       {item.email ? (
                         <>

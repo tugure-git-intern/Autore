@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { StageRow } from "@/lib/stages";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import { StageMatrix } from "./stage-matrix";
 
 const LIMA: StageRow[] = [
@@ -85,5 +86,28 @@ describe("StageMatrix", () => {
     render(<StageMatrix rows={LIMA.slice(0, 1)} stages={[]} pipelineStatus="passed" />);
     expect(kartu()[0].className).toContain("dark:border-[var(--color-line)]");
     expect(kartu()[0].className).toContain("dark:bg-[var(--bg-sidebar)]");
+  });
+});
+
+describe("StageMatrix dalam bahasa Inggris", () => {
+  it("menerjemahkan label status dan nama daftar", () => {
+    render(
+      <BahasaProvider awal="en">
+        <StageMatrix rows={LIMA} stages={[]} pipelineStatus="passed" />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByRole("list", { name: "Pipeline stages" })).toBeVisible();
+    expect(within(kartu()[0]).getByText("Passed")).toBeVisible();
+  });
+
+  it("memakai pesan bahasa Inggris saat tidak ada tahap", () => {
+    render(
+      <BahasaProvider awal="en">
+        <StageMatrix rows={[]} stages={[]} pipelineStatus="passed" />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByText("No pipeline data to show.")).toBeVisible();
   });
 });

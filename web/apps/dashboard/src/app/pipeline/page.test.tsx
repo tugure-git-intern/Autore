@@ -10,6 +10,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { StatusProvider } from "@/components/app-shell";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import PipelinePage from "./page";
 
 afterEach(() => {
@@ -329,4 +330,26 @@ test("Jalankan Ulang mengikuti aplikasi kedua, jadi targetnya bukan hardcode", a
   const fetchMock = mockFetch({ ...status, applications: [appUji("audit-uji3"), appUji("tes-web")] });
 
   expect(await bodyDeployUntuk("tes-web", fetchMock)).toEqual({ app: "tes-web" });
+});
+
+test("halaman pipeline ikut bahasa Inggris", async () => {
+  mockFetch(status);
+
+  render(
+    <BahasaProvider awal="en">
+      <StatusProvider>
+        <PipelinePage />
+      </StatusProvider>
+    </BahasaProvider>,
+  );
+
+  expect(await screen.findByRole("heading", { name: "Pipeline Detail" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Pipeline & Log" })).toBeVisible();
+  expect(screen.getByRole("searchbox", { name: "Search applications" })).toBeVisible();
+  expect(screen.getByRole("navigation", { name: "Application list" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run Again" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Pipeline Summary" })).toBeVisible();
+  expect(screen.getByRole("list", { name: "Pipeline stages" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Log Detail" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Build History" })).toBeVisible();
 });

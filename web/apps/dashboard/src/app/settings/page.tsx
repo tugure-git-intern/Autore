@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { PERAN_UI, parseRole, type Role, type UsersPayload } from "@autore/contracts";
+import { useBahasa } from "@/components/bahasa-provider";
 import { PageTabHeader } from "@/components/ui/page-tab-header";
 import { useKirimToast } from "@/components/toast";
 import { GalatPengaturan, fetchUsers, simpanUsers } from "@/lib/settings-client";
@@ -22,6 +23,7 @@ const keBaris = (users: UsersPayload["users"]): Baris[] =>
 
 export default function SettingsPage() {
   const kirimToast = useKirimToast();
+  const { t, tf } = useBahasa();
   const [awal, setAwal] = useState<UsersPayload | null>(null);
   const [baris, setBaris] = useState<Baris[]>([]);
   const [revisi, setRevisi] = useState("");
@@ -30,7 +32,8 @@ export default function SettingsPage() {
   const [roleBaru, setRoleBaru] = useState<Role>("dev");
   const [menyimpan, setMenyimpan] = useState(false);
   const [memuat, setMemuat] = useState(true);
-  const [galat, setGalat] = useState<string | null>(null);
+  // Pesan server apa adanya; cadangan diterjemahkan saat render.
+  const [galat, setGalat] = useState<{ pesan: string } | null>(null);
   const [ditolak, setDitolak] = useState(false);
   const sinyalRef = useRef<AbortController | null>(null);
 
@@ -50,7 +53,7 @@ export default function SettingsPage() {
     } catch (err) {
       if (sinyal.signal.aborted) return;
       if (err instanceof GalatPengaturan && err.status === 403) setDitolak(true);
-      setGalat(err instanceof Error ? err.message : "Gagal memuat pengguna.");
+      setGalat({ pesan: err instanceof Error ? err.message : "" });
     } finally {
       if (!sinyal.signal.aborted) setMemuat(false);
     }
@@ -88,12 +91,15 @@ export default function SettingsPage() {
         revisi,
         users: baris.map((b) => ({ login: b.login, role: b.role })),
       });
-      kirimToast(backup ? `Tersimpan. Backup: ${backup}` : "Tersimpan.", "sukses");
+      kirimToast(
+        backup ? tf("setelan.simpanTersimpanBackup", { berkas: backup }) : t("setelan.simpanTersimpan"),
+        "sukses",
+      );
       await muat();
     } catch (err) {
       // 409 (revisi basi / env menimpa) dan 400 (tanpa admin) dijelaskan oleh
       // server: tampilkan kalimatnya dan muat ulang keadaan sebenarnya.
-      kirimToast(err instanceof Error ? err.message : "Gagal menyimpan.", "gagal");
+      kirimToast(err instanceof Error ? err.message : t("setelan.simpanGagal"), "gagal");
       await muat();
     } finally {
       setMenyimpan(false);
@@ -106,10 +112,10 @@ export default function SettingsPage() {
         <section className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]">
           <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
             <ShieldCheck className="h-5 w-5 text-red-600 dark:text-red-300" aria-hidden="true" />
-            Akses ditolak
+            {t("setelan.ditolakJudul")}
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Halaman Pengguna &amp; Role hanya untuk admin. Role akun ini bukan admin.
+            {t("setelan.ditolakIsi")}
           </p>
         </section>
       </main>
@@ -119,8 +125,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-0">
       <PageTabHeader
-        title="Pengaturan — Pengguna &amp; Role"
-        description="Siapa yang boleh masuk dashboard dan perannya. Minimal satu admin harus tersisa."
+        title={t("setelan.judul")}
+        description={t("setelan.deskripsi")}
         icon={Settings}
         action={
           <button
@@ -130,7 +136,7 @@ export default function SettingsPage() {
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:hover:bg-[var(--bg-canvas)]"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${memuat ? "animate-spin" : ""}`} />
-            Muat Ulang
+            {t("setelan.muatUlang")}
           </button>
         }
       />
@@ -138,18 +144,19 @@ export default function SettingsPage() {
       <div className="rounded-b-xl bg-white p-5 sm:rounded-b-2xl dark:bg-[var(--bg-canvas)]">
         {sumber === "env" ? (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
-            Daftar pengguna sedang diatur lewat <code>AUTORE_ALLOWED_USERS</code> di unit API. Perubahan
-            di halaman ini tidak akan tersimpan selama env itu aktif.
+            {t("setelan.envIsi")} <code>AUTORE_ALLOWED_USERS</code> {t("setelan.envEkor")}
           </div>
         ) : null}
 
         {galat ? (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-200">
             <div className="text-sm">
-              <p className="font-semibold">Gagal memuat pengguna</p>
-              <p className="mt-1 text-xs text-rose-700 dark:text-rose-200">{galat}</p>
+              <p className="font-semibold">{t("setelan.gagalJudul")}</p>
+              <p className="mt-1 text-xs text-rose-700 dark:text-rose-200">
+                {galat.pesan || t("setelan.gagalUmum")}
+              </p>
               <button type="button" onClick={muat} className="mt-3 rounded border border-rose-300 bg-white px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-50 dark:border-rose-800 dark:bg-transparent dark:text-rose-200">
-                Coba Lagi
+                {t("setelan.cobaLagi")}
               </button>
             </div>
           </div>
@@ -158,9 +165,15 @@ export default function SettingsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-[var(--color-muted)]">
-              <th scope="col" className="pb-2">Akun GitHub</th>
-              <th scope="col" className="pb-2">Role</th>
-              <th scope="col" className="pb-2"><span className="sr-only">Aksi</span></th>
+              <th scope="col" className="pb-2">
+                {t("setelan.kolomAkun")}
+              </th>
+              <th scope="col" className="pb-2">
+                {t("setelan.kolomRole")}
+              </th>
+              <th scope="col" className="pb-2">
+                <span className="sr-only">{t("setelan.kolomAksi")}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -169,7 +182,7 @@ export default function SettingsPage() {
                 <td className="py-2 font-mono text-xs">{b.login}</td>
                 <td className="py-2">
                   <select
-                    aria-label={`Role untuk ${b.login}`}
+                    aria-label={tf("setelan.roleUntuk", { login: b.login })}
                     value={b.role}
                     onChange={(e) => ubahRole(b.login, e.target.value)}
                     className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]"
@@ -185,7 +198,7 @@ export default function SettingsPage() {
                     onClick={() => hapus(b.login)}
                     className="text-xs text-red-600 hover:underline dark:text-red-300"
                   >
-                    Hapus
+                    {t("setelan.hapus")}
                   </button>
                 </td>
               </tr>
@@ -198,11 +211,11 @@ export default function SettingsPage() {
             value={loginBaru}
             onChange={(e) => setLoginBaru(e.target.value)}
             placeholder="login-github"
-            aria-label="Login GitHub baru"
+            aria-label={t("setelan.loginBaru")}
             className="w-56 rounded-md border border-gray-200 bg-white px-3 py-1.5 font-mono text-xs dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)]"
           />
           <select
-            aria-label="Role baru"
+            aria-label={t("setelan.roleBaru")}
             value={roleBaru}
             onChange={(e) => {
               const role = parseRole(e.target.value);
@@ -219,7 +232,7 @@ export default function SettingsPage() {
             onClick={tambah}
             className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:hover:bg-[var(--bg-canvas)]"
           >
-            Tambah
+            {t("setelan.tambah")}
           </button>
         </div>
 
@@ -230,12 +243,10 @@ export default function SettingsPage() {
             disabled={menyimpan || !kotor || sumber === "env"}
             className="inline-flex h-9 items-center rounded-md bg-[#273a52] px-4 text-sm font-medium text-[#eaedf3] hover:opacity-90 disabled:opacity-50 dark:bg-[#c9d9f2] dark:text-[#282c32]"
           >
-            {menyimpan ? "Menyimpan…" : "Simpan"}
+            {menyimpan ? t("setelan.menyimpan") : t("setelan.simpan")}
           </button>
           <span className="text-xs text-muted">
-            Simpan tidak merusak berkas walau server mati di tengah. Salinan lama otomatis
-            dibuat (<code>allowed-users.json.bak-*</code>), dan izin baru langsung berlaku tanpa perlu
-            login ulang — menu sidebar baru mengikuti setelah dashboard di-restart.
+            {tf("setelan.catatan", { berkas: "allowed-users.json.bak-*" })}
           </span>
         </div>
       </div>

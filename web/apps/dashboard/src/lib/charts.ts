@@ -1,4 +1,5 @@
 import type { DailyPoint, RunTotals } from "./contracts";
+import { BAHASA_BAWAAN, terjemah, type Bahasa, type KunciTerjemah } from "./i18n";
 
 export const CHART_COLORS = {
   passed: "#16a34a",
@@ -25,12 +26,18 @@ export type Slice = {
   fill: string;
 };
 
+const namaIrisan = {
+  id: { passed: "Lulus", failed: "Gagal", running: "Berjalan" },
+  en: { passed: "Passed", failed: "Failed", running: "Running" },
+} as const;
+
 /** Tiga irisan tetap, termasuk yang bernilai nol, supaya warna legenda stabil. */
-export function toSlices(totals: RunTotals): Slice[] {
+export function toSlices(totals: RunTotals, bahasa: Bahasa = BAHASA_BAWAAN): Slice[] {
+  const nama = namaIrisan[bahasa];
   return [
-    { key: "passed", name: "Lulus", value: totals.passed, fill: CHART_COLORS.passed },
-    { key: "failed", name: "Gagal", value: totals.failed, fill: CHART_COLORS.failed },
-    { key: "running", name: "Berjalan", value: totals.running, fill: CHART_COLORS.running },
+    { key: "passed", name: nama.passed, value: totals.passed, fill: CHART_COLORS.passed },
+    { key: "failed", name: nama.failed, value: totals.failed, fill: CHART_COLORS.failed },
+    { key: "running", name: nama.running, value: totals.running, fill: CHART_COLORS.running },
   ];
 }
 
@@ -44,19 +51,19 @@ export type RadarScore = {
 
 export type RadarAxis = { axis: string; value: number };
 
-const AXES: Array<[keyof RadarScore, string]> = [
-  ["security", "Keamanan"],
-  ["reliability", "Keandalan"],
-  ["speed", "Kecepatan"],
-  ["freshness", "Kesegaran"],
-  ["coverage", "Cakupan"],
+const AXES: Array<[keyof RadarScore, KunciTerjemah]> = [
+  ["security", "radar.keamanan"],
+  ["reliability", "radar.keandalan"],
+  ["speed", "radar.kecepatan"],
+  ["freshness", "radar.kesegaran"],
+  ["coverage", "radar.cakupan"],
 ];
 
 /** Sumbu tanpa data tidak digambar: radar yang lebih kecil lebih jujur daripada sumbu nol. */
-export function toRadar(score: RadarScore): RadarAxis[] {
-  return AXES.flatMap(([kunci, axis]) => {
+export function toRadar(score: RadarScore, bahasa: Bahasa = BAHASA_BAWAAN): RadarAxis[] {
+  return AXES.flatMap(([kunci, label]) => {
     const nilai = score[kunci];
     if (nilai === null || nilai === undefined || !Number.isFinite(nilai)) return [];
-    return [{ axis, value: Math.min(100, Math.max(0, Math.round(nilai))) }];
+    return [{ axis: terjemah(bahasa, label), value: Math.min(100, Math.max(0, Math.round(nilai))) }];
   });
 }

@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { StatusProvider } from "@/components/app-shell";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import ApplicationsPage from "./page";
 
 afterEach(() => {
@@ -400,4 +401,30 @@ describe("ApplicationsPage di layar HP", () => {
     expect(screen.getAllByTestId("kartu-aplikasi")).toHaveLength(1);
     expect(screen.getByText("Demo Lama")).toBeVisible();
   });
+});
+
+test("seluruh daftar ikut bahasa Inggris", async () => {
+  mockFetch(TWO_APPS);
+
+  render(
+    <BahasaProvider awal="en">
+      <StatusProvider>
+        <ApplicationsPage />
+      </StatusProvider>
+    </BahasaProvider>,
+  );
+
+  expect(await screen.findByText("Portal Klaim")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Applications" })).toBeVisible();
+  expect(screen.getByText(/2 applications registered/)).toBeVisible();
+  const header = screen.getAllByRole("row")[0];
+  expect(
+    within(header)
+      .getAllByRole("columnheader")
+      .map((th) => th.textContent),
+  ).toEqual(["Name", "Security Status", "Last Update", "Action"]);
+  expect(screen.getAllByRole("link", { name: "View SBOM" })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "Security Scan" })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+  expect(screen.getByText(/0 findings/)).toBeVisible();
 });

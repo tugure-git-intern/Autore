@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { StatusProvider } from "@/components/app-shell";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import SecurityPage from "./page";
 
 afterEach(() => {
@@ -171,4 +172,32 @@ test("kartu grid boleh menyusut di layar HP, dan hash panjang boleh membungkus",
   // Baris sha256 tanpa spasi: tanpa break-words ia melebarkan kartu.
   const ringkasan = screen.getByText("Gitleaks: 2 temuan.");
   expect(ringkasan.className).toContain("break-words");
+});
+
+test("halaman keamanan ikut bahasa Inggris", async () => {
+  mockApi(async () => ok(RUNS));
+
+  render(
+    <BahasaProvider awal="en">
+      <StatusProvider>
+        <SecurityPage />
+      </StatusProvider>
+    </BahasaProvider>,
+  );
+
+  expect(await screen.findByRole("heading", { name: "Security" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Pipeline Score" })).toBeVisible();
+  expect(screen.getByText("Five measured axes")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Security Gates" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Findings per Application" })).toBeVisible();
+  const header = screen.getAllByRole("row")[0];
+  expect(
+    within(header)
+      .getAllByRole("columnheader")
+      .map((th) => th.textContent),
+  ).toEqual(["Application", "Findings", "Status"]);
+  expect(screen.getByText("2 findings")).toBeVisible();
+  expect(
+    screen.getByText(/Scores come from the available pipeline data/),
+  ).toBeVisible();
 });

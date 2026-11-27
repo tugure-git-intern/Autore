@@ -1,9 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-
-export const BANNER_GAGAL = "Gagal terhubung ke Jenkins. Menampilkan data terakhir.";
-export const BANNER_BASI = "Data terakhir ditampilkan; status terbaru belum terbaca.";
+import { useBahasa } from "./bahasa-provider";
 
 /**
  * Satu banner untuk semua halaman: merah hanya saat tarikan API gagal, kuning
@@ -11,6 +9,8 @@ export const BANNER_BASI = "Data terakhir ditampilkan; status terbaru belum terb
  * yang gagal cuma pembacaan snapshot.
  */
 export function StatusBanner({ stale, failed }: { stale: boolean; failed: boolean }) {
+  const { t } = useBahasa();
+
   if (!failed && !stale) return null;
 
   const kelas = failed
@@ -23,7 +23,7 @@ export function StatusBanner({ stale, failed }: { stale: boolean; failed: boolea
       className={`mb-4 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${kelas}`}
     >
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-      {failed ? BANNER_GAGAL : BANNER_BASI}
+      {t(failed ? "banner.jenkinsGagal" : "banner.dataBasi")}
     </div>
   );
 }

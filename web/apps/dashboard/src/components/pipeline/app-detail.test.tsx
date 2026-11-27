@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import type { ActivePipeline, ApplicationRecord, DashboardStatus, RunRecord } from "@/lib/contracts";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import { AppDetail } from "./app-detail";
 
 const app: ApplicationRecord = {
@@ -170,4 +171,39 @@ test("kartu gagal menyebut port yang bentrok, bukan cuma menyuruh buka log", () 
       "Port 8088 sudah dipakai aplikasi lain. Ganti deployPort di Jenkinsfile ke port bebas, lalu deploy ulang.",
     ),
   ).toBeVisible();
+});
+
+test("detail aplikasi ikut bahasa Inggris", () => {
+  render(
+    <BahasaProvider awal="en">
+      <AppDetail app={app} pipeline={pipelineCocok} runs={[]} aktif={[]} applications={[app]} />
+    </BahasaProvider>,
+  );
+
+  expect(screen.getByRole("heading", { name: "Pipeline Detail" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run Again" })).toBeVisible();
+  expect(screen.getByText("Last build")).toBeVisible();
+  expect(screen.getByText("No builds for this application yet")).toBeVisible();
+  expect(screen.getByText("1 security findings")).toBeVisible();
+  expect(screen.getByText("Deployed")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Build History" })).toBeVisible();
+});
+
+test("penjelasan pipeline milik aplikasi lain memakai bahasa Inggris", () => {
+  render(
+    <BahasaProvider awal="en">
+      <AppDetail
+        app={{ ...app, status: "passed", commit_sha: "aaaaaaa1" }}
+        pipeline={pipelineMilikAppLain}
+        runs={[]}
+        aktif={[]}
+        applications={[{ ...app, status: "passed", commit_sha: "aaaaaaa1" }]}
+      />
+    </BahasaProvider>,
+  );
+
+  expect(
+    screen.getByText(/The workspace's latest pipeline does not belong to Portal Klaim/),
+  ).toBeVisible();
+  expect(screen.getByText(/belongs to another application|not mixed up with Portal Klaim's own build/)).toBeVisible();
 });

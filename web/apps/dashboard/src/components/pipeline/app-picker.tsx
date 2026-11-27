@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, type KeyboardEvent } from "react";
-import type { ApplicationRecord, StatusValue } from "@/lib/contracts";
+import { useBahasa } from "@/components/bahasa-provider";
+import { type ApplicationRecord, type StatusValue } from "@/lib/contracts";
 import { relativeTime } from "@/lib/format";
 import { StatusBadge, type AppStatus } from "../status-badge";
 
@@ -36,6 +37,7 @@ export function AppPicker({
   terpilih?: string;
   onPilih: (id: string) => void;
 }) {
+  const { bahasa, t } = useBahasa();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -48,7 +50,7 @@ export function AppPicker({
   };
 
   return (
-    <nav aria-label="Daftar aplikasi">
+    <nav aria-label={t("detail.daftarAplikasi")}>
       <ul className="divide-y divide-gray-100 dark:divide-[var(--color-line)]">
         {applications.map((app, index) => (
           <li key={app.id}>
@@ -70,7 +72,7 @@ export function AppPicker({
                 <StatusBadge status={app.status as AppStatus} />
               </span>
               <span className="text-xs text-muted">
-                {app.last_build ? relativeTime(app.last_build) : "Belum ada build"}
+                {app.last_build ? relativeTime(app.last_build, Date.now(), bahasa) : t("detail.belumBuild")}
               </span>
             </button>
           </li>

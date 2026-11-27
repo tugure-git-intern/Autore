@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { FileQuestion, Home } from "lucide-react";
+import { useBahasa } from "@/components/bahasa-provider";
 
 export default function NotFound() {
+  const { t } = useBahasa();
+
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
       <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-[var(--color-line)] dark:bg-[var(--bg-canvas)]">
@@ -9,13 +14,13 @@ export default function NotFound() {
           <FileQuestion className="h-6 w-6" aria-hidden="true" />
         </div>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
-          Galat 404
+          {t("galat.kode404")}
         </p>
         <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-[var(--color-ink)]">
-          Halaman Tidak Ditemukan
+          {t("galat.tidakDitemukan")}
         </h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-[var(--color-muted)]">
-          Rute yang Anda minta tidak tersedia atau telah dipindahkan.
+          {t("galat.tidakDitemukanIsi")}
         </p>
         <div className="mt-6 flex justify-center">
           <Link
@@ -23,7 +28,7 @@ export default function NotFound() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <Home className="h-4 w-4" aria-hidden="true" />
-            Kembali ke Dashboard
+            {t("galat.keBeranda")}
           </Link>
         </div>
       </div>

@@ -1,8 +1,13 @@
+import type { KunciTerjemah } from "./i18n";
+
 export type ActionKind = "deploy" | "scan" | "remove";
 
 export interface ActionOutcome {
   ok: boolean;
   message: string;
+  /** Kunci kamus untuk pesan tetap; `message` jadi cadangan teks mentah. */
+  kunci?: KunciTerjemah;
+  isi?: Record<string, string | number>;
   /** Diisi kalau server menolak karena sesi; pemanggil yang memindahkan halaman. */
   redirectTo?: string;
 }
@@ -12,10 +17,20 @@ export function goToLogin(redirectTo: string): void {
   window.location.assign(redirectTo);
 }
 
-const SUCCESS: Record<ActionKind, string> = {
-  deploy: "Deploy terkirim, build Jenkins sedang berjalan.",
-  scan: "Scan keamanan selesai tanpa temuan.",
-  remove: "Aplikasi dihapus dari server. Repo GitHub tidak disentuh.",
+const SUKSES: Record<ActionKind, { kunci: KunciTerjemah; teks: string }> = {
+  deploy: { kunci: "aksi.deploySukses", teks: "Deploy terkirim, build Jenkins sedang berjalan." },
+  scan: { kunci: "aksi.scanSukses", teks: "Scan keamanan selesai tanpa temuan." },
+  remove: { kunci: "aksi.removeSukses", teks: "Aplikasi dihapus dari server. Repo GitHub tidak disentuh." },
+};
+
+const GAGAL_HUBUNGI = {
+  kunci: "aksi.gagalHubungi" as const,
+  message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi.",
+};
+
+const SESI_BERAKHIR = {
+  kunci: "aksi.sesiBerakhir" as const,
+  message: "Sesi Anda sudah berakhir. Silakan login ulang.",
 };
 
 /** Dipakai juga oleh quick-start-client: satu cara membaca baris pesan CLI. */
@@ -52,10 +67,13 @@ export async function runAction(
       body: JSON.stringify(konfirmasi !== undefined ? { app, konfirmasi } : { app }),
     });
   } catch {
-    return { ok: false, message: "Gagal menghubungi server aksi. Cek jaringan lalu coba lagi." };
+    return { ok: false, ...GAGAL_HUBUNGI };
   }
 
-  if (response.ok) return { ok: true, message: SUCCESS[action] };
+  if (response.ok) {
+    const sukses = SUKSES[action];
+    return { ok: true, message: sukses.teks, kunci: sukses.kunci };
+  }
 
   // 401 = sesi yang bermasalah, bukan aksi yang gagal: menampilkan pesan saja
   // akan menyisakan UI yang terus gagal sampai halaman dimuat ulang. 403 beda:
@@ -64,7 +82,7 @@ export async function runAction(
   if (response.status === 401) {
     return {
       ok: false,
-      message: "Sesi Anda sudah berakhir. Silakan login ulang.",
+      ...SESI_BERAKHIR,
       redirectTo: "/login",
     };
   }

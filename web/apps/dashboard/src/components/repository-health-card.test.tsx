@@ -16,9 +16,9 @@ describe("RepositoryHealthCard", () => {
   it("menampilkan judul, skor besar, dan rincian kelas dalam bahasa Indonesia", () => {
     render(<RepositoryHealthCard health={health()} />);
 
-    expect(screen.getByText("Repository Health")).toBeVisible();
+    expect(screen.getByText("Kesehatan Repo")).toBeVisible();
     expect(screen.getByText("21%")).toBeVisible();
-    expect(screen.getByText("10 repos · 0 gold · 0 silver · 10 bronze")).toBeVisible();
+    expect(screen.getByText("10 repo · 0 gold · 0 silver · 10 bronze")).toBeVisible();
   });
 
   it("menaruh ikon medali di kanan judul", () => {
@@ -28,7 +28,7 @@ describe("RepositoryHealthCard", () => {
     expect(medali).not.toBeNull();
     expect(medali).toHaveAttribute("aria-hidden", "true");
     // Satu baris dengan judul: judul kiri, ikon kanan.
-    expect(screen.getByText("Repository Health").closest("div")?.contains(medali!)).toBe(true);
+    expect(screen.getByText("Kesehatan Repo").closest("div")?.contains(medali!)).toBe(true);
   });
 
   it("menampilkan nol persen tanpa NaN saat belum ada repo", () => {
@@ -39,6 +39,6 @@ describe("RepositoryHealthCard", () => {
     );
 
     expect(screen.getByText("0%")).toBeVisible();
-    expect(screen.getByText("0 repos · 0 gold · 0 silver · 0 bronze")).toBeVisible();
+    expect(screen.getByText("0 repo · 0 gold · 0 silver · 0 bronze")).toBeVisible();
   });
 });

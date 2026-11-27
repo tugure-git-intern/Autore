@@ -12,6 +12,7 @@ import { ActionButton } from "@/components/actions/action-button";
 import { ConnectDialog } from "@/components/actions/connect-dialog";
 import { QuickStartDialog } from "@/components/actions/quick-start-dialog";
 import { ApplicationsFilter } from "@/components/applications-filter";
+import { useBahasa } from "@/components/bahasa-provider";
 import { formatBuild } from "@/components/dashboard-overview";
 import { EmptyApplications } from "@/components/empty-applications";
 import { StatusBadge, type AppStatus } from "@/components/status-badge";
@@ -28,21 +29,12 @@ function toBadge(status: StatusValue): AppStatus {
 }
 
 /**
- * A finding count is only a fact once a scan produced a verdict. Without one
- * (registry-only app, or a scan still running) the cell stays a dash instead of
- * claiming "0 temuan".
- */
-function findings(status: AppStatus, securityIssues: number): string {
-  if (status !== "passed" && status !== "failed") return "—";
-  return `${securityIssues} temuan`;
-}
-
-/**
  * Tiga aksi yang sama dipakai tabel (desktop) dan kartu (HP). Di kartu
  * target sentuhnya dilebarkan ke 44px: tautan teks 14px terlalu kecil untuk
  * jempol.
  */
 function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void; sentuh?: boolean }) {
+  const { t } = useBahasa();
   const kelasTautan = sentuh
     ? "inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline dark:text-blue-300"
     : "whitespace-nowrap text-blue-600 hover:underline dark:text-blue-300";
@@ -50,21 +42,20 @@ function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void
   return (
     <div className={sentuh ? "mt-1 flex flex-wrap items-center gap-4" : "flex flex-wrap items-center gap-x-3 gap-y-1"}>
       <Link href={`/pipeline?app=${encodeURIComponent(app)}`} className={kelasTautan}>
-        Detail
+        {t("aplikasi.detail")}
       </Link>
       <Link href={`/applications/sbom?app=${encodeURIComponent(app)}`} className={kelasTautan}>
-        Lihat SBOM
+        {t("aplikasi.lihatSbom")}
       </Link>
-      <ActionButton label="Scan Keamanan" action="scan" app={app} onDone={onDone} />
+      <ActionButton label={t("aplikasi.scanKeamanan")} action="scan" app={app} onDone={onDone} />
       <ActionButton
-        label="Hapus"
+        label={t("aplikasi.hapus")}
         action="remove"
         app={app}
         confirm={{
-          title: "Hapus aplikasi ini dari server?",
-          warning:
-            "Container, job Jenkins, registry, environments, dan folder app dihapus. Repo GitHub tidak disentuh. Riwayat build ikut hilang.",
-          confirmLabel: "Hapus permanen",
+          title: t("aplikasi.hapusJudul"),
+          warning: t("aplikasi.hapusPeringatan"),
+          confirmLabel: t("aplikasi.hapusKonfirmasi"),
           requireTypedName: app,
         }}
         onDone={onDone}
@@ -75,6 +66,7 @@ function AksiAplikasi({ app, onDone, sentuh }: { app: string; onDone: () => void
 
 export default function ApplicationsPage() {
   const { state, loading, failed, reload } = useStatus();
+  const { bahasa, t } = useBahasa();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   // Empat kolom + tiga aksi butuh 727px; di HP barisnya jadi kartu.
@@ -82,7 +74,7 @@ export default function ApplicationsPage() {
 
   if (loading && !state) {
     return (
-      <section aria-label="Memuat aplikasi" aria-busy="true">
+      <section aria-label={t("aplikasi.memuat")} aria-busy="true">
         <Skeleton className="h-7 w-40" />
         <Skeleton className="mt-4 h-64" />
       </section>
@@ -93,10 +85,10 @@ export default function ApplicationsPage() {
     return (
       <Card className="p-6">
         <p role="alert" className="font-medium text-red-700 dark:text-red-300">
-          Status Autore belum tersedia.
+          {t("aplikasi.gagal")}
         </p>
         <Button className="mt-4" onClick={reload}>
-          Coba lagi
+          {t("aplikasi.cobaLagi")}
         </Button>
       </Card>
     );
@@ -106,14 +98,21 @@ export default function ApplicationsPage() {
   const applications = data.applications;
   const tersaring = filterApps(applications, query, status);
 
+  /**
+   * Angka temuan baru fakta setelah ada hasil scan. Tanpa itu (aplikasi baru
+   * terdaftar, atau scan masih jalan) selnya tetap strip, bukan "0 temuan".
+   */
+  const temuan = (badge: AppStatus, securityIssues: number): string =>
+    badge === "passed" || badge === "failed" ? `${securityIssues} ${t("aplikasi.temuan")}` : "—";
+
   return (
     <>
       <StatusBanner stale={stale} failed={failed} />
 
       <div className="space-y-0">
         <PageTabHeader
-          title="Daftar Aplikasi"
-          description={`${applications.length} aplikasi terdaftar dalam pipeline DevSecOps.`}
+          title={t("aplikasi.judul")}
+          description={`${applications.length} ${t("aplikasi.deskripsi")}`}
           icon={Layers}
           action={
             <span className="flex flex-wrap items-start justify-end gap-2">
@@ -138,7 +137,7 @@ export default function ApplicationsPage() {
           {applications.length === 0 ? (
             <EmptyApplications />
           ) : tersaring.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">Tidak ada aplikasi yang cocok</p>
+            <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">{t("aplikasi.tidakCocok")}</p>
           ) : sempit ? (
             <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-[var(--color-line)] dark:border-[var(--color-line)]">
               {tersaring.map((app) => {
@@ -150,14 +149,16 @@ export default function ApplicationsPage() {
                         <p className="font-medium text-ink">{dash(app.name)}</p>
                         <p className="font-mono text-xs text-muted">{app.id}</p>
                         {app.author ? (
-                          <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {t("aplikasi.dibuatOleh")} {app.author}
+                          </p>
                         ) : null}
                       </div>
                       <StatusBadge status={badge} />
                     </div>
                     <p className="mt-2 text-xs text-muted">
-                      {findings(badge, app.security_issues)} · Terakhir update{" "}
-                      {formatBuild(app.last_build)}
+                      {temuan(badge, app.security_issues)} · {t("aplikasi.terakhirUpdate")}{" "}
+                      {formatBuild(app.last_build, bahasa)}
                     </p>
                     <AksiAplikasi app={app.id} onDone={reload} sentuh />
                   </div>
@@ -170,16 +171,16 @@ export default function ApplicationsPage() {
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
                   <tr>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Nama
+                      {t("aplikasi.kolomNama")}
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Status Keamanan
+                      {t("aplikasi.kolomStatus")}
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Terakhir Update
+                      {t("aplikasi.kolomTerakhir")}
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
-                      Aksi
+                      {t("aplikasi.kolomAksi")}
                     </th>
                   </tr>
                 </thead>
@@ -192,16 +193,16 @@ export default function ApplicationsPage() {
                           <p className="font-medium text-ink">{dash(app.name)}</p>
                           <p className="font-mono text-xs text-muted">{app.id}</p>
                           {app.author ? (
-                            <p className="mt-1 text-xs text-muted">Dibuat oleh: {app.author}</p>
+                            <p className="mt-1 text-xs text-muted">
+                              {t("aplikasi.dibuatOleh")} {app.author}
+                            </p>
                           ) : null}
                         </td>
                         <td className="px-5 py-4">
                           <StatusBadge status={badge} />
-                          <p className="mt-1 text-xs text-muted">
-                            {findings(badge, app.security_issues)}
-                          </p>
+                          <p className="mt-1 text-xs text-muted">{temuan(badge, app.security_issues)}</p>
                         </td>
-                        <td className="px-5 py-4 text-muted">{formatBuild(app.last_build)}</td>
+                        <td className="px-5 py-4 text-muted">{formatBuild(app.last_build, bahasa)}</td>
                         <td className="px-5 py-4">
                           <AksiAplikasi app={app.id} onDone={reload} />
                         </td>

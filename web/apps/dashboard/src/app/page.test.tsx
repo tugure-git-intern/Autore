@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
 import { AppShell, StatusProvider } from "@/components/app-shell";
+import { BahasaProvider } from "@/components/bahasa-provider";
 import type { SessionUser } from "@/lib/current-user";
 import DashboardPage from "./page";
 
@@ -314,4 +315,19 @@ test("header dashboard memakai PageTabHeader: judul dan sapaan dalam satu kepala
   expect(within(header).getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
   expect(within(header).getByText("Selamat datang, MAliffadlan.")).toBeInTheDocument();
   expect(screen.queryByTestId("header-separator")).toBeNull();
+});
+
+test("sapaan, judul kartu, dan skeleton ikut bahasa aktif", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+  render(
+    <BahasaProvider awal="en">
+      <AppShell user={{ login: "MAliffadlan", name: "", image: null } as SessionUser}>
+        <DashboardPage />
+      </AppShell>
+    </BahasaProvider>,
+  );
+
+  expect(screen.getByText("Welcome back, MAliffadlan.")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Loading status" })).toBeInTheDocument();
 });

@@ -6,6 +6,7 @@ import { beforeEach, expect, vi } from "vitest";
 const signOut = vi.hoisted(() => vi.fn());
 vi.mock("next-auth/react", () => ({ signOut }));
 
+import { BahasaProvider } from "./bahasa-provider";
 import { UserMenu } from "./user-menu";
 import type { SessionUser } from "@/lib/current-user";
 
@@ -81,4 +82,15 @@ describe("UserMenu", () => {
 
     expect(screen.getByTestId("badge-role")).toHaveTextContent("Hanya baca");
   });
+});
+
+it("badge tanpa role dan tombol keluar ikut bahasa Inggris", () => {
+  render(
+    <BahasaProvider awal="en">
+      <UserMenu user={{ login: "tanpa-role", name: "Tanpa Role" } as SessionUser} />
+    </BahasaProvider>,
+  );
+
+  expect(screen.getByTestId("badge-role")).toHaveTextContent("Read only");
+  expect(screen.getByRole("button", { name: /Sign out/ })).toBeTruthy();
 });

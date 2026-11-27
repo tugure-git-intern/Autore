@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
+import { useBahasa } from "@/components/bahasa-provider";
 import { Card } from "@/components/ui/card";
 import { type SbomPackageType, type SbomPayload } from "@/lib/contracts";
 import { dash } from "@/lib/format";
 import { filterPackages } from "@/lib/filter-sbom";
+import type { KunciTerjemah } from "@/lib/i18n";
 
 /** Label yang dibaca manusia untuk `type` dari CLI. */
-const TIPE: Record<SbomPackageType, string> = {
-  os: "OS Package",
-  language: "Language Package",
+const TIPE: Record<SbomPackageType, KunciTerjemah> = {
+  os: "sbom.tipeOs",
+  language: "sbom.tipeBahasa",
 };
 
 /**
@@ -19,6 +21,7 @@ const TIPE: Record<SbomPackageType, string> = {
  */
 export function SbomTable({ payload }: { payload: SbomPayload }) {
   const [query, setQuery] = useState("");
+  const { t } = useBahasa();
   const paket = filterPackages(payload.packages, query);
 
   return (
@@ -33,19 +36,19 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari library..."
-            aria-label="Cari library"
+            placeholder={t("sbom.cari")}
+            aria-label={t("sbom.cariLabel")}
             className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
           />
         </div>
         <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">
-          {paket.length} dari {payload.total} paket
+          {paket.length} {t("sbom.hitungan")} {payload.total} {t("sbom.hitunganPaket")}
         </p>
       </div>
 
       {paket.length === 0 ? (
         <p className="p-5 text-sm text-gray-500 dark:text-[var(--color-muted)]">
-          {payload.total === 0 ? "SBOM ini tidak memuat paket" : "Tidak ada library yang cocok"}
+          {payload.total === 0 ? t("sbom.kosong") : t("sbom.tidakCocok")}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -53,13 +56,13 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-muted)]">
               <tr>
                 <th scope="col" className="px-5 py-3 font-medium">
-                  Nama Library
+                  {t("sbom.kolomNama")}
                 </th>
                 <th scope="col" className="px-5 py-3 font-medium">
-                  Versi
+                  {t("sbom.kolomVersi")}
                 </th>
                 <th scope="col" className="px-5 py-3 font-medium">
-                  Tipe
+                  {t("sbom.kolomTipe")}
                 </th>
               </tr>
             </thead>
@@ -68,7 +71,7 @@ export function SbomTable({ payload }: { payload: SbomPayload }) {
                 <tr key={`${p.name}@${p.version}#${p.type}`}>
                   <td className="px-5 py-3 font-medium text-ink">{p.name}</td>
                   <td className="px-5 py-3 font-mono text-xs text-muted">{dash(p.version)}</td>
-                  <td className="px-5 py-3 text-muted">{TIPE[p.type]}</td>
+                  <td className="px-5 py-3 text-muted">{t(TIPE[p.type])}</td>
                 </tr>
               ))}
             </tbody>

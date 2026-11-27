@@ -44,7 +44,11 @@ test("sukses tanpa URL repo tetap dianggap berhasil, tanpa field repo kosong", a
 
   const hasil = await runQuickStart({ nama: "coba-web", stack: "go", kode: "kosong" });
 
-  expect(hasil).toEqual({ ok: true, message: expect.stringContaining("coba-web") });
+  expect(hasil.ok).toBe(true);
+  expect(hasil.message).toContain("coba-web");
+  expect(hasil.kunci).toBe("aksi.buatSukses");
+  // Repo kosong tidak boleh ikut dikirim sebagai field.
+  expect("repo" in hasil).toBe(false);
 });
 
 test("penolakan server memakai pesan error dan baris pertama keluaran CLI", async () => {

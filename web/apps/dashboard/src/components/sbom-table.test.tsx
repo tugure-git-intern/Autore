@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { SbomPayload } from "@/lib/contracts";
+import { BahasaProvider } from "./bahasa-provider";
 import { SbomTable } from "./sbom-table";
 
 const PAYLOAD: SbomPayload = {
@@ -77,5 +78,37 @@ describe("SbomTable", () => {
     expect(screen.getByText("SBOM ini tidak memuat paket")).toBeVisible();
     expect(screen.getByText("0 dari 0 paket")).toBeVisible();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("SbomTable dalam bahasa Inggris", () => {
+  it("menerjemahkan header, hitungan, dan tipe", () => {
+    render(
+      <BahasaProvider awal="en">
+        <SbomTable payload={PAYLOAD} />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByRole("searchbox", { name: "Search libraries" })).toBeVisible();
+    expect(screen.getByText("3 of 3 packages")).toBeVisible();
+    const header = screen.getAllByRole("row")[0];
+    expect(
+      within(header)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual(["Library Name", "Version", "Type"]);
+    expect(screen.getByRole("row", { name: /openssl/ }).textContent).toContain("OS Package");
+    expect(screen.getByRole("row", { name: /express/ }).textContent).toContain("Language Package");
+  });
+
+  it("memakai pesan bahasa Inggris saat SBOM kosong", () => {
+    render(
+      <BahasaProvider awal="en">
+        <SbomTable payload={{ ...PAYLOAD, total: 0, packages: [] }} />
+      </BahasaProvider>,
+    );
+
+    expect(screen.getByText("This SBOM contains no packages")).toBeVisible();
+    expect(screen.getByText("0 of 0 packages")).toBeVisible();
   });
 });

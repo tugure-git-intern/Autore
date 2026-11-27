@@ -2,12 +2,14 @@
 
 import { Search } from "lucide-react";
 import type { StatusFilter } from "@/lib/filter-apps";
+import type { KunciTerjemah } from "@/lib/i18n";
+import { useBahasa } from "./bahasa-provider";
 
-const OPSI: ReadonlyArray<{ value: StatusFilter; label: string }> = [
-  { value: "all", label: "Semua status" },
-  { value: "passed", label: "Lulus" },
-  { value: "failed", label: "Gagal" },
-  { value: "unknown", label: "Unknown" },
+const OPSI: ReadonlyArray<{ value: StatusFilter; label: KunciTerjemah }> = [
+  { value: "all", label: "filter.semua" },
+  { value: "passed", label: "filter.lulus" },
+  { value: "failed", label: "filter.gagal" },
+  { value: "unknown", label: "filter.tidakDiketahui" },
 ];
 
 /** Filter terkendali — state tinggal di halaman, komponen ini hanya melaporkan perubahan. */
@@ -26,6 +28,8 @@ export function ApplicationsFilter({
   total: number;
   shown: number;
 }) {
+  const { t } = useBahasa();
+
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="relative w-full sm:max-w-xs">
@@ -37,8 +41,8 @@ export function ApplicationsFilter({
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Cari aplikasi..."
-          aria-label="Cari aplikasi"
+          placeholder={t("filter.cari")}
+          aria-label={t("filter.cariLabel")}
           className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)] dark:placeholder:text-[var(--color-muted)]"
         />
       </div>
@@ -47,17 +51,17 @@ export function ApplicationsFilter({
         <select
           value={status}
           onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
-          aria-label="Status"
+          aria-label={t("filter.statusLabel")}
           className="h-9 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 dark:border-[var(--color-line)] dark:bg-[var(--bg-sidebar)] dark:text-[var(--color-ink)]"
         >
           {OPSI.map((opsi) => (
             <option key={opsi.value} value={opsi.value}>
-              {opsi.label}
+              {t(opsi.label)}
             </option>
           ))}
         </select>
         <p className="text-sm text-gray-500 dark:text-[var(--color-muted)]">
-          {shown} dari {total} aplikasi
+          {shown} {t("filter.hitungan")} {total} {t("filter.aplikasi")}
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useBahasa } from "@/components/bahasa-provider";
 import { SbomTable } from "@/components/sbom-table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,8 +18,6 @@ type Hasil =
   | { tahap: "siap"; payload: SbomPayload | null }
   | { tahap: "gagal" };
 
-const KEMBALI = { href: "/applications", label: "Kembali ke Detail Aplikasi" };
-
 export default function SbomPage() {
   return (
     <Suspense fallback={<Memuat />}>
@@ -28,20 +27,22 @@ export default function SbomPage() {
 }
 
 function Kembali() {
+  const { t } = useBahasa();
   return (
     <a
-      href={KEMBALI.href}
+      href="/applications"
       className="mb-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline dark:text-blue-300"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-      {KEMBALI.label}
+      {t("sbom.kembali")}
     </a>
   );
 }
 
 function Memuat() {
+  const { t } = useBahasa();
   return (
-    <section aria-label="Memuat SBOM" aria-busy="true">
+    <section aria-label={t("sbom.memuat")} aria-busy="true">
       <Skeleton className="h-7 w-52" />
       <Skeleton className="mt-4 h-64" />
     </section>
@@ -50,6 +51,7 @@ function Memuat() {
 
 function SbomDetail() {
   const app = useSearchParams().get("app") ?? "";
+  const { t } = useBahasa();
   const [hasil, setHasil] = useState<Hasil>({ tahap: "memuat" });
 
   const muat = useCallback(
@@ -76,10 +78,8 @@ function SbomDetail() {
       <div>
         <Kembali />
         <Card className="p-6">
-          <p className="font-medium text-ink">Aplikasi tidak disebutkan.</p>
-          <p className="mt-1 text-sm text-muted">
-            Buka halaman ini dari tombol “Lihat SBOM” di daftar aplikasi.
-          </p>
+          <p className="font-medium text-ink">{t("sbom.tidakDisebut")}</p>
+          <p className="mt-1 text-sm text-muted">{t("sbom.tidakDisebutIsi")}</p>
         </Card>
       </div>
     );
@@ -93,13 +93,11 @@ function SbomDetail() {
         <Kembali />
         <Card className="p-6">
           <div role="alert">
-            <p className="font-medium text-red-700 dark:text-red-300">Gagal memuat SBOM.</p>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-300">
-              Server tidak mengembalikan datanya. Coba lagi sebentar.
-            </p>
+            <p className="font-medium text-red-700 dark:text-red-300">{t("sbom.gagal")}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{t("sbom.gagalIsi")}</p>
           </div>
           <Button className="mt-4" onClick={() => void muat()}>
-            Coba lagi
+            {t("sbom.cobaLagi")}
           </Button>
         </Card>
       </div>
@@ -120,18 +118,15 @@ function SbomDetail() {
           <div className="flex items-start gap-3">
             <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" aria-hidden="true" />
             <div>
-              <p className="font-medium text-ink">SBOM belum tersedia untuk aplikasi ini.</p>
-              <p className="mt-1 text-sm text-muted">
-                Daftar dependensi dihasilkan pada tahap 6 (Trivy &amp; SBOM) pipeline. Jalankan
-                pipeline aplikasinya sampai tahap itu selesai, lalu buka halaman ini lagi.
-              </p>
+              <p className="font-medium text-ink">{t("sbom.belumJudul")}</p>
+              <p className="mt-1 text-sm text-muted">{t("sbom.belumIsi")}</p>
             </div>
           </div>
         </Card>
       ) : (
         <>
           <p className="mb-4 text-sm text-muted">
-            {payload.total} paket · dibuat {dash(payload.generated_at)}
+            {payload.total} {t("sbom.paket")} · {t("sbom.dibuat")} {dash(payload.generated_at)}
           </p>
           <SbomTable payload={payload} />
         </>

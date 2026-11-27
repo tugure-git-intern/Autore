@@ -7,11 +7,12 @@ deployment sehat terakhir lewat job `<app>-rollback`.
 
 ## Mode
 
-- **dry-run** (bawaan script): hanya menulis keputusan ke jurnal, tidak menyentuh
-  production.
-- **on** (bawaan unit systemd): rollback benar-benar dijalankan.
-
-Mode per app diatur di `/etc/autore/watchdog-<app>.env`.
+- Script default ke **dry-run** bila `AUTORE_WATCHDOG_MODE` tidak disetel: hanya
+  mencatat keputusan, tidak memicu rollback.
+- Unit systemd template menetapkan **on** secara default; rollback production
+  benar-benar dijalankan setelah ambang gagal tercapai.
+- `/etc/autore/watchdog-<app>.env` dimuat setelah konfigurasi global dan dapat
+  override mode per app. Gunakan `AUTORE_WATCHDOG_MODE=dry-run` untuk observasi.
 
 ## Berkas dan env
 

@@ -69,7 +69,14 @@ These controls already exist. A report that they are missing is out of date:
   the fixed version in the build log.
 - The OS patch layer is rebuilt on every pipeline run (`ARG AUTORE_APT_REFRESH` plus `--pull`), so a
   cached layer cannot hide a stale package.
-- No service binds `0.0.0.0`; the network surface is documented in `README.md`.
+- No production service binds `0.0.0.0`: the API binds `127.0.0.1:9121` and `next start` binds the
+  host's Tailscale IPv4 on `:9120`. The `dev:dashboard` script binds `0.0.0.0:9120` for local
+  framework access only and is not a production entrypoint; the network surface is documented in
+  `README.md` and `ARCHITECTURE.md`.
+- Release decisions are enforced server-side, not by hiding buttons: the API reads the caller's
+  current role from the allowlist, enforces approve/reject (`qa`), promote and production rollback
+  (`admin`), and the four-eyes rule on promotion, then appends the decision to the file-backed
+  release ledger before any Jenkins job is triggered.
 - Secrets live in `.env` files that are ignored by git; `gitleaks` runs in the pre-commit hook and as
   a blocking CI stage.
 - Pipeline steps run from the admin-controlled shared library, never from the application repository.

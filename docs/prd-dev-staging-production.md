@@ -1,7 +1,7 @@
 # PRD: Autore sebagai Platform CI/CD Internal (dev → staging → approval → production)
 
-Status: Draf untuk review. Tanggal: 2026-11-12.
-Asumsi yang belum dikonfirmasi kantor ditandai **[Asumsi]**. Semua keputusan lain mengikuti brief.
+Status: Draf historis untuk review; snapshot 2026-11-12–13, bukan status implementasi saat ini.
+Asumsi yang belum dikonfirmasi kantor ditandai **[Asumsi]**. Source Autore kini memuat ledger release, approval/reject, promote, dan rollback. Gunakan source serta `ARCHITECTURE.md`, `docs/RUNBOOK-ROLLBACK.md`, dan `docs/RUNBOOK-WATCHDOG.md` untuk perilaku saat ini; dokumen ini merekam rancangan/keputusan pada tanggal snapshot.
 
 ## 1. Latar Belakang, Masalah, Tujuan, Keberhasilan
 

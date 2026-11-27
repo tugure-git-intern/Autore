@@ -17,19 +17,19 @@ Role dibaca server dari `web/allowed-users.json`, bukan dari token browser.
 |---|---|---|
 | Setujui / Tolak staging | `qa` | `menunggu_persetujuan` |
 | Promosikan ke production | `admin` | `disetujui` |
-| Rollback (tombol UI: production) | `qa` | `aktif` |
-| Rollback staging lewat API | `qa` | release apa pun yang punya deployment sehat sebelumnya |
+| Rollback production (UI atau API) | `admin` | release aktif dengan deployment sehat sebelumnya |
+| Rollback staging lewat API | `qa` | status release mengizinkan rollback dan ada deployment sehat sebelumnya |
 
 Penolakan wajib menyertakan alasan (tombol **Tolak** → isi alasan → kirim).
 
 ## Jalur 1 — UI (production)
 
-1. Login dashboard `http://100.80.3.14:9120` dengan akun role `qa`/`admin`.
+1. Login ke dashboard. Tombol Rollback Production hanya tersedia bagi `admin`.
 2. Buka `/pipeline?app=<app>`.
-3. Pada kartu release yang statusnya **Aktif**, klik **Rollback Production**.
-4. Konfirmasi. Respons `202` berarti job `<app>-rollback` dipicu; halaman dimuat ulang setelah build selesai.
+3. Pada kartu release berstatus **Aktif**, pilih **Rollback Production**.
+4. Konfirmasi. `202` berarti job `<app>-rollback` sudah dipicu, bukan bahwa deployment selesai; pantau build Jenkins dan verifikasi health serta ledger.
 
-Tombol tidak muncul untuk role `dev` — itu memang gerbangnya, bukan bug.
+API juga menegakkan role `admin` untuk rollback production; menyembunyikan tombol bukan satu-satunya kontrol. Rollback staging lewat API memerlukan `qa`.
 
 ## Jalur 2 — API (staging atau production)
 
@@ -46,11 +46,18 @@ Aturan body (ditegakkan 400):
 - `Production`, `prod`, `""`, `null`, atau kunci tambahan lain ditolak.
 - Tidak ada nilai default: rollback tanpa environment tidak pernah jalan.
 
-Respons: `202` job dipicu, `400` body salah, `403` role kurang, `404` app/release/job tidak ada, `409` tidak ada target sehat atau sudah ada rollback berjalan, `502` gagal baca ledger.
+| Respons | Arti |
+|---|---|
+| `202` | Job dipicu; pantau Jenkins untuk hasil akhir |
+| `400` | Body/ID salah |
+| `403` | Role kurang (production perlu `admin`) |
+| `404` | Release tidak ditemukan |
+| `409` | State/target/environment tidak valid, belum dikonfigurasi, atau rollback lain sedang jalan |
+| `502` | CLI gagal memicu job Jenkins atau kegagalan upstream |
 
 ## Yang dijalankan di belakang
 
-1. API memicu job Jenkins `<app>-rollback` (`Jenkinsfile.rollback`), agent `vps-runner-1`.
+1. API menjalankan `autore release trigger-rollback` untuk job Jenkins `<app>-rollback` (`Jenkinsfile.rollback`), agent `vps-runner-1`. Kalau job belum ada (HTTP 404), CLI mendaftarkan job dari repo Autore `main` lalu memicu rollback dalam request yang sama.
 2. Job memakai binary kanonik `/usr/local/lib/autore-ci/autore` + `ci-deploy-by-digest.sh` mode rollback.
 3. Skrip menarik image **by digest**, mengganti container, lalu health check.
 4. Hasil ditulis sebagai event `rollback` dengan `outcome` `rolled_back` atau `rollback_failed` dan `health` `ok`/`gagal`.

@@ -74,14 +74,15 @@ npx vitest run
 npm run build:dashboard
 
 # Run browser E2E, mobile contract, and accessibility suites (needs web/.env)
-npm run test:e2e                        # 87 Playwright tests across 8 spec files
+npm run test:e2e                        # 97 Playwright tests across 12 spec files
 npm run test:e2e -- e2e/a11y.spec.ts    # axe-core WCAG 2.1 AA: 6 routes + dark-mode toast
 ```
 
 Playwright reads `AUTH_SECRET` / `NEXTAUTH_SECRET` from `web/.env` through dotenv-cli, so always use the
 `npm run test:e2e` wrapper from `web/`. Running `npx playwright test` directly fails in global setup.
-These browser suites are not part of the Jenkins Stage 5 web gate, so run them locally before pushing
-changes that touch rendering, theming, navigation, or actions.
+Jenkins runs the Playwright suite in Stage 5.5 via the trusted `/usr/local/lib/autore-ci/ci-web-e2e.sh`
+script and archives its reports. Run the wrapper locally before pushing changes that touch rendering,
+theming, navigation, or actions; CI coverage does not remove the need to inspect failures and artifacts.
 
 ---
 
@@ -150,6 +151,6 @@ Before submitting a pull request:
 - [ ] `npx vitest run` passes 100% across all packages.
 - [ ] `npx tsc --noEmit` reports 0 errors in `contracts`, `api`, and `dashboard`.
 - [ ] `npm run build:dashboard` succeeds without error.
-- [ ] `npm run test:e2e` passes (87 Playwright tests, including the axe-core WCAG 2.1 AA suite).
+- [ ] `npm run test:e2e` passes (97 Playwright tests, including the axe-core WCAG 2.1 AA suite).
 - [ ] Zero emojis in code, commits, and documentation.
 - [ ] No secrets, keys, or credential tokens committed.

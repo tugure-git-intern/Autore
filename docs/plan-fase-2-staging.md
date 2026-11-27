@@ -1,8 +1,8 @@
 # Rencana Implementasi Fase 2A/2B: Staging Nyata (Vertical Slice)
 
-Status: revisi untuk review. Tanggal: 2026-11-13.
-Sumber utama: `/home/tugure/Autore`. Preview laptop: `~/.hermes/plans/plan-fase-2-staging.md`.
-Ruang lingkup: perencanaan saja. Tidak ada implementasi, deploy, restart, perubahan Jenkins job, atau systemd unit.
+Status: rencana historis, direvisi 2026-11-13. Bukan checklist/status implementasi terkini.
+Sumber saat penulisan: `/home/tugure/Autore`. Preview laptop saat itu: `~/.hermes/plans/plan-fase-2-staging.md`.
+Ruang lingkup dokumen ini adalah rencana saja. Repository kini berisi implementasi release/approval/promote/rollback; daftar fase, file, langkah, dan acceptance criteria di bawah merekam rencana pada tanggal tersebut dan belum diverifikasi sebagai status deploy saat ini. Untuk perilaku kode kini, lihat `ARCHITECTURE.md` dan runbook release.
 
 ## 0. Keputusan Revisi
 

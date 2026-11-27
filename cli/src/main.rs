@@ -713,7 +713,6 @@ fn project_aktif_awal(cwd: &std::path::Path) -> Option<PathBuf> {
     is_autore_project_dir(cwd).then(|| cwd.to_path_buf())
 }
 
-#[cfg(unix)]
 fn project_label(active: Option<&std::path::Path>) -> Option<String> {
     active.map(|p| p.display().to_string())
 }
@@ -1260,17 +1259,12 @@ fn main() {
 
     // Terminal interaktif -> satu sesi TUI untuk seluruh alur: menu, log proses, dan
     // pertanyaan semua di layar yang sama. Output dipipe -> daftar teks seperti semula.
-    if !std::io::stdout().is_terminal() {
+    // Pemeriksaan ini harus jalan SEBELUM ada yang menulis ke stdout di Windows: handle
+    // stdout Rust di-cache, dan `Tangkap` baru bisa menggantinya selama belum dipakai.
+    if !tui::stdout_terminal() {
         text_menu_loop(&mut active_project, &mut last_note);
         return;
     }
-    // TUI menangkap stdout lewat fd POSIX; Windows belum punya padanannya, jadi di sana
-    // menu teks tetap dipakai (fitur lain jalan penuh).
-    #[cfg(not(unix))]
-    {
-        text_menu_loop(&mut active_project, &mut last_note);
-    }
-    #[cfg(unix)]
     {
         let Some(mut sesi) = tui::Session::start(MENU, project_label(active_project.as_deref()))
         else {

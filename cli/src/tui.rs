@@ -6,17 +6,19 @@
 //! `Session::close` **selalu** mengembalikan terminal ke mode normal sebelum keluar —
 //! supaya perintah yang interaktif (tanya nama project, token, dll.) bisa jalan seperti biasa.
 
-// Windows: menu teks saja; implementasi TUI POSIX tidak dipakai.
-#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
+// Platform disentuh di tiga titik saja: `buka_layar`, `ukuran_layar`, dan `Tangkap`.
+// POSIX memakai /dev/tty + pipe/dup2 (di file ini), Windows memakai CONOUT$ +
+// CreatePipe/SetStdHandle (tui_win.rs). Sisanya satu jalur kode.
+#[cfg(windows)]
+mod tui_win;
+#[cfg(windows)]
+use tui_win::{buka_layar, ukuran_layar, Tangkap};
 
-use crossterm::cursor::MoveTo;
-#[cfg(unix)]
-use crossterm::cursor::{Hide, Show};
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
-#[cfg(unix)]
 use crossterm::{
     event::{self, Event},
     execute,
@@ -25,11 +27,14 @@ use crossterm::{
 };
 use std::collections::VecDeque;
 use std::io::{self, Write};
+#[cfg(unix)]
+use std::io::IsTerminal;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+use std::{fs::File, sync::mpsc::Receiver, sync::Arc, thread};
 #[cfg(unix)]
-use std::{fs::File, os::fd::FromRawFd, sync::mpsc::Receiver, sync::Arc, thread};
+use std::os::fd::FromRawFd;
 
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
@@ -46,8 +51,8 @@ const STDOUT_FILENO: i32 = 1;
 const STDERR_FILENO: i32 = 2;
 
 // Tiga syscall yang dipakai untuk menangkap output ke panel kanan. Ditulis langsung
-// supaya tidak menambah dependensi (`libc`) hanya untuk ini. Windows tidak punya
-// padanan fd POSIX; di sana menu teks yang dipakai.
+// supaya tidak menambah dependensi (`libc`) hanya untuk ini. Windows memakai
+// CreatePipe + SetStdHandle (lihat tui_win.rs).
 #[cfg(unix)]
 unsafe extern "C" {
     fn pipe(fds: *mut i32) -> i32;
@@ -374,13 +379,11 @@ pub fn ask_yes_no(label: &str, default_ya: bool) -> Option<bool> {
 }
 
 /// Buf log panel kanan (diisi thread pembaca pipe).
-#[cfg(unix)]
 #[derive(Default)]
 struct Log {
     buf: Mutex<VecDeque<String>>,
 }
 
-#[cfg(unix)]
 impl Log {
     fn push(&self, line: String) {
         // ponytail: lock beracun (panic di thread lain) tidak boleh ikut membunuh UI.
@@ -395,6 +398,29 @@ impl Log {
         let b = self.buf.lock().unwrap_or_else(|e| e.into_inner());
         b.iter().cloned().collect()
     }
+}
+
+/// Ukuran layar. POSIX membacanya dari crossterm; Windows dari handle `CONOUT$`
+/// (tui_win.rs) karena stdout sudah dialihkan ke pipe.
+#[cfg(unix)]
+fn ukuran_layar(_layar: &File) -> (u16, u16) {
+    terminal::size().unwrap_or((80, 24))
+}
+
+/// Apakah stdout proses ini terminal. Di Windows dipakai `GetConsoleMode` mentah
+/// (tui_win.rs) supaya handle stdout Rust belum ter-cache saat `Tangkap` dipasang.
+#[cfg(unix)]
+pub fn stdout_terminal() -> bool {
+    std::io::stdout().is_terminal()
+}
+
+#[cfg(windows)]
+pub(crate) use tui_win::stdout_terminal;
+
+/// Sink layar TUI: `/dev/tty` di POSIX, `CONOUT$` di Windows.
+#[cfg(unix)]
+fn buka_layar() -> Option<File> {
+    File::options().read(true).write(true).open("/dev/tty").ok()
 }
 
 /// Pengalih stdout+stderr ke pipe selama sesi: isinya masuk log, dan `lepas`
@@ -427,6 +453,7 @@ impl Tangkap {
     }
 
     /// Untuk unit test: tidak menyentuh fd proses sama sekali.
+    #[cfg(test)]
     fn uji() -> Tangkap {
         Tangkap { asli: -1 }
     }
@@ -446,7 +473,6 @@ impl Tangkap {
 }
 
 /// Baca sampai EOF, pecah per baris, masukkan ke log. Sisa tanpa `\n` ikut masuk di akhir.
-#[cfg(unix)]
 fn salurkan<R: io::Read>(mut sumber: R, log: &Log) {
     let mut buf = [0u8; 8192];
     let mut sisa = String::new();
@@ -466,7 +492,6 @@ fn salurkan<R: io::Read>(mut sumber: R, log: &Log) {
 }
 
 /// Buang karakter kendali yang bisa merusak layout; urutan ANSI (warna) dibiarkan.
-#[cfg(unix)]
 fn buang_kendali(baris: &str) -> String {
     baris
         .chars()
@@ -475,7 +500,6 @@ fn buang_kendali(baris: &str) -> String {
 }
 
 /// Satu pertanyaan yang sedang menunggu jawaban.
-#[cfg(unix)]
 struct Pending {
     label: String,
     secret: bool,
@@ -485,7 +509,6 @@ struct Pending {
     reply: Sender<Answer>,
 }
 
-#[cfg(unix)]
 impl Pending {
     fn baru(q: Question) -> Pending {
         let (label, secret, options, sel) = match q.ask {
@@ -558,7 +581,6 @@ impl Pending {
 }
 
 /// Sesi TUI penuh: menu, log, pertanyaan, status — satu layar, tidak pernah keluar.
-#[cfg(unix)]
 pub struct Session {
     tty: File,
     items: &'static [Item],
@@ -575,15 +597,10 @@ pub struct Session {
     frame: String,
 }
 
-#[cfg(unix)]
 impl Session {
     /// Mulai sesi: raw mode + alternate screen + tangkap stdout/stderr ke panel kanan.
     pub fn start(items: &'static [Item], project: Option<String>) -> Option<Session> {
-        let tty = File::options()
-            .read(true)
-            .write(true)
-            .open("/dev/tty")
-            .ok()?;
+        let tty = buka_layar()?;
         let (tx, rx) = channel();
         let log = Arc::new(Log::default());
         let tangkap = Tangkap::pasang(&log)?;
@@ -683,7 +700,7 @@ impl Session {
     }
 
     fn gambar(&mut self) {
-        let (cols, rows) = terminal::size().unwrap_or((80, 24));
+        let (cols, rows) = ukuran_layar(&self.tty);
         let log = self.log.semua();
         let ask = self.pending.as_ref().map(|p| AskView {
             label: p.label.clone(),
@@ -1695,6 +1712,7 @@ mod tests {
 
     /// Kontrak Tangkap: selama terpasang, tulisan ke fd 1 (seperti anak proses)
     /// masuk log; setelah `lepas`, fd 1 kembali dan tidak lagi masuk log.
+    #[cfg(unix)]
     #[test]
     fn tangkap_menyalurkan_stdout_lalu_mengembalikannya() {
         use std::io::Write;
